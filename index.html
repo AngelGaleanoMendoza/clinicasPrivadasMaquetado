@@ -1071,7 +1071,9 @@ function renderDashboard(){
         <div class="dia-name">${p?p.nombre+' '+p.apellidos:'Desconocido'}</div>
         <div class="dia-sub">${c.motivo}${edad?' · '+edad:''}</div>
       </div>
-      ${estadoTag(c.estado)}</div>`;
+      ${estadoTag(c.estado)}
+      ${c.estado!=='completada'&&c.estado!=='cancelada'?`<button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;flex-shrink:0" onclick="event.stopPropagation();marcarCitaCompletada(${c.id})" title="Marcar que acudió">✅</button>`:''}
+      </div>`;
   }).join(''):`<div class="empty-state" style="padding:28px 0"><div class="empty-icon" style="font-size:32px">📅</div><p>Sin citas para hoy</p></div>`;
 
   renderCalendar('dashboard-cal',false);
@@ -1207,7 +1209,7 @@ function renderDetalleP(pid){
 
   document.getElementById('tab-citas-p').innerHTML=`<div class="card">
     <div class="card-header"><h3>📅 Citas</h3><button class="btn btn-primary btn-sm" onclick="openModalCitaP(${p.id})">+ Nueva</button></div>
-    ${citas.length?`<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Motivo</th><th>Tipo</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>${citas.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(c=>`<tr><td>${formatFecha(c.fecha)}</td><td>${c.hora}</td><td>${c.motivo}</td><td><span class="tag tag-cyan">${c.tipo}</span></td><td>${estadoTag(c.estado)}</td><td><div class="actions-cell"><button class="btn btn-primary btn-sm" onclick="verResumenCita(${c.id})" title="Ver hoja">📄</button><button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">✏️</button><button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">🗑️</button></div></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty-state"><div class="empty-icon">📅</div><p>Sin citas</p></div>'}
+    ${citas.length?`<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Motivo</th><th>Tipo</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>${citas.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(c=>`<tr><td>${formatFecha(c.fecha)}</td><td>${c.hora}</td><td>${c.motivo}</td><td><span class="tag tag-cyan">${c.tipo}</span></td><td>${estadoTag(c.estado)}</td><td><div class="actions-cell">${c.estado!=='completada'&&c.estado!=='cancelada'?`<button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;white-space:nowrap" onclick="marcarCitaCompletada(${c.id})">✅ Acudió</button>`:''}<button class="btn btn-primary btn-sm" onclick="verResumenCita(${c.id})" title="Ver hoja">📄</button><button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">✏️</button><button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">🗑️</button></div></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty-state"><div class="empty-icon">📅</div><p>Sin citas</p></div>'}
   </div>`;
 
   document.getElementById('tab-meds-p').innerHTML=`<div class="card">
@@ -1233,7 +1235,8 @@ function renderCitas(){
   const h=hoy(), citasHoy=C.c.filter(c=>c.fecha===h).sort((a,b)=>a.hora.localeCompare(b.hora));
   document.getElementById('lista-citas-hoy').innerHTML=citasHoy.length?citasHoy.map(c=>{
     const p=C.p.find(x=>x.id===c.pacienteId);
-    return `<div class="cita-item ${c.estado}"><div class="cita-time">${c.hora}</div><div class="cita-info"><div class="cita-paciente">${p?p.nombre+' '+p.apellidos:'Desconocido'}</div><div class="cita-motivo">${c.motivo}</div></div>${estadoTag(c.estado)}<div class="actions-cell" style="margin-left:6px"><button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">✏️</button><button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">🗑️</button></div></div>`;
+    return `<div class="cita-item ${c.estado}"><div class="cita-time">${c.hora}</div><div class="cita-info"><div class="cita-paciente">${p?p.nombre+' '+p.apellidos:'Desconocido'}</div><div class="cita-motivo">${c.motivo}</div></div>${estadoTag(c.estado)}<div class="actions-cell" style="margin-left:6px">${c.estado!=='completada'&&c.estado!=='cancelada'?`<button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;white-space:nowrap" onclick="marcarCitaCompletada(${c.id})">✅ Acudió</button>`:''}
+    <button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">✏️</button><button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">🗑️</button></div></div>`;
   }).join(''):`<div class="empty-state" style="padding:20px"><div class="empty-icon" style="font-size:30px">📅</div><p>Sin citas hoy</p></div>`;
 
   renderCalendar('citas-cal',true);
@@ -1247,7 +1250,8 @@ function renderCitas(){
     return `<tr><td>${formatFecha(c.fecha)}</td><td>${c.hora}</td>
       <td><div class="patient-name-cell"><div class="patient-avatar" style="background:${colAvatar(c.pacienteId||0)};width:28px;height:28px;font-size:10px">${p?ini(p.nombre,p.apellidos):'?'}</div><div>${p?p.nombre+' '+p.apellidos:'Desconocido'}</div></div></td>
       <td>${c.motivo}</td><td><span class="tag tag-cyan">${c.tipo}</span></td><td>${estadoTag(c.estado)}</td>
-      <td><div class="actions-cell"><button class="btn btn-primary btn-sm" onclick="verResumenCita(${c.id})" title="Ver hoja">📄</button><button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">✏️</button><button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">🗑️</button></div></td></tr>`;
+      <td><div class="actions-cell">${c.estado!=='completada'&&c.estado!=='cancelada'?`<button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;white-space:nowrap" onclick="marcarCitaCompletada(${c.id})">✅ Acudió</button>`:''}
+        <button class="btn btn-primary btn-sm" onclick="verResumenCita(${c.id})" title="Ver hoja">📄</button><button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">✏️</button><button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">🗑️</button></div></td></tr>`;
   }).join('');
 }
 
@@ -1295,6 +1299,26 @@ async function eliminarCita(id){
   await loadAll(); renderCitas();
   if(currentView==='paciente-detalle') renderDetalleP(currentPatientId);
   updateBadges();
+}
+
+async function marcarCitaCompletada(id){
+  const c=C.c.find(x=>x.id===id); if(!c) return;
+  const p=C.p.find(x=>x.id===c.pacienteId);
+  const nombre=p?p.nombre+' '+p.apellidos:'el paciente';
+  if(!confirm(`¿Confirmar que ${nombre} acudió a la cita correctamente?`)) return;
+  setLoading(true);
+  const {error}=await sb.from('citas').update({estado:'completada'}).eq('id',id);
+  setLoading(false);
+  if(error){ toast('Error: '+error.message,'error'); return; }
+  atendidosFecha=c.fecha;
+  toast(`Cita de ${nombre} marcada como completada ✅`,'success');
+  await loadAll(); renderView(currentView); updateBadges();
+  const t=document.createElement('div');
+  t.className='toast info'; t.style.cursor='pointer';
+  t.innerHTML='📊 Ver en Atendidos por Día →';
+  t.onclick=()=>{ t.remove(); navigate('atendidos'); };
+  document.getElementById('toasts').appendChild(t);
+  setTimeout(()=>t.remove(),5000);
 }
 
 // ════════════════════ MEDICACIONES ════════════════════
