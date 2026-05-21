@@ -254,6 +254,21 @@ tbody tr:hover td{background:#F8FAFC}
 .toast.error{background:#7F1D1D;border-color:rgba(239,68,68,.3)}
 .toast.info{background:#1E3A5F;border-color:rgba(37,99,235,.3)}
 
+/* LOGIN USER CARDS */
+.login-select-title{color:#94A3B8;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;margin-bottom:14px;text-align:center}
+.login-users-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:4px}
+.login-user-card{background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.1);border-radius:16px;padding:20px 10px 16px;text-align:center;cursor:pointer;transition:all .2s;user-select:none}
+.login-user-card:hover,.login-user-card:active{background:rgba(37,99,235,.25);border-color:rgba(37,99,235,.5);transform:translateY(-3px);box-shadow:0 8px 24px rgba(37,99,235,.25)}
+.luc-icon{font-size:34px;margin-bottom:8px;line-height:1}
+.luc-name{color:#fff;font-size:13px;font-weight:700;margin-bottom:2px}
+.luc-role{color:#64748B;font-size:10px;font-weight:500}
+.login-selected-box{display:flex;align-items:center;gap:12px;background:rgba(37,99,235,.15);border:1.5px solid rgba(37,99,235,.35);border-radius:12px;padding:12px 16px;margin-bottom:18px}
+.lsb-icon{font-size:28px;flex-shrink:0}
+.lsb-name{color:#fff;font-size:15px;font-weight:700}
+.lsb-role{color:#93C5FD;font-size:11px;margin-top:2px}
+.btn-back{background:transparent;border:none;color:#475569;font-size:12px;cursor:pointer;font-family:inherit;padding:0 0 14px;display:flex;align-items:center;gap:5px;transition:color .2s}
+.btn-back:hover{color:#94A3B8}
+
 /* MISC */
 ::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-track{background:transparent}
@@ -357,21 +372,24 @@ tbody tr:hover td{background:#F8FAFC}
       <h1>GaleSistem</h1>
       <p>Sistema de Gestión Clínica</p>
     </div>
-    <div class="login-field">
-      <label>Correo electrónico</label>
-      <div class="login-field-wrap">
-        <span class="field-icon">📧</span>
-        <input type="email" id="login-email" placeholder="correo@galesistem.com" autocomplete="email">
-      </div>
+    <!-- PASO 1: elegir usuario -->
+    <div id="login-step-1">
+      <p class="login-select-title">¿Quién eres?</p>
+      <div class="login-users-grid" id="login-users-grid"></div>
     </div>
-    <div class="login-field">
-      <label>Contraseña</label>
-      <div class="login-field-wrap">
-        <span class="field-icon">🔒</span>
-        <input type="password" id="login-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
+    <!-- PASO 2: contraseña -->
+    <div id="login-step-2" style="display:none">
+      <div id="login-selected-user"></div>
+      <button class="btn-back" onclick="backToUserSelect()">← Cambiar usuario</button>
+      <div class="login-field">
+        <label>Contraseña</label>
+        <div class="login-field-wrap">
+          <span class="field-icon">🔒</span>
+          <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+        </div>
       </div>
+      <button class="btn-login" onclick="doLogin()">Entrar →</button>
     </div>
-    <button class="btn-login" onclick="doLogin()">Iniciar Sesión →</button>
     <p class="login-note">🔒 Solo personal autorizado de GaleSistem</p>
   </div>
 </div>
@@ -735,7 +753,42 @@ function setDbStatus(ok) {
 }
 
 // ════════════════════ AUTH (Supabase) ════════════════════
+const LOGIN_USERS = [
+  { label:'Dr. Galeano',  email:'sebasgale65@gmail.com',      icon:'👨‍⚕️', role:'Administrador' },
+  { label:'Recepción',    email:'recepcion@galesistem.com',   icon:'👩‍💼', role:'Recepcionista'  },
+  { label:'Enfermería',   email:'enfermeria@galesistem.com',  icon:'👩‍⚕️', role:'Enfermera/o'   },
+];
+
 let currentUser = null;
+let selectedEmail = '';
+
+function renderLoginUsers() {
+  document.getElementById('login-users-grid').innerHTML = LOGIN_USERS.map(u=>`
+    <div class="login-user-card" onclick="selectLoginUser('${u.email}','${u.label}','${u.icon}','${u.role}')">
+      <div class="luc-icon">${u.icon}</div>
+      <div class="luc-name">${u.label}</div>
+      <div class="luc-role">${u.role}</div>
+    </div>`).join('');
+}
+
+function selectLoginUser(email, label, icon, role) {
+  selectedEmail = email;
+  document.getElementById('login-selected-user').innerHTML=`
+    <div class="login-selected-box">
+      <div class="lsb-icon">${icon}</div>
+      <div><div class="lsb-name">${label}</div><div class="lsb-role">${role}</div></div>
+    </div>`;
+  document.getElementById('login-step-1').style.display='none';
+  document.getElementById('login-step-2').style.display='block';
+  setTimeout(()=>document.getElementById('login-pass').focus(), 50);
+}
+
+function backToUserSelect() {
+  selectedEmail='';
+  document.getElementById('login-step-1').style.display='block';
+  document.getElementById('login-step-2').style.display='none';
+  document.getElementById('login-pass').value='';
+}
 
 async function checkSession() {
   const { data:{ session } } = await sb.auth.getSession();
@@ -767,11 +820,10 @@ async function onUserLoggedIn(user, animate=true) {
 }
 
 async function doLogin() {
-  const email = document.getElementById('login-email').value.trim();
-  const pass  = document.getElementById('login-pass').value;
-  if (!email || !pass) { shakeLogin(); return; }
+  const pass = document.getElementById('login-pass').value;
+  if (!selectedEmail || !pass) { shakeLogin(); return; }
   setLoading(true);
-  const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
+  const { data, error } = await sb.auth.signInWithPassword({ email: selectedEmail, password: pass });
   setLoading(false);
   if (error) {
     shakeLogin();
@@ -1408,6 +1460,7 @@ document.addEventListener('click',e=>{
 // ════════════════════ INIT ════════════════════
 document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('topbar-date').textContent = new Date().toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'});
+  renderLoginUsers();
   await checkSession();
 });
 </script>
