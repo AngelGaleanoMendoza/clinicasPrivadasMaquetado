@@ -275,6 +275,65 @@ tbody tr:hover td{background:#F8FAFC}
 }
 .menu-toggle{display:none;background:none;border:none;font-size:22px;cursor:pointer;padding:4px}
 @media(max-width:768px){.menu-toggle{display:block}}
+
+/* SIDEBAR OVERLAY */
+.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:97;backdrop-filter:blur(2px)}
+.sidebar-overlay.show{display:block}
+
+/* INLINE SEARCH BAR */
+.search-bar{display:flex;gap:10px;align-items:center;margin-bottom:18px;flex-wrap:wrap}
+.search-bar-input{flex:1;display:flex;align-items:center;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;padding:9px 14px;gap:8px;min-width:200px;transition:border .2s}
+.search-bar-input:focus-within{border-color:var(--primary);background:#fff}
+.search-bar-input input{border:none;background:transparent;outline:none;font-size:14px;width:100%;font-family:inherit;color:var(--text)}
+.filter-chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{padding:5px 14px;border-radius:20px;font-size:12px;font-weight:600;border:1.5px solid var(--border);background:var(--bg);color:var(--text-light);cursor:pointer;transition:all .2s;user-select:none}
+.chip.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.chip:hover:not(.active){border-color:var(--primary);color:var(--primary)}
+
+/* PACIENTES DEL DÍA */
+.dia-item{display:flex;align-items:center;gap:12px;padding:11px 14px;background:var(--bg);border-radius:10px;margin-bottom:8px;cursor:pointer;transition:all .2s;border:1px solid transparent}
+.dia-item:hover{border-color:var(--primary);background:var(--primary-light);transform:translateX(2px)}
+.dia-time{font-size:13px;font-weight:800;color:var(--primary);min-width:46px}
+.dia-info{flex:1;min-width:0}
+.dia-name{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dia-sub{font-size:11px;color:var(--text-light);margin-top:2px}
+
+/* BOTTOM NAV */
+.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--sidebar-bg);border-top:1px solid rgba(255,255,255,.1);z-index:100;padding:6px 0 env(safe-area-inset-bottom,6px)}
+.bottom-nav-items{display:flex;justify-content:space-around;align-items:center}
+.bn-item{display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 10px;cursor:pointer;color:var(--sidebar-text);transition:color .2s;border:none;background:none;font-family:inherit;flex:1;position:relative}
+.bn-item.active{color:#93C5FD}
+.bn-item .bn-icon{font-size:21px;line-height:1}
+.bn-item .bn-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.3px}
+.bn-badge{position:absolute;top:4px;right:12px;background:var(--primary);color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:10px;min-width:16px;text-align:center}
+
+/* STAT TREND */
+.stat-trend{font-size:11px;margin-top:5px;font-weight:600;display:inline-flex;align-items:center;gap:3px}
+.stat-trend.warn{color:var(--warning)}
+.stat-trend.ok{color:var(--success)}
+
+@media(max-width:768px){
+  .bottom-nav{display:block}
+  .content{padding:14px 14px 90px}
+  .db-status{display:none}
+  .topbar-date{display:none}
+  .modal{border-radius:20px 20px 0 0;position:fixed;bottom:0;left:0;right:0;width:100%;max-width:100%;max-height:88vh;animation:slideUp .3s cubic-bezier(.34,1.2,.64,1)}
+  @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+  .modal-overlay{align-items:flex-end;padding:0}
+  .stats-grid{grid-template-columns:1fr 1fr;gap:10px}
+  .stat-card{padding:14px 12px}
+  .stat-icon{width:40px;height:40px;font-size:18px}
+  .stat-info h3{font-size:20px}
+  .grid-2{grid-template-columns:1fr}
+  .topbar h1{font-size:15px}
+  .topbar-search{min-width:120px}
+  thead th:nth-child(n+4){display:none}
+  tbody td:nth-child(n+4){display:none}
+}
+@media(max-width:480px){
+  .stat-card{padding:12px 10px}
+  .stat-info h3{font-size:18px}
+}
 </style>
 </head>
 <body>
@@ -352,7 +411,7 @@ tbody tr:hover td{background:#F8FAFC}
 
   <div class="main">
     <div class="topbar">
-      <button class="menu-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</button>
+      <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
       <h1 id="page-title">Dashboard</h1>
       <div class="topbar-search">
         <span style="color:var(--text-light);font-size:15px">🔍</span>
@@ -371,12 +430,15 @@ tbody tr:hover td{background:#F8FAFC}
         <div class="stats-grid">
           <div class="stat-card"><div class="stat-icon si-blue">👥</div><div class="stat-info"><h3 id="stat-pacientes">—</h3><p>Pacientes registrados</p></div></div>
           <div class="stat-card"><div class="stat-icon si-green">📅</div><div class="stat-info"><h3 id="stat-citas-hoy">—</h3><p>Citas hoy</p></div></div>
+          <div class="stat-card"><div class="stat-icon" style="background:linear-gradient(135deg,#FEF3C7,#FDE68A)">⏳</div><div class="stat-info"><h3 id="stat-pendientes">—</h3><p>Citas pendientes</p><div class="stat-trend warn" id="stat-pendientes-trend"></div></div></div>
           <div class="stat-card"><div class="stat-icon si-orange">💊</div><div class="stat-info"><h3 id="stat-meds">—</h3><p>Medicaciones activas</p></div></div>
-          <div class="stat-card"><div class="stat-icon si-cyan">📝</div><div class="stat-info"><h3 id="stat-notas">—</h3><p>Notas clínicas</p></div></div>
         </div>
         <div class="grid-2">
           <div class="card">
-            <div class="card-header"><h3>📅 Agenda de hoy</h3><button class="btn btn-primary btn-sm" onclick="navigate('citas')">Ver todas</button></div>
+            <div class="card-header">
+              <h3>📅 Pacientes del día</h3>
+              <button class="btn btn-primary btn-sm" onclick="navigate('citas')">Ver citas</button>
+            </div>
             <div id="agenda-hoy"></div>
           </div>
           <div>
@@ -397,6 +459,18 @@ tbody tr:hover td{background:#F8FAFC}
       <div id="view-pacientes" class="view">
         <div class="card">
           <div class="card-header"><h3>👥 Registro de Pacientes</h3><button class="btn btn-primary" onclick="openModalPaciente()">+ Nuevo Paciente</button></div>
+          <div class="search-bar">
+            <div class="search-bar-input">
+              <span style="color:var(--text-light)">🔍</span>
+              <input type="text" id="pacientes-search" placeholder="Buscar por nombre, apellidos, DNI o teléfono..." oninput="filterPacientes(this.value)">
+            </div>
+            <div class="filter-chips">
+              <span class="chip active" onclick="setFiltroEstado('todos',this)">Todos</span>
+              <span class="chip" onclick="setFiltroEstado('activo',this)">Activos</span>
+              <span class="chip" onclick="setFiltroEstado('inactivo',this)">Inactivos</span>
+            </div>
+          </div>
+          <div id="pacientes-count" style="font-size:12px;color:var(--text-light);margin-bottom:10px"></div>
           <div class="table-wrap">
             <table>
               <thead><tr><th>Paciente</th><th>Identificación</th><th>Fecha Nac.</th><th>Teléfono</th><th>Correo</th><th>Estado</th><th>Acciones</th></tr></thead>
@@ -502,6 +576,20 @@ tbody tr:hover td{background:#F8FAFC}
 </div>
 
 <div class="toast-container" id="toasts"></div>
+
+<!-- SIDEBAR OVERLAY -->
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+<!-- BOTTOM NAV (móvil) -->
+<nav class="bottom-nav" id="bottom-nav">
+  <div class="bottom-nav-items">
+    <button class="bn-item active" id="bn-dashboard" onclick="navigate('dashboard')"><span class="bn-icon">📊</span><span class="bn-label">Inicio</span></button>
+    <button class="bn-item" id="bn-pacientes" onclick="navigate('pacientes')"><span class="bn-icon">👥</span><span class="bn-label">Pacientes</span></button>
+    <button class="bn-item" id="bn-citas" onclick="navigate('citas')"><span class="bn-icon">📅</span><span class="bn-label">Citas</span><span class="bn-badge" id="bn-badge-citas" style="display:none">0</span></button>
+    <button class="bn-item" id="bn-medicaciones" onclick="navigate('medicaciones')"><span class="bn-icon">💊</span><span class="bn-label">Meds</span></button>
+    <button class="bn-item" id="bn-notas" onclick="navigate('notas')"><span class="bn-icon">📝</span><span class="bn-label">Notas</span></button>
+  </div>
+</nav>
 
 <!-- MODAL PACIENTE -->
 <div class="modal-overlay" id="modal-paciente">
@@ -757,7 +845,7 @@ async function navigate(view, patientId) {
   if(patientId) currentPatientId=patientId;
   await loadAll();
   renderView(view);
-  if(window.innerWidth<=768) document.getElementById('sidebar').classList.remove('open');
+  if(window.innerWidth<=768) closeSidebar();
 }
 
 function renderView(v) {
@@ -775,8 +863,12 @@ function renderView(v) {
 
 function updateBadges() {
   const h=hoy();
+  const citasHoy=C.c.filter(x=>x.fecha===h&&x.estado!=='cancelada').length;
   document.getElementById('badge-pacientes').textContent = C.p.length;
-  document.getElementById('badge-citas').textContent = C.c.filter(x=>x.fecha===h&&x.estado!=='cancelada').length;
+  document.getElementById('badge-citas').textContent = citasHoy;
+  const bnBadge=document.getElementById('bn-badge-citas');
+  if(bnBadge){ bnBadge.textContent=citasHoy; bnBadge.style.display=citasHoy>0?'block':'none'; }
+  updateBottomNav(currentView);
 }
 
 // ════════════════════ CALENDARIO ════════════════════
@@ -833,15 +925,27 @@ function renderCalDayCitas(date){
 // ════════════════════ DASHBOARD ════════════════════
 function renderDashboard(){
   const h=hoy();
+  const pendientes=C.c.filter(c=>c.estado==='pendiente');
   document.getElementById('stat-pacientes').textContent=C.p.length;
   document.getElementById('stat-citas-hoy').textContent=C.c.filter(c=>c.fecha===h).length;
+  document.getElementById('stat-pendientes').textContent=pendientes.length;
+  const tEl=document.getElementById('stat-pendientes-trend');
+  if(tEl) tEl.innerHTML=pendientes.length>0?`⚠️ ${pendientes.length} por confirmar`:'✅ Sin pendientes';
+  if(tEl) tEl.className='stat-trend '+(pendientes.length>0?'warn':'ok');
   document.getElementById('stat-meds').textContent=C.m.filter(x=>x.estado==='activa').length;
-  document.getElementById('stat-notas').textContent=C.n.length;
 
   const citasHoy=C.c.filter(c=>c.fecha===h).sort((a,b)=>a.hora.localeCompare(b.hora));
   document.getElementById('agenda-hoy').innerHTML=citasHoy.length?citasHoy.map(c=>{
     const p=C.p.find(x=>x.id===c.pacienteId);
-    return `<div class="cita-item ${c.estado}"><div class="cita-time">${c.hora}</div><div class="cita-info"><div class="cita-paciente">${p?p.nombre+' '+p.apellidos:'Desconocido'}</div><div class="cita-motivo">${c.motivo}</div></div>${estadoTag(c.estado)}</div>`;
+    const edad=p?calcEdad(p.fechaNac):'';
+    return `<div class="dia-item" onclick="navigate('paciente-detalle',${c.pacienteId})">
+      <div class="dia-time">${c.hora}</div>
+      <div class="patient-avatar" style="background:${colAvatar(c.pacienteId||0)};width:36px;height:36px;font-size:12px;flex-shrink:0">${p?ini(p.nombre,p.apellidos):'?'}</div>
+      <div class="dia-info">
+        <div class="dia-name">${p?p.nombre+' '+p.apellidos:'Desconocido'}</div>
+        <div class="dia-sub">${c.motivo}${edad?' · '+edad:''}</div>
+      </div>
+      ${estadoTag(c.estado)}</div>`;
   }).join(''):`<div class="empty-state" style="padding:28px 0"><div class="empty-icon" style="font-size:32px">📅</div><p>Sin citas para hoy</p></div>`;
 
   renderCalendar('dashboard-cal',false);
@@ -856,10 +960,20 @@ function renderDashboard(){
 
 // ════════════════════ PACIENTES ════════════════════
 function renderPacientes(){
+  const search=document.getElementById('pacientes-search');
+  if(search) search.value='';
+  filtroEstado='todos';
+  document.querySelectorAll('.filter-chips .chip').forEach((c,i)=>c.classList.toggle('active',i===0));
+  const countEl=document.getElementById('pacientes-count');
+  if(countEl) countEl.textContent=`${C.p.length} pacientes`;
+  renderPacientesList(C.p);
+}
+
+function renderPacientesList(lista){
   const tbody=document.getElementById('tabla-pacientes'), empty=document.getElementById('pacientes-empty');
-  if(!C.p.length){ tbody.innerHTML=''; empty.style.display='block'; return; }
+  if(!lista.length){ tbody.innerHTML=''; empty.style.display='block'; return; }
   empty.style.display='none';
-  tbody.innerHTML=C.p.map(x=>`<tr>
+  tbody.innerHTML=lista.map(x=>`<tr>
     <td><div class="patient-name-cell"><div class="patient-avatar" style="background:${colAvatar(x.id)}">${ini(x.nombre,x.apellidos)}</div>
     <div><div style="font-weight:600">${x.nombre} ${x.apellidos}</div><div class="text-light">${calcEdad(x.fechaNac)}</div></div></div></td>
     <td>${x.identificacion||'—'}</td><td>${formatFecha(x.fechaNac)}</td><td>${x.telefono||'—'}</td><td>${x.email||'—'}</td>
@@ -1229,6 +1343,42 @@ function importarJSON(e){
     }catch(err){ setLoading(false); toast('Error al leer el archivo','error'); console.error(err); }
   };
   r.readAsText(file); e.target.value='';
+}
+
+// ════════════════════ SIDEBAR MOBILE ════════════════════
+function toggleSidebar(){
+  const sb=document.getElementById('sidebar'), ov=document.getElementById('sidebar-overlay');
+  const open=sb.classList.toggle('open');
+  ov.classList.toggle('show',open);
+}
+function closeSidebar(){
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('show');
+}
+
+// ════════════════════ BOTTOM NAV ════════════════════
+function updateBottomNav(view){
+  const map={dashboard:'bn-dashboard',pacientes:'bn-pacientes',citas:'bn-citas',medicaciones:'bn-medicaciones',notas:'bn-notas','paciente-detalle':'bn-pacientes',exportar:null};
+  document.querySelectorAll('.bn-item').forEach(b=>b.classList.remove('active'));
+  const id=map[view]; if(id) { const el=document.getElementById(id); if(el) el.classList.add('active'); }
+}
+
+// ════════════════════ FILTRO PACIENTES ════════════════════
+let filtroEstado='todos';
+function setFiltroEstado(estado, chipEl){
+  filtroEstado=estado;
+  document.querySelectorAll('.filter-chips .chip').forEach(c=>c.classList.remove('active'));
+  if(chipEl) chipEl.classList.add('active');
+  filterPacientes(document.getElementById('pacientes-search')?.value||'');
+}
+function filterPacientes(q){
+  const q2=q.toLowerCase().trim();
+  let lista=C.p;
+  if(filtroEstado!=='todos') lista=lista.filter(x=>(x.estado||'activo')===filtroEstado);
+  if(q2) lista=lista.filter(p=>`${p.nombre} ${p.apellidos} ${p.identificacion||''} ${p.telefono||''}`.toLowerCase().includes(q2));
+  const countEl=document.getElementById('pacientes-count');
+  if(countEl) countEl.textContent=lista.length===C.p.length?`${C.p.length} pacientes`:`${lista.length} de ${C.p.length} pacientes`;
+  renderPacientesList(lista);
 }
 
 // ════════════════════ SEARCH ════════════════════
