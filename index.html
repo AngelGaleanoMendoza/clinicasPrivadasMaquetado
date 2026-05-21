@@ -357,17 +357,11 @@ tbody tr:hover td{background:#F8FAFC}
       <h1>GaleSistem</h1>
       <p>Sistema de Gestión Clínica</p>
     </div>
-    <div class="login-users">
-      <p>Acceso rápido</p>
-      <div class="login-user-chip" onclick="quickLogin('admin','1234')">👨‍⚕️ Dr. Galeano</div>
-      <div class="login-user-chip" onclick="quickLogin('recepcion','1234')">👩‍💼 Recepción</div>
-      <div class="login-user-chip" onclick="quickLogin('enfermeria','1234')">👩‍⚕️ Enfermería</div>
-    </div>
     <div class="login-field">
-      <label>Usuario</label>
+      <label>Correo electrónico</label>
       <div class="login-field-wrap">
-        <span class="field-icon">👤</span>
-        <input type="text" id="login-user" placeholder="Ingresa tu usuario" autocomplete="username">
+        <span class="field-icon">📧</span>
+        <input type="email" id="login-email" placeholder="correo@galesistem.com" autocomplete="email">
       </div>
     </div>
     <div class="login-field">
@@ -740,48 +734,57 @@ function setDbStatus(ok) {
   document.getElementById('db-label').textContent = ok ? 'Supabase conectado' : 'Sin conexión';
 }
 
-// ════════════════════ LOGIN ════════════════════
-const USERS = {
-  admin:      { name:'Dr. Galeano',  role:'Administrador', avatar:'G' },
-  recepcion:  { name:'Recepción',    role:'Recepcionista', avatar:'R' },
-  enfermeria: { name:'Enfermería',   role:'Enfermera/o',   avatar:'E' },
-};
+// ════════════════════ AUTH (Supabase) ════════════════════
 let currentUser = null;
 
-function quickLogin(u, p) {
-  document.getElementById('login-user').value = u;
-  document.getElementById('login-pass').value = p;
+async function checkSession() {
+  const { data:{ session } } = await sb.auth.getSession();
+  if (session) await onUserLoggedIn(session.user, false);
+}
+
+async function onUserLoggedIn(user, animate=true) {
+  await loadAll();
+  const { data: profile } = await sb.from('profiles').select('*').eq('id', user.id).single();
+  const rol = profile?.rol || 'recepcion';
+  const nombre = profile?.nombre || user.email.split('@')[0];
+  const rolLabel = {admin:'Administrador',recepcion:'Recepcionista',enfermeria:'Enfermera/o'}[rol] || rol;
+  currentUser = { name:nombre, role:rolLabel, avatar:nombre[0].toUpperCase(), email:user.email, key:rol };
+
+  const ls = document.getElementById('login-screen');
+  const app = document.getElementById('app');
+  if (animate) {
+    ls.style.transition = 'opacity .4s, transform .4s';
+    ls.style.opacity = '0'; ls.style.transform = 'scale(1.05)';
+    await new Promise(r => setTimeout(r, 400));
+  }
+  ls.style.display = 'none';
+  app.classList.add('visible');
+  document.getElementById('sf-name').textContent = currentUser.name;
+  document.getElementById('sf-role').textContent = currentUser.role;
+  document.getElementById('sf-avatar').textContent = currentUser.avatar;
+  navigate('dashboard');
+  if (animate) toast(`Bienvenido, ${currentUser.name} 👋`, 'info');
 }
 
 async function doLogin() {
-  const u = document.getElementById('login-user').value.trim().toLowerCase();
-  const p = document.getElementById('login-pass').value;
-  if(!u || !p) { shakeLogin(); return; }
-  if(!USERS[u]) { shakeLogin(); toast('Usuario no encontrado','error'); return; }
-  if(p.length < 3) { shakeLogin(); toast('Contraseña incorrecta','error'); return; }
-
-  currentUser = { ...USERS[u], key:u };
-  const ls = document.getElementById('login-screen');
-  ls.style.transition = 'opacity .4s, transform .4s';
-  ls.style.opacity = '0';
-  ls.style.transform = 'scale(1.05)';
-
-  await loadAll();
-
-  setTimeout(() => {
-    ls.style.display = 'none';
-    const app = document.getElementById('app');
-    app.classList.add('visible');
-    document.getElementById('sf-name').textContent = currentUser.name;
-    document.getElementById('sf-role').textContent = currentUser.role;
-    document.getElementById('sf-avatar').textContent = currentUser.avatar;
-    navigate('dashboard');
-    toast(`Bienvenido, ${currentUser.name} 👋`,'info');
-  }, 400);
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-pass').value;
+  if (!email || !pass) { shakeLogin(); return; }
+  setLoading(true);
+  const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
+  setLoading(false);
+  if (error) {
+    shakeLogin();
+    const msg = error.message.includes('Invalid') ? 'Credenciales incorrectas' : error.message;
+    toast(msg, 'error');
+    return;
+  }
+  await onUserLoggedIn(data.user, true);
 }
 
-function doLogout() {
-  if(!confirm('¿Cerrar sesión?')) return;
+async function doLogout() {
+  if (!confirm('¿Cerrar sesión?')) return;
+  await sb.auth.signOut();
   const app = document.getElementById('app');
   app.style.transition = 'opacity .3s';
   app.style.opacity = '0';
@@ -791,7 +794,7 @@ function doLogout() {
     const ls = document.getElementById('login-screen');
     ls.style.cssText = 'display:flex;opacity:0;transform:scale(.95);transition:opacity .4s,transform .4s';
     setTimeout(() => { ls.style.opacity='1'; ls.style.transform='none'; }, 10);
-    document.getElementById('login-user').value = '';
+    document.getElementById('login-email').value = '';
     document.getElementById('login-pass').value = '';
     currentUser = null;
   }, 300);
@@ -1403,8 +1406,9 @@ document.addEventListener('click',e=>{
 });
 
 // ════════════════════ INIT ════════════════════
-document.addEventListener('DOMContentLoaded',()=>{
+document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('topbar-date').textContent = new Date().toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'});
+  await checkSession();
 });
 </script>
 </body>
