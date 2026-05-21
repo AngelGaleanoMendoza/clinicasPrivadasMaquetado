@@ -327,6 +327,48 @@ tbody tr:hover td{background:#F8FAFC}
 .stat-trend.warn{color:var(--warning)}
 .stat-trend.ok{color:var(--success)}
 
+/* ATENDIDOS POR DÍA */
+.atendido-item{display:flex;align-items:center;gap:12px;padding:13px 16px;background:var(--bg);border-radius:10px;margin-bottom:8px;border-left:3px solid var(--primary);transition:all .2s}
+.atendido-item.completada{border-left-color:var(--success)}
+.atendido-item.cancelada{border-left-color:var(--danger);opacity:.65}
+.atendido-item.pendiente,.atendido-item.confirmada{border-left-color:var(--warning)}
+.atendido-item:hover{background:var(--primary-light);transform:translateX(2px)}
+.atendido-time{font-size:14px;font-weight:800;color:var(--primary);min-width:50px}
+.atendido-item.completada .atendido-time{color:var(--success)}
+.atendido-info{flex:1;min-width:0}
+.atendido-name{font-weight:700;font-size:14px}
+.atendido-sub{font-size:11px;color:var(--text-light);margin-top:3px}
+
+/* RESUMEN / HOJA DE CONSULTA */
+.rc-header{display:flex;justify-content:space-between;align-items:center;padding-bottom:14px;border-bottom:2px solid var(--border);margin-bottom:18px}
+.rc-logo{font-size:15px;font-weight:800;color:var(--primary);display:flex;align-items:center;gap:6px}
+.rc-date-gen{font-size:11px;color:var(--text-light)}
+.rc-patient{display:flex;gap:16px;align-items:flex-start;background:linear-gradient(135deg,#0F172A,#1E3A5F);border-radius:var(--radius);padding:20px;margin-bottom:18px;color:#fff}
+.rc-patient-info h2{font-size:19px;font-weight:800;margin-bottom:6px}
+.rc-meta{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;opacity:.85}
+.rc-alergias{margin-top:8px;background:rgba(239,68,68,.2);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:6px 10px;font-size:12px;color:#FCA5A5}
+.rc-section{background:var(--bg);border-radius:12px;padding:18px;margin-bottom:14px;border:1px solid var(--border)}
+.rc-section-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--text-light);margin-bottom:12px}
+.rc-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.rc-field{display:flex;flex-direction:column;gap:3px}
+.rc-field.full{grid-column:1/-1}
+.rc-field span{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-light)}
+.rc-field strong{font-size:14px;font-weight:700;color:var(--text);line-height:1.4}
+.rc-med-item{padding:10px 14px;background:var(--card);border-radius:8px;border-left:3px solid var(--success);margin-bottom:8px;font-size:13px;font-weight:600}
+.rc-nota{background:var(--card);border-radius:10px;padding:14px;margin-bottom:10px;border:1px solid var(--border)}
+.rc-footer{text-align:center;padding-top:14px;border-top:1px solid var(--border);color:var(--text-light);font-size:11px;margin-top:6px}
+
+@media print{
+  #login-screen,#loading-overlay,.toast-container,.bottom-nav,.sidebar-overlay{display:none!important}
+  #app{display:block!important}
+  .sidebar,.topbar,.content{display:none!important}
+  .modal-overlay{position:static!important;background:none!important;padding:0!important;display:block!important}
+  .modal{box-shadow:none!important;border:none!important;max-height:none!important;animation:none!important;border-radius:0!important}
+  .modal-footer{display:none!important}
+  .rc-patient{color:#000!important;background:#f0f4f8!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .rc-alergias{color:#c00!important;background:#ffe0e0!important;border-color:#faa!important}
+}
+
 @media(max-width:768px){
   .bottom-nav{display:block}
   .content{padding:14px 14px 90px}
@@ -409,6 +451,7 @@ tbody tr:hover td{background:#F8FAFC}
       <div class="menu-item" onclick="navigate('citas')"><span class="icon">📅</span> Citas <span class="badge" id="badge-citas">0</span></div>
       <div class="menu-item" onclick="navigate('medicaciones')"><span class="icon">💊</span> Medicaciones</div>
       <div class="menu-item" onclick="navigate('notas')"><span class="icon">📝</span> Notas Clínicas</div>
+      <div class="menu-item" onclick="navigate('atendidos')"><span class="icon">📊</span> Atendidos por Día</div>
       <div class="menu-section">Sistema</div>
       <div class="menu-item" onclick="navigate('exportar')"><span class="icon">📤</span> Exportar / Enviar</div>
     </nav>
@@ -557,6 +600,21 @@ tbody tr:hover td{background:#F8FAFC}
         <div id="tab-notas-p" style="display:none"></div>
       </div>
 
+      <!-- ATENDIDOS POR DÍA -->
+      <div id="view-atendidos" class="view">
+        <div class="card">
+          <div class="card-header">
+            <h3>📊 Pacientes Atendidos por Día</h3>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <input type="date" id="atendidos-fecha-picker" onchange="renderAtendidos(this.value)" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;outline:none;cursor:pointer;color:var(--text);background:var(--card)">
+              <button class="btn btn-secondary btn-sm" onclick="renderAtendidos(hoy())">Hoy</button>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px" id="atendidos-stats"></div>
+          <div id="atendidos-lista"></div>
+        </div>
+      </div>
+
       <!-- EXPORTAR -->
       <div id="view-exportar" class="view">
         <div class="grid-2">
@@ -695,6 +753,18 @@ tbody tr:hover td{background:#F8FAFC}
     <h2 id="ver-nota-title">📝 Nota Clínica</h2>
     <div id="ver-nota-content"></div>
     <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-ver-nota')">Cerrar</button></div>
+  </div>
+</div>
+
+<!-- MODAL RESUMEN / HOJA DE CONSULTA -->
+<div class="modal-overlay" id="modal-resumen-cita">
+  <div class="modal modal-lg">
+    <h2>📄 Hoja de Consulta</h2>
+    <div id="resumen-cita-content"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="imprimirResumen()">🖨️ Imprimir</button>
+      <button class="btn btn-secondary" onclick="closeModal('modal-resumen-cita')">Cerrar</button>
+    </div>
   </div>
 </div>
 
@@ -846,8 +916,8 @@ async function doLogout() {
     const ls = document.getElementById('login-screen');
     ls.style.cssText = 'display:flex;opacity:0;transform:scale(.95);transition:opacity .4s,transform .4s';
     setTimeout(() => { ls.style.opacity='1'; ls.style.transform='none'; }, 10);
-    document.getElementById('login-email').value = '';
     document.getElementById('login-pass').value = '';
+    backToUserSelect();
     currentUser = null;
   }, 300);
 }
@@ -894,7 +964,7 @@ async function navigate(view, patientId) {
   if(el) el.classList.add('active');
   const mi=document.querySelector(`.menu-item[onclick*="'${view}'"]`);
   if(mi) mi.classList.add('active');
-  const titles={dashboard:'Dashboard',pacientes:'Pacientes',citas:'Citas',medicaciones:'Medicaciones',notas:'Notas Clínicas',exportar:'Exportar / Enviar','paciente-detalle':'Expediente del Paciente'};
+  const titles={dashboard:'Dashboard',pacientes:'Pacientes',citas:'Citas',medicaciones:'Medicaciones',notas:'Notas Clínicas',atendidos:'Atendidos por Día',exportar:'Exportar / Enviar','paciente-detalle':'Expediente del Paciente'};
   document.getElementById('page-title').textContent = titles[view]||view;
   currentView=view;
   if(patientId) currentPatientId=patientId;
@@ -910,6 +980,7 @@ function renderView(v) {
     case 'citas': renderCitas(); break;
     case 'medicaciones': renderMedicaciones(); break;
     case 'notas': renderNotas(); break;
+    case 'atendidos': renderAtendidos(); break;
     case 'exportar': renderExportar(); break;
     case 'paciente-detalle': renderDetalleP(currentPatientId); break;
   }
@@ -1136,7 +1207,7 @@ function renderDetalleP(pid){
 
   document.getElementById('tab-citas-p').innerHTML=`<div class="card">
     <div class="card-header"><h3>📅 Citas</h3><button class="btn btn-primary btn-sm" onclick="openModalCitaP(${p.id})">+ Nueva</button></div>
-    ${citas.length?`<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Motivo</th><th>Tipo</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>${citas.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(c=>`<tr><td>${formatFecha(c.fecha)}</td><td>${c.hora}</td><td>${c.motivo}</td><td><span class="tag tag-cyan">${c.tipo}</span></td><td>${estadoTag(c.estado)}</td><td><div class="actions-cell"><button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">✏️</button><button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">🗑️</button></div></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty-state"><div class="empty-icon">📅</div><p>Sin citas</p></div>'}
+    ${citas.length?`<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Motivo</th><th>Tipo</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>${citas.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(c=>`<tr><td>${formatFecha(c.fecha)}</td><td>${c.hora}</td><td>${c.motivo}</td><td><span class="tag tag-cyan">${c.tipo}</span></td><td>${estadoTag(c.estado)}</td><td><div class="actions-cell"><button class="btn btn-primary btn-sm" onclick="verResumenCita(${c.id})" title="Ver hoja">📄</button><button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">✏️</button><button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">🗑️</button></div></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty-state"><div class="empty-icon">📅</div><p>Sin citas</p></div>'}
   </div>`;
 
   document.getElementById('tab-meds-p').innerHTML=`<div class="card">
@@ -1176,7 +1247,7 @@ function renderCitas(){
     return `<tr><td>${formatFecha(c.fecha)}</td><td>${c.hora}</td>
       <td><div class="patient-name-cell"><div class="patient-avatar" style="background:${colAvatar(c.pacienteId||0)};width:28px;height:28px;font-size:10px">${p?ini(p.nombre,p.apellidos):'?'}</div><div>${p?p.nombre+' '+p.apellidos:'Desconocido'}</div></div></td>
       <td>${c.motivo}</td><td><span class="tag tag-cyan">${c.tipo}</span></td><td>${estadoTag(c.estado)}</td>
-      <td><div class="actions-cell"><button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">✏️</button><button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">🗑️</button></div></td></tr>`;
+      <td><div class="actions-cell"><button class="btn btn-primary btn-sm" onclick="verResumenCita(${c.id})" title="Ver hoja">📄</button><button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">✏️</button><button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">🗑️</button></div></td></tr>`;
   }).join('');
 }
 
@@ -1349,6 +1420,147 @@ function verNota(id){
   document.getElementById('modal-ver-nota').classList.add('open');
 }
 
+// ════════════════════ ATENDIDOS POR DÍA ════════════════════
+let atendidosFecha = hoy();
+
+function renderAtendidos(fecha) {
+  if(fecha) atendidosFecha = fecha;
+  const picker = document.getElementById('atendidos-fecha-picker');
+  if(picker) picker.value = atendidosFecha;
+
+  const citas = C.c.filter(c => c.fecha === atendidosFecha).sort((a,b) => a.hora.localeCompare(b.hora));
+  const completadas = citas.filter(c => c.estado === 'completada');
+  const pendientes  = citas.filter(c => c.estado === 'pendiente' || c.estado === 'confirmada');
+  const canceladas  = citas.filter(c => c.estado === 'cancelada');
+
+  const statsEl = document.getElementById('atendidos-stats');
+  if(statsEl) statsEl.innerHTML =
+    `<span class="tag tag-green">✅ ${completadas.length} completadas</span>` +
+    `<span class="tag tag-orange">⏳ ${pendientes.length} pendientes</span>` +
+    (canceladas.length ? `<span class="tag tag-red">❌ ${canceladas.length} canceladas</span>` : '') +
+    `<span class="tag tag-gray">📋 ${citas.length} total del día</span>`;
+
+  const lista = document.getElementById('atendidos-lista');
+  if(!lista) return;
+  if(!citas.length) {
+    lista.innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div><p>Sin citas registradas para esta fecha</p></div>';
+    return;
+  }
+  lista.innerHTML = citas.map(c => {
+    const p = C.p.find(x => x.id === c.pacienteId);
+    return `<div class="atendido-item ${c.estado}">
+      <div class="atendido-time">${c.hora}</div>
+      <div class="patient-avatar" style="background:${colAvatar(c.pacienteId||0)};width:38px;height:38px;font-size:13px;flex-shrink:0">${p?ini(p.nombre,p.apellidos):'?'}</div>
+      <div class="atendido-info">
+        <div class="atendido-name">${p?p.nombre+' '+p.apellidos:'Desconocido'}</div>
+        <div class="atendido-sub">${c.motivo} · <span class="tag tag-cyan" style="font-size:10px;padding:2px 7px">${c.tipo}</span></div>
+      </div>
+      ${estadoTag(c.estado)}
+      <div class="actions-cell">
+        <button class="btn btn-primary btn-sm" onclick="verResumenCita(${c.id})">📄 Hoja</button>
+        <button class="btn btn-secondary btn-sm" onclick="navigate('paciente-detalle',${c.pacienteId})">👁️</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function verResumenCita(citaId) {
+  const c = C.c.find(x => x.id === citaId);
+  if(!c) return;
+  const p = C.p.find(x => x.id === c.pacienteId);
+  const meds = C.m.filter(m => m.pacienteId === c.pacienteId && m.estado === 'activa');
+  const notasDia = C.n.filter(n => n.pacienteId === c.pacienteId && n.fecha === c.fecha).sort((a,b) => b.id - a.id);
+  const notasOtras = C.n.filter(n => n.pacienteId === c.pacienteId && n.fecha !== c.fecha).sort((a,b) => b.fecha.localeCompare(a.fecha));
+  const estadoIcon = {completada:'✅',pendiente:'⏳',confirmada:'🔵',cancelada:'❌'}[c.estado]||'📋';
+
+  document.getElementById('resumen-cita-content').innerHTML = `
+    <div class="rc-header">
+      <div class="rc-logo">🏥 GaleSistem · Hoja de Consulta</div>
+      <div class="rc-date-gen">Generado: ${new Date().toLocaleString('es-ES')}</div>
+    </div>
+
+    <div class="rc-patient">
+      <div class="patient-avatar" style="background:${p?colAvatar(p.id):'#475569'};width:62px;height:62px;font-size:22px;flex-shrink:0;border:3px solid rgba(255,255,255,.2)">${p?ini(p.nombre,p.apellidos):'?'}</div>
+      <div class="rc-patient-info" style="flex:1">
+        <h2>${p?p.nombre+' '+p.apellidos:'Paciente no encontrado'}</h2>
+        <div class="rc-meta">
+          ${p?.fechaNac?`<span>🎂 ${calcEdad(p.fechaNac)}</span>`:''}
+          ${p?.sexo?`<span>${p.sexo==='M'?'♂ Masculino':p.sexo==='F'?'♀ Femenino':p.sexo}</span>`:''}
+          ${p?.sangre?`<span>🩸 ${p.sangre}</span>`:''}
+          ${p?.telefono?`<span>📞 ${p.telefono}</span>`:''}
+          ${p?.identificacion?`<span>🪪 ${p.identificacion}</span>`:''}
+          ${p?.email?`<span>✉️ ${p.email}</span>`:''}
+        </div>
+        ${p?.alergias?`<div class="rc-alergias">⚠️ Alergias: <strong>${p.alergias}</strong></div>`:''}
+        ${p?.emergencia?`<div style="font-size:12px;color:rgba(255,255,255,.65);margin-top:6px">🆘 Emergencia: ${p.emergencia}</div>`:''}
+        ${p?.direccion?`<div style="font-size:12px;color:rgba(255,255,255,.55);margin-top:3px">📍 ${p.direccion}</div>`:''}
+      </div>
+    </div>
+
+    <div class="rc-section">
+      <div class="rc-section-title">📅 Datos de la Consulta</div>
+      <div class="rc-fields">
+        <div class="rc-field"><span>Fecha</span><strong>${formatFecha(c.fecha)}</strong></div>
+        <div class="rc-field"><span>Hora</span><strong>${c.hora}</strong></div>
+        <div class="rc-field"><span>Tipo de consulta</span><strong>${c.tipo}</strong></div>
+        <div class="rc-field"><span>Estado</span><strong>${estadoIcon} ${c.estado}</strong></div>
+        <div class="rc-field full"><span>Motivo de Consulta</span><strong>${c.motivo}</strong></div>
+        ${c.notas?`<div class="rc-field full"><span>Observaciones / Indicaciones de la cita</span><strong style="white-space:pre-wrap;font-weight:500">${c.notas}</strong></div>`:''}
+      </div>
+    </div>
+
+    ${meds.length?`<div class="rc-section">
+      <div class="rc-section-title">💊 Medicaciones Activas del Paciente</div>
+      ${meds.map(m=>`<div class="rc-med-item">
+        <strong>${m.nombre}</strong> · ${m.dosis} · ${m.frecuencia} · vía ${m.via}
+        ${m.inicio?`<span style="font-size:11px;color:var(--text-light);margin-left:6px">(desde ${formatFecha(m.inicio)}${m.fin?' hasta '+formatFecha(m.fin):''})</span>`:''}
+        ${m.indicaciones?`<div style="font-size:12px;color:var(--text-light);margin-top:4px">📌 ${m.indicaciones}</div>`:''}
+      </div>`).join('')}
+    </div>`:
+    `<div class="rc-section"><div class="rc-section-title">💊 Medicaciones Activas</div><p style="font-size:13px;color:var(--text-light)">Sin medicaciones activas registradas</p></div>`}
+
+    ${notasDia.length?`<div class="rc-section">
+      <div class="rc-section-title">📝 Notas Clínicas — Esta Consulta (${formatFecha(c.fecha)})</div>
+      ${notasDia.map(n=>`<div class="rc-nota">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+          <span class="tag tag-blue">${n.tipo}</span>
+          ${n.titulo?`<strong style="font-size:13px">${n.titulo}</strong>`:''}
+        </div>
+        <div style="white-space:pre-wrap;line-height:1.75;font-size:13px;color:var(--text)">${n.contenido}</div>
+      </div>`).join('')}
+    </div>`:''}
+
+    ${notasOtras.length?`<div class="rc-section">
+      <div class="rc-section-title">📋 Historial de Notas Anteriores</div>
+      ${notasOtras.slice(0,4).map(n=>`<div class="rc-nota">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
+          <span class="tag tag-blue">${n.tipo}</span>
+          <span style="font-size:11px;color:var(--text-light)">${formatFecha(n.fecha)}</span>
+          ${n.titulo?`<strong style="font-size:12px">${n.titulo}</strong>`:''}
+        </div>
+        <div style="white-space:pre-wrap;line-height:1.6;font-size:12px;color:var(--text)">${n.contenido.length>300?n.contenido.substring(0,300)+'…':n.contenido}</div>
+      </div>`).join('')}
+      ${notasOtras.length>4?`<p style="font-size:12px;color:var(--text-light);text-align:center;margin-top:6px">+${notasOtras.length-4} notas más en el expediente</p>`:''}
+    </div>`:''}
+
+    ${!notasDia.length&&!notasOtras.length?`<div class="rc-section"><div class="rc-section-title">📝 Notas Clínicas</div><p style="font-size:13px;color:var(--text-light)">Sin notas clínicas registradas para este paciente</p></div>`:''}
+
+    ${p?.observaciones?`<div class="rc-section">
+      <div class="rc-section-title">🗂️ Antecedentes y Observaciones Generales</div>
+      <div style="white-space:pre-wrap;line-height:1.75;font-size:13px">${p.observaciones}</div>
+    </div>`:''}
+
+    <div class="rc-footer">
+      GaleSistem · Sistema de Gestión Clínica · Documento generado el ${new Date().toLocaleString('es-ES')} · Solo uso médico interno
+    </div>`;
+
+  document.getElementById('modal-resumen-cita').classList.add('open');
+}
+
+function imprimirResumen() {
+  window.print();
+}
+
 // ════════════════════ EXPORTAR ════════════════════
 function renderExportar(){
   document.getElementById('resumen-exportar').innerHTML=`
@@ -1413,7 +1625,7 @@ function closeSidebar(){
 
 // ════════════════════ BOTTOM NAV ════════════════════
 function updateBottomNav(view){
-  const map={dashboard:'bn-dashboard',pacientes:'bn-pacientes',citas:'bn-citas',medicaciones:'bn-medicaciones',notas:'bn-notas','paciente-detalle':'bn-pacientes',exportar:null};
+  const map={dashboard:'bn-dashboard',pacientes:'bn-pacientes',citas:'bn-citas',medicaciones:'bn-medicaciones',notas:'bn-notas',atendidos:null,'paciente-detalle':'bn-pacientes',exportar:null};
   document.querySelectorAll('.bn-item').forEach(b=>b.classList.remove('active'));
   const id=map[view]; if(id) { const el=document.getElementById(id); if(el) el.classList.add('active'); }
 }
