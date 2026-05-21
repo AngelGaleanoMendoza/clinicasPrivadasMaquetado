@@ -756,6 +756,16 @@ tbody tr:hover td{background:#F8FAFC}
   </div>
 </div>
 
+<!-- MODAL SELECTOR DE CITA (varios turnos el mismo día) -->
+<div class="modal-overlay" id="modal-acudio-picker">
+  <div class="modal" style="max-width:440px">
+    <h2 id="acudio-picker-title">✅ ¿Qué cita marcar?</h2>
+    <p style="font-size:13px;color:var(--text-light);margin-bottom:16px">Este paciente tiene más de una cita hoy. Selecciona cuál marcar como completada:</p>
+    <div id="acudio-picker-lista"></div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-acudio-picker')">Cancelar</button></div>
+  </div>
+</div>
+
 <!-- MODAL RESUMEN / HOJA DE CONSULTA -->
 <div class="modal-overlay" id="modal-resumen-cita">
   <div class="modal modal-lg">
@@ -1107,6 +1117,7 @@ function renderPacientesList(lista){
     <td>${x.identificacion||'—'}</td><td>${formatFecha(x.fechaNac)}</td><td>${x.telefono||'—'}</td><td>${x.email||'—'}</td>
     <td>${estadoTag(x.estado||'activo')}</td>
     <td><div class="actions-cell">
+      <button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;white-space:nowrap" onclick="registrarAcudidoPaciente(${x.id})">✅ Acudió</button>
       <button class="btn btn-secondary btn-sm" onclick="navigate('paciente-detalle',${x.id})">👁️</button>
       <button class="btn btn-secondary btn-sm" onclick="openModalPaciente(${x.id})">✏️</button>
       <button class="btn btn-danger btn-sm" onclick="eliminarPaciente(${x.id})">🗑️</button>
@@ -1185,7 +1196,10 @@ function renderDetalleP(pid){
           ${p.telefono?`<span>📞 ${p.telefono}</span>`:''}
         </div>
       </div>
-      <div style="margin-left:auto"><button class="btn" style="background:rgba(255,255,255,.15);color:#fff" onclick="openModalPaciente(${p.id})">✏️ Editar</button></div>
+      <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff" onclick="registrarAcudidoPaciente(${p.id})">✅ Paciente acudió</button>
+        <button class="btn" style="background:rgba(255,255,255,.15);color:#fff" onclick="openModalPaciente(${p.id})">✏️ Editar</button>
+      </div>
     </div>`;
 
   document.getElementById('tab-info').innerHTML=`
@@ -1299,6 +1313,27 @@ async function eliminarCita(id){
   await loadAll(); renderCitas();
   if(currentView==='paciente-detalle') renderDetalleP(currentPatientId);
   updateBadges();
+}
+
+function registrarAcudidoPaciente(pid){
+  const h=hoy();
+  const p=C.p.find(x=>x.id===pid);
+  const nombre=p?p.nombre+' '+p.apellidos:'El paciente';
+  const citasHoy=C.c.filter(c=>c.pacienteId===pid&&c.fecha===h&&c.estado!=='completada'&&c.estado!=='cancelada');
+  if(!citasHoy.length){
+    toast(`${p?.nombre||'El paciente'} no tiene citas pendientes hoy`,'info');
+    return;
+  }
+  if(citasHoy.length===1){ marcarCitaCompletada(citasHoy[0].id); return; }
+  document.getElementById('acudio-picker-title').textContent=`✅ Citas de ${p?.nombre||'Paciente'} hoy`;
+  document.getElementById('acudio-picker-lista').innerHTML=citasHoy.map(c=>`
+    <div class="cita-item ${c.estado}" style="cursor:pointer;margin-bottom:8px" onclick="closeModal('modal-acudio-picker');marcarCitaCompletada(${c.id})">
+      <div class="cita-time">${c.hora}</div>
+      <div class="cita-info"><div class="cita-paciente">${c.motivo}</div><div class="cita-motivo">${c.tipo}</div></div>
+      ${estadoTag(c.estado)}
+      <span style="color:var(--success);font-size:20px;flex-shrink:0">✅</span>
+    </div>`).join('');
+  document.getElementById('modal-acudio-picker').classList.add('open');
 }
 
 async function marcarCitaCompletada(id){
