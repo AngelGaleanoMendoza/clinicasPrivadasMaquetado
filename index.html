@@ -269,6 +269,22 @@ tbody tr:hover td{background:#F8FAFC}
 .btn-back{background:transparent;border:none;color:#475569;font-size:12px;cursor:pointer;font-family:inherit;padding:0 0 14px;display:flex;align-items:center;gap:5px;transition:color .2s}
 .btn-back:hover{color:#94A3B8}
 
+/* FOTO PACIENTE */
+.foto-circle{width:88px;height:88px;border-radius:50%;background:var(--bg);border:3px solid var(--border);overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.foto-circle img{width:100%;height:100%;object-fit:cover}
+
+/* EXPEDIENTE VITALES */
+.vitales-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:16px}
+.vital-card{background:linear-gradient(135deg,#F0FDF4,#DCFCE7);border:1px solid #BBF7D0;border-radius:12px;padding:14px;text-align:center}
+.vital-card .v-val{font-size:22px;font-weight:800;color:#166534;line-height:1}
+.vital-card .v-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#15803D;margin-top:4px}
+.exp-section{margin-bottom:16px}
+.exp-section-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--text-light);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+
+/* CONFIGURACIÓN */
+.config-logo-box{width:100px;height:100px;border-radius:16px;background:linear-gradient(135deg,var(--primary),var(--accent));display:flex;align-items:center;justify-content:center;font-size:36px;overflow:hidden;flex-shrink:0}
+.config-logo-box img{width:100%;height:100%;object-fit:contain;border-radius:16px}
+
 /* MISC */
 ::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-track{background:transparent}
@@ -454,6 +470,7 @@ tbody tr:hover td{background:#F8FAFC}
       <div class="menu-item" onclick="navigate('atendidos')"><span class="icon">📊</span> Atendidos por Día</div>
       <div class="menu-section">Sistema</div>
       <div class="menu-item" onclick="navigate('exportar')"><span class="icon">📤</span> Exportar / Enviar</div>
+      <div class="menu-item" onclick="navigate('configuracion')"><span class="icon">⚙️</span> Configuración Clínica</div>
     </nav>
     <div class="sidebar-footer">
       <div class="sf-user">
@@ -593,11 +610,13 @@ tbody tr:hover td{background:#F8FAFC}
           <button class="tab" onclick="switchTab('tab-citas-p',this)">📅 Citas</button>
           <button class="tab" onclick="switchTab('tab-meds-p',this)">💊 Medicaciones</button>
           <button class="tab" onclick="switchTab('tab-notas-p',this)">📝 Notas</button>
+          <button class="tab" onclick="switchTab('tab-expediente',this)">📁 Expediente</button>
         </div>
         <div id="tab-info"></div>
         <div id="tab-citas-p" style="display:none"></div>
         <div id="tab-meds-p" style="display:none"></div>
         <div id="tab-notas-p" style="display:none"></div>
+        <div id="tab-expediente" style="display:none"></div>
       </div>
 
       <!-- ATENDIDOS POR DÍA -->
@@ -612,6 +631,48 @@ tbody tr:hover td{background:#F8FAFC}
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px" id="atendidos-stats"></div>
           <div id="atendidos-lista"></div>
+        </div>
+      </div>
+
+      <!-- CONFIGURACIÓN CLÍNICA -->
+      <div id="view-configuracion" class="view">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header"><h3>⚙️ Datos de la Clínica</h3></div>
+            <div style="display:flex;gap:18px;align-items:flex-start;margin-bottom:22px">
+              <div id="config-logo-box" class="config-logo-box">🏥</div>
+              <div style="flex:1">
+                <p class="text-light" style="margin-bottom:8px">Logo de la clínica (URL de imagen)</p>
+                <div style="display:flex;gap:8px">
+                  <input type="text" id="config-logo-url" placeholder="https://..." style="flex:1;padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit;outline:none">
+                  <button class="btn btn-secondary btn-sm" onclick="previewLogo()">Ver</button>
+                </div>
+                <p class="text-light" style="margin-top:6px;font-size:11px">O pega la URL de tu logo para que aparezca en las notas de consulta</p>
+              </div>
+            </div>
+            <div class="form-grid">
+              <div class="form-group full"><label>Nombre de la Clínica *</label><input type="text" id="config-nombre-clinica" placeholder="Clínica GaleSistem"></div>
+              <div class="form-group"><label>Médico Responsable</label><input type="text" id="config-nombre-doctor" placeholder="Dr. Ángel Galeano"></div>
+              <div class="form-group"><label>Especialidad</label><input type="text" id="config-especialidad" placeholder="Medicina General"></div>
+              <div class="form-group"><label>Registro Médico / Licencia</label><input type="text" id="config-registro" placeholder="CM-12345"></div>
+              <div class="form-group"><label>Teléfono</label><input type="tel" id="config-telefono" placeholder="+503 2200-0000"></div>
+              <div class="form-group"><label>Correo Clínica</label><input type="email" id="config-email" placeholder="info@clinica.com"></div>
+              <div class="form-group full"><label>Dirección</label><input type="text" id="config-direccion" placeholder="Calle, Ciudad, País"></div>
+              <div class="form-group full"><label>Nota al pie (en notas de consulta)</label><input type="text" id="config-nota-pie" placeholder="Horario: Lunes a Viernes 8am–5pm"></div>
+            </div>
+            <div style="margin-top:18px">
+              <button class="btn btn-primary" onclick="guardarConfigClinica()">💾 Guardar Configuración</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>👁️ Vista Previa Nota de Consulta</h3></div>
+            <div id="config-preview" style="border:1px solid var(--border);border-radius:10px;padding:18px;background:var(--bg)">
+              <p class="text-light" style="text-align:center;padding:20px">Llena los datos y guarda para ver la vista previa en las notas de consulta.</p>
+            </div>
+            <div style="margin-top:14px">
+              <p class="text-light" style="font-size:12px">💡 Para imprimir una nota de consulta completa: ve a <strong>Atendidos por Día</strong> → botón <strong>🖨️ Nota</strong></p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -665,6 +726,19 @@ tbody tr:hover td{background:#F8FAFC}
 <div class="modal-overlay" id="modal-paciente">
   <div class="modal modal-lg">
     <h2 id="modal-paciente-title">👤 Nuevo Paciente</h2>
+    <div style="display:flex;justify-content:center;margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
+        <div class="foto-circle" id="foto-circle">
+          <span id="foto-placeholder" style="font-size:32px">👤</span>
+          <img id="foto-img-preview" src="" alt="foto" style="display:none;width:100%;height:100%;object-fit:cover">
+        </div>
+        <div style="display:flex;gap:6px">
+          <input type="file" id="p-foto" accept="image/*" onchange="previewFoto(event)" style="display:none">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('p-foto').click()">📷 Foto</button>
+          <button type="button" class="btn btn-sm" id="btn-quitar-foto" onclick="quitarFoto()" style="display:none;background:var(--bg);border:1.5px solid var(--border);color:var(--danger)">✕ Quitar</button>
+        </div>
+      </div>
+    </div>
     <div class="form-grid">
       <div class="form-group"><label>Nombre *</label><input type="text" id="p-nombre" placeholder="Juan"></div>
       <div class="form-group"><label>Apellidos *</label><input type="text" id="p-apellidos" placeholder="García López"></div>
@@ -785,11 +859,13 @@ const SKEY = 'sb_publishable_2W-uJNSJSFLMYn5NJShPKw_sRCynIka';
 const sb = supabase.createClient(SURL, SKEY);
 
 // ════════════════════ CACHE LOCAL ════════════════════
-const C = { p:[], c:[], m:[], n:[] };
+const C = { p:[], c:[], m:[], n:[], e:[] };
 
 // ════════════════════ MAPPERS DB ↔ JS ════════════════════
-const fromP = r => ({ id:r.id, nombre:r.nombre, apellidos:r.apellidos, identificacion:r.identificacion, fechaNac:r.fecha_nac, sexo:r.sexo, sangre:r.sangre, telefono:r.telefono, email:r.email, direccion:r.direccion, alergias:r.alergias, estado:r.estado||'activo', emergencia:r.emergencia, observaciones:r.observaciones, fechaRegistro:r.fecha_registro });
-const toP   = x => ({ nombre:x.nombre, apellidos:x.apellidos, identificacion:x.identificacion||null, fecha_nac:x.fechaNac||null, sexo:x.sexo||null, sangre:x.sangre||null, telefono:x.telefono||null, email:x.email||null, direccion:x.direccion||null, alergias:x.alergias||null, estado:x.estado||'activo', emergencia:x.emergencia||null, observaciones:x.observaciones||null, fecha_registro:x.fechaRegistro||hoy() });
+const fromP = r => ({ id:r.id, nombre:r.nombre, apellidos:r.apellidos, identificacion:r.identificacion, fechaNac:r.fecha_nac, sexo:r.sexo, sangre:r.sangre, telefono:r.telefono, email:r.email, direccion:r.direccion, alergias:r.alergias, estado:r.estado||'activo', emergencia:r.emergencia, observaciones:r.observaciones, fechaRegistro:r.fecha_registro, fotoUrl:r.foto_url||null });
+const toP   = x => ({ nombre:x.nombre, apellidos:x.apellidos, identificacion:x.identificacion||null, fecha_nac:x.fechaNac||null, sexo:x.sexo||null, sangre:x.sangre||null, telefono:x.telefono||null, email:x.email||null, direccion:x.direccion||null, alergias:x.alergias||null, estado:x.estado||'activo', emergencia:x.emergencia||null, observaciones:x.observaciones||null, fecha_registro:x.fechaRegistro||hoy(), foto_url:x.fotoUrl||null });
+const fromE = r => ({ id:r.id, pacienteId:r.paciente_id, peso:r.peso, talla:r.talla, presion:r.presion, temperatura:r.temperatura, enfermedadesCronicas:r.enfermedades_cronicas, cirugias:r.cirugias_previas, antecedentesFamiliares:r.antecedentes_familiares, vacunas:r.vacunas, tabaco:r.habito_tabaco||'no', alcohol:r.habito_alcohol||'no', actividadFisica:r.actividad_fisica||'sedentario', ocupacion:r.ocupacion, estadoCivil:r.estado_civil, observacionesMedicas:r.observaciones_medicas });
+const toE   = x => ({ paciente_id:x.pacienteId, peso:x.peso?Number(x.peso):null, talla:x.talla?Number(x.talla):null, presion:x.presion||null, temperatura:x.temperatura?Number(x.temperatura):null, enfermedades_cronicas:x.enfermedadesCronicas||null, cirugias_previas:x.cirugias||null, antecedentes_familiares:x.antecedentesFamiliares||null, vacunas:x.vacunas||null, habito_tabaco:x.tabaco||'no', habito_alcohol:x.alcohol||'no', actividad_fisica:x.actividadFisica||'sedentario', ocupacion:x.ocupacion||null, estado_civil:x.estadoCivil||null, observaciones_medicas:x.observacionesMedicas||null });
 const fromC = r => ({ id:r.id, pacienteId:r.paciente_id, fecha:r.fecha, hora:(r.hora||'').slice(0,5), motivo:r.motivo, tipo:r.tipo, estado:r.estado, notas:r.notas });
 const toC   = x => ({ paciente_id:x.pacienteId, fecha:x.fecha, hora:x.hora, motivo:x.motivo, tipo:x.tipo||'consulta', estado:x.estado||'pendiente', notas:x.notas||null });
 const fromM = r => ({ id:r.id, pacienteId:r.paciente_id, nombre:r.nombre, dosis:r.dosis, frecuencia:r.frecuencia, inicio:r.inicio, fin:r.fin, via:r.via, estado:r.estado, indicaciones:r.indicaciones });
@@ -801,11 +877,12 @@ const toN   = x => ({ paciente_id:x.pacienteId, tipo:x.tipo||'evolucion', fecha:
 async function loadAll() {
   setLoading(true);
   try {
-    const [rp,rc,rm,rn] = await Promise.all([
+    const [rp,rc,rm,rn,re] = await Promise.all([
       sb.from('pacientes').select('*').order('id'),
       sb.from('citas').select('*').order('id'),
       sb.from('medicaciones').select('*').order('id'),
-      sb.from('notas').select('*').order('id')
+      sb.from('notas').select('*').order('id'),
+      sb.from('expediente').select('*').order('id')
     ]);
     if(rp.error) throw rp.error;
     if(rc.error) throw rc.error;
@@ -815,6 +892,7 @@ async function loadAll() {
     C.c = (rc.data||[]).map(fromC);
     C.m = (rm.data||[]).map(fromM);
     C.n = (rn.data||[]).map(fromN);
+    C.e = re.error ? [] : (re.data||[]).map(fromE);
     setDbStatus(true);
   } catch(e) {
     console.error('Supabase:', e);
@@ -974,7 +1052,7 @@ async function navigate(view, patientId) {
   if(el) el.classList.add('active');
   const mi=document.querySelector(`.menu-item[onclick*="'${view}'"]`);
   if(mi) mi.classList.add('active');
-  const titles={dashboard:'Dashboard',pacientes:'Pacientes',citas:'Citas',medicaciones:'Medicaciones',notas:'Notas Clínicas',atendidos:'Atendidos por Día',exportar:'Exportar / Enviar','paciente-detalle':'Expediente del Paciente'};
+  const titles={dashboard:'Dashboard',pacientes:'Pacientes',citas:'Citas',medicaciones:'Medicaciones',notas:'Notas Clínicas',atendidos:'Atendidos por Día',configuracion:'Configuración Clínica',exportar:'Exportar / Enviar','paciente-detalle':'Expediente del Paciente'};
   document.getElementById('page-title').textContent = titles[view]||view;
   currentView=view;
   if(patientId) currentPatientId=patientId;
@@ -991,6 +1069,7 @@ function renderView(v) {
     case 'medicaciones': renderMedicaciones(); break;
     case 'notas': renderNotas(); break;
     case 'atendidos': renderAtendidos(); break;
+    case 'configuracion': renderConfiguracion(); break;
     case 'exportar': renderExportar(); break;
     case 'paciente-detalle': renderDetalleP(currentPatientId); break;
   }
@@ -1112,7 +1191,7 @@ function renderPacientesList(lista){
   if(!lista.length){ tbody.innerHTML=''; empty.style.display='block'; return; }
   empty.style.display='none';
   tbody.innerHTML=lista.map(x=>`<tr>
-    <td><div class="patient-name-cell"><div class="patient-avatar" style="background:${colAvatar(x.id)}">${ini(x.nombre,x.apellidos)}</div>
+    <td><div class="patient-name-cell">${x.fotoUrl?`<img src="${x.fotoUrl}" style="width:34px;height:34px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--border)" alt="foto">`:`<div class="patient-avatar" style="background:${colAvatar(x.id)}">${ini(x.nombre,x.apellidos)}</div>`}
     <div><div style="font-weight:600">${x.nombre} ${x.apellidos}</div><div class="text-light">${calcEdad(x.fechaNac)}</div></div></div></td>
     <td>${x.identificacion||'—'}</td><td>${formatFecha(x.fechaNac)}</td><td>${x.telefono||'—'}</td><td>${x.email||'—'}</td>
     <td>${estadoTag(x.estado||'activo')}</td>
@@ -1128,6 +1207,12 @@ function openModalPaciente(id){
   editingId=id||null;
   document.getElementById('modal-paciente-title').textContent=id?'✏️ Editar Paciente':'👤 Nuevo Paciente';
   ['nombre','apellidos','id','fechanac','sexo','sangre','telefono','email','direccion','alergias','estado','emergencia','observaciones'].forEach(f=>{ const e=document.getElementById('p-'+f); if(e) e.value=''; });
+  pendingFotoFile=null; currentFotoUrl=null;
+  document.getElementById('foto-img-preview').style.display='none';
+  document.getElementById('foto-img-preview').src='';
+  document.getElementById('foto-placeholder').style.display='block';
+  document.getElementById('btn-quitar-foto').style.display='none';
+  document.getElementById('p-foto').value='';
   if(id){
     const x=C.p.find(p=>p.id===id);
     if(x){
@@ -1144,6 +1229,7 @@ function openModalPaciente(id){
       document.getElementById('p-estado').value=x.estado||'activo';
       document.getElementById('p-emergencia').value=x.emergencia||'';
       document.getElementById('p-observaciones').value=x.observaciones||'';
+      if(x.fotoUrl){ currentFotoUrl=x.fotoUrl; document.getElementById('foto-placeholder').style.display='none'; document.getElementById('foto-img-preview').src=x.fotoUrl; document.getElementById('foto-img-preview').style.display='block'; document.getElementById('btn-quitar-foto').style.display='block'; }
     }
   }
   document.getElementById('modal-paciente').classList.add('open');
@@ -1153,13 +1239,17 @@ async function guardarPaciente(){
   const nombre=document.getElementById('p-nombre').value.trim();
   const apellidos=document.getElementById('p-apellidos').value.trim();
   if(!nombre||!apellidos){ toast('Nombre y apellidos son obligatorios','error'); return; }
-  const obj={nombre,apellidos,identificacion:document.getElementById('p-id').value.trim(),fechaNac:document.getElementById('p-fechanac').value,sexo:document.getElementById('p-sexo').value,sangre:document.getElementById('p-sangre').value,telefono:document.getElementById('p-telefono').value.trim(),email:document.getElementById('p-email').value.trim(),direccion:document.getElementById('p-direccion').value.trim(),alergias:document.getElementById('p-alergias').value.trim(),estado:document.getElementById('p-estado').value,emergencia:document.getElementById('p-emergencia').value.trim(),observaciones:document.getElementById('p-observaciones').value.trim(),fechaRegistro:hoy()};
+  const obj={nombre,apellidos,identificacion:document.getElementById('p-id').value.trim(),fechaNac:document.getElementById('p-fechanac').value,sexo:document.getElementById('p-sexo').value,sangre:document.getElementById('p-sangre').value,telefono:document.getElementById('p-telefono').value.trim(),email:document.getElementById('p-email').value.trim(),direccion:document.getElementById('p-direccion').value.trim(),alergias:document.getElementById('p-alergias').value.trim(),estado:document.getElementById('p-estado').value,emergencia:document.getElementById('p-emergencia').value.trim(),observaciones:document.getElementById('p-observaciones').value.trim(),fechaRegistro:hoy(),fotoUrl:currentFotoUrl};
   setLoading(true);
-  let err;
+  let err, savedId=editingId;
   if(editingId){ const r=await sb.from('pacientes').update(toP(obj)).eq('id',editingId); err=r.error; }
-  else { const r=await sb.from('pacientes').insert([toP(obj)]); err=r.error; }
+  else { const r=await sb.from('pacientes').insert([toP(obj)]).select('id').single(); err=r.error; if(!err) savedId=r.data.id; }
+  if(err){ setLoading(false); toast('Error: '+err.message,'error'); return; }
+  if(pendingFotoFile && savedId){
+    try{ const url=await subirFotoPaciente(pendingFotoFile,savedId); await sb.from('pacientes').update({foto_url:url}).eq('id',savedId); pendingFotoFile=null; }
+    catch(e){ toast('Paciente guardado, error con la foto: '+e.message,'info'); }
+  }
   setLoading(false);
-  if(err){ toast('Error: '+err.message,'error'); return; }
   toast(editingId?'Paciente actualizado':'Paciente registrado ✅');
   closeModal('modal-paciente');
   await loadAll(); renderPacientes(); updateBadges();
@@ -1186,7 +1276,7 @@ function renderDetalleP(pid){
 
   document.getElementById('detalle-header').innerHTML=`
     <div class="patient-detail-header">
-      <div class="patient-detail-avatar" style="background:${colAvatar(p.id)}">${ini(p.nombre,p.apellidos)}</div>
+      ${p.fotoUrl?`<img src="${p.fotoUrl}" class="patient-detail-avatar" style="object-fit:cover;border:3px solid rgba(255,255,255,.4)" alt="foto">`:`<div class="patient-detail-avatar" style="background:${colAvatar(p.id)}">${ini(p.nombre,p.apellidos)}</div>`}
       <div class="patient-detail-info">
         <h2>${p.nombre} ${p.apellidos}</h2>
         <div class="meta">
@@ -1235,10 +1325,76 @@ function renderDetalleP(pid){
     <div class="card-header"><h3>📝 Notas Clínicas</h3><button class="btn btn-primary btn-sm" onclick="openModalNotaP(${p.id})">+ Nueva</button></div>
     ${notas.length?`<div class="timeline">${notas.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(n=>`<div class="timeline-item"><div class="timeline-date">${formatFecha(n.fecha)} · <span class="tag tag-blue" style="font-size:10px">${n.tipo}</span></div><div class="timeline-content">${n.titulo?`<strong style="display:block;margin-bottom:5px">${n.titulo}</strong>`:''}<p style="white-space:pre-wrap;line-height:1.7">${n.contenido}</p><div style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-secondary btn-sm" onclick="verNota(${n.id})">👁️ Ver</button><button class="btn btn-danger btn-sm" onclick="eliminarNota(${n.id})">🗑️</button></div></div></div>`).join('')}</div>`:'<div class="empty-state"><div class="empty-icon">📝</div><p>Sin notas</p></div>'}
   </div>`;
+
+  const exp=C.e.find(x=>x.pacienteId===pid)||{};
+  const imc=(exp.peso&&exp.talla)?(exp.peso/((exp.talla/100)**2)).toFixed(1):null;
+  document.getElementById('tab-expediente').innerHTML=`
+  <div class="card">
+    <div class="card-header"><h3>📁 Expediente Médico</h3><button class="btn btn-primary btn-sm" onclick="guardarExpediente(${pid})">💾 Guardar</button></div>
+
+    <div class="exp-section">
+      <div class="exp-section-title">⚡ Signos Vitales</div>
+      <div class="vitales-grid">
+        <div class="vital-card"><div class="v-val">${exp.peso||'—'}</div><div class="v-lbl">Peso kg</div></div>
+        <div class="vital-card"><div class="v-val">${exp.talla||'—'}</div><div class="v-lbl">Talla cm</div></div>
+        <div class="vital-card"><div class="v-val">${exp.presion||'—'}</div><div class="v-lbl">Presión</div></div>
+        <div class="vital-card"><div class="v-val">${exp.temperatura?exp.temperatura+'°':'—'}</div><div class="v-lbl">Temp.</div></div>
+        ${imc?`<div class="vital-card"><div class="v-val">${imc}</div><div class="v-lbl">IMC</div></div>`:''}
+      </div>
+      <div class="form-grid" style="margin-top:12px">
+        <div class="form-group"><label>Peso (kg)</label><input type="number" id="exp-peso" value="${exp.peso||''}" placeholder="70.0" step="0.1"></div>
+        <div class="form-group"><label>Talla (cm)</label><input type="number" id="exp-talla" value="${exp.talla||''}" placeholder="170"></div>
+        <div class="form-group"><label>Presión Arterial</label><input type="text" id="exp-presion" value="${exp.presion||''}" placeholder="120/80 mmHg"></div>
+        <div class="form-group"><label>Temperatura (°C)</label><input type="number" id="exp-temperatura" value="${exp.temperatura||''}" placeholder="36.5" step="0.1"></div>
+      </div>
+    </div>
+
+    <div class="exp-section">
+      <div class="exp-section-title">👤 Datos Socioeconómicos</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Ocupación</label><input type="text" id="exp-ocupacion" value="${exp.ocupacion||''}" placeholder="Empleado, estudiante..."></div>
+        <div class="form-group"><label>Estado Civil</label><select id="exp-estadoCivil">
+          <option value="">—</option>
+          ${['soltero','casado','divorciado','viudo','union libre'].map(v=>`<option value="${v}" ${exp.estadoCivil===v?'selected':''}>${v}</option>`).join('')}
+        </select></div>
+        <div class="form-group"><label>Hábito: Tabaco</label><select id="exp-tabaco">
+          ${[['no','No fuma'],['ex','Ex fumador'],['ocasional','Ocasional'],['diario','Diario']].map(([v,l])=>`<option value="${v}" ${exp.tabaco===v?'selected':''}>${l}</option>`).join('')}
+        </select></div>
+        <div class="form-group"><label>Hábito: Alcohol</label><select id="exp-alcohol">
+          ${[['no','No consume'],['ocasional','Ocasional'],['frecuente','Frecuente']].map(([v,l])=>`<option value="${v}" ${exp.alcohol===v?'selected':''}>${l}</option>`).join('')}
+        </select></div>
+        <div class="form-group full"><label>Actividad Física</label><select id="exp-actividadFisica">
+          ${[['sedentario','Sedentario'],['leve','Leve (1-2 días/semana)'],['moderada','Moderada (3-4 días)'],['intensa','Intensa (5+ días)']].map(([v,l])=>`<option value="${v}" ${exp.actividadFisica===v?'selected':''}>${l}</option>`).join('')}
+        </select></div>
+      </div>
+    </div>
+
+    <div class="exp-section">
+      <div class="exp-section-title">🏥 Antecedentes Clínicos</div>
+      <div class="form-grid cols-1">
+        <div class="form-group"><label>Enfermedades Crónicas</label><textarea id="exp-enfermedadesCronicas" placeholder="Hipertensión, diabetes tipo 2, asma...">${exp.enfermedadesCronicas||''}</textarea></div>
+        <div class="form-group"><label>Cirugías Previas</label><textarea id="exp-cirugias" placeholder="Apendicectomía 2018, cesárea...">${exp.cirugias||''}</textarea></div>
+        <div class="form-group"><label>Antecedentes Familiares</label><textarea id="exp-antecedentesFamiliares" placeholder="Padre: HTA, diabetes. Madre: cáncer...">${exp.antecedentesFamiliares||''}</textarea></div>
+      </div>
+    </div>
+
+    <div class="exp-section">
+      <div class="exp-section-title">💉 Alergias y Vacunas</div>
+      <div class="form-grid cols-1">
+        <div class="form-group"><label>Alergias conocidas (del perfil del paciente)</label>
+          <div style="padding:10px 14px;background:${p.alergias?'#FEF2F2':'var(--bg)'};border:1.5px solid ${p.alergias?'#FECACA':'var(--border)'};border-radius:10px;font-size:13px;color:${p.alergias?'#DC2626':'var(--text-light)'}">
+            ${p.alergias?'⚠️ '+p.alergias:'Sin alergias registradas — edita el perfil del paciente para agregar'}
+          </div>
+        </div>
+        <div class="form-group"><label>Esquema de Vacunas</label><textarea id="exp-vacunas" placeholder="COVID-19 ✓, Influenza ✓, Hepatitis B ✓...">${exp.vacunas||''}</textarea></div>
+        <div class="form-group"><label>Observaciones Médicas Adicionales</label><textarea id="exp-observacionesMedicas" placeholder="Notas del médico sobre el expediente...">${exp.observacionesMedicas||''}</textarea></div>
+      </div>
+    </div>
+  </div>`;
 }
 
 function switchTab(tabId, btn){
-  ['tab-info','tab-citas-p','tab-meds-p','tab-notas-p'].forEach(id=>{ const e=document.getElementById(id); if(e) e.style.display='none'; });
+  ['tab-info','tab-citas-p','tab-meds-p','tab-notas-p','tab-expediente'].forEach(id=>{ const e=document.getElementById(id); if(e) e.style.display='none'; });
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.getElementById(tabId).style.display='block';
   if(btn) btn.classList.add('active');
@@ -1479,6 +1635,262 @@ function verNota(id){
   document.getElementById('modal-ver-nota').classList.add('open');
 }
 
+// ════════════════════ FOTO PACIENTE ════════════════════
+let pendingFotoFile = null;
+let currentFotoUrl  = null;
+
+function previewFoto(event) {
+  const file = event.target.files[0]; if(!file) return;
+  pendingFotoFile = file;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('foto-placeholder').style.display = 'none';
+    const img = document.getElementById('foto-img-preview');
+    img.src = e.target.result; img.style.display = 'block';
+    document.getElementById('btn-quitar-foto').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+function quitarFoto() {
+  pendingFotoFile = null; currentFotoUrl = null;
+  document.getElementById('foto-img-preview').style.display = 'none';
+  document.getElementById('foto-img-preview').src = '';
+  document.getElementById('foto-placeholder').style.display = 'block';
+  document.getElementById('btn-quitar-foto').style.display = 'none';
+  document.getElementById('p-foto').value = '';
+}
+
+async function subirFotoPaciente(file, pacienteId) {
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  const path = `${pacienteId}.${ext}`;
+  const { error } = await sb.storage.from('pacientes').upload(path, file, { upsert: true, contentType: file.type });
+  if(error) throw error;
+  const { data } = sb.storage.from('pacientes').getPublicUrl(path);
+  return data.publicUrl;
+}
+
+// ════════════════════ EXPEDIENTE ════════════════════
+async function guardarExpediente(pid) {
+  const obj = {
+    pacienteId: pid,
+    peso: document.getElementById('exp-peso').value,
+    talla: document.getElementById('exp-talla').value,
+    presion: document.getElementById('exp-presion').value,
+    temperatura: document.getElementById('exp-temperatura').value,
+    enfermedadesCronicas: document.getElementById('exp-enfermedadesCronicas').value.trim(),
+    cirugias: document.getElementById('exp-cirugias').value.trim(),
+    antecedentesFamiliares: document.getElementById('exp-antecedentesFamiliares').value.trim(),
+    vacunas: document.getElementById('exp-vacunas').value.trim(),
+    tabaco: document.getElementById('exp-tabaco').value,
+    alcohol: document.getElementById('exp-alcohol').value,
+    actividadFisica: document.getElementById('exp-actividadFisica').value,
+    ocupacion: document.getElementById('exp-ocupacion').value.trim(),
+    estadoCivil: document.getElementById('exp-estadoCivil').value,
+    observacionesMedicas: document.getElementById('exp-observacionesMedicas').value.trim()
+  };
+  setLoading(true);
+  const existing = C.e.find(x => x.pacienteId === pid);
+  let err;
+  if(existing) { const r = await sb.from('expediente').update(toE(obj)).eq('id', existing.id); err = r.error; }
+  else { const r = await sb.from('expediente').insert([toE(obj)]); err = r.error; }
+  setLoading(false);
+  if(err) { toast('Error: ' + err.message, 'error'); return; }
+  toast('Expediente guardado ✅');
+  await loadAll();
+  renderDetalleP(pid);
+  setTimeout(() => { switchTab('tab-expediente', document.querySelectorAll('.tab')[4]); }, 50);
+}
+
+// ════════════════════ CONFIGURACIÓN CLÍNICA ════════════════════
+function getClinicaConfig() {
+  try { return JSON.parse(localStorage.getItem('galesistem_clinica') || '{}'); } catch { return {}; }
+}
+
+function renderConfiguracion() {
+  const cfg = getClinicaConfig();
+  ['nombre-clinica','nombre-doctor','especialidad','direccion','telefono','email','registro','nota-pie','logo-url'].forEach(k => {
+    const el = document.getElementById('config-' + k.replace('-','') === 'config-logo-url' ? 'config-logo-url' : 'config-' + k);
+    if(el) el.value = cfg[k.replace(/-([a-z])/g, (_,c) => c.toUpperCase())] || '';
+  });
+  if(cfg.logoUrl) { const b = document.getElementById('config-logo-box'); b.innerHTML = `<img src="${cfg.logoUrl}" alt="logo">`; }
+  document.getElementById('config-logo-url').value = cfg.logoUrl || '';
+  document.getElementById('config-nombre-clinica').value = cfg.nombreClinica || '';
+  document.getElementById('config-nombre-doctor').value = cfg.nombreDoctor || '';
+  document.getElementById('config-especialidad').value = cfg.especialidad || '';
+  document.getElementById('config-registro').value = cfg.registro || '';
+  document.getElementById('config-telefono').value = cfg.telefono || '';
+  document.getElementById('config-email').value = cfg.email || '';
+  document.getElementById('config-direccion').value = cfg.direccion || '';
+  document.getElementById('config-nota-pie').value = cfg.notaPie || '';
+  actualizarPreviewConfig(cfg);
+}
+
+function previewLogo() {
+  const url = document.getElementById('config-logo-url').value.trim();
+  const b = document.getElementById('config-logo-box');
+  if(url) b.innerHTML = `<img src="${url}" alt="logo">`;
+  else b.innerHTML = '🏥';
+}
+
+function guardarConfigClinica() {
+  const cfg = {
+    nombreClinica: document.getElementById('config-nombre-clinica').value.trim(),
+    nombreDoctor:  document.getElementById('config-nombre-doctor').value.trim(),
+    especialidad:  document.getElementById('config-especialidad').value.trim(),
+    registro:      document.getElementById('config-registro').value.trim(),
+    telefono:      document.getElementById('config-telefono').value.trim(),
+    email:         document.getElementById('config-email').value.trim(),
+    direccion:     document.getElementById('config-direccion').value.trim(),
+    notaPie:       document.getElementById('config-nota-pie').value.trim(),
+    logoUrl:       document.getElementById('config-logo-url').value.trim()
+  };
+  if(!cfg.nombreClinica) { toast('El nombre de la clínica es obligatorio', 'error'); return; }
+  localStorage.setItem('galesistem_clinica', JSON.stringify(cfg));
+  toast('Configuración guardada ✅');
+  actualizarPreviewConfig(cfg);
+  previewLogo();
+}
+
+function actualizarPreviewConfig(cfg) {
+  const el = document.getElementById('config-preview');
+  if(!el) return;
+  el.innerHTML = `
+    <div style="display:flex;align-items:flex-start;gap:12px;border-bottom:2px solid var(--primary);padding-bottom:12px;margin-bottom:12px">
+      <div style="width:52px;height:52px;border-radius:10px;background:linear-gradient(135deg,var(--primary),var(--accent));display:flex;align-items:center;justify-content:center;font-size:22px;overflow:hidden;flex-shrink:0">${cfg.logoUrl?`<img src="${cfg.logoUrl}" style="width:100%;height:100%;object-fit:contain">` : '🏥'}</div>
+      <div>
+        <div style="font-size:16px;font-weight:800;color:var(--primary)">${cfg.nombreClinica||'GaleSistem Clínica'}</div>
+        ${cfg.nombreDoctor?`<div style="font-size:12px;font-weight:600">${cfg.nombreDoctor}${cfg.especialidad?' · '+cfg.especialidad:''}</div>`:''}
+        ${cfg.direccion?`<div style="font-size:11px;color:var(--text-light)">📍 ${cfg.direccion}</div>`:''}
+        ${cfg.telefono?`<div style="font-size:11px;color:var(--text-light)">📞 ${cfg.telefono}</div>`:''}
+      </div>
+    </div>
+    <p style="font-size:11px;color:var(--text-light);text-align:center">Así aparecerá el encabezado en tus notas de consulta</p>`;
+}
+
+// ════════════════════ NOTA DE CONSULTA (IMPRESIÓN) ════════════════════
+function imprimirNotaConsulta(citaId) {
+  const c = C.c.find(x => x.id === citaId); if(!c) return;
+  const p = C.p.find(x => x.id === c.pacienteId);
+  const e = C.e.find(x => x.pacienteId === c.pacienteId);
+  const meds = C.m.filter(m => m.pacienteId === c.pacienteId && m.estado === 'activa');
+  const notasDia = C.n.filter(n => n.pacienteId === c.pacienteId && n.fecha === c.fecha);
+  const cfg = getClinicaConfig();
+  const fmtF = f => { if(!f) return '—'; const d=new Date(f+'T12:00:00'); return d.toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'}); };
+  const edadCalc = fn => { if(!fn) return ''; const h=new Date(),n=new Date(fn); let a=h.getFullYear()-n.getFullYear(); if(h.getMonth()<n.getMonth()||(h.getMonth()===n.getMonth()&&h.getDate()<n.getDate()))a--; return a+' años'; };
+  const inits = (a,b) => ((a||'')[0]||'').toUpperCase()+((b||'')[0]||'').toUpperCase();
+  const imc = (e?.peso && e?.talla) ? (e.peso/((e.talla/100)**2)).toFixed(1) : null;
+
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Nota de Consulta</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',Arial,sans-serif;color:#1a1a1a;padding:32px;font-size:13px;line-height:1.5;max-width:800px;margin:0 auto}
+.h{display:flex;align-items:flex-start;gap:18px;border-bottom:3px solid #2563EB;padding-bottom:14px;margin-bottom:18px}
+.logo{width:72px;height:72px;border-radius:12px;background:linear-gradient(135deg,#2563EB,#06B6D4);display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0;overflow:hidden}
+.logo img{width:100%;height:100%;object-fit:contain;border-radius:12px}
+.ci h1{font-size:20px;font-weight:800;color:#2563EB;line-height:1.2}
+.ci p{font-size:11.5px;color:#555;margin-top:2px}
+.folio{margin-left:auto;text-align:right;flex-shrink:0}
+.folio .fd{font-size:10px;color:#999}
+.folio .fv{font-size:16px;font-weight:800;color:#0F172A}
+.folio .fn{font-size:10px;color:#ccc;margin-top:3px}
+.badge{display:inline-block;background:#2563EB;color:#fff;padding:5px 16px;border-radius:20px;font-size:12px;font-weight:700;margin-bottom:16px}
+.ph{display:flex;gap:14px;align-items:center;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:14px;margin-bottom:16px}
+.av{width:60px;height:60px;border-radius:50%;background:#2563EB;display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;font-weight:800;flex-shrink:0;overflow:hidden}
+.av img{width:100%;height:100%;object-fit:cover}
+.pn{font-size:17px;font-weight:800;margin-bottom:5px}
+.pm{display:flex;flex-wrap:wrap;gap:10px;font-size:11.5px;color:#475569}
+.ab{margin-top:7px;background:#FEF2F2;border:1px solid #FECACA;border-radius:6px;padding:5px 10px;font-size:11.5px;color:#DC2626}
+.cb{background:#EFF6FF;border:1px solid #BFDBFE;border-radius:10px;padding:14px;margin-bottom:14px}
+.mot{font-size:15px;font-weight:700;color:#1D4ED8;margin-bottom:7px}
+.fr{display:flex;flex-wrap:wrap;gap:16px;margin-bottom:7px}
+.fi label{display:block;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94A3B8;margin-bottom:1px}
+.fi span{font-size:13px;font-weight:600}
+.s{margin-bottom:14px}
+.st{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:#94A3B8;padding-bottom:4px;border-bottom:1px solid #E2E8F0;margin-bottom:8px}
+.vs{display:flex;flex-wrap:wrap;gap:10px;background:#F0FDF4;border:1px solid #DCFCE7;border-radius:8px;padding:10px 14px;margin-bottom:14px}
+.vf label{font-size:9px;font-weight:700;text-transform:uppercase;color:#15803D;display:block;margin-bottom:1px}
+.vf span{font-size:15px;font-weight:800;color:#166534}
+.mi{border-left:3px solid #10B981;padding:8px 12px;background:#F0FDF4;border-radius:0 8px 8px 0;margin-bottom:8px}
+.mn{font-weight:700;font-size:13px}
+.md{font-size:11.5px;color:#555;margin-top:2px}
+.ni{background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:10px 12px;margin-bottom:8px}
+.nt{font-size:9.5px;font-weight:700;text-transform:uppercase;color:#2563EB;margin-bottom:4px;letter-spacing:.5px}
+.nc{white-space:pre-wrap;font-size:12.5px;line-height:1.7}
+.sig{display:flex;justify-content:flex-end;margin-top:36px}
+.sb{text-align:center;min-width:200px}
+.sl{border-top:1px solid #333;margin-bottom:5px}
+.sn{font-size:13px;font-weight:700}
+.sd{font-size:11px;color:#666}
+.ft{margin-top:22px;border-top:1px solid #E2E8F0;padding-top:10px;text-align:center;font-size:10px;color:#94A3B8}
+@media print{body{padding:15px}.no-print{display:none}}
+</style></head><body>
+<div class="h">
+  <div class="logo">${cfg.logoUrl?`<img src="${cfg.logoUrl}" alt="logo">`:'🏥'}</div>
+  <div class="ci">
+    <h1>${cfg.nombreClinica||'GaleSistem Clínica'}</h1>
+    ${cfg.nombreDoctor?`<p><strong>${cfg.nombreDoctor}</strong>${cfg.especialidad?' — '+cfg.especialidad:''}</p>`:''}
+    ${cfg.direccion?`<p>📍 ${cfg.direccion}</p>`:''}
+    ${cfg.telefono?`<p>📞 ${cfg.telefono}${cfg.email?' · ✉️ '+cfg.email:''}</p>`:''}
+    ${cfg.registro?`<p>Reg. Med. ${cfg.registro}</p>`:''}
+  </div>
+  <div class="folio">
+    <div class="fd">Fecha de emisión</div>
+    <div class="fv">${new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'})}</div>
+    <div class="fn">N° GS-${c.id}-${Date.now().toString().slice(-5)}</div>
+  </div>
+</div>
+<div class="badge">📋 Nota de Consulta Médica</div>
+<div class="ph">
+  <div class="av">${p?.fotoUrl?`<img src="${p.fotoUrl}" alt="foto">`:inits(p?.nombre,p?.apellidos)}</div>
+  <div style="flex:1">
+    <div class="pn">${p?p.nombre+' '+p.apellidos:'Paciente no registrado'}</div>
+    <div class="pm">
+      ${p?.fechaNac?`<span>🎂 ${edadCalc(p.fechaNac)}</span>`:''}
+      ${p?.sexo?`<span>${p.sexo==='M'?'♂ Masculino':p.sexo==='F'?'♀ Femenino':p.sexo}</span>`:''}
+      ${p?.sangre?`<span>🩸 ${p.sangre}</span>`:''}
+      ${p?.identificacion?`<span>🪪 ${p.identificacion}</span>`:''}
+      ${p?.telefono?`<span>📞 ${p.telefono}</span>`:''}
+      ${e?.ocupacion?`<span>💼 ${e.ocupacion}</span>`:''}
+    </div>
+    ${p?.alergias?`<div class="ab">⚠️ <strong>Alergias:</strong> ${p.alergias}</div>`:''}
+  </div>
+</div>
+<div class="cb">
+  <div class="fr">
+    <div class="fi"><label>Fecha</label><span>${fmtF(c.fecha)}</span></div>
+    <div class="fi"><label>Hora</label><span>${c.hora}</span></div>
+    <div class="fi"><label>Tipo</label><span style="text-transform:capitalize">${c.tipo}</span></div>
+    <div class="fi"><label>Estado</label><span style="text-transform:capitalize">${c.estado}</span></div>
+  </div>
+  <div class="mot">${c.motivo}</div>
+  ${c.notas?`<div style="font-size:12.5px;color:#475569;white-space:pre-wrap">${c.notas}</div>`:''}
+</div>
+${e&&(e.peso||e.talla||e.presion||e.temperatura)?`
+<div class="vs">
+  ${e.peso?`<div class="vf"><label>Peso</label><span>${e.peso} kg</span></div>`:''}
+  ${e.talla?`<div class="vf"><label>Talla</label><span>${e.talla} cm</span></div>`:''}
+  ${e.presion?`<div class="vf"><label>Presión Arterial</label><span>${e.presion}</span></div>`:''}
+  ${e.temperatura?`<div class="vf"><label>Temperatura</label><span>${e.temperatura}°C</span></div>`:''}
+  ${imc?`<div class="vf"><label>IMC</label><span>${imc}</span></div>`:''}
+</div>`:''}
+${notasDia.length?`<div class="s"><div class="st">Diagnóstico / Notas de la Consulta</div>${notasDia.map(n=>`<div class="ni"><div class="nt">${n.tipo}${n.titulo?' — '+n.titulo:''}</div><div class="nc">${n.contenido}</div></div>`).join('')}</div>`:'<div class="s"><div class="st">Diagnóstico</div><p style="font-size:12px;color:#94A3B8">Sin notas registradas para esta consulta</p></div>'}
+<div class="s">
+  <div class="st">Prescripción / Medicación</div>
+  ${meds.length?meds.map(m=>`<div class="mi"><div class="mn">Rx. ${m.nombre}</div><div class="md">${m.dosis} · ${m.frecuencia} · Vía ${m.via}${m.fin?' · Hasta: '+fmtF(m.fin):''}</div>${m.indicaciones?`<div class="md" style="font-style:italic">📌 ${m.indicaciones}</div>`:''}</div>`).join(''):'<p style="font-size:12px;color:#94A3B8">Sin medicamentos prescritos en esta consulta</p>'}
+</div>
+${p?.alergias||e?.enfermedadesCronicas?`<div class="s"><div class="st">Antecedentes Relevantes</div>${p?.alergias?`<p style="font-size:12px;margin-bottom:4px"><strong>Alergias:</strong> ${p.alergias}</p>`:''}${e?.enfermedadesCronicas?`<p style="font-size:12px"><strong>Enf. crónicas:</strong> ${e.enfermedadesCronicas}</p>`:''}</div>`:''}
+<div class="sig"><div class="sb"><div style="height:46px"></div><div class="sl"></div><div class="sn">${cfg.nombreDoctor||'Médico Responsable'}</div>${cfg.especialidad?`<div class="sd">${cfg.especialidad}</div>`:''}${cfg.registro?`<div class="sd">Reg. ${cfg.registro}</div>`:''}</div></div>
+<div class="ft">${cfg.nombreClinica||'GaleSistem'} · ${cfg.notaPie||cfg.direccion||''} · Generado: ${new Date().toLocaleString('es-ES')}</div>
+<script>window.onload=function(){window.print()}<\/script>
+</body></html>`;
+
+  const w = window.open('', '_blank', 'width=860,height=1020');
+  w.document.write(html);
+  w.document.close();
+}
+
 // ════════════════════ ATENDIDOS POR DÍA ════════════════════
 let atendidosFecha = hoy();
 
@@ -1516,6 +1928,7 @@ function renderAtendidos(fecha) {
       </div>
       ${estadoTag(c.estado)}
       <div class="actions-cell">
+        <button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff;white-space:nowrap" onclick="imprimirNotaConsulta(${c.id})">🖨️ Nota</button>
         <button class="btn btn-primary btn-sm" onclick="verResumenCita(${c.id})">📄 Hoja</button>
         <button class="btn btn-secondary btn-sm" onclick="navigate('paciente-detalle',${c.pacienteId})">👁️</button>
       </div>
