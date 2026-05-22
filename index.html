@@ -430,8 +430,28 @@ tbody tr:hover td{background:#F8FAFC}
       <h1>GaleSistem</h1>
       <p>Sistema de Gestión Clínica</p>
     </div>
+    <!-- PASO 0: código de clínica -->
+    <div id="login-step-0">
+      <div class="login-field">
+        <label>Código de clínica</label>
+        <div class="login-field-wrap">
+          <span class="field-icon">🏥</span>
+          <input type="text" id="login-codigo" placeholder="ej. clinica-galeano" autocomplete="off"
+            onkeydown="if(event.key==='Enter')buscarClinica()"
+            oninput="this.value=this.value.toLowerCase().replace(/\s+/g,'-')">
+        </div>
+      </div>
+      <button class="btn-login" onclick="buscarClinica()">Continuar →</button>
+      <p id="login-clinica-error" style="color:#F87171;font-size:12px;text-align:center;margin-top:10px;display:none">Código no encontrado</p>
+    </div>
     <!-- PASO 1: elegir usuario -->
-    <div id="login-step-1">
+    <div id="login-step-1" style="display:none">
+      <div id="login-clinica-badge" style="display:flex;align-items:center;gap:8px;background:rgba(37,99,235,.15);border:1px solid rgba(37,99,235,.3);border-radius:10px;padding:9px 14px;margin-bottom:14px">
+        <span style="font-size:18px">🏥</span>
+        <div><div id="login-clinica-nombre" style="color:#fff;font-size:13px;font-weight:700"></div>
+        <div style="color:#64748B;font-size:10px">Selecciona tu usuario</div></div>
+        <button class="btn-back" style="margin-left:auto;padding:0" onclick="backToClinicaSelect()">✕</button>
+      </div>
       <p class="login-select-title">¿Quién eres?</p>
       <div class="login-users-grid" id="login-users-grid"></div>
     </div>
@@ -767,6 +787,7 @@ tbody tr:hover td{background:#F8FAFC}
     <h2 id="modal-cita-title">📅 Nueva Cita</h2>
     <div class="form-grid">
       <div class="form-group full"><label>Paciente *</label><select id="c-paciente"><option value="">Seleccionar paciente...</option></select></div>
+      <div class="form-group full"><label>Médico</label><select id="c-medico"><option value="">Sin asignar</option></select></div>
       <div class="form-group"><label>Fecha *</label><input type="date" id="c-fecha"></div>
       <div class="form-group"><label>Hora *</label><input type="time" id="c-hora"></div>
       <div class="form-group full"><label>Motivo de Consulta *</label><input type="text" id="c-motivo" placeholder="Ej: Control mensual, dolor de cabeza..."></div>
@@ -859,30 +880,33 @@ const SKEY = 'sb_publishable_2W-uJNSJSFLMYn5NJShPKw_sRCynIka';
 const sb = supabase.createClient(SURL, SKEY);
 
 // ════════════════════ CACHE LOCAL ════════════════════
-const C = { p:[], c:[], m:[], n:[], e:[] };
+const C = { p:[], c:[], m:[], n:[], e:[], prof:[] };
+let currentClinicaId = null;
+let currentClinica   = null;
 
 // ════════════════════ MAPPERS DB ↔ JS ════════════════════
 const fromP = r => ({ id:r.id, nombre:r.nombre, apellidos:r.apellidos, identificacion:r.identificacion, fechaNac:r.fecha_nac, sexo:r.sexo, sangre:r.sangre, telefono:r.telefono, email:r.email, direccion:r.direccion, alergias:r.alergias, estado:r.estado||'activo', emergencia:r.emergencia, observaciones:r.observaciones, fechaRegistro:r.fecha_registro, fotoUrl:r.foto_url||null });
-const toP   = x => ({ nombre:x.nombre, apellidos:x.apellidos, identificacion:x.identificacion||null, fecha_nac:x.fechaNac||null, sexo:x.sexo||null, sangre:x.sangre||null, telefono:x.telefono||null, email:x.email||null, direccion:x.direccion||null, alergias:x.alergias||null, estado:x.estado||'activo', emergencia:x.emergencia||null, observaciones:x.observaciones||null, fecha_registro:x.fechaRegistro||hoy(), foto_url:x.fotoUrl||null });
+const toP   = x => ({ nombre:x.nombre, apellidos:x.apellidos, identificacion:x.identificacion||null, fecha_nac:x.fechaNac||null, sexo:x.sexo||null, sangre:x.sangre||null, telefono:x.telefono||null, email:x.email||null, direccion:x.direccion||null, alergias:x.alergias||null, estado:x.estado||'activo', emergencia:x.emergencia||null, observaciones:x.observaciones||null, fecha_registro:x.fechaRegistro||hoy(), foto_url:x.fotoUrl||null, clinica_id:currentClinicaId });
 const fromE = r => ({ id:r.id, pacienteId:r.paciente_id, peso:r.peso, talla:r.talla, presion:r.presion, temperatura:r.temperatura, enfermedadesCronicas:r.enfermedades_cronicas, cirugias:r.cirugias_previas, antecedentesFamiliares:r.antecedentes_familiares, vacunas:r.vacunas, tabaco:r.habito_tabaco||'no', alcohol:r.habito_alcohol||'no', actividadFisica:r.actividad_fisica||'sedentario', ocupacion:r.ocupacion, estadoCivil:r.estado_civil, observacionesMedicas:r.observaciones_medicas });
-const toE   = x => ({ paciente_id:x.pacienteId, peso:x.peso?Number(x.peso):null, talla:x.talla?Number(x.talla):null, presion:x.presion||null, temperatura:x.temperatura?Number(x.temperatura):null, enfermedades_cronicas:x.enfermedadesCronicas||null, cirugias_previas:x.cirugias||null, antecedentes_familiares:x.antecedentesFamiliares||null, vacunas:x.vacunas||null, habito_tabaco:x.tabaco||'no', habito_alcohol:x.alcohol||'no', actividad_fisica:x.actividadFisica||'sedentario', ocupacion:x.ocupacion||null, estado_civil:x.estadoCivil||null, observaciones_medicas:x.observacionesMedicas||null });
-const fromC = r => ({ id:r.id, pacienteId:r.paciente_id, fecha:r.fecha, hora:(r.hora||'').slice(0,5), motivo:r.motivo, tipo:r.tipo, estado:r.estado, notas:r.notas });
-const toC   = x => ({ paciente_id:x.pacienteId, fecha:x.fecha, hora:x.hora, motivo:x.motivo, tipo:x.tipo||'consulta', estado:x.estado||'pendiente', notas:x.notas||null });
+const toE   = x => ({ paciente_id:x.pacienteId, peso:x.peso?Number(x.peso):null, talla:x.talla?Number(x.talla):null, presion:x.presion||null, temperatura:x.temperatura?Number(x.temperatura):null, enfermedades_cronicas:x.enfermedadesCronicas||null, cirugias_previas:x.cirugias||null, antecedentes_familiares:x.antecedentesFamiliares||null, vacunas:x.vacunas||null, habito_tabaco:x.tabaco||'no', habito_alcohol:x.alcohol||'no', actividad_fisica:x.actividadFisica||'sedentario', ocupacion:x.ocupacion||null, estado_civil:x.estadoCivil||null, observaciones_medicas:x.observacionesMedicas||null, clinica_id:currentClinicaId });
+const fromC = r => ({ id:r.id, pacienteId:r.paciente_id, medicoId:r.medico_id||null, fecha:r.fecha, hora:(r.hora||'').slice(0,5), motivo:r.motivo, tipo:r.tipo, estado:r.estado, notas:r.notas });
+const toC   = x => ({ paciente_id:x.pacienteId, medico_id:x.medicoId||null, fecha:x.fecha, hora:x.hora, motivo:x.motivo, tipo:x.tipo||'consulta', estado:x.estado||'pendiente', notas:x.notas||null, clinica_id:currentClinicaId });
 const fromM = r => ({ id:r.id, pacienteId:r.paciente_id, nombre:r.nombre, dosis:r.dosis, frecuencia:r.frecuencia, inicio:r.inicio, fin:r.fin, via:r.via, estado:r.estado, indicaciones:r.indicaciones });
-const toM   = x => ({ paciente_id:x.pacienteId, nombre:x.nombre, dosis:x.dosis, frecuencia:x.frecuencia, inicio:x.inicio||null, fin:x.fin||null, via:x.via||'oral', estado:x.estado||'activa', indicaciones:x.indicaciones||null });
+const toM   = x => ({ paciente_id:x.pacienteId, nombre:x.nombre, dosis:x.dosis, frecuencia:x.frecuencia, inicio:x.inicio||null, fin:x.fin||null, via:x.via||'oral', estado:x.estado||'activa', indicaciones:x.indicaciones||null, clinica_id:currentClinicaId });
 const fromN = r => ({ id:r.id, pacienteId:r.paciente_id, tipo:r.tipo, fecha:r.fecha, titulo:r.titulo, contenido:r.contenido });
-const toN   = x => ({ paciente_id:x.pacienteId, tipo:x.tipo||'evolucion', fecha:x.fecha||hoy(), titulo:x.titulo||null, contenido:x.contenido });
+const toN   = x => ({ paciente_id:x.pacienteId, tipo:x.tipo||'evolucion', fecha:x.fecha||hoy(), titulo:x.titulo||null, contenido:x.contenido, clinica_id:currentClinicaId });
 
 // ════════════════════ LOAD DATA ════════════════════
 async function loadAll() {
   setLoading(true);
   try {
-    const [rp,rc,rm,rn,re] = await Promise.all([
+    const [rp,rc,rm,rn,re,rpf] = await Promise.all([
       sb.from('pacientes').select('*').order('id'),
       sb.from('citas').select('*').order('id'),
       sb.from('medicaciones').select('*').order('id'),
       sb.from('notas').select('*').order('id'),
-      sb.from('expediente').select('*').order('id')
+      sb.from('expediente').select('*').order('id'),
+      sb.from('profiles').select('id,nombre,rol,email,icono,clinica_id').eq('clinica_id', currentClinicaId)
     ]);
     if(rp.error) throw rp.error;
     if(rc.error) throw rc.error;
@@ -893,6 +917,7 @@ async function loadAll() {
     C.m = (rm.data||[]).map(fromM);
     C.n = (rn.data||[]).map(fromN);
     C.e = re.error ? [] : (re.data||[]).map(fromE);
+    C.prof = rpf.error ? [] : (rpf.data||[]);
     setDbStatus(true);
   } catch(e) {
     console.error('Supabase:', e);
@@ -911,21 +936,47 @@ function setDbStatus(ok) {
 }
 
 // ════════════════════ AUTH (Supabase) ════════════════════
-const LOGIN_USERS = [
-  { label:'Dr. Galeano',  email:'sebasgale65@gmail.com',      icon:'👨‍⚕️', role:'Administrador' },
-  { label:'Recepción',    email:'recepcion@galesistem.com',   icon:'👩‍💼', role:'Recepcionista'  },
-  { label:'Enfermería',   email:'enfermeria@galesistem.com',  icon:'👩‍⚕️', role:'Enfermera/o'   },
-];
-
-let currentUser = null;
+let currentUser  = null;
 let selectedEmail = '';
 
-function renderLoginUsers() {
-  document.getElementById('login-users-grid').innerHTML = LOGIN_USERS.map(u=>`
-    <div class="login-user-card" onclick="selectLoginUser('${u.email}','${u.label}','${u.icon}','${u.role}')">
-      <div class="luc-icon">${u.icon}</div>
-      <div class="luc-name">${u.label}</div>
-      <div class="luc-role">${u.role}</div>
+async function buscarClinica() {
+  const codigo = (document.getElementById('login-codigo').value||'').trim().toLowerCase();
+  if (!codigo) { shakeLogin(); return; }
+  const errEl = document.getElementById('login-clinica-error');
+  errEl.style.display = 'none';
+  setLoading(true);
+  const { data, error } = await sb.rpc('get_medicos_clinica', { p_codigo: codigo });
+  setLoading(false);
+  if (error || !data || data.length === 0) {
+    errEl.style.display = 'block';
+    shakeLogin();
+    return;
+  }
+  currentClinica = { codigo };
+  document.getElementById('login-clinica-nombre').textContent = codigo.replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+  renderLoginUsers(data);
+  document.getElementById('login-step-0').style.display = 'none';
+  document.getElementById('login-step-1').style.display = 'block';
+}
+
+function backToClinicaSelect() {
+  currentClinica = null;
+  selectedEmail = '';
+  document.getElementById('login-step-0').style.display = 'block';
+  document.getElementById('login-step-1').style.display = 'none';
+  document.getElementById('login-step-2').style.display = 'none';
+  document.getElementById('login-pass').value = '';
+  document.getElementById('login-codigo').value = '';
+  document.getElementById('login-clinica-error').style.display = 'none';
+}
+
+function renderLoginUsers(users) {
+  const rolLabel = r => ({admin:'Administrador',medico:'Médico',recepcion:'Recepcionista',enfermeria:'Enfermera/o'}[r]||r);
+  document.getElementById('login-users-grid').innerHTML = users.map(u=>`
+    <div class="login-user-card" onclick="selectLoginUser(${JSON.stringify(u.email)},${JSON.stringify(u.nombre)},${JSON.stringify(u.icono||'👨‍⚕️')},${JSON.stringify(rolLabel(u.rol))})">
+      <div class="luc-icon">${u.icono||'👨‍⚕️'}</div>
+      <div class="luc-name">${u.nombre}</div>
+      <div class="luc-role">${rolLabel(u.rol)}</div>
     </div>`).join('');
 }
 
@@ -942,10 +993,10 @@ function selectLoginUser(email, label, icon, role) {
 }
 
 function backToUserSelect() {
-  selectedEmail='';
-  document.getElementById('login-step-1').style.display='block';
-  document.getElementById('login-step-2').style.display='none';
-  document.getElementById('login-pass').value='';
+  selectedEmail = '';
+  document.getElementById('login-step-1').style.display = 'block';
+  document.getElementById('login-step-2').style.display = 'none';
+  document.getElementById('login-pass').value = '';
 }
 
 async function checkSession() {
@@ -954,12 +1005,13 @@ async function checkSession() {
 }
 
 async function onUserLoggedIn(user, animate=true) {
-  await loadAll();
   const { data: profile } = await sb.from('profiles').select('*').eq('id', user.id).single();
   const rol = profile?.rol || 'recepcion';
   const nombre = profile?.nombre || user.email.split('@')[0];
-  const rolLabel = {admin:'Administrador',recepcion:'Recepcionista',enfermeria:'Enfermera/o'}[rol] || rol;
-  currentUser = { name:nombre, role:rolLabel, avatar:nombre[0].toUpperCase(), email:user.email, key:rol };
+  const rolLabel = {admin:'Administrador',medico:'Médico',recepcion:'Recepcionista',enfermeria:'Enfermera/o'}[rol] || rol;
+  currentClinicaId = profile?.clinica_id || null;
+  currentUser = { name:nombre, role:rolLabel, avatar:nombre[0].toUpperCase(), email:user.email, key:rol, id:user.id };
+  await loadAll();
 
   const ls = document.getElementById('login-screen');
   const app = document.getElementById('app');
@@ -995,6 +1047,9 @@ async function doLogin() {
 async function doLogout() {
   if (!confirm('¿Cerrar sesión?')) return;
   await sb.auth.signOut();
+  currentUser = null;
+  currentClinicaId = null;
+  currentClinica = null;
   const app = document.getElementById('app');
   app.style.transition = 'opacity .3s';
   app.style.opacity = '0';
@@ -1004,9 +1059,7 @@ async function doLogout() {
     const ls = document.getElementById('login-screen');
     ls.style.cssText = 'display:flex;opacity:0;transform:scale(.95);transition:opacity .4s,transform .4s';
     setTimeout(() => { ls.style.opacity='1'; ls.style.transform='none'; }, 10);
-    document.getElementById('login-pass').value = '';
-    backToUserSelect();
-    currentUser = null;
+    backToClinicaSelect();
   }, 300);
 }
 
@@ -1425,17 +1478,36 @@ function renderCitas(){
   }).join('');
 }
 
+function fillMedicoSelect(selId, selectedId) {
+  const medicos = C.prof.filter(p => p.rol==='medico'||p.rol==='admin');
+  const sel = document.getElementById(selId);
+  sel.innerHTML = '<option value="">Sin asignar</option>' +
+    medicos.map(m=>`<option value="${m.id}">${m.icono||'👨‍⚕️'} ${m.nombre}</option>`).join('');
+  if (selectedId) sel.value = selectedId;
+  else if (currentUser?.key==='medico'||currentUser?.key==='admin') sel.value = currentUser.id;
+}
+
 function openModalCita(id){
   editingId=id||null;
   document.getElementById('modal-cita-title').textContent=id?'✏️ Editar Cita':'📅 Nueva Cita';
   fillSelect('c-paciente');
+  fillMedicoSelect('c-medico');
   document.getElementById('c-fecha').value=hoy();
   ['hora','motivo','notas'].forEach(f=>document.getElementById('c-'+f).value='');
   document.getElementById('c-estado').value='pendiente';
   document.getElementById('c-tipo').value='consulta';
   if(id){
     const c=C.c.find(x=>x.id===id);
-    if(c){ document.getElementById('c-paciente').value=c.pacienteId; document.getElementById('c-fecha').value=c.fecha; document.getElementById('c-hora').value=c.hora; document.getElementById('c-motivo').value=c.motivo; document.getElementById('c-tipo').value=c.tipo; document.getElementById('c-estado').value=c.estado; document.getElementById('c-notas').value=c.notas||''; }
+    if(c){
+      document.getElementById('c-paciente').value=c.pacienteId;
+      document.getElementById('c-fecha').value=c.fecha;
+      document.getElementById('c-hora').value=c.hora;
+      document.getElementById('c-motivo').value=c.motivo;
+      document.getElementById('c-tipo').value=c.tipo;
+      document.getElementById('c-estado').value=c.estado;
+      document.getElementById('c-notas').value=c.notas||'';
+      if(c.medicoId) document.getElementById('c-medico').value=c.medicoId;
+    }
   }
   document.getElementById('modal-cita').classList.add('open');
 }
@@ -1447,7 +1519,8 @@ async function guardarCita(){
   const hora=document.getElementById('c-hora').value;
   const motivo=document.getElementById('c-motivo').value.trim();
   if(!pid||!fecha||!hora||!motivo){ toast('Completa los campos obligatorios','error'); return; }
-  const obj={pacienteId:pid,fecha,hora,motivo,tipo:document.getElementById('c-tipo').value,estado:document.getElementById('c-estado').value,notas:document.getElementById('c-notas').value.trim()};
+  const medicoId=document.getElementById('c-medico').value||null;
+  const obj={pacienteId:pid,medicoId,fecha,hora,motivo,tipo:document.getElementById('c-tipo').value,estado:document.getElementById('c-estado').value,notas:document.getElementById('c-notas').value.trim()};
   setLoading(true);
   let err;
   if(editingId){ const r=await sb.from('citas').update(toC(obj)).eq('id',editingId); err=r.error; }
@@ -1704,7 +1777,8 @@ async function guardarExpediente(pid) {
 
 // ════════════════════ CONFIGURACIÓN CLÍNICA ════════════════════
 function getClinicaConfig() {
-  try { return JSON.parse(localStorage.getItem('galesistem_clinica') || '{}'); } catch { return {}; }
+  const key = 'galesistem_clinica' + (currentClinicaId ? '_' + currentClinicaId : '');
+  try { return JSON.parse(localStorage.getItem(key) || '{}'); } catch { return {}; }
 }
 
 function renderConfiguracion() {
@@ -1746,7 +1820,8 @@ function guardarConfigClinica() {
     logoUrl:       document.getElementById('config-logo-url').value.trim()
   };
   if(!cfg.nombreClinica) { toast('El nombre de la clínica es obligatorio', 'error'); return; }
-  localStorage.setItem('galesistem_clinica', JSON.stringify(cfg));
+  const key = 'galesistem_clinica' + (currentClinicaId ? '_' + currentClinicaId : '');
+  localStorage.setItem(key, JSON.stringify(cfg));
   toast('Configuración guardada ✅');
   actualizarPreviewConfig(cfg);
   previewLogo();
@@ -2144,7 +2219,7 @@ document.addEventListener('click',e=>{
 // ════════════════════ INIT ════════════════════
 document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('topbar-date').textContent = new Date().toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'});
-  renderLoginUsers();
+  setTimeout(()=>document.getElementById('login-codigo').focus(), 300);
   await checkSession();
 });
 </script>
