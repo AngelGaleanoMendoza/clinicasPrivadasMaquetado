@@ -947,6 +947,7 @@ async function buscarClinica() {
   setLoading(true);
   const { data, error } = await sb.rpc('get_medicos_clinica', { p_codigo: codigo });
   setLoading(false);
+  alert('data: ' + JSON.stringify(data) + '\nerror: ' + JSON.stringify(error));
   if (error || !data || data.length === 0) {
     errEl.style.display = 'block';
     shakeLogin();
