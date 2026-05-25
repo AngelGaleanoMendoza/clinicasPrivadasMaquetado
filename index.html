@@ -444,7 +444,7 @@ tbody tr:hover td{background:#F8FAFC}
       <button class="btn-login" onclick="buscarClinica()">Continuar →</button>
       <p id="login-clinica-error" style="color:#F87171;font-size:12px;text-align:center;margin-top:10px;display:none">Código no encontrado</p>
     </div>
-    <!-- PASO 1: elegir usuario -->
+    <!-- PASO 1: elegir usuario (o email si RPC no disponible) -->
     <div id="login-step-1" style="display:none">
       <div id="login-clinica-badge" style="display:flex;align-items:center;gap:8px;background:rgba(37,99,235,.15);border:1px solid rgba(37,99,235,.3);border-radius:10px;padding:9px 14px;margin-bottom:14px">
         <span style="font-size:18px">🏥</span>
@@ -452,8 +452,23 @@ tbody tr:hover td{background:#F8FAFC}
         <div style="color:#64748B;font-size:10px">Selecciona tu usuario</div></div>
         <button class="btn-back" style="margin-left:auto;padding:0" onclick="backToClinicaSelect()">✕</button>
       </div>
-      <p class="login-select-title">¿Quién eres?</p>
-      <div class="login-users-grid" id="login-users-grid"></div>
+      <!-- Avatares de médicos (si el RPC funciona) -->
+      <div id="login-users-wrap">
+        <p class="login-select-title">¿Quién eres?</p>
+        <div class="login-users-grid" id="login-users-grid"></div>
+      </div>
+      <!-- Fallback: campo de email -->
+      <div id="login-email-wrap" style="display:none">
+        <div class="login-field">
+          <label>Tu correo</label>
+          <div class="login-field-wrap">
+            <span class="field-icon">📧</span>
+            <input type="email" id="login-email-input" placeholder="tu@correo.com" autocomplete="username"
+              onkeydown="if(event.key==='Enter')irAPasswordEmail()">
+          </div>
+        </div>
+        <button class="btn-login" onclick="irAPasswordEmail()">Continuar →</button>
+      </div>
     </div>
     <!-- PASO 2: contraseña -->
     <div id="login-step-2" style="display:none">
@@ -945,19 +960,37 @@ async function buscarClinica() {
   const errEl = document.getElementById('login-clinica-error');
   errEl.style.display = 'none';
   setLoading(true);
-  const { data, error } = await sb.rpc('get_medicos_clinica', { p_codigo: codigo });
-  setLoading(false);
-  alert('data: ' + JSON.stringify(data) + '\nerror: ' + JSON.stringify(error));
-  if (error || !data || data.length === 0) {
+
+  // Validar clínica con SELECT directo (anon tiene permiso garantizado)
+  const { data: clinicaRow, error: cErr } = await sb
+    .from('clinicas').select('id,nombre').eq('codigo', codigo).eq('activa', true).single();
+
+  if (cErr || !clinicaRow) {
+    setLoading(false);
     errEl.style.display = 'block';
     shakeLogin();
     return;
   }
-  currentClinica = { codigo };
-  document.getElementById('login-clinica-nombre').textContent = codigo.replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
-  renderLoginUsers(data);
+
+  currentClinica = { codigo, id: clinicaRow.id };
+  document.getElementById('login-clinica-nombre').textContent = clinicaRow.nombre;
+
+  // Intentar cargar médicos con RPC (opcional — fallback a email si falla)
+  const { data: medicos } = await sb.rpc('get_medicos_clinica', { p_codigo: codigo });
+  setLoading(false);
+
   document.getElementById('login-step-0').style.display = 'none';
   document.getElementById('login-step-1').style.display = 'block';
+
+  if (medicos && medicos.length > 0) {
+    renderLoginUsers(medicos);
+    document.getElementById('login-users-wrap').style.display = 'block';
+    document.getElementById('login-email-wrap').style.display = 'none';
+  } else {
+    document.getElementById('login-users-wrap').style.display = 'none';
+    document.getElementById('login-email-wrap').style.display = 'block';
+    setTimeout(() => document.getElementById('login-email-input').focus(), 50);
+  }
 }
 
 function backToClinicaSelect() {
@@ -990,6 +1023,20 @@ function selectLoginUser(email, label, icon, role) {
     </div>`;
   document.getElementById('login-step-1').style.display='none';
   document.getElementById('login-step-2').style.display='block';
+  setTimeout(()=>document.getElementById('login-pass').focus(), 50);
+}
+
+function irAPasswordEmail() {
+  const email = (document.getElementById('login-email-input').value||'').trim();
+  if (!email) { shakeLogin(); return; }
+  selectedEmail = email;
+  document.getElementById('login-selected-user').innerHTML = `
+    <div class="login-selected-box">
+      <div class="lsb-icon">📧</div>
+      <div><div class="lsb-name">${email}</div><div class="lsb-role">Usuario</div></div>
+    </div>`;
+  document.getElementById('login-step-1').style.display = 'none';
+  document.getElementById('login-step-2').style.display = 'block';
   setTimeout(()=>document.getElementById('login-pass').focus(), 50);
 }
 
