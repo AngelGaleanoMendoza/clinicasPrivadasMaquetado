@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lumea Med — Gestión Clínica</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -25,33 +25,31 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 .loading-text{color:var(--text-light);font-size:13px;font-weight:500}
 
 /* LOGIN */
-#login-screen{position:fixed;inset:0;z-index:9999;background:linear-gradient(135deg,#0F172A 0%,#1E3A5F 50%,#0F172A 100%);display:flex;align-items:center;justify-content:center;overflow:hidden}
-.login-bg{position:absolute;inset:0;overflow:hidden}
-.login-orb{position:absolute;border-radius:50%;filter:blur(80px);opacity:.25;animation:orbFloat 8s ease-in-out infinite}
-.orb1{width:500px;height:500px;background:radial-gradient(#2563EB,transparent);top:-100px;left:-100px;animation-delay:0s}
-.orb2{width:400px;height:400px;background:radial-gradient(#06B6D4,transparent);bottom:-80px;right:-80px;animation-delay:-3s}
-.orb3{width:300px;height:300px;background:radial-gradient(#8B5CF6,transparent);top:50%;left:50%;transform:translate(-50%,-50%);animation-delay:-5s}
-@keyframes orbFloat{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(30px,-20px) scale(1.05)}66%{transform:translate(-20px,30px) scale(.95)}}
-.login-card{position:relative;z-index:1;background:rgba(255,255,255,.05);backdrop-filter:blur(24px);border:1px solid rgba(255,255,255,.12);border-radius:24px;padding:48px 44px;width:100%;max-width:420px;box-shadow:0 32px 80px rgba(0,0,0,.4);animation:loginIn .6s cubic-bezier(.34,1.56,.64,1)}
-@keyframes loginIn{from{opacity:0;transform:translateY(40px) scale(.95)}to{opacity:1;transform:none}}
-.login-logo{text-align:center;margin-bottom:36px}
-.login-logo-icon{width:72px;height:72px;background:linear-gradient(135deg,#2563EB,#06B6D4);border-radius:20px;display:inline-flex;align-items:center;justify-content:center;font-size:34px;margin-bottom:16px;box-shadow:0 8px 32px rgba(37,99,235,.5)}
-.login-logo h1{color:#fff;font-size:26px;font-weight:800;letter-spacing:-.5px}
-.login-logo p{color:#94A3B8;font-size:13px;margin-top:4px}
-.login-users{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:14px;margin-bottom:20px}
-.login-users p{color:#64748B;font-size:11px;margin-bottom:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
-.login-user-chip{display:inline-flex;align-items:center;gap:6px;background:rgba(37,99,235,.2);border:1px solid rgba(37,99,235,.3);color:#93C5FD;border-radius:20px;padding:5px 12px;font-size:12px;cursor:pointer;margin:3px;transition:all .2s}
-.login-user-chip:hover{background:rgba(37,99,235,.4);color:#fff}
-.login-field{margin-bottom:18px}
-.login-field label{display:block;color:#CBD5E1;font-size:12px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px}
-.login-field-wrap{position:relative}
-.login-field-wrap .field-icon{position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:16px}
-.login-field input{width:100%;padding:13px 14px 13px 44px;background:rgba(255,255,255,.08);border:1.5px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-size:15px;font-family:inherit;outline:none;transition:all .2s}
-.login-field input::placeholder{color:#475569}
-.login-field input:focus{border-color:#2563EB;background:rgba(37,99,235,.12);box-shadow:0 0 0 3px rgba(37,99,235,.2)}
-.btn-login{width:100%;padding:14px;background:linear-gradient(135deg,#2563EB,#06B6D4);border:none;border-radius:10px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;box-shadow:0 4px 20px rgba(37,99,235,.4);position:relative;overflow:hidden}
-.btn-login:hover{transform:translateY(-1px);box-shadow:0 8px 28px rgba(37,99,235,.5)}
-.login-note{text-align:center;margin-top:16px;color:#475569;font-size:12px}
+#login-screen{position:fixed;inset:0;z-index:9999;background:#080c18;display:flex;align-items:center;justify-content:center;overflow:hidden}
+#login-screen::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");pointer-events:none;z-index:0}
+.login-card{position:relative;z-index:1;width:340px;display:flex;flex-direction:column;align-items:center;gap:2rem}
+.lm-mark{width:60px;height:60px;position:relative;display:flex;align-items:center;justify-content:center}
+.lm-ring{position:absolute;inset:0;border-radius:50%;border:1.5px solid transparent;background:linear-gradient(135deg,#00d4ff,#7c4dff) border-box;-webkit-mask:linear-gradient(#fff 0 0) padding-box,linear-gradient(#fff 0 0);-webkit-mask-composite:destination-out;mask-composite:exclude;animation:lmSpin 8s linear infinite}
+@keyframes lmSpin{to{transform:rotate(360deg)}}
+.lm-inner{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#00b8d9,#6c3fd4);display:flex;align-items:center;justify-content:center}
+.lm-cross{position:relative;width:14px;height:14px}
+.lm-cross::before,.lm-cross::after{content:'';position:absolute;background:rgba(255,255,255,.92);border-radius:1px}
+.lm-cross::before{width:2px;height:100%;left:50%;transform:translateX(-50%)}
+.lm-cross::after{height:2px;width:100%;top:50%;transform:translateY(-50%)}
+.lm-wordmark{text-align:center;line-height:1;margin-top:.25rem}
+.lm-letters{font-size:30px;font-weight:700;letter-spacing:.14em;background:linear-gradient(90deg,#00d4ff,#7c4dff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-family:'Outfit',sans-serif}
+.lm-sub{font-size:9px;font-weight:300;letter-spacing:.22em;color:rgba(255,255,255,.3);text-transform:uppercase;margin-top:5px;font-family:'Outfit',sans-serif}
+.lm-divider{width:100%;height:.5px;background:rgba(255,255,255,.07)}
+.lm-form{width:100%;display:flex;flex-direction:column;gap:12px}
+.lm-field{position:relative}
+.lm-field svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:16px;height:16px;stroke:rgba(255,255,255,.25);fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.lm-field input{width:100%;background:rgba(255,255,255,.04);border:.5px solid rgba(255,255,255,.1);border-radius:8px;padding:12px 14px 12px 38px;font-size:14px;font-family:'Outfit',sans-serif;color:rgba(255,255,255,.85);outline:none;transition:border-color .2s,background .2s}
+.lm-field input::placeholder{color:rgba(255,255,255,.22)}
+.lm-field input:focus{border-color:rgba(0,212,255,.4);background:rgba(0,212,255,.04)}
+.btn-login{width:100%;padding:13px;border:none;border-radius:8px;background:linear-gradient(90deg,#00b8d9,#6c3fd4);color:#fff;font-size:14px;font-weight:600;font-family:'Outfit',sans-serif;letter-spacing:.06em;cursor:pointer;margin-top:4px;transition:opacity .2s,transform .1s}
+.btn-login:hover{opacity:.85}
+.btn-login:active{transform:scale(.98)}
+.lm-footer{font-size:12px;color:rgba(255,255,255,.2);letter-spacing:.03em;text-align:center;font-family:'Outfit',sans-serif}
 
 /* APP */
 #app{display:none;min-height:100vh}
@@ -419,27 +417,28 @@ tbody tr:hover td{background:#F8FAFC}
 
 <!-- LOGIN -->
 <div id="login-screen">
-  <div class="login-bg">
-    <div class="login-orb orb1"></div>
-    <div class="login-orb orb2"></div>
-    <div class="login-orb orb3"></div>
-  </div>
   <div class="login-card">
-    <div class="login-logo">
-      <img src="lumea-logo.png" alt="Lumea Med" style="width:240px;height:auto;margin-bottom:8px;border-radius:12px">
-      <p style="color:#94A3B8;font-size:12px;margin-top:4px">Sistema de Clínicas Privadas</p>
-    </div>
-    <div class="login-field">
-      <label>Contraseña de acceso</label>
-      <div class="login-field-wrap">
-        <span class="field-icon">🔑</span>
-        <input type="password" id="login-pin" placeholder="••••••••" autocomplete="current-password"
-          onkeydown="if(event.key==='Enter')verificarPin()">
+    <div>
+      <div class="lm-mark">
+        <div class="lm-ring"></div>
+        <div class="lm-inner"><div class="lm-cross"></div></div>
+      </div>
+      <div class="lm-wordmark">
+        <div class="lm-letters">LMD</div>
+        <div class="lm-sub">Lumea Med · Clínicas Privadas</div>
       </div>
     </div>
-    <p id="login-pin-error" style="color:#F87171;font-size:12px;text-align:center;margin:-10px 0 10px;display:none">Contraseña incorrecta</p>
-    <button class="btn-login" onclick="verificarPin()">Entrar →</button>
-    <p class="login-note">🔒 Solo personal autorizado de Lumea Med</p>
+    <div class="lm-divider"></div>
+    <div class="lm-form">
+      <div class="lm-field">
+        <svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+        <input type="password" id="login-pin" placeholder="Contraseña de acceso" autocomplete="current-password"
+          onkeydown="if(event.key==='Enter')verificarPin()">
+      </div>
+      <p id="login-pin-error" style="color:#f87171;font-size:12px;text-align:center;margin:-4px 0 0;display:none;font-family:'Outfit',sans-serif">Contraseña incorrecta</p>
+      <button class="btn-login" onclick="verificarPin()">Iniciar sesión</button>
+    </div>
+    <div class="lm-footer">Solo personal autorizado de Lumea Med</div>
   </div>
 </div>
 
