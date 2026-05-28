@@ -2125,7 +2125,18 @@ document.addEventListener('click',e=>{
 // ════════════════════ INIT ════════════════════
 document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('topbar-date').textContent = new Date().toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'});
-  cargarUsuariosLogin();
+  // Entrada directa sin login (modo pruebas)
+  currentClinicaId = 1;
+  currentUser = { name:'Dr. Galeano', role:'Administrador', avatar:'G', email:'sebasgale65@gmail.com', key:'admin' };
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').classList.add('visible');
+  document.getElementById('sf-name').textContent = currentUser.name;
+  document.getElementById('sf-role').textContent = currentUser.role;
+  document.getElementById('sf-avatar').textContent = currentUser.avatar;
+  setLoading(true);
+  await loadAll();
+  setLoading(false);
+  navigate('dashboard');
 });
 
 async function cargarUsuariosLogin() {
