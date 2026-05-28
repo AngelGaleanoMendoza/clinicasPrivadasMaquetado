@@ -430,13 +430,16 @@ tbody tr:hover td{background:#F8FAFC}
       <h1>Lumea Med</h1>
       <p>Sistema de Gestión Clínica</p>
     </div>
-    <!-- Selección de usuario (tap directo) -->
-    <div id="login-step-1">
-      <p class="login-select-title">¿Quién eres?</p>
-      <div class="login-users-grid" id="login-users-grid">
-        <div style="color:#475569;font-size:12px;text-align:center;padding:20px;grid-column:1/-1">Cargando usuarios...</div>
+    <div class="login-field">
+      <label>Contraseña de acceso</label>
+      <div class="login-field-wrap">
+        <span class="field-icon">🔑</span>
+        <input type="password" id="login-pin" placeholder="••••••••" autocomplete="current-password"
+          onkeydown="if(event.key==='Enter')verificarPin()">
       </div>
     </div>
+    <p id="login-pin-error" style="color:#F87171;font-size:12px;text-align:center;margin:-10px 0 10px;display:none">Contraseña incorrecta</p>
+    <button class="btn-login" onclick="verificarPin()">Entrar →</button>
     <p class="login-note">🔒 Solo personal autorizado de Lumea Med</p>
   </div>
 </div>
@@ -2123,9 +2126,17 @@ document.addEventListener('click',e=>{
 });
 
 // ════════════════════ INIT ════════════════════
+const ACCESS_PIN = 'lumea2025';
+
 document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('topbar-date').textContent = new Date().toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'});
-  // Entrada directa sin login (modo pruebas)
+  if (sessionStorage.getItem('lm_auth') === ACCESS_PIN) {
+    await entrarDirecto();
+  }
+  // Si no hay sesión, muestra el login-screen (ya visible por defecto)
+});
+
+async function entrarDirecto() {
   currentClinicaId = 1;
   currentUser = { name:'Dr. Galeano', role:'Administrador', avatar:'G', email:'sebasgale65@gmail.com', key:'admin' };
   document.getElementById('login-screen').style.display = 'none';
@@ -2137,7 +2148,35 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadAll();
   setLoading(false);
   navigate('dashboard');
-});
+}
+
+async function verificarPin() {
+  const pin = document.getElementById('login-pin').value;
+  if (pin === ACCESS_PIN) {
+    sessionStorage.setItem('lm_auth', ACCESS_PIN);
+    await entrarDirecto();
+  } else {
+    shakeLogin();
+    document.getElementById('login-pin-error').style.display = 'block';
+    document.getElementById('login-pin').value = '';
+  }
+}
+
+async function doLogout() {
+  if (!confirm('¿Cerrar sesión?')) return;
+  sessionStorage.removeItem('lm_auth');
+  currentUser = null; currentClinicaId = null;
+  const app = document.getElementById('app');
+  app.style.transition = 'opacity .3s'; app.style.opacity = '0';
+  setTimeout(() => {
+    app.classList.remove('visible'); app.style.opacity = '';
+    const ls = document.getElementById('login-screen');
+    ls.style.cssText = 'display:flex;opacity:0;transform:scale(.95);transition:opacity .4s,transform .4s';
+    document.getElementById('login-pin').value = '';
+    document.getElementById('login-pin-error').style.display = 'none';
+    setTimeout(() => { ls.style.opacity='1'; ls.style.transform='none'; }, 10);
+  }, 300);
+}
 
 async function cargarUsuariosLogin() {
   const { data } = await sb.from('profiles').select('nombre,icono,rol,email').order('nombre');
