@@ -460,6 +460,7 @@ tbody tr:hover td{background:#F8FAFC}
       <div class="menu-item" onclick="navigate('medicaciones')"><span class="icon">💊</span> Medicaciones</div>
       <div class="menu-item" onclick="navigate('notas')"><span class="icon">📝</span> Notas Clínicas</div>
       <div class="menu-item" onclick="navigate('atendidos')"><span class="icon">📊</span> Atendidos por Día</div>
+      <div class="menu-item" onclick="navigate('estadisticas')"><span class="icon">📈</span> Estadísticas</div>
       <div class="menu-section">Sistema</div>
       <div class="menu-item" onclick="navigate('exportar')"><span class="icon">📤</span> Exportar / Enviar</div>
       <div class="menu-item" onclick="navigate('configuracion')"><span class="icon">⚙️</span> Configuración Clínica</div>
@@ -665,6 +666,48 @@ tbody tr:hover td{background:#F8FAFC}
               <p class="text-light" style="font-size:12px">💡 Para imprimir una nota de consulta completa: ve a <strong>Atendidos por Día</strong> → botón <strong>🖨️ Nota</strong></p>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- ESTADÍSTICAS -->
+      <div id="view-estadisticas" class="view">
+        <div class="card" style="margin-bottom:18px">
+          <div class="card-header">
+            <h3>📈 Estadísticas de Pacientes Atendidos</h3>
+            <button class="btn btn-primary btn-sm" onclick="descargarPDFEstadisticas()">⬇️ Descargar PDF</button>
+          </div>
+          <div class="tabs" style="margin-bottom:0">
+            <button class="tab active" id="tab-est-dia"    onclick="switchEstTab('dia')">📅 Diario</button>
+            <button class="tab"        id="tab-est-semana" onclick="switchEstTab('semana')">📆 Semanal</button>
+            <button class="tab"        id="tab-est-mes"    onclick="switchEstTab('mes')">🗓️ Mensual</button>
+          </div>
+        </div>
+
+        <!-- DIARIO -->
+        <div id="est-panel-dia">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap">
+            <label style="font-size:13px;font-weight:600;color:var(--text-light)">Fecha:</label>
+            <input type="date" id="est-dia-fecha" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;outline:none;color:var(--text);background:var(--card)" onchange="renderEstDia()">
+          </div>
+          <div id="est-dia-stats"></div>
+        </div>
+
+        <!-- SEMANAL -->
+        <div id="est-panel-semana" style="display:none">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap">
+            <label style="font-size:13px;font-weight:600;color:var(--text-light)">Semana del:</label>
+            <input type="week" id="est-semana-fecha" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;outline:none;color:var(--text);background:var(--card)" onchange="renderEstSemana()">
+          </div>
+          <div id="est-semana-stats"></div>
+        </div>
+
+        <!-- MENSUAL -->
+        <div id="est-panel-mes" style="display:none">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap">
+            <label style="font-size:13px;font-weight:600;color:var(--text-light)">Mes:</label>
+            <input type="month" id="est-mes-fecha" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;outline:none;color:var(--text);background:var(--card)" onchange="renderEstMes()">
+          </div>
+          <div id="est-mes-stats"></div>
         </div>
       </div>
 
@@ -1014,7 +1057,7 @@ async function navigate(view, patientId) {
   if(el) el.classList.add('active');
   const mi=document.querySelector(`.menu-item[onclick*="'${view}'"]`);
   if(mi) mi.classList.add('active');
-  const titles={dashboard:'Dashboard',pacientes:'Pacientes',citas:'Citas',medicaciones:'Medicaciones',notas:'Notas Clínicas',atendidos:'Atendidos por Día',configuracion:'Configuración Clínica',exportar:'Exportar / Enviar','paciente-detalle':'Expediente del Paciente'};
+  const titles={dashboard:'Dashboard',pacientes:'Pacientes',citas:'Citas',medicaciones:'Medicaciones',notas:'Notas Clínicas',atendidos:'Atendidos por Día',estadisticas:'Estadísticas',configuracion:'Configuración Clínica',exportar:'Exportar / Enviar','paciente-detalle':'Expediente del Paciente'};
   document.getElementById('page-title').textContent = titles[view]||view;
   currentView=view;
   if(patientId) currentPatientId=patientId;
@@ -1031,6 +1074,7 @@ function renderView(v) {
     case 'medicaciones': renderMedicaciones(); break;
     case 'notas': renderNotas(); break;
     case 'atendidos': renderAtendidos(); break;
+    case 'estadisticas': renderEstadisticas(); break;
     case 'configuracion': renderConfiguracion(); break;
     case 'exportar': renderExportar(); break;
     case 'paciente-detalle': renderDetalleP(currentPatientId); break;
@@ -2193,6 +2237,203 @@ async function cargarUsuariosLogin() {
       <div class="luc-name">${u.nombre}</div>
       <div class="luc-role">${rolLabel(u.rol)}</div>
     </div>`).join('');
+}
+
+// ════════════════════ ESTADÍSTICAS ════════════════════
+let estTab = 'dia';
+
+function switchEstTab(tab) {
+  estTab = tab;
+  ['dia','semana','mes'].forEach(t => {
+    document.getElementById('est-panel-'+t).style.display = t===tab ? 'block' : 'none';
+    document.getElementById('tab-est-'+t).classList.toggle('active', t===tab);
+  });
+  if(tab==='dia') renderEstDia();
+  if(tab==='semana') renderEstSemana();
+  if(tab==='mes') renderEstMes();
+}
+
+function renderEstadisticas() {
+  const d = document.getElementById('est-dia-fecha');
+  if (!d.value) d.value = hoy();
+  const s = document.getElementById('est-semana-fecha');
+  if (!s.value) s.value = semanaISO(new Date());
+  const m = document.getElementById('est-mes-fecha');
+  if (!m.value) m.value = hoy().slice(0,7);
+  renderEstDia();
+}
+
+function semanaISO(d) {
+  const dt = new Date(d); dt.setHours(0,0,0,0);
+  dt.setDate(dt.getDate() + 3 - (dt.getDay()+6)%7);
+  const w = new Date(dt.getFullYear(),0,4);
+  const wk = 1+Math.round(((dt-w)/86400000 - 3 + (w.getDay()+6)%7)/7);
+  return `${dt.getFullYear()}-W${String(wk).padStart(2,'0')}`;
+}
+
+function estCards(total, atendidos, canceladas, pendientes) {
+  const pct = total ? Math.round(atendidos/total*100) : 0;
+  return `<div class="stats-grid" style="margin-bottom:18px">
+    <div class="stat-card"><div class="stat-icon si-blue">📋</div><div class="stat-info"><h3>${total}</h3><p>Total citas</p></div></div>
+    <div class="stat-card"><div class="stat-icon si-green">✅</div><div class="stat-info"><h3>${atendidos}</h3><p>Atendidos</p><span class="stat-trend ok">↑ ${pct}%</span></div></div>
+    <div class="stat-card"><div class="stat-icon si-orange">⏳</div><div class="stat-info"><h3>${pendientes}</h3><p>Pendientes</p></div></div>
+    <div class="stat-card"><div class="stat-icon" style="background:linear-gradient(135deg,#FEF2F2,#FEE2E2)">❌</div><div class="stat-info"><h3>${canceladas}</h3><p>Canceladas</p></div></div>
+  </div>`;
+}
+
+function estBarras(datos, titulo) {
+  if (!datos.length) return '';
+  const max = Math.max(...datos.map(d=>d.v), 1);
+  return `<div class="card" style="margin-bottom:16px">
+    <div class="card-header"><h3>${titulo}</h3></div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      ${datos.map(d=>`
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="min-width:110px;font-size:12px;font-weight:600;color:var(--text-light);text-align:right">${d.k}</div>
+          <div style="flex:1;background:var(--bg);border-radius:8px;height:28px;overflow:hidden">
+            <div style="height:100%;width:${Math.round(d.v/max*100)}%;background:linear-gradient(90deg,var(--primary),var(--accent));border-radius:8px;display:flex;align-items:center;padding-left:8px;transition:width .5s;min-width:${d.v?'28px':'0'}">
+              ${d.v ? `<span style="color:#fff;font-size:11px;font-weight:700">${d.v}</span>` : ''}
+            </div>
+          </div>
+          <div style="min-width:24px;font-size:13px;font-weight:800;color:var(--text)">${d.v}</div>
+        </div>`).join('')}
+    </div>
+  </div>`;
+}
+
+function estTabla(citas, titulo) {
+  if (!citas.length) return `<div class="card"><div class="card-header"><h3>${titulo}</h3></div><div class="empty-state"><div class="empty-icon">📋</div><p>Sin registros</p></div></div>`;
+  return `<div class="card" style="margin-bottom:16px">
+    <div class="card-header"><h3>${titulo}</h3></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Hora</th><th>Paciente</th><th>Tipo</th><th>Estado</th></tr></thead>
+      <tbody>${citas.map(c=>{
+        const p=C.p.find(x=>x.id===c.pacienteId);
+        return `<tr><td><strong>${c.hora||'—'}</strong></td><td>${p?p.nombre+' '+p.apellidos:'—'}</td><td><span class="tag tag-cyan">${c.tipo}</span></td><td>${estadoTag(c.estado)}</td></tr>`;
+      }).join('')}</tbody>
+    </table></div>
+  </div>`;
+}
+
+function renderEstDia() {
+  const fecha = document.getElementById('est-dia-fecha').value || hoy();
+  document.getElementById('est-dia-fecha').value = fecha;
+  const citas = C.c.filter(c=>c.fecha===fecha);
+  const atendidos = citas.filter(c=>c.estado==='completada');
+  const canceladas = citas.filter(c=>c.estado==='cancelada');
+  const pendientes = citas.filter(c=>c.estado==='pendiente'||c.estado==='confirmada');
+  const tipos = ['consulta','control','urgencia','cirugia','examen'].map(t=>({k:t,v:citas.filter(c=>c.tipo===t).length})).filter(d=>d.v>0);
+  document.getElementById('est-dia-stats').innerHTML =
+    estCards(citas.length, atendidos.length, canceladas.length, pendientes.length) +
+    (tipos.length ? estBarras(tipos, '📊 Por tipo de cita') : '') +
+    estTabla(citas.sort((a,b)=>(a.hora||'').localeCompare(b.hora||'')), `📋 Detalle del ${formatFecha(fecha)}`);
+}
+
+function renderEstSemana() {
+  const val = document.getElementById('est-semana-fecha').value;
+  if (!val) return;
+  const [yr, wk] = val.split('-W').map(Number);
+  const simple = d => d.toISOString().split('T')[0];
+  const lunes = new Date(yr, 0, 1 + (wk-1)*7);
+  lunes.setDate(lunes.getDate() - (lunes.getDay()||7) + 1);
+  const dias = Array.from({length:7}, (_,i)=>{ const d=new Date(lunes); d.setDate(d.getDate()+i); return simple(d); });
+  const diasNom = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+  const citas = C.c.filter(c=>dias.includes(c.fecha));
+  const atendidos = citas.filter(c=>c.estado==='completada');
+  const canceladas = citas.filter(c=>c.estado==='cancelada');
+  const pendientes = citas.filter(c=>c.estado==='pendiente'||c.estado==='confirmada');
+  const porDia = dias.map((f,i)=>({k:diasNom[i], v:C.c.filter(c=>c.fecha===f&&c.estado==='completada').length}));
+  const tipos = ['consulta','control','urgencia','cirugia','examen'].map(t=>({k:t,v:citas.filter(c=>c.tipo===t).length})).filter(d=>d.v>0);
+  document.getElementById('est-semana-stats').innerHTML =
+    estCards(citas.length, atendidos.length, canceladas.length, pendientes.length) +
+    estBarras(porDia, '📅 Atendidos por día') +
+    (tipos.length ? estBarras(tipos,'📊 Por tipo') : '') +
+    estTabla(citas.sort((a,b)=>a.fecha.localeCompare(b.fecha)||(a.hora||'').localeCompare(b.hora||'')), '📋 Detalle de la semana');
+}
+
+function renderEstMes() {
+  const val = document.getElementById('est-mes-fecha').value;
+  if (!val) return;
+  const [yr, mo] = val.split('-').map(Number);
+  const citas = C.c.filter(c=>c.fecha.startsWith(val));
+  const atendidos = citas.filter(c=>c.estado==='completada');
+  const canceladas = citas.filter(c=>c.estado==='cancelada');
+  const pendientes = citas.filter(c=>c.estado==='pendiente'||c.estado==='confirmada');
+  // Agrupar por semana del mes
+  const semanas = {};
+  citas.filter(c=>c.estado==='completada').forEach(c=>{
+    const d = new Date(c.fecha+'T12:00:00'), wk = Math.ceil(d.getDate()/7);
+    const k = `Sem ${wk}`; semanas[k] = (semanas[k]||0)+1;
+  });
+  const porSemana = Object.entries(semanas).map(([k,v])=>({k,v}));
+  const tipos = ['consulta','control','urgencia','cirugia','examen'].map(t=>({k:t,v:citas.filter(c=>c.tipo===t).length})).filter(d=>d.v>0);
+  // Top pacientes
+  const freq = {};
+  citas.forEach(c=>{ freq[c.pacienteId]=(freq[c.pacienteId]||0)+1; });
+  const topP = Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([id,v])=>{
+    const p=C.p.find(x=>x.id==id); return {k:p?p.nombre+' '+p.apellidos:'#'+id, v};
+  });
+  document.getElementById('est-mes-stats').innerHTML =
+    estCards(citas.length, atendidos.length, canceladas.length, pendientes.length) +
+    (porSemana.length ? estBarras(porSemana,'📅 Atendidos por semana') : '') +
+    (tipos.length ? estBarras(tipos,'📊 Por tipo de cita') : '') +
+    (topP.length ? estBarras(topP,'👥 Pacientes frecuentes') : '') +
+    estTabla(citas.sort((a,b)=>a.fecha.localeCompare(b.fecha)||(a.hora||'').localeCompare(b.hora||'')), '📋 Detalle del mes');
+}
+
+function descargarPDFEstadisticas() {
+  const cfg = getClinicaConfig();
+  let titulo='', contenido='';
+  if(estTab==='dia'){
+    const fecha = document.getElementById('est-dia-fecha').value||hoy();
+    titulo = `Estadísticas Diarias — ${formatFecha(fecha)}`;
+    contenido = document.getElementById('est-dia-stats').innerHTML;
+  } else if(estTab==='semana'){
+    const val = document.getElementById('est-semana-fecha').value||'';
+    titulo = `Estadísticas Semanales — ${val}`;
+    contenido = document.getElementById('est-semana-stats').innerHTML;
+  } else {
+    const val = document.getElementById('est-mes-fecha').value||'';
+    const [yr,mo] = val.split('-');
+    const nomMes = new Date(yr,mo-1,1).toLocaleDateString('es-ES',{month:'long',year:'numeric'});
+    titulo = `Estadísticas Mensuales — ${nomMes}`;
+    contenido = document.getElementById('est-mes-stats').innerHTML;
+  }
+  const w = window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+  <title>${titulo}</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Inter',system-ui,sans-serif;color:#0F172A;padding:32px;font-size:13px}
+    h1{font-size:20px;font-weight:800;color:#2563EB;margin-bottom:4px}
+    .sub{color:#64748B;font-size:12px;margin-bottom:24px}
+    .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+    .stat-card{border:1px solid #E2E8F0;border-radius:10px;padding:14px;display:flex;align-items:center;gap:10px}
+    .stat-icon{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+    .si-blue{background:#EFF6FF}.si-green{background:#F0FDF4}.si-orange{background:#FFFBEB}
+    .stat-info h3{font-size:22px;font-weight:800}.stat-info p{font-size:11px;color:#64748B}
+    .card{border:1px solid #E2E8F0;border-radius:10px;padding:16px;margin-bottom:14px}
+    .card-header{display:flex;align-items:center;margin-bottom:14px;font-size:13px;font-weight:700}
+    table{width:100%;border-collapse:collapse}
+    th{background:#F1F5F9;padding:8px 12px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase}
+    td{padding:10px 12px;border-bottom:1px solid #E2E8F0;font-size:12px}
+    .tag{display:inline-block;padding:2px 8px;border-radius:12px;font-size:10px;font-weight:600}
+    .tag-green{background:#F0FDF4;color:#15803D}.tag-orange{background:#FFFBEB;color:#B45309}
+    .tag-cyan{background:#ECFEFF;color:#0E7490}.tag-red{background:#FEF2F2;color:#B91C1C}
+    .tag-gray{background:#F1F5F9;color:#475569}
+    .stat-trend{font-size:11px;font-weight:600;color:#10B981}
+    .empty-state{text-align:center;padding:30px;color:#94A3B8}
+    .empty-icon{font-size:32px;margin-bottom:8px}
+    footer{margin-top:24px;padding-top:14px;border-top:1px solid #E2E8F0;text-align:center;color:#94A3B8;font-size:11px}
+    @media print{body{padding:16px}}
+  </style></head><body>
+  <h1>🏥 ${cfg.nombreClinica||'Lumea Med'}</h1>
+  <div class="sub">${cfg.nombreDoctor||''} · ${titulo} · Generado: ${new Date().toLocaleString('es-ES')}</div>
+  ${contenido}
+  <footer>Lumea Med · Sistema de Gestión Clínica · Documento para uso interno</footer>
+  <script>window.onload=function(){window.print()}<\/script>
+  </body></html>`);
+  w.document.close();
 }
 </script>
 </body>
