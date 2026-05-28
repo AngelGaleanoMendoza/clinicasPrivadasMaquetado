@@ -908,55 +908,6 @@ function setDbStatus(ok) {
 let currentUser  = null;
 let selectedEmail = '';
 
-async function buscarClinica() {
-  const codigo = (document.getElementById('login-codigo').value||'').trim().toLowerCase();
-  if (!codigo) { shakeLogin(); return; }
-  const errEl = document.getElementById('login-clinica-error');
-  errEl.style.display = 'none';
-  setLoading(true);
-
-  // Validar clínica con SELECT directo (anon tiene permiso garantizado)
-  const { data: clinicaRow, error: cErr } = await sb
-    .from('clinicas').select('id,nombre').eq('codigo', codigo).eq('activa', true).single();
-
-  if (cErr || !clinicaRow) {
-    setLoading(false);
-    errEl.style.display = 'block';
-    shakeLogin();
-    return;
-  }
-
-  currentClinica = { codigo, id: clinicaRow.id };
-  document.getElementById('login-clinica-nombre').textContent = clinicaRow.nombre;
-
-  // Intentar cargar médicos con RPC (opcional — fallback a email si falla)
-  const { data: medicos } = await sb.rpc('get_medicos_clinica', { p_codigo: codigo });
-  setLoading(false);
-
-  document.getElementById('login-step-0').style.display = 'none';
-  document.getElementById('login-step-1').style.display = 'block';
-
-  if (medicos && medicos.length > 0) {
-    renderLoginUsers(medicos);
-    document.getElementById('login-users-wrap').style.display = 'block';
-    document.getElementById('login-email-wrap').style.display = 'none';
-  } else {
-    document.getElementById('login-users-wrap').style.display = 'none';
-    document.getElementById('login-email-wrap').style.display = 'block';
-    setTimeout(() => document.getElementById('login-email-input').focus(), 50);
-  }
-}
-
-function backToClinicaSelect() {
-  currentClinica = null;
-  selectedEmail = '';
-  document.getElementById('login-step-0').style.display = 'block';
-  document.getElementById('login-step-1').style.display = 'none';
-  document.getElementById('login-step-2').style.display = 'none';
-  document.getElementById('login-pass').value = '';
-  document.getElementById('login-codigo').value = '';
-  document.getElementById('login-clinica-error').style.display = 'none';
-}
 
 function renderLoginUsers(users) {
   const rolLabel = r => ({admin:'Administrador',medico:'Médico',recepcion:'Recepcionista',enfermeria:'Enfermera/o'}[r]||r);
@@ -970,52 +921,34 @@ function renderLoginUsers(users) {
 
 async function selectLoginUser(email, label, icon, role) {
   const roleKey = {'Administrador':'admin','Médico':'medico','Recepcionista':'recepcion','Enfermera/o':'enfermeria'}[role]||'medico';
-  const { data: prof } = await sb.from('profiles').select('clinica_id').eq('email', email).single();
-  currentClinicaId = prof?.clinica_id || 1;
+  currentClinicaId = 1;
   currentUser = { name:label, role, avatar:label[0].toUpperCase(), email, key:roleKey };
-  await enterApp(true);
+  await enterApp();
 }
 
-async function irAPasswordEmail() {
-  const email = (document.getElementById('login-email-input').value||'').trim();
-  if (!email) { shakeLogin(); return; }
-  currentClinicaId = currentClinica?.id || null;
-  currentUser = { name:email.split('@')[0], role:'Usuario', avatar:email[0].toUpperCase(), email, key:'medico' };
-  await enterApp(true);
-}
-
-async function enterApp(animate) {
+async function enterApp() {
   setLoading(true);
   await loadAll();
   setLoading(false);
   const ls = document.getElementById('login-screen');
   const app = document.getElementById('app');
-  if (animate) {
-    ls.style.transition = 'opacity .4s, transform .4s';
-    ls.style.opacity = '0'; ls.style.transform = 'scale(1.05)';
-    await new Promise(r => setTimeout(r, 400));
-  }
+  ls.style.transition = 'opacity .4s, transform .4s';
+  ls.style.opacity = '0'; ls.style.transform = 'scale(1.05)';
+  await new Promise(r => setTimeout(r, 400));
   ls.style.display = 'none';
   app.classList.add('visible');
   document.getElementById('sf-name').textContent = currentUser.name;
   document.getElementById('sf-role').textContent = currentUser.role;
   document.getElementById('sf-avatar').textContent = currentUser.avatar;
   navigate('dashboard');
-  if (animate) toast(`Bienvenido, ${currentUser.name} 👋`, 'info');
+  toast(`Bienvenido, ${currentUser.name} 👋`, 'info');
 }
 
-function backToUserSelect() {
-  document.getElementById('login-step-1').style.display = 'block';
-  document.getElementById('login-step-2').style.display = 'none';
-}
-
-async function checkSession() {
-  // Sin autenticación activa por ahora
-}
+async function checkSession() {}
 
 async function doLogout() {
   if (!confirm('¿Cerrar sesión?')) return;
-  currentUser = null; currentClinicaId = null; currentClinica = null;
+  currentUser = null; currentClinicaId = null;
   const app = document.getElementById('app');
   app.style.transition = 'opacity .3s';
   app.style.opacity = '0';
@@ -1025,7 +958,7 @@ async function doLogout() {
     const ls = document.getElementById('login-screen');
     ls.style.cssText = 'display:flex;opacity:0;transform:scale(.95);transition:opacity .4s,transform .4s';
     setTimeout(() => { ls.style.opacity='1'; ls.style.transform='none'; }, 10);
-    backToClinicaSelect();
+    cargarUsuariosLogin();
   }, 300);
 }
 
