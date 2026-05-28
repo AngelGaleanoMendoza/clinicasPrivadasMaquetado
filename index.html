@@ -1014,53 +1014,25 @@ function renderLoginUsers(users) {
     </div>`).join('');
 }
 
-function selectLoginUser(email, label, icon, role) {
-  selectedEmail = email;
-  document.getElementById('login-selected-user').innerHTML=`
-    <div class="login-selected-box">
-      <div class="lsb-icon">${icon}</div>
-      <div><div class="lsb-name">${label}</div><div class="lsb-role">${role}</div></div>
-    </div>`;
-  document.getElementById('login-step-1').style.display='none';
-  document.getElementById('login-step-2').style.display='block';
-  setTimeout(()=>document.getElementById('login-pass').focus(), 50);
+async function selectLoginUser(email, label, icon, role) {
+  currentClinicaId = currentClinica?.id || null;
+  const roleKey = {'Administrador':'admin','Médico':'medico','Recepcionista':'recepcion','Enfermera/o':'enfermeria'}[role]||'medico';
+  currentUser = { name:label, role, avatar:label[0].toUpperCase(), email, key:roleKey };
+  await enterApp(true);
 }
 
-function irAPasswordEmail() {
+async function irAPasswordEmail() {
   const email = (document.getElementById('login-email-input').value||'').trim();
   if (!email) { shakeLogin(); return; }
-  selectedEmail = email;
-  document.getElementById('login-selected-user').innerHTML = `
-    <div class="login-selected-box">
-      <div class="lsb-icon">📧</div>
-      <div><div class="lsb-name">${email}</div><div class="lsb-role">Usuario</div></div>
-    </div>`;
-  document.getElementById('login-step-1').style.display = 'none';
-  document.getElementById('login-step-2').style.display = 'block';
-  setTimeout(()=>document.getElementById('login-pass').focus(), 50);
+  currentClinicaId = currentClinica?.id || null;
+  currentUser = { name:email.split('@')[0], role:'Usuario', avatar:email[0].toUpperCase(), email, key:'medico' };
+  await enterApp(true);
 }
 
-function backToUserSelect() {
-  selectedEmail = '';
-  document.getElementById('login-step-1').style.display = 'block';
-  document.getElementById('login-step-2').style.display = 'none';
-  document.getElementById('login-pass').value = '';
-}
-
-async function checkSession() {
-  const { data:{ session } } = await sb.auth.getSession();
-  if (session) await onUserLoggedIn(session.user, false);
-}
-
-async function onUserLoggedIn(user, animate=true) {
-  const { data: profile } = await sb.from('profiles').select('*').eq('id', user.id).single();
-  const rol = profile?.rol || 'recepcion';
-  const nombre = profile?.nombre || user.email.split('@')[0];
-  const rolLabel = {admin:'Administrador',medico:'Médico',recepcion:'Recepcionista',enfermeria:'Enfermera/o'}[rol] || rol;
-  currentClinicaId = profile?.clinica_id || null;
-  currentUser = { name:nombre, role:rolLabel, avatar:nombre[0].toUpperCase(), email:user.email, key:rol, id:user.id };
+async function enterApp(animate) {
+  setLoading(true);
   await loadAll();
-
+  setLoading(false);
   const ls = document.getElementById('login-screen');
   const app = document.getElementById('app');
   if (animate) {
@@ -1077,27 +1049,18 @@ async function onUserLoggedIn(user, animate=true) {
   if (animate) toast(`Bienvenido, ${currentUser.name} 👋`, 'info');
 }
 
-async function doLogin() {
-  const pass = document.getElementById('login-pass').value;
-  if (!selectedEmail || !pass) { shakeLogin(); return; }
-  setLoading(true);
-  const { data, error } = await sb.auth.signInWithPassword({ email: selectedEmail, password: pass });
-  setLoading(false);
-  if (error) {
-    shakeLogin();
-    const msg = error.message.includes('Invalid') ? 'Credenciales incorrectas' : error.message;
-    toast(msg, 'error');
-    return;
-  }
-  await onUserLoggedIn(data.user, true);
+function backToUserSelect() {
+  document.getElementById('login-step-1').style.display = 'block';
+  document.getElementById('login-step-2').style.display = 'none';
+}
+
+async function checkSession() {
+  // Sin autenticación activa por ahora
 }
 
 async function doLogout() {
   if (!confirm('¿Cerrar sesión?')) return;
-  await sb.auth.signOut();
-  currentUser = null;
-  currentClinicaId = null;
-  currentClinica = null;
+  currentUser = null; currentClinicaId = null; currentClinica = null;
   const app = document.getElementById('app');
   app.style.transition = 'opacity .3s';
   app.style.opacity = '0';
