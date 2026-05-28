@@ -927,21 +927,27 @@ async function selectLoginUser(email, label, icon, role) {
 }
 
 async function enterApp() {
-  setLoading(true);
-  await loadAll();
-  setLoading(false);
-  const ls = document.getElementById('login-screen');
-  const app = document.getElementById('app');
-  ls.style.transition = 'opacity .4s, transform .4s';
-  ls.style.opacity = '0'; ls.style.transform = 'scale(1.05)';
-  await new Promise(r => setTimeout(r, 400));
-  ls.style.display = 'none';
-  app.classList.add('visible');
-  document.getElementById('sf-name').textContent = currentUser.name;
-  document.getElementById('sf-role').textContent = currentUser.role;
-  document.getElementById('sf-avatar').textContent = currentUser.avatar;
-  navigate('dashboard');
-  toast(`Bienvenido, ${currentUser.name} 👋`, 'info');
+  try {
+    setLoading(true);
+    await loadAll();
+    setLoading(false);
+    const ls = document.getElementById('login-screen');
+    const app = document.getElementById('app');
+    ls.style.transition = 'opacity .4s, transform .4s';
+    ls.style.opacity = '0'; ls.style.transform = 'scale(1.05)';
+    await new Promise(r => setTimeout(r, 400));
+    ls.style.display = 'none';
+    app.classList.add('visible');
+    document.getElementById('sf-name').textContent = currentUser.name;
+    document.getElementById('sf-role').textContent = currentUser.role;
+    document.getElementById('sf-avatar').textContent = currentUser.avatar;
+    navigate('dashboard');
+    toast(`Bienvenido, ${currentUser.name} 👋`, 'info');
+  } catch(err) {
+    setLoading(false);
+    console.error('enterApp error:', err);
+    alert('Error al entrar: ' + err.message);
+  }
 }
 
 async function checkSession() {}
