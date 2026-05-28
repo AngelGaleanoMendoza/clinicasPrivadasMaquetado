@@ -911,8 +911,9 @@ let selectedEmail = '';
 
 function renderLoginUsers(users) {
   const rolLabel = r => ({admin:'Administrador',medico:'Médico',recepcion:'Recepcionista',enfermeria:'Enfermera/o'}[r]||r);
+  const q = v => JSON.stringify(v).replace(/"/g,'&quot;');
   document.getElementById('login-users-grid').innerHTML = users.map(u=>`
-    <div class="login-user-card" onclick="selectLoginUser(${JSON.stringify(u.email)},${JSON.stringify(u.nombre)},${JSON.stringify(u.icono||'👨‍⚕️')},${JSON.stringify(rolLabel(u.rol))})">
+    <div class="login-user-card" onclick="selectLoginUser(${q(u.email)},${q(u.nombre)},${q(u.icono||'👨‍⚕️')},${q(rolLabel(u.rol))})">
       <div class="luc-icon">${u.icono||'👨‍⚕️'}</div>
       <div class="luc-name">${u.nombre}</div>
       <div class="luc-role">${rolLabel(u.rol)}</div>
@@ -2130,13 +2131,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function cargarUsuariosLogin() {
   const { data } = await sb.from('profiles').select('nombre,icono,rol,email').order('nombre');
   const rolLabel = r => ({admin:'Administrador',medico:'Médico',recepcion:'Recepcionista',enfermeria:'Enfermera/o'}[r]||r);
+  const q = v => JSON.stringify(v).replace(/"/g,'&quot;');
   const grid = document.getElementById('login-users-grid');
   if (!data || data.length === 0) {
     grid.innerHTML = `<div style="color:#475569;font-size:12px;text-align:center;padding:20px;grid-column:1/-1">Sin usuarios registrados</div>`;
     return;
   }
   grid.innerHTML = data.map(u => `
-    <div class="login-user-card" onclick="selectLoginUser(${JSON.stringify(u.email)},${JSON.stringify(u.nombre)},${JSON.stringify(u.icono||'👨‍⚕️')},${JSON.stringify(rolLabel(u.rol))})">
+    <div class="login-user-card" onclick="selectLoginUser(${q(u.email)},${q(u.nombre)},${q(u.icono||'👨‍⚕️')},${q(rolLabel(u.rol))})">
       <div class="luc-icon">${u.icono||'👨‍⚕️'}</div>
       <div class="luc-name">${u.nombre}</div>
       <div class="luc-role">${rolLabel(u.rol)}</div>
