@@ -430,58 +430,12 @@ tbody tr:hover td{background:#F8FAFC}
       <h1>GaleSistem</h1>
       <p>Sistema de Gestión Clínica</p>
     </div>
-    <!-- PASO 0: código de clínica -->
-    <div id="login-step-0">
-      <div class="login-field">
-        <label>Código de clínica</label>
-        <div class="login-field-wrap">
-          <span class="field-icon">🏥</span>
-          <input type="text" id="login-codigo" placeholder="ej. clinica-galeano" autocomplete="off"
-            onkeydown="if(event.key==='Enter')buscarClinica()"
-            oninput="this.value=this.value.toLowerCase().replace(/\s+/g,'-')">
-        </div>
+    <!-- Selección de usuario (tap directo) -->
+    <div id="login-step-1">
+      <p class="login-select-title">¿Quién eres?</p>
+      <div class="login-users-grid" id="login-users-grid">
+        <div style="color:#475569;font-size:12px;text-align:center;padding:20px;grid-column:1/-1">Cargando usuarios...</div>
       </div>
-      <button class="btn-login" onclick="buscarClinica()">Continuar →</button>
-      <p id="login-clinica-error" style="color:#F87171;font-size:12px;text-align:center;margin-top:10px;display:none">Código no encontrado</p>
-    </div>
-    <!-- PASO 1: elegir usuario (o email si RPC no disponible) -->
-    <div id="login-step-1" style="display:none">
-      <div id="login-clinica-badge" style="display:flex;align-items:center;gap:8px;background:rgba(37,99,235,.15);border:1px solid rgba(37,99,235,.3);border-radius:10px;padding:9px 14px;margin-bottom:14px">
-        <span style="font-size:18px">🏥</span>
-        <div><div id="login-clinica-nombre" style="color:#fff;font-size:13px;font-weight:700"></div>
-        <div style="color:#64748B;font-size:10px">Selecciona tu usuario</div></div>
-        <button class="btn-back" style="margin-left:auto;padding:0" onclick="backToClinicaSelect()">✕</button>
-      </div>
-      <!-- Avatares de médicos (si el RPC funciona) -->
-      <div id="login-users-wrap">
-        <p class="login-select-title">¿Quién eres?</p>
-        <div class="login-users-grid" id="login-users-grid"></div>
-      </div>
-      <!-- Fallback: campo de email -->
-      <div id="login-email-wrap" style="display:none">
-        <div class="login-field">
-          <label>Tu correo</label>
-          <div class="login-field-wrap">
-            <span class="field-icon">📧</span>
-            <input type="email" id="login-email-input" placeholder="tu@correo.com" autocomplete="username"
-              onkeydown="if(event.key==='Enter')irAPasswordEmail()">
-          </div>
-        </div>
-        <button class="btn-login" onclick="irAPasswordEmail()">Continuar →</button>
-      </div>
-    </div>
-    <!-- PASO 2: contraseña -->
-    <div id="login-step-2" style="display:none">
-      <div id="login-selected-user"></div>
-      <button class="btn-back" onclick="backToUserSelect()">← Cambiar usuario</button>
-      <div class="login-field">
-        <label>Contraseña</label>
-        <div class="login-field-wrap">
-          <span class="field-icon">🔒</span>
-          <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
-        </div>
-      </div>
-      <button class="btn-login" onclick="doLogin()">Entrar →</button>
     </div>
     <p class="login-note">🔒 Solo personal autorizado de GaleSistem</p>
   </div>
@@ -1015,8 +969,9 @@ function renderLoginUsers(users) {
 }
 
 async function selectLoginUser(email, label, icon, role) {
-  currentClinicaId = currentClinica?.id || null;
   const roleKey = {'Administrador':'admin','Médico':'medico','Recepcionista':'recepcion','Enfermera/o':'enfermeria'}[role]||'medico';
+  const { data: prof } = await sb.from('profiles').select('clinica_id').eq('email', email).single();
+  currentClinicaId = prof?.clinica_id || 1;
   currentUser = { name:label, role, avatar:label[0].toUpperCase(), email, key:roleKey };
   await enterApp(true);
 }
@@ -2230,9 +2185,24 @@ document.addEventListener('click',e=>{
 // ════════════════════ INIT ════════════════════
 document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('topbar-date').textContent = new Date().toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'});
-  setTimeout(()=>document.getElementById('login-codigo').focus(), 300);
-  await checkSession();
+  cargarUsuariosLogin();
 });
+
+async function cargarUsuariosLogin() {
+  const { data } = await sb.from('profiles').select('nombre,icono,rol,email').order('nombre');
+  const rolLabel = r => ({admin:'Administrador',medico:'Médico',recepcion:'Recepcionista',enfermeria:'Enfermera/o'}[r]||r);
+  const grid = document.getElementById('login-users-grid');
+  if (!data || data.length === 0) {
+    grid.innerHTML = `<div style="color:#475569;font-size:12px;text-align:center;padding:20px;grid-column:1/-1">Sin usuarios registrados</div>`;
+    return;
+  }
+  grid.innerHTML = data.map(u => `
+    <div class="login-user-card" onclick="selectLoginUser(${JSON.stringify(u.email)},${JSON.stringify(u.nombre)},${JSON.stringify(u.icono||'👨‍⚕️')},${JSON.stringify(rolLabel(u.rol))})">
+      <div class="luc-icon">${u.icono||'👨‍⚕️'}</div>
+      <div class="luc-name">${u.nombre}</div>
+      <div class="luc-role">${rolLabel(u.rol)}</div>
+    </div>`).join('');
+}
 </script>
 </body>
 </html>
