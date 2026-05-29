@@ -1021,8 +1021,8 @@ tbody tr:hover td{background:#F8FAFC}
     <h2>📄 Hoja de Consulta</h2>
     <div id="resumen-cita-content"></div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="imprimirResumen()">🖨️ Imprimir</button>
       <button class="btn btn-secondary" onclick="closeModal('modal-resumen-cita')">Cerrar</button>
+      <button class="btn btn-primary" onclick="imprimirNotaConsulta(currentResumenCitaId)">🖨️ Imprimir Nota</button>
     </div>
   </div>
 </div>
@@ -1198,7 +1198,7 @@ function toast(msg, type='success') {
 }
 
 // ════════════════════ NAVIGATION ════════════════════
-let currentView='dashboard', editingId=null, currentPatientId=null, selCalDate=hoy();
+let currentView='dashboard', editingId=null, currentPatientId=null, selCalDate=hoy(), currentResumenCitaId=null;
 
 async function navigate(view, patientId) {
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
@@ -2122,6 +2122,7 @@ function renderAtendidos(fecha) {
 }
 
 function verResumenCita(citaId) {
+  currentResumenCitaId = citaId;
   const c = C.c.find(x => x.id === citaId);
   if(!c) return;
   const p = C.p.find(x => x.id === c.pacienteId);
