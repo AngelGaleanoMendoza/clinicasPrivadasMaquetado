@@ -435,6 +435,17 @@ tbody tr:hover td{background:#F8FAFC}
   .stat-card{padding:12px 10px}
   .stat-info h3{font-size:18px}
 }
+
+/* ADMIN PANEL */
+.admin-stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:20px}
+.admin-stat{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;display:flex;align-items:center;gap:12px}
+.admin-stat-icon{font-size:26px;flex-shrink:0}
+.admin-stat-val{font-size:22px;font-weight:800;line-height:1;color:var(--text)}
+.admin-stat-label{font-size:11px;color:var(--text-light);margin-top:3px;font-weight:500}
+.admin-badge-sa{display:inline-flex;align-items:center;gap:5px;background:linear-gradient(90deg,rgba(0,212,255,.15),rgba(124,77,255,.15));border:1px solid rgba(124,77,255,.3);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:700;color:#a78bfa}
+.icon-select{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:4px}
+.icon-opt{width:100%;aspect-ratio:1;border:1.5px solid var(--border);border-radius:10px;background:var(--bg);cursor:pointer;font-size:22px;display:flex;align-items:center;justify-content:center;transition:all .15s;padding:0}
+.icon-opt:hover,.icon-opt.selected{border-color:var(--primary);background:var(--primary-light)}
 </style>
 </head>
 <body>
@@ -495,6 +506,8 @@ tbody tr:hover td{background:#F8FAFC}
       <div class="menu-section">Sistema</div>
       <div class="menu-item" onclick="navigate('exportar')"><span class="icon">📤</span> Exportar / Enviar</div>
       <div class="menu-item" onclick="navigate('configuracion')"><span class="icon">⚙️</span> Configuración Clínica</div>
+      <div class="menu-section" id="menu-admin-section" style="display:none">Super Admin</div>
+      <div class="menu-item" id="menu-admin" onclick="navigate('admin')" style="display:none"><span class="icon">👑</span> Administración</div>
     </nav>
     <div class="sidebar-footer">
       <div class="sf-user">
@@ -746,6 +759,27 @@ tbody tr:hover td{background:#F8FAFC}
         </div>
       </div>
 
+      <!-- ADMIN SUPER -->
+      <div id="view-admin" class="view">
+        <div class="card" style="margin-bottom:18px">
+          <div class="card-header">
+            <h3>👑 Panel de Administración <span class="admin-badge-sa">Super Admin</span></h3>
+            <button class="btn btn-primary btn-sm" id="btn-admin-add" onclick="adminAddNew()">+ Nueva Clínica</button>
+          </div>
+          <div id="admin-stats-row" class="admin-stat-row"></div>
+          <div class="tabs" style="margin-bottom:0">
+            <button class="tab active" id="tab-admin-clinicas" onclick="switchAdminTab('clinicas')">🏥 Clínicas</button>
+            <button class="tab" id="tab-admin-usuarios" onclick="switchAdminTab('usuarios')">👥 Usuarios</button>
+          </div>
+        </div>
+        <div id="admin-panel-clinicas">
+          <div class="card"><div id="admin-clinicas-list"></div></div>
+        </div>
+        <div id="admin-panel-usuarios" style="display:none">
+          <div class="card"><div id="admin-usuarios-list"></div></div>
+        </div>
+      </div>
+
       <!-- EXPORTAR -->
       <div id="view-exportar" class="view">
         <div class="grid-2">
@@ -772,6 +806,67 @@ tbody tr:hover td{background:#F8FAFC}
         </div>
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CLÍNICA (Admin) -->
+<div class="modal-overlay" id="modal-clinica">
+  <div class="modal" style="max-width:480px">
+    <h2 id="modal-clinica-title">🏥 Nueva Clínica</h2>
+    <div class="form-grid cols-1">
+      <div class="form-group"><label>Nombre de la Clínica *</label><input type="text" id="cl-nombre" placeholder="Clínica Galeano"></div>
+      <div class="form-group"><label>Código único *</label><input type="text" id="cl-codigo" placeholder="clinica-galeano" oninput="this.value=this.value.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')">
+        <span style="font-size:11px;color:var(--text-light)">Solo letras minúsculas, números y guiones. Ej: clinica-galeano</span>
+      </div>
+      <div class="form-group"><label>Estado</label>
+        <select id="cl-activa"><option value="true">Activa</option><option value="false">Inactiva</option></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-clinica')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarClinica()">💾 Guardar Clínica</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL USUARIO (Admin) -->
+<div class="modal-overlay" id="modal-usuario">
+  <div class="modal" style="max-width:520px">
+    <h2 id="modal-usuario-title">👤 Nuevo Usuario</h2>
+    <div class="form-grid">
+      <div class="form-group"><label>Nombre completo *</label><input type="text" id="u-nombre" placeholder="Dr. Juan Pérez"></div>
+      <div class="form-group"><label>Correo electrónico</label><input type="email" id="u-email" placeholder="dr.perez@clinica.com"></div>
+      <div class="form-group"><label>Rol</label>
+        <select id="u-rol">
+          <option value="admin">Administrador</option>
+          <option value="medico">Médico</option>
+          <option value="recepcion">Recepcionista</option>
+          <option value="enfermeria">Enfermería</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Clínica asignada</label>
+        <select id="u-clinica"><option value="">Sin clínica</option></select>
+      </div>
+      <div class="form-group full"><label>Ícono del usuario</label>
+        <div class="icon-select" id="u-icono-grid">
+          <button type="button" class="icon-opt selected" data-icon="👨‍⚕️" onclick="selectIcon(this)">👨‍⚕️</button>
+          <button type="button" class="icon-opt" data-icon="👩‍⚕️" onclick="selectIcon(this)">👩‍⚕️</button>
+          <button type="button" class="icon-opt" data-icon="🩺" onclick="selectIcon(this)">🩺</button>
+          <button type="button" class="icon-opt" data-icon="💉" onclick="selectIcon(this)">💉</button>
+          <button type="button" class="icon-opt" data-icon="🏥" onclick="selectIcon(this)">🏥</button>
+          <button type="button" class="icon-opt" data-icon="👨‍💼" onclick="selectIcon(this)">👨‍💼</button>
+          <button type="button" class="icon-opt" data-icon="👩‍💼" onclick="selectIcon(this)">👩‍💼</button>
+          <button type="button" class="icon-opt" data-icon="🔬" onclick="selectIcon(this)">🔬</button>
+          <button type="button" class="icon-opt" data-icon="💊" onclick="selectIcon(this)">💊</button>
+          <button type="button" class="icon-opt" data-icon="🧬" onclick="selectIcon(this)">🧬</button>
+        </div>
+        <input type="hidden" id="u-icono" value="👨‍⚕️">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-usuario')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarUsuario()">💾 Guardar Usuario</button>
     </div>
   </div>
 </div>
@@ -1098,10 +1193,17 @@ async function navigate(view, patientId) {
   if(el) el.classList.add('active');
   const mi=document.querySelector(`.menu-item[onclick*="'${view}'"]`);
   if(mi) mi.classList.add('active');
-  const titles={dashboard:'Dashboard',pacientes:'Pacientes',citas:'Citas',medicaciones:'Medicaciones',notas:'Notas Clínicas',atendidos:'Atendidos por Día',estadisticas:'Estadísticas',configuracion:'Configuración Clínica',exportar:'Exportar / Enviar','paciente-detalle':'Expediente del Paciente'};
+  const titles={dashboard:'Dashboard',pacientes:'Pacientes',citas:'Citas',medicaciones:'Medicaciones',notas:'Notas Clínicas',atendidos:'Atendidos por Día',estadisticas:'Estadísticas',configuracion:'Configuración Clínica',exportar:'Exportar / Enviar','paciente-detalle':'Expediente del Paciente',admin:'Administración'};
   document.getElementById('page-title').textContent = titles[view]||view;
   currentView=view;
   if(patientId) currentPatientId=patientId;
+  if(view==='admin'){
+    if(!isSuperAdmin()){navigate('dashboard');return;}
+    await loadAdminData();
+    switchAdminTab(adminTab||'clinicas');
+    if(window.innerWidth<=768) closeSidebar();
+    return;
+  }
   await loadAll();
   renderView(view);
   if(window.innerWidth<=768) closeSidebar();
@@ -2233,6 +2335,7 @@ async function entrarDirecto() {
   document.getElementById('sf-name').textContent = currentUser.name;
   document.getElementById('sf-role').textContent = currentUser.role;
   document.getElementById('sf-avatar').textContent = currentUser.avatar;
+  toggleAdminMenu();
   setLoading(true);
   await loadAll();
   setLoading(false);
@@ -2426,6 +2529,258 @@ function renderEstMes() {
     estTabla(citas.sort((a,b)=>a.fecha.localeCompare(b.fecha)||(a.hora||'').localeCompare(b.hora||'')), '📋 Detalle del mes');
 }
 
+// ════════════════════ SUPER ADMIN ════════════════════
+const SUPER_ADMIN_EMAIL = 'sebasgale65@gmail.com';
+let adminClinicas = [];
+let adminUsuarios = [];
+let adminTab = 'clinicas';
+let editingClinicaId = null;
+let editingUsuarioId = null;
+
+function isSuperAdmin() {
+  return currentUser && currentUser.email === SUPER_ADMIN_EMAIL;
+}
+
+function toggleAdminMenu() {
+  const sa = isSuperAdmin();
+  const section = document.getElementById('menu-admin-section');
+  const item = document.getElementById('menu-admin');
+  if(section) section.style.display = sa ? 'block' : 'none';
+  if(item) item.style.display = sa ? 'flex' : 'none';
+}
+
+async function loadAdminData() {
+  setLoading(true);
+  const [rc, ru] = await Promise.all([
+    sb.from('clinicas').select('*').order('id'),
+    sb.from('profiles').select('*').order('nombre')
+  ]);
+  adminClinicas = rc.data || [];
+  adminUsuarios = ru.data || [];
+  setLoading(false);
+}
+
+function switchAdminTab(tab) {
+  adminTab = tab;
+  ['clinicas','usuarios'].forEach(t => {
+    document.getElementById('admin-panel-'+t).style.display = t===tab ? 'block' : 'none';
+    document.getElementById('tab-admin-'+t).classList.toggle('active', t===tab);
+  });
+  const btn = document.getElementById('btn-admin-add');
+  if(btn) btn.textContent = tab==='clinicas' ? '+ Nueva Clínica' : '+ Nuevo Usuario';
+  if(tab==='clinicas') renderAdminClinicas();
+  if(tab==='usuarios') renderAdminUsuarios();
+  renderAdminStats();
+}
+
+function adminAddNew() {
+  if(adminTab==='clinicas') openModalClinica();
+  else openModalUsuario();
+}
+
+function renderAdminStats() {
+  const el = document.getElementById('admin-stats-row');
+  if(!el) return;
+  const activas = adminClinicas.filter(c=>c.activa).length;
+  el.innerHTML = `
+    <div class="admin-stat"><div class="admin-stat-icon">🏥</div><div><div class="admin-stat-val">${adminClinicas.length}</div><div class="admin-stat-label">Clínicas totales</div></div></div>
+    <div class="admin-stat"><div class="admin-stat-icon">✅</div><div><div class="admin-stat-val">${activas}</div><div class="admin-stat-label">Clínicas activas</div></div></div>
+    <div class="admin-stat"><div class="admin-stat-icon">👥</div><div><div class="admin-stat-val">${adminUsuarios.length}</div><div class="admin-stat-label">Usuarios registrados</div></div></div>
+    <div class="admin-stat"><div class="admin-stat-icon">👑</div><div><div class="admin-stat-val">1</div><div class="admin-stat-label">Super Admin</div></div></div>`;
+}
+
+function renderAdminClinicas() {
+  const el = document.getElementById('admin-clinicas-list');
+  if(!el) return;
+  if(!adminClinicas.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">🏥</div><p>No hay clínicas registradas.<br>Crea la primera con <strong>+ Nueva Clínica</strong></p></div>`;
+    return;
+  }
+  el.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th>#</th><th>Nombre</th><th>Código</th><th>Estado</th><th>Usuarios</th><th>Acciones</th></tr></thead>
+    <tbody>${adminClinicas.map(c => {
+      const cnt = adminUsuarios.filter(u=>u.clinica_id===c.id).length;
+      return `<tr>
+        <td><strong style="color:var(--text-light)">#${c.id}</strong></td>
+        <td><strong>${c.nombre}</strong></td>
+        <td><code style="background:var(--bg);padding:2px 8px;border-radius:6px;font-size:11px;color:var(--text-light)">${c.codigo}</code></td>
+        <td>${c.activa?'<span class="tag tag-green">Activa</span>':'<span class="tag tag-red">Inactiva</span>'}</td>
+        <td><span class="tag tag-blue">${cnt} usuario${cnt!==1?'s':''}</span></td>
+        <td class="actions-cell">
+          <button class="btn btn-sm btn-secondary" data-cid="${c.id}" onclick="openModalClinicaEdit(Number(this.dataset.cid))">✏️ Editar</button>
+          <button class="btn btn-sm btn-danger" data-cid="${c.id}" onclick="eliminarClinica(Number(this.dataset.cid))">🗑️</button>
+        </td></tr>`;
+    }).join('')}</tbody></table></div>`;
+}
+
+function renderAdminUsuarios() {
+  const el = document.getElementById('admin-usuarios-list');
+  if(!el) return;
+  const rolLabel = r => ({admin:'Administrador',medico:'Médico',recepcion:'Recepcionista',enfermeria:'Enfermería'}[r]||r);
+  const rolTag = r => ({admin:'tag-blue',medico:'tag-cyan',recepcion:'tag-orange',enfermeria:'tag-green'}[r]||'tag-gray');
+  if(!adminUsuarios.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">👥</div><p>No hay usuarios registrados.<br>Crea el primero con <strong>+ Nuevo Usuario</strong></p></div>`;
+    return;
+  }
+  el.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th>Usuario</th><th>Email</th><th>Rol</th><th>Clínica</th><th>Acciones</th></tr></thead>
+    <tbody>${adminUsuarios.map(u => {
+      const clinica = adminClinicas.find(c=>c.id===u.clinica_id);
+      return `<tr>
+        <td><div class="patient-name-cell">
+          <div class="patient-avatar" style="background:linear-gradient(135deg,var(--primary),var(--accent));font-size:18px;width:34px;height:34px">${u.icono||'👤'}</div>
+          <strong>${u.nombre}</strong>
+        </div></td>
+        <td style="font-size:12px;color:var(--text-light)">${u.email||'—'}</td>
+        <td><span class="tag ${rolTag(u.rol)}">${rolLabel(u.rol)}</span></td>
+        <td>${clinica?clinica.nombre:'<span style="color:var(--text-light);font-size:12px">Sin clínica</span>'}</td>
+        <td class="actions-cell">
+          <button class="btn btn-sm btn-secondary" data-uid="${u.id}" onclick="openModalUsuarioEditById(this.dataset.uid)">✏️ Editar</button>
+          <button class="btn btn-sm btn-danger" data-uid="${u.id}" onclick="eliminarUsuario(this.dataset.uid)">🗑️</button>
+        </td></tr>`;
+    }).join('')}</tbody></table></div>`;
+}
+
+// ── Modal Clínica ──
+function openModalClinica() {
+  document.getElementById('modal-clinica-title').textContent = '🏥 Nueva Clínica';
+  document.getElementById('cl-nombre').value = '';
+  document.getElementById('cl-codigo').value = '';
+  document.getElementById('cl-activa').value = 'true';
+  editingClinicaId = null;
+  document.getElementById('modal-clinica').classList.add('open');
+}
+
+function openModalClinicaEdit(id) {
+  const c = adminClinicas.find(x=>x.id===id);
+  if(!c) return;
+  document.getElementById('modal-clinica-title').textContent = '✏️ Editar Clínica';
+  document.getElementById('cl-nombre').value = c.nombre;
+  document.getElementById('cl-codigo').value = c.codigo;
+  document.getElementById('cl-activa').value = String(c.activa);
+  editingClinicaId = id;
+  document.getElementById('modal-clinica').classList.add('open');
+}
+
+async function guardarClinica() {
+  const nombre = document.getElementById('cl-nombre').value.trim();
+  const codigo = document.getElementById('cl-codigo').value.trim();
+  const activa = document.getElementById('cl-activa').value === 'true';
+  if(!nombre||!codigo){ toast('Nombre y código son obligatorios','error'); return; }
+  setLoading(true);
+  if(editingClinicaId) {
+    const {error} = await sb.from('clinicas').update({nombre,codigo,activa}).eq('id',editingClinicaId);
+    if(error){ toast('Error al actualizar: '+error.message,'error'); setLoading(false); return; }
+    toast('Clínica actualizada','success');
+  } else {
+    const {error} = await sb.from('clinicas').insert({nombre,codigo,activa});
+    if(error){ toast('Error al crear: '+error.message,'error'); setLoading(false); return; }
+    toast('Clínica creada exitosamente','success');
+  }
+  closeModal('modal-clinica');
+  await loadAdminData();
+  renderAdminClinicas();
+  renderAdminStats();
+  setLoading(false);
+}
+
+async function eliminarClinica(id) {
+  const c = adminClinicas.find(x=>x.id===id);
+  const cnt = adminUsuarios.filter(u=>u.clinica_id===id).length;
+  const msg = cnt > 0
+    ? `La clínica "${c?.nombre}" tiene ${cnt} usuario(s) asignado(s). ¿Eliminar de todas formas?`
+    : `¿Eliminar la clínica "${c?.nombre}"? Esta acción no se puede deshacer.`;
+  if(!confirm(msg)) return;
+  setLoading(true);
+  const {error} = await sb.from('clinicas').delete().eq('id',id);
+  if(error){ toast('Error al eliminar: '+error.message,'error'); setLoading(false); return; }
+  toast('Clínica eliminada','success');
+  await loadAdminData();
+  renderAdminClinicas();
+  renderAdminStats();
+  setLoading(false);
+}
+
+// ── Modal Usuario ──
+function fillClinicaSelect(selectedId) {
+  document.getElementById('u-clinica').innerHTML =
+    '<option value="">Sin clínica</option>' +
+    adminClinicas.map(c=>`<option value="${c.id}" ${c.id===selectedId?'selected':''}>${c.nombre}</option>`).join('');
+}
+
+function selectIcon(btn) {
+  document.querySelectorAll('#u-icono-grid .icon-opt').forEach(b=>b.classList.remove('selected'));
+  btn.classList.add('selected');
+  document.getElementById('u-icono').value = btn.dataset.icon;
+}
+
+function openModalUsuario() {
+  document.getElementById('modal-usuario-title').textContent = '👤 Nuevo Usuario';
+  document.getElementById('u-nombre').value = '';
+  document.getElementById('u-email').value = '';
+  document.getElementById('u-rol').value = 'medico';
+  document.getElementById('u-icono').value = '👨‍⚕️';
+  document.querySelectorAll('#u-icono-grid .icon-opt').forEach((b,i)=>b.classList.toggle('selected',i===0));
+  fillClinicaSelect(null);
+  editingUsuarioId = null;
+  document.getElementById('modal-usuario').classList.add('open');
+}
+
+function openModalUsuarioEditById(id) {
+  const u = adminUsuarios.find(x=>x.id===id);
+  if(!u) return;
+  document.getElementById('modal-usuario-title').textContent = '✏️ Editar Usuario';
+  document.getElementById('u-nombre').value = u.nombre;
+  document.getElementById('u-email').value = u.email||'';
+  document.getElementById('u-rol').value = u.rol;
+  document.getElementById('u-icono').value = u.icono||'👨‍⚕️';
+  document.querySelectorAll('#u-icono-grid .icon-opt').forEach(b=>{
+    b.classList.toggle('selected', b.dataset.icon===(u.icono||'👨‍⚕️'));
+  });
+  fillClinicaSelect(u.clinica_id);
+  editingUsuarioId = u.id;
+  document.getElementById('modal-usuario').classList.add('open');
+}
+
+async function guardarUsuario() {
+  const nombre = document.getElementById('u-nombre').value.trim();
+  const email = document.getElementById('u-email').value.trim();
+  const rol = document.getElementById('u-rol').value;
+  const icono = document.getElementById('u-icono').value;
+  const clinicaVal = document.getElementById('u-clinica').value;
+  const clinica_id = clinicaVal ? Number(clinicaVal) : null;
+  if(!nombre){ toast('El nombre es obligatorio','error'); return; }
+  setLoading(true);
+  if(editingUsuarioId) {
+    const {error} = await sb.from('profiles').update({nombre,email:email||null,rol,icono,clinica_id}).eq('id',editingUsuarioId);
+    if(error){ toast('Error al actualizar: '+error.message,'error'); setLoading(false); return; }
+    toast('Usuario actualizado','success');
+  } else {
+    const {error} = await sb.from('profiles').insert({id:crypto.randomUUID(),nombre,email:email||null,rol,icono,clinica_id});
+    if(error){ toast('Error al crear: '+error.message,'error'); setLoading(false); return; }
+    toast('Usuario creado exitosamente','success');
+  }
+  closeModal('modal-usuario');
+  await loadAdminData();
+  renderAdminUsuarios();
+  renderAdminStats();
+  setLoading(false);
+}
+
+async function eliminarUsuario(id) {
+  const u = adminUsuarios.find(x=>x.id===id);
+  if(!confirm(`¿Eliminar el usuario "${u?.nombre}"?`)) return;
+  setLoading(true);
+  const {error} = await sb.from('profiles').delete().eq('id',id);
+  if(error){ toast('Error al eliminar: '+error.message,'error'); setLoading(false); return; }
+  toast('Usuario eliminado','success');
+  await loadAdminData();
+  renderAdminUsuarios();
+  renderAdminStats();
+  setLoading(false);
+}
+
+// ════════════════════ ESTADÍSTICAS ════════════════════
 function descargarPDFEstadisticas() {
   const cfg = getClinicaConfig();
   let titulo='', contenido='';
