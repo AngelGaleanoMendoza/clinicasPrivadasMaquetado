@@ -472,12 +472,17 @@ tbody tr:hover td{background:#F8FAFC}
     <div class="lm-divider"></div>
     <div class="lm-form">
       <div class="lm-field">
-        <svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
-        <input type="password" id="login-pin" placeholder="Contraseña de acceso" autocomplete="current-password"
-          onkeydown="if(event.key==='Enter')verificarPin()">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+        <input type="email" id="login-email" placeholder="Correo electrónico" autocomplete="email"
+          onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()">
       </div>
-      <p id="login-pin-error" style="color:#f87171;font-size:12px;text-align:center;margin:-4px 0 0;display:none;font-family:'Outfit',sans-serif">Contraseña incorrecta</p>
-      <button class="btn-login" onclick="verificarPin()">Iniciar sesión</button>
+      <div class="lm-field">
+        <svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+        <input type="password" id="login-password" placeholder="Contraseña" autocomplete="current-password"
+          onkeydown="if(event.key==='Enter')verificarLogin()">
+      </div>
+      <p id="login-error" style="color:#f87171;font-size:12px;text-align:center;margin:-4px 0 0;display:none;font-family:'Outfit',sans-serif">Email o contraseña incorrectos</p>
+      <button class="btn-login" onclick="verificarLogin()">Iniciar sesión</button>
     </div>
     <div class="lm-footer">Solo personal autorizado de Lumea Med</div>
   </div>
@@ -848,6 +853,10 @@ tbody tr:hover td{background:#F8FAFC}
       <div class="form-group"><label>Clínica asignada</label>
         <select id="u-clinica"><option value="">Sin clínica</option></select>
       </div>
+      <div class="form-group full"><label>Contraseña <span id="u-pass-req">*</span></label>
+        <input type="password" id="u-password" placeholder="Contraseña de acceso" autocomplete="new-password">
+        <span id="u-pass-hint" style="font-size:11px;color:var(--text-light);margin-top:2px;display:none">Dejar vacío para no cambiar</span>
+      </div>
       <div class="form-group full"><label>Ícono del usuario</label>
         <div class="icon-select" id="u-icono-grid">
           <button type="button" class="icon-opt selected" data-icon="👨‍⚕️" onclick="selectIcon(this)">👨‍⚕️</button>
@@ -1080,51 +1089,56 @@ function setDbStatus(ok) {
   document.getElementById('db-label').textContent = ok ? 'Supabase conectado' : 'Sin conexión';
 }
 
-// ════════════════════ AUTH (Supabase) ════════════════════
-let currentUser  = null;
+// ════════════════════ AUTH ════════════════════
+let currentUser = null;
 let selectedEmail = '';
 
-
-function renderLoginUsers(users) {
-  const rolLabel = r => ({admin:'Administrador',medico:'Médico',recepcion:'Recepcionista',enfermeria:'Enfermera/o'}[r]||r);
-  const q = v => JSON.stringify(v).replace(/"/g,'&quot;');
-  document.getElementById('login-users-grid').innerHTML = users.map(u=>`
-    <div class="login-user-card" onclick="selectLoginUser(${q(u.email)},${q(u.nombre)},${q(u.icono||'👨‍⚕️')},${q(rolLabel(u.rol))})">
-      <div class="luc-icon">${u.icono||'👨‍⚕️'}</div>
-      <div class="luc-name">${u.nombre}</div>
-      <div class="luc-role">${rolLabel(u.rol)}</div>
-    </div>`).join('');
-}
-
-async function selectLoginUser(email, label, icon, role) {
-  const roleKey = {'Administrador':'admin','Médico':'medico','Recepcionista':'recepcion','Enfermera/o':'enfermeria'}[role]||'medico';
-  currentClinicaId = 1;
-  currentUser = { name:label, role, avatar:label[0].toUpperCase(), email, key:roleKey };
-  await enterApp();
-}
-
-async function enterApp() {
-  try {
-    setLoading(true);
-    await loadAll();
-    setLoading(false);
-    const ls = document.getElementById('login-screen');
-    const app = document.getElementById('app');
-    ls.style.transition = 'opacity .4s, transform .4s';
-    ls.style.opacity = '0'; ls.style.transform = 'scale(1.05)';
-    await new Promise(r => setTimeout(r, 400));
-    ls.style.display = 'none';
-    app.classList.add('visible');
-    document.getElementById('sf-name').textContent = currentUser.name;
-    document.getElementById('sf-role').textContent = currentUser.role;
-    document.getElementById('sf-avatar').textContent = currentUser.avatar;
-    navigate('dashboard');
-    toast(`Bienvenido, ${currentUser.name} 👋`, 'info');
-  } catch(err) {
-    setLoading(false);
-    console.error('enterApp error:', err);
-    alert('Error al entrar: ' + err.message);
+async function verificarLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
+  if(!email || !password) {
+    errEl.textContent = 'Ingresa tu email y contraseña';
+    errEl.style.display = 'block';
+    return;
   }
+  setLoading(true);
+  const { data, error } = await sb.from('profiles')
+    .select('*').eq('email', email).eq('password', password).maybeSingle();
+  setLoading(false);
+  if(error || !data) {
+    shakeLogin();
+    errEl.textContent = 'Email o contraseña incorrectos';
+    errEl.style.display = 'block';
+    document.getElementById('login-password').value = '';
+    return;
+  }
+  sessionStorage.setItem('lm_user', JSON.stringify(data));
+  await entrarConPerfil(data);
+}
+
+async function entrarConPerfil(profile) {
+  const rolLabel = {admin:'Administrador',medico:'Médico',recepcion:'Recepcionista',enfermeria:'Enfermería'}[profile.rol]||profile.rol;
+  currentClinicaId = profile.clinica_id || 1;
+  currentUser = {
+    name: profile.nombre,
+    role: rolLabel,
+    avatar: profile.icono || profile.nombre[0].toUpperCase(),
+    email: profile.email,
+    key: profile.rol
+  };
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').classList.add('visible');
+  document.getElementById('sf-name').textContent = currentUser.name;
+  document.getElementById('sf-role').textContent = currentUser.role;
+  document.getElementById('sf-avatar').textContent = currentUser.avatar;
+  toggleAdminMenu();
+  setLoading(true);
+  await loadAll();
+  setLoading(false);
+  navigate('dashboard');
+  toast(`Bienvenido, ${currentUser.name} 👋`, 'info');
 }
 
 async function checkSession() {}
@@ -2313,50 +2327,29 @@ document.addEventListener('click',e=>{
 });
 
 // ════════════════════ INIT ════════════════════
-const ACCESS_PIN = 'lumea2025';
-
 document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('topbar-date').textContent = new Date().toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'});
   if (localStorage.getItem('lm_theme') === 'dark') {
     document.body.classList.add('dark');
     document.getElementById('theme-icon').textContent = '🌙';
   }
-  if (sessionStorage.getItem('lm_auth') === ACCESS_PIN) {
-    await entrarDirecto();
+  const saved = sessionStorage.getItem('lm_user');
+  if(saved) {
+    try { await entrarConPerfil(JSON.parse(saved)); }
+    catch(e) { sessionStorage.removeItem('lm_user'); }
   }
-  // Si no hay sesión, muestra el login-screen (ya visible por defecto)
 });
 
-async function entrarDirecto() {
-  currentClinicaId = 1;
-  currentUser = { name:'Dr. Galeano', role:'Administrador', avatar:'G', email:'sebasgale65@gmail.com', key:'admin' };
-  document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('app').classList.add('visible');
-  document.getElementById('sf-name').textContent = currentUser.name;
-  document.getElementById('sf-role').textContent = currentUser.role;
-  document.getElementById('sf-avatar').textContent = currentUser.avatar;
-  toggleAdminMenu();
-  setLoading(true);
-  await loadAll();
-  setLoading(false);
-  navigate('dashboard');
-}
-
 async function verificarPin() {
-  const pin = document.getElementById('login-pin').value;
-  if (pin === ACCESS_PIN) {
-    sessionStorage.setItem('lm_auth', ACCESS_PIN);
-    await entrarDirecto();
-  } else {
-    shakeLogin();
-    document.getElementById('login-pin-error').style.display = 'block';
+  // deprecated — kept para compatibilidad
+  if (false) {
     document.getElementById('login-pin').value = '';
   }
 }
 
 async function doLogout() {
   if (!confirm('¿Cerrar sesión?')) return;
-  sessionStorage.removeItem('lm_auth');
+  sessionStorage.removeItem('lm_user');
   currentUser = null; currentClinicaId = null;
   const app = document.getElementById('app');
   app.style.transition = 'opacity .3s'; app.style.opacity = '0';
@@ -2364,28 +2357,14 @@ async function doLogout() {
     app.classList.remove('visible'); app.style.opacity = '';
     const ls = document.getElementById('login-screen');
     ls.style.cssText = 'display:flex;opacity:0;transform:scale(.95);transition:opacity .4s,transform .4s';
-    document.getElementById('login-pin').value = '';
-    document.getElementById('login-pin-error').style.display = 'none';
+    document.getElementById('login-email').value = '';
+    document.getElementById('login-password').value = '';
+    document.getElementById('login-error').style.display = 'none';
     setTimeout(() => { ls.style.opacity='1'; ls.style.transform='none'; }, 10);
   }, 300);
 }
 
-async function cargarUsuariosLogin() {
-  const { data } = await sb.from('profiles').select('nombre,icono,rol,email').order('nombre');
-  const rolLabel = r => ({admin:'Administrador',medico:'Médico',recepcion:'Recepcionista',enfermeria:'Enfermera/o'}[r]||r);
-  const q = v => JSON.stringify(v).replace(/"/g,'&quot;');
-  const grid = document.getElementById('login-users-grid');
-  if (!data || data.length === 0) {
-    grid.innerHTML = `<div style="color:#475569;font-size:12px;text-align:center;padding:20px;grid-column:1/-1">Sin usuarios registrados</div>`;
-    return;
-  }
-  grid.innerHTML = data.map(u => `
-    <div class="login-user-card" onclick="selectLoginUser(${q(u.email)},${q(u.nombre)},${q(u.icono||'👨‍⚕️')},${q(rolLabel(u.rol))})">
-      <div class="luc-icon">${u.icono||'👨‍⚕️'}</div>
-      <div class="luc-name">${u.nombre}</div>
-      <div class="luc-role">${rolLabel(u.rol)}</div>
-    </div>`).join('');
-}
+async function cargarUsuariosLogin() { /* reemplazado por login email+password */ }
 
 // ════════════════════ ESTADÍSTICAS ════════════════════
 let estTab = 'dia';
@@ -2720,6 +2699,9 @@ function openModalUsuario() {
   document.getElementById('u-email').value = '';
   document.getElementById('u-rol').value = 'medico';
   document.getElementById('u-icono').value = '👨‍⚕️';
+  document.getElementById('u-password').value = '';
+  document.getElementById('u-pass-req').style.display = 'inline';
+  document.getElementById('u-pass-hint').style.display = 'none';
   document.querySelectorAll('#u-icono-grid .icon-opt').forEach((b,i)=>b.classList.toggle('selected',i===0));
   fillClinicaSelect(null);
   editingUsuarioId = null;
@@ -2734,6 +2716,9 @@ function openModalUsuarioEditById(id) {
   document.getElementById('u-email').value = u.email||'';
   document.getElementById('u-rol').value = u.rol;
   document.getElementById('u-icono').value = u.icono||'👨‍⚕️';
+  document.getElementById('u-password').value = '';
+  document.getElementById('u-pass-req').style.display = 'none';
+  document.getElementById('u-pass-hint').style.display = 'block';
   document.querySelectorAll('#u-icono-grid .icon-opt').forEach(b=>{
     b.classList.toggle('selected', b.dataset.icon===(u.icono||'👨‍⚕️'));
   });
@@ -2747,16 +2732,20 @@ async function guardarUsuario() {
   const email = document.getElementById('u-email').value.trim();
   const rol = document.getElementById('u-rol').value;
   const icono = document.getElementById('u-icono').value;
+  const password = document.getElementById('u-password').value;
   const clinicaVal = document.getElementById('u-clinica').value;
   const clinica_id = clinicaVal ? Number(clinicaVal) : null;
   if(!nombre){ toast('El nombre es obligatorio','error'); return; }
+  if(!editingUsuarioId && !password){ toast('La contraseña es obligatoria','error'); return; }
   setLoading(true);
   if(editingUsuarioId) {
-    const {error} = await sb.from('profiles').update({nombre,email:email||null,rol,icono,clinica_id}).eq('id',editingUsuarioId);
+    const upd = {nombre,email:email||null,rol,icono,clinica_id};
+    if(password) upd.password = password;
+    const {error} = await sb.from('profiles').update(upd).eq('id',editingUsuarioId);
     if(error){ toast('Error al actualizar: '+error.message,'error'); setLoading(false); return; }
     toast('Usuario actualizado','success');
   } else {
-    const {error} = await sb.from('profiles').insert({id:crypto.randomUUID(),nombre,email:email||null,rol,icono,clinica_id});
+    const {error} = await sb.from('profiles').insert({id:crypto.randomUUID(),nombre,email:email||null,rol,icono,clinica_id,password});
     if(error){ toast('Error al crear: '+error.message,'error'); setLoading(false); return; }
     toast('Usuario creado exitosamente','success');
   }
