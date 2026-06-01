@@ -1252,11 +1252,11 @@ async function loadAll() {
   setLoading(true);
   try {
     const [rp,rc,rm,rn,re,rpf,ri,rmov] = await Promise.all([
-      sb.from('pacientes').select('*').order('id'),
-      sb.from('citas').select('*').order('id'),
-      sb.from('medicaciones').select('*').order('id'),
-      sb.from('notas').select('*').order('id'),
-      sb.from('expediente').select('*').order('id'),
+      sb.from('pacientes').select('*').eq('clinica_id', currentClinicaId).order('id'),
+      sb.from('citas').select('*').eq('clinica_id', currentClinicaId).order('id'),
+      sb.from('medicaciones').select('*').eq('clinica_id', currentClinicaId).order('id'),
+      sb.from('notas').select('*').eq('clinica_id', currentClinicaId).order('id'),
+      sb.from('expediente').select('*').eq('clinica_id', currentClinicaId).order('id'),
       sb.from('profiles').select('id,nombre,rol,email,icono,clinica_id').eq('clinica_id', currentClinicaId),
       sb.from('inventario').select('*').eq('clinica_id', currentClinicaId).order('nombre'),
       sb.from('inventario_movimientos').select('*').eq('clinica_id', currentClinicaId).order('fecha', {ascending:false}).limit(500)
