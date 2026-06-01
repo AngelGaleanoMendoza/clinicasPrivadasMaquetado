@@ -867,8 +867,9 @@ body.dark .inv-badge-salida{background:rgba(239,68,68,.15);color:#FCA5A5}
           </div>
           <div id="admin-stats-row" class="admin-stat-row"></div>
           <div class="tabs" style="margin-bottom:0">
-            <button class="tab active" id="tab-admin-clinicas" onclick="switchAdminTab('clinicas')">🏥 Clínicas</button>
-            <button class="tab" id="tab-admin-usuarios" onclick="switchAdminTab('usuarios')">👥 Usuarios</button>
+            <button class="tab active" id="tab-admin-clinicas"      onclick="switchAdminTab('clinicas')">🏥 Clínicas</button>
+            <button class="tab"        id="tab-admin-usuarios"      onclick="switchAdminTab('usuarios')">👥 Usuarios</button>
+            <button class="tab"        id="tab-admin-productividad" onclick="switchAdminTab('productividad')">📊 Productividad</button>
           </div>
         </div>
         <div id="admin-panel-clinicas">
@@ -876,6 +877,24 @@ body.dark .inv-badge-salida{background:rgba(239,68,68,.15);color:#FCA5A5}
         </div>
         <div id="admin-panel-usuarios" style="display:none">
           <div class="card"><div id="admin-usuarios-list"></div></div>
+        </div>
+        <div id="admin-panel-productividad" style="display:none">
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-header">
+              <h3>📊 Actividad por usuario</h3>
+              <div class="filter-chips">
+                <span class="chip active" id="prod-chip-hoy"    onclick="setProdPeriodo('hoy',this)">Hoy</span>
+                <span class="chip"        id="prod-chip-semana" onclick="setProdPeriodo('semana',this)">Esta semana</span>
+                <span class="chip"        id="prod-chip-mes"    onclick="setProdPeriodo('mes',this)">Este mes</span>
+              </div>
+            </div>
+            <div id="prod-resumen-row" class="stats-grid" style="margin-bottom:18px"></div>
+            <div id="prod-usuarios-list"></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>📅 Línea de actividad — últimos 7 días</h3></div>
+            <div id="prod-timeline"></div>
+          </div>
         </div>
       </div>
 
@@ -1341,6 +1360,7 @@ async function entrarConPerfil(profile) {
   setLoading(false);
   navigate('dashboard');
   toast(`Bienvenido, ${currentUser.name} 👋`, 'info');
+  logActivity('login');
 }
 
 async function checkSession() {}
@@ -1628,6 +1648,7 @@ async function guardarPaciente(){
   }
   setLoading(false);
   toast(editingId?'Paciente actualizado':'Paciente registrado ✅');
+  if(!editingId) logActivity('paciente');
   closeModal('modal-paciente');
   await loadAll(); renderPacientes(); updateBadges();
 }
@@ -1853,6 +1874,7 @@ async function guardarCita(){
   setLoading(false);
   if(err){ toast('Error: '+err.message,'error'); return; }
   toast(editingId?'Cita actualizada':'Cita registrada ✅');
+  if(!editingId) logActivity('cita');
   closeModal('modal-cita');
   await loadAll(); renderCitas(); updateBadges();
 }
@@ -1949,6 +1971,7 @@ async function guardarMedicacion(){
   setLoading(false);
   if(err){ toast('Error: '+err.message,'error'); return; }
   toast(editingId?'Medicación actualizada':'Medicación registrada ✅');
+  if(!editingId) logActivity('medicacion');
   closeModal('modal-medicacion');
   await loadAll(); renderMedicaciones();
   if(currentView==='paciente-detalle') renderDetalleP(currentPatientId);
@@ -2010,6 +2033,7 @@ async function guardarNota(){
   setLoading(false);
   if(err){ toast('Error: '+err.message,'error'); return; }
   toast(editingId?'Nota actualizada':'Nota guardada ✅');
+  if(!editingId) logActivity('nota');
   closeModal('modal-nota');
   await loadAll(); renderNotas();
   if(currentView==='paciente-detalle') renderDetalleP(currentPatientId);
@@ -3580,7 +3604,9 @@ function renderEstMes() {
 const SUPER_ADMIN_EMAIL = 'sebasgale65@gmail.com';
 let adminClinicas = [];
 let adminUsuarios = [];
+let adminActividad = [];
 let adminTab = 'clinicas';
+let prodPeriodo = 'hoy';
 let editingClinicaId = null;
 let editingUsuarioId = null;
 
@@ -3598,25 +3624,29 @@ function toggleAdminMenu() {
 
 async function loadAdminData() {
   setLoading(true);
-  const [rc, ru] = await Promise.all([
+  const [rc, ru, ra] = await Promise.all([
     sb.from('clinicas').select('*').order('id'),
-    sb.from('profiles').select('*').order('nombre')
+    sb.from('profiles').select('*').order('nombre'),
+    sb.from('actividad_usuarios').select('*').order('created_at', {ascending:false}).limit(2000)
   ]);
   adminClinicas = rc.data || [];
   adminUsuarios = ru.data || [];
+  adminActividad = ra.data || [];
   setLoading(false);
 }
 
 function switchAdminTab(tab) {
   adminTab = tab;
-  ['clinicas','usuarios'].forEach(t => {
+  ['clinicas','usuarios','productividad'].forEach(t => {
     document.getElementById('admin-panel-'+t).style.display = t===tab ? 'block' : 'none';
     document.getElementById('tab-admin-'+t).classList.toggle('active', t===tab);
   });
   const btn = document.getElementById('btn-admin-add');
-  if(btn) btn.textContent = tab==='clinicas' ? '+ Nueva Clínica' : '+ Nuevo Usuario';
+  if(btn) btn.style.display = tab==='productividad' ? 'none' : 'inline-flex';
+  if(btn && tab!=='productividad') btn.textContent = tab==='clinicas' ? '+ Nueva Clínica' : '+ Nuevo Usuario';
   if(tab==='clinicas') renderAdminClinicas();
   if(tab==='usuarios') renderAdminUsuarios();
+  if(tab==='productividad') renderProductividad();
   renderAdminStats();
 }
 
@@ -3686,6 +3716,132 @@ function renderAdminUsuarios() {
           <button class="btn btn-sm btn-danger" data-uid="${u.id}" onclick="eliminarUsuario(this.dataset.uid)">🗑️</button>
         </td></tr>`;
     }).join('')}</tbody></table></div>`;
+}
+
+// ── Productividad ──
+function setProdPeriodo(p, el) {
+  prodPeriodo = p;
+  document.querySelectorAll('[id^="prod-chip-"]').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  renderProductividad();
+}
+
+function prodFechaRango() {
+  const now = new Date(), h = hoy();
+  if(prodPeriodo === 'hoy') return [h, h];
+  if(prodPeriodo === 'semana') {
+    const lunes = new Date(now); lunes.setDate(now.getDate()-(now.getDay()||7)+1); lunes.setHours(0,0,0,0);
+    return [lunes.toISOString().split('T')[0], h];
+  }
+  return [h.slice(0,7)+'-01', h];
+}
+
+function renderProductividad() {
+  const [desde, hasta] = prodFechaRango();
+  const acts = adminActividad.filter(a => a.fecha >= desde && a.fecha <= hasta);
+
+  // Resumen global
+  const logins  = acts.filter(a=>a.accion==='login').length;
+  const acciones = acts.filter(a=>a.accion!=='login').length;
+  const usuariosActivos = new Set(acts.map(a=>a.user_id)).size;
+  const resEl = document.getElementById('prod-resumen-row');
+  if(resEl) resEl.innerHTML=`
+    <div class="stat-card"><div class="stat-icon si-blue">👤</div><div class="stat-info"><h3>${usuariosActivos}</h3><p>Usuarios activos</p></div></div>
+    <div class="stat-card"><div class="stat-icon si-green">🔑</div><div class="stat-info"><h3>${logins}</h3><p>Inicios de sesión</p></div></div>
+    <div class="stat-card"><div class="stat-icon si-orange">⚡</div><div class="stat-info"><h3>${acciones}</h3><p>Acciones registradas</p></div></div>
+    <div class="stat-card"><div class="stat-icon" style="background:linear-gradient(135deg,#EEF2FF,#E0E7FF)">📊</div><div class="stat-info"><h3>${acts.length}</h3><p>Total eventos</p></div></div>`;
+
+  // Por usuario
+  const listEl = document.getElementById('prod-usuarios-list');
+  if(!listEl) return;
+  const porUsuario = {};
+  acts.forEach(a => {
+    if(!porUsuario[a.user_id]) porUsuario[a.user_id] = {nombre:a.user_nombre, login:0, cita:0, paciente:0, nota:0, medicacion:0, otros:0};
+    const u = porUsuario[a.user_id];
+    if(a.accion in u) u[a.accion]++; else u.otros++;
+  });
+  const usuarios = Object.entries(porUsuario).sort((a,b)=>{
+    const ta = Object.values(a[1]).slice(1).reduce((s,v)=>s+v,0);
+    const tb = Object.values(b[1]).slice(1).reduce((s,v)=>s+v,0);
+    return tb-ta;
+  });
+
+  if(!usuarios.length){
+    listEl.innerHTML=`<div class="empty-state"><div class="empty-icon">📊</div><p>Sin actividad registrada en este período</p></div>`;
+    renderTimeline(desde);
+    return;
+  }
+
+  const maxScore = Math.max(...usuarios.map(([,u])=>u.cita+u.paciente+u.nota+u.medicacion+u.otros),1);
+  listEl.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th>Usuario</th><th>Clínica</th><th>Logins</th><th>Citas</th><th>Pacientes</th><th>Notas</th><th>Medicaciones</th><th>Actividad</th></tr></thead>
+    <tbody>${usuarios.map(([uid,u])=>{
+      const prof = adminUsuarios.find(p=>p.id===uid);
+      const clinica = adminClinicas.find(c=>c.id===prof?.clinica_id);
+      const score = u.cita+u.paciente+u.nota+u.medicacion+u.otros;
+      const pct = Math.round(score/maxScore*100);
+      const nivel = score===0?['tag-gray','Inactivo']:score<5?['tag-orange','Bajo']:score<15?['tag-cyan','Activo']:['tag-green','Muy activo'];
+      return `<tr>
+        <td><div class="patient-name-cell">
+          <div class="patient-avatar" style="background:linear-gradient(135deg,var(--primary),var(--accent));font-size:16px">${prof?.icono||'👤'}</div>
+          <div><strong>${u.nombre}</strong><div style="font-size:11px;color:var(--text-light)">${prof?.email||''}</div></div>
+        </div></td>
+        <td style="font-size:12px;color:var(--text-light)">${clinica?.nombre||'—'}</td>
+        <td><span style="font-weight:700;color:var(--primary)">${u.login}</span></td>
+        <td>${u.cita}</td><td>${u.paciente}</td><td>${u.nota}</td><td>${u.medicacion}</td>
+        <td style="min-width:140px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="flex:1;background:var(--bg);border-radius:6px;height:18px;overflow:hidden">
+              <div style="width:${pct}%;height:100%;background:linear-gradient(90deg,var(--primary),var(--accent));border-radius:6px"></div>
+            </div>
+            <span class="tag ${nivel[0]}" style="flex-shrink:0">${nivel[1]}</span>
+          </div>
+        </td>
+      </tr>`;
+    }).join('')}</tbody></table></div>`;
+
+  renderTimeline(desde);
+}
+
+function renderTimeline(desde) {
+  const el = document.getElementById('prod-timeline'); if(!el) return;
+  const diasNom = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const dias = Array.from({length:7},(_,i)=>{
+    const d = new Date(); d.setDate(d.getDate()-6+i); return d.toISOString().split('T')[0];
+  });
+  const porDia = dias.map(f=>({
+    f, nom:diasNom[new Date(f+'T12:00:00').getDay()],
+    login: adminActividad.filter(a=>a.fecha===f&&a.accion==='login').length,
+    total: adminActividad.filter(a=>a.fecha===f).length
+  }));
+  const maxT = Math.max(...porDia.map(d=>d.total),1);
+  el.innerHTML = `<div style="display:flex;gap:8px;align-items:flex-end;height:120px;padding:0 4px">
+    ${porDia.map(d=>`
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%">
+        <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;width:100%">
+          <div title="${d.total} eventos" style="width:100%;background:linear-gradient(to top,var(--primary),var(--accent));border-radius:6px 6px 0 0;height:${Math.max(d.total?Math.round(d.total/maxT*90):0,0)}%;min-height:${d.total?'4px':'0'};transition:height .4s;position:relative">
+            ${d.total?`<div style="position:absolute;top:-18px;left:50%;transform:translateX(-50%);font-size:10px;font-weight:700;color:var(--primary)">${d.total}</div>`:''}
+          </div>
+        </div>
+        <div style="font-size:10px;font-weight:700;color:var(--text-light);text-transform:uppercase">${d.nom}</div>
+        <div style="font-size:9px;color:var(--text-light)">${d.f.slice(5)}</div>
+      </div>`).join('')}
+  </div>
+  <div style="display:flex;gap:14px;margin-top:10px;font-size:11px;color:var(--text-light)">
+    <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:linear-gradient(135deg,var(--primary),var(--accent));display:inline-block"></span>Total eventos por día</span>
+  </div>`;
+}
+
+// ── logActivity ──
+async function logActivity(accion) {
+  if(!currentUser||!currentClinicaId) return;
+  sb.from('actividad_usuarios').insert({
+    clinica_id: currentClinicaId,
+    user_id: currentUser.id || currentUser.email,
+    user_nombre: currentUser.name,
+    accion,
+    fecha: hoy()
+  });
 }
 
 // ── Modal Clínica ──
