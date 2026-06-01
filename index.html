@@ -944,10 +944,18 @@ tbody tr:hover td{background:#F8FAFC}
       <div class="form-group full"><label>Médico</label><select id="c-medico"><option value="">Sin asignar</option></select></div>
       <div class="form-group"><label>Fecha *</label><input type="date" id="c-fecha"></div>
       <div class="form-group"><label>Hora *</label><input type="time" id="c-hora"></div>
-      <div class="form-group full"><label>Motivo de Consulta *</label><input type="text" id="c-motivo" placeholder="Ej: Control mensual, dolor de cabeza..."></div>
+      <div class="form-group full" style="position:relative">
+        <label>Motivo de Consulta *</label>
+        <input type="text" id="c-motivo" placeholder="Ej: dolor de cabeza, fiebre, control..." autocomplete="off" oninput="mostrarSugerenciasDx(this.value)" onblur="setTimeout(()=>ocultarSugerenciasDx(),180)">
+        <div id="dx-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;z-index:300;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.15);margin-top:4px"></div>
+      </div>
+      <div class="form-group full" id="dx-elegidos-wrap" style="display:none">
+        <label>Diagnósticos sugeridos seleccionados</label>
+        <div id="dx-elegidos" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+      </div>
       <div class="form-group"><label>Tipo</label><select id="c-tipo"><option value="consulta">Consulta general</option><option value="control">Control</option><option value="urgencia">Urgencia</option><option value="cirugia">Cirugía</option><option value="examen">Examen</option></select></div>
       <div class="form-group"><label>Estado</label><select id="c-estado"><option value="pendiente">Pendiente</option><option value="confirmada">Confirmada</option><option value="completada">Completada</option><option value="cancelada">Cancelada</option></select></div>
-      <div class="form-group full"><label>Notas</label><textarea id="c-notas" placeholder="Observaciones, indicaciones previas..."></textarea></div>
+      <div class="form-group full"><label>Notas / Diagnóstico</label><textarea id="c-notas" placeholder="Observaciones, diagnóstico... (los diagnósticos sugeridos se agregan aquí)"></textarea></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-cita')">Cancelar</button>
@@ -1613,6 +1621,7 @@ function openModalCita(id){
   fillMedicoSelect('c-medico');
   document.getElementById('c-fecha').value=hoy();
   ['hora','motivo','notas'].forEach(f=>document.getElementById('c-'+f).value='');
+  dxElegidos=[]; renderDxElegidos(); ocultarSugerenciasDx();
   document.getElementById('c-estado').value='pendiente';
   document.getElementById('c-tipo').value='consulta';
   if(id){
@@ -2689,6 +2698,127 @@ async function doLogout() {
 }
 
 async function cargarUsuariosLogin() { /* reemplazado por login email+password */ }
+
+// ════════════════════ DIAGNÓSTICOS SUGERIDOS ════════════════════
+const DX_MAP = {
+  'dolor de cabeza':['Migraña sin aura','Cefalea tensional','Hipertensión arterial','Sinusitis aguda','Cefalea en racimos','Neuralgia del trigémino','Hematoma subdural'],
+  'cefalea':['Migraña sin aura','Cefalea tensional','Hipertensión arterial','Sinusitis aguda','Neuralgia del trigémino'],
+  'migraña':['Migraña sin aura','Migraña con aura','Cefalea en racimos','Cefalea tensional crónica'],
+  'fiebre':['Infección respiratoria aguda','Dengue clásico','Dengue hemorrágico','Influenza','Faringoamigdalitis bacteriana','Malaria','Leptospirosis','Fiebre tifoidea','Chikungunya'],
+  'calentura':['Infección respiratoria aguda','Dengue clásico','Influenza','Faringoamigdalitis','Malaria','Leptospirosis'],
+  'tos':['Infección respiratoria alta','Bronquitis aguda','Neumonía','Asma bronquial','EPOC exacerbado','Laringotraqueobronquitis','Covid-19','Tuberculosis pulmonar'],
+  'gripe':['Influenza','Infección respiratoria viral','Faringoamigdalitis viral','Rinofaringitis aguda'],
+  'catarro':['Rinofaringitis aguda','Sinusitis aguda','Infección respiratoria alta','Faringitis viral'],
+  'dolor de garganta':['Faringoamigdalitis bacteriana','Faringoamigdalitis viral','Mononucleosis infecciosa','Absceso periamigdalino','Laringitis aguda','Epiglotitis'],
+  'garganta':['Faringoamigdalitis bacteriana','Faringoamigdalitis viral','Laringitis aguda','Amigdalitis crónica'],
+  'dolor abdominal':['Gastritis aguda','Apendicitis aguda','Colitis','Gastroenteritis','Síndrome de intestino irritable','Úlcera péptica','Colelitiasis','Pancreatitis aguda'],
+  'dolor de estomago':['Gastritis aguda','Úlcera péptica','Gastroenteritis','Síndrome de intestino irritable','Dispepsia funcional','Apendicitis aguda'],
+  'gastritis':['Gastritis aguda','Gastritis crónica','Úlcera péptica','Gastroduodenitis','Reflujo gastroesofágico'],
+  'nauseas':['Gastritis aguda','Gastroenteritis','Hiperemesis gravídica','Intoxicación alimentaria','Migraña','Vértigo','Cetoacidosis diabética'],
+  'vomito':['Gastroenteritis infecciosa','Gastritis aguda','Intoxicación alimentaria','Obstrucción intestinal','Apendicitis aguda','Hiperemesis gravídica'],
+  'diarrea':['Gastroenteritis infecciosa','Colitis amebiana','Intoxicación alimentaria','Síndrome de intestino irritable','Colitis ulcerativa','Rotavirus','Giardiasis'],
+  'dolor de pecho':['Angina de pecho inestable','Infarto agudo al miocardio','Pericarditis aguda','Costocondritis','Reflujo gastroesofágico','Embolia pulmonar','Neumonía','Ansiedad'],
+  'palpitaciones':['Arritmia cardíaca','Taquicardia supraventricular','Fibrilación auricular','Anemia','Hipertiroidismo','Ansiedad','Prolapso de válvula mitral'],
+  'presion alta':['Hipertensión arterial primaria','Crisis hipertensiva','Hipertensión secundaria','Feocromocitoma','Hiperaldosteronismo'],
+  'hipertension':['Hipertensión arterial esencial','Crisis hipertensiva','Hipertensión renovascular','Preeclampsia'],
+  'diabetes':['Diabetes mellitus tipo 2','Diabetes mellitus tipo 1','Prediabetes','Hipoglucemia','Cetoacidosis diabética','Síndrome metabólico'],
+  'azucar':['Diabetes mellitus tipo 2','Hipoglucemia','Prediabetes','Síndrome metabólico'],
+  'dolor de espalda':['Lumbalgia mecánica','Hernia de disco lumbar','Ciática','Contractura muscular lumbar','Espondiloartrosis','Osteoporosis','Pielonefritis'],
+  'lumbar':['Lumbalgia mecánica','Hernia de disco lumbar','Ciática','Espondiloartrosis','Pielonefritis aguda'],
+  'mareos':['Vértigo posicional paroxístico benigno','Laberintitis','Anemia','Hipotensión ortostática','Enfermedad de Ménière','Hipoglucemia','Hipertensión arterial'],
+  'vertigo':['Vértigo posicional paroxístico benigno','Laberintitis vestibular','Enfermedad de Ménière','Neuritis vestibular','ACV cerebeloso'],
+  'infeccion urinaria':['Cistitis bacteriana aguda','Pielonefritis aguda','Uretritis','Prostatitis','Vaginitis bacteriana'],
+  'ardor al orinar':['Cistitis bacteriana aguda','Uretritis','Vaginitis bacteriana','Prostatitis crónica'],
+  'piel':['Dermatitis atópica','Urticaria aguda','Dermatitis de contacto','Psoriasis','Micosis cutánea','Escabiosis','Celulitis infecciosa'],
+  'alergia':['Urticaria aguda','Dermatitis atópica','Rinitis alérgica','Conjuntivitis alérgica','Asma alérgica','Reacción anafiláctica'],
+  'sarpullido':['Urticaria aguda','Dermatitis de contacto','Varicela','Dengue hemorrágico','Escabiosis','Roséola infantil'],
+  'asma':['Asma bronquial','Asma de difícil control','Bronquitis asmática','EPOC','Broncoespasmo'],
+  'oido':['Otitis media aguda','Otitis externa','Tapón de cerumen','Otitis media con efusión','Mastoiditis'],
+  'ojo':['Conjuntivitis bacteriana','Conjuntivitis viral','Orzuelo','Blefaritis','Uveítis aguda','Glaucoma agudo'],
+  'articulaciones':['Artritis reumatoide','Osteoartritis','Gota aguda','Artritis séptica','Lupus eritematoso','Artralgia reactiva'],
+  'rodilla':['Osteoartritis de rodilla','Lesión meniscal','Tendinitis rotuliana','Bursitis prerrotuliana','Artritis séptica'],
+  'embarazo':['Embarazo normoevolutivo','Hiperemesis gravídica','Amenaza de aborto','Infección urinaria en embarazo','Preeclampsia','Anemia en embarazo'],
+  'prenatal':['Control prenatal de bajo riesgo','Preeclampsia','Diabetes gestacional','Anemia gestacional','Restricción crecimiento fetal'],
+  'ansiedad':['Trastorno de ansiedad generalizada','Trastorno de pánico','Fobia específica','Trastorno de estrés postraumático','Trastorno adaptativo'],
+  'depresion':['Episodio depresivo mayor','Trastorno depresivo persistente','Trastorno bipolar','Trastorno adaptativo con ánimo deprimido'],
+  'control':['Control de salud general','Control de hipertensión arterial','Control de diabetes mellitus','Control pediátrico','Control prenatal','Control postoperatorio'],
+  'chequeo':['Examen médico general','Control de salud del adulto','Examen preventivo','Perfil lipídico alterado'],
+  'dengue':['Dengue clásico','Dengue con signos de alarma','Dengue grave','Chikungunya'],
+  'infeccion':['Infección respiratoria alta','Infección urinaria','Infección de tejidos blandos','Sepsis','Gastroenteritis infecciosa'],
+  'anemia':['Anemia ferropénica','Anemia por deficiencia de B12','Anemia hemolítica','Anemia aplásica','Talasemia'],
+  'tiroides':['Hipotiroidismo','Hipertiroidismo','Tiroiditis de Hashimoto','Bocio simple','Nódulo tiroideo'],
+  'colesterol':['Dislipidemia mixta','Hipercolesterolemia','Síndrome metabólico','Hipertrigliceridemia'],
+  'gastro':['Gastritis aguda','Gastroenteritis','Colitis','Reflujo gastroesofágico','Úlcera péptica'],
+};
+
+const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+
+function buscarDiagnosticos(query) {
+  if(!query || query.length < 3) return [];
+  const q = norm(query);
+  const found = new Set();
+  Object.entries(DX_MAP).forEach(([key, dxs]) => {
+    if(norm(key).includes(q) || q.includes(norm(key))) dxs.forEach(d => found.add(d));
+  });
+  // También buscar palabra suelta
+  const words = q.split(' ').filter(w => w.length > 3);
+  words.forEach(w => {
+    Object.entries(DX_MAP).forEach(([key, dxs]) => {
+      if(norm(key).includes(w)) dxs.forEach(d => found.add(d));
+    });
+  });
+  return [...found].slice(0, 9);
+}
+
+function mostrarSugerenciasDx(query) {
+  const el = document.getElementById('dx-suggestions');
+  if(!el) return;
+  const dxs = buscarDiagnosticos(query);
+  if(!dxs.length){ el.style.display='none'; return; }
+  el.style.display = 'block';
+  el.innerHTML = dxs.map(dx =>
+    `<div style="padding:10px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border);transition:background .15s;display:flex;align-items:center;gap:8px"
+      onmousedown="seleccionarDx('${dx.replace(/'/g,"\\'")}')">
+      <span style="font-size:16px">🩺</span>
+      <span>${dx}</span>
+    </div>`
+  ).join('');
+}
+
+function ocultarSugerenciasDx() {
+  const el = document.getElementById('dx-suggestions');
+  if(el) el.style.display = 'none';
+}
+
+let dxElegidos = [];
+function seleccionarDx(dx) {
+  ocultarSugerenciasDx();
+  if(dxElegidos.includes(dx)) return;
+  dxElegidos.push(dx);
+  renderDxElegidos();
+  // Agrega al textarea de notas
+  const notas = document.getElementById('c-notas');
+  const sep = notas.value && !notas.value.endsWith('\n') ? '\n' : '';
+  notas.value += (notas.value ? sep : '') + 'Dx: ' + dx;
+}
+
+function renderDxElegidos() {
+  const wrap = document.getElementById('dx-elegidos-wrap');
+  const el = document.getElementById('dx-elegidos');
+  if(!el || !wrap) return;
+  wrap.style.display = dxElegidos.length ? 'block' : 'none';
+  el.innerHTML = dxElegidos.map((dx,i) =>
+    `<span style="display:inline-flex;align-items:center;gap:5px;background:var(--primary-light);color:var(--primary);border:1px solid var(--primary);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600">
+      🩺 ${dx}
+      <button type="button" onclick="quitarDx(${i})" style="background:none;border:none;cursor:pointer;color:var(--primary);font-size:14px;line-height:1;padding:0">×</button>
+    </span>`
+  ).join('');
+}
+
+function quitarDx(i) {
+  dxElegidos.splice(i,1);
+  renderDxElegidos();
+}
 
 // ════════════════════ ESTADÍSTICAS ════════════════════
 let estTab = 'dia';
