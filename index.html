@@ -417,27 +417,149 @@ tbody tr:hover td{background:#F8FAFC}
   .rc-alergias{color:#c00!important;background:#ffe0e0!important;border-color:#faa!important}
 }
 
+/* ══════════ RESPONSIVE TABLET (max 1024px) ══════════ */
+@media(max-width:1024px){
+  .sidebar{width:220px}
+  .main{margin-left:220px}
+  .topbar-search{min-width:180px}
+}
+
+/* ══════════ RESPONSIVE MÓVIL / TABLET PEQUEÑA (max 768px) ══════════ */
 @media(max-width:768px){
+  /* Sidebar */
+  .sidebar{transform:translateX(-100%)}
+  .sidebar.open{transform:none}
+  .main{margin-left:0}
+
+  /* Bottom nav */
   .bottom-nav{display:block}
-  .content{padding:14px 14px 90px}
-  .db-status{display:none}
-  .topbar-date{display:none}
-  .modal{border-radius:20px 20px 0 0;position:fixed;bottom:0;left:0;right:0;width:100%;max-width:100%;max-height:88vh;animation:slideUp .3s cubic-bezier(.34,1.2,.64,1)}
+  .content{padding:12px 12px 90px}
+
+  /* Topbar */
+  .topbar{padding:10px 14px;gap:10px}
+  .topbar h1{font-size:15px}
+  .topbar-search{min-width:100px;padding:7px 10px}
+  .db-status,.topbar-date{display:none}
+
+  /* Modales — salen desde abajo en móvil */
+  .modal{border-radius:20px 20px 0 0;position:fixed;bottom:0;left:0;right:0;width:100%;max-width:100%!important;max-height:92vh;animation:slideUp .3s cubic-bezier(.34,1.2,.64,1);padding:22px 16px}
   @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
   .modal-overlay{align-items:flex-end;padding:0}
+  .modal h2{font-size:16px;margin-bottom:16px}
+
+  /* Stats */
   .stats-grid{grid-template-columns:1fr 1fr;gap:10px}
-  .stat-card{padding:14px 12px}
-  .stat-icon{width:40px;height:40px;font-size:18px}
+  .stat-card{padding:12px 10px}
+  .stat-icon{width:38px;height:38px;font-size:17px}
   .stat-info h3{font-size:20px}
   .grid-2{grid-template-columns:1fr}
-  .topbar h1{font-size:15px}
-  .topbar-search{min-width:120px}
+
+  /* Admin stats row */
+  .admin-stat-row{grid-template-columns:1fr 1fr}
+
+  /* Agendas — stack vertical en móvil */
+  #view-agendas>div{grid-template-columns:1fr!important;gap:12px!important}
+  #agendas-right-panel>div:last-child{grid-template-columns:1fr!important}
+
+  /* Inventario */
+  #inv-panel-productos .search-bar{flex-direction:column;align-items:stretch}
+  .filter-chips{flex-wrap:wrap}
+  #inv-panel-movimientos>div>div{flex-direction:column;align-items:flex-start;gap:8px}
+
+  /* Examen visual — stack OD/OI */
+  #modal-examen-visual [style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr!important;gap:8px!important}
+
+  /* Tablas — ocultar columnas menos importantes */
   thead th:nth-child(n+4){display:none}
   tbody td:nth-child(n+4){display:none}
+  thead th:last-child{display:table-cell}
+  tbody td:last-child{display:table-cell}
+
+  /* Calendarios */
+  .cal-day{min-height:34px;font-size:12px}
+  .cal-nav h4{font-size:13px}
+
+  /* Formularios */
+  .form-grid{grid-template-columns:1fr}
+  .form-group.full{grid-column:1}
+
+  /* Botones en card-header */
+  .card-header{flex-wrap:wrap;gap:8px}
+
+  /* Paciente detalle */
+  .patient-detail-header{flex-direction:column;gap:12px;align-items:flex-start}
+  .tabs{overflow-x:auto;flex-wrap:nowrap;padding-bottom:2px}
+  .tab{white-space:nowrap;flex-shrink:0}
+
+  /* Vitales */
+  .vitales-grid{grid-template-columns:repeat(3,1fr)}
+
+  /* Topbar search */
+  .topbar-search input{font-size:13px}
 }
+
+/* ══════════ RESPONSIVE MÓVIL PEQUEÑO (max 480px) ══════════ */
 @media(max-width:480px){
-  .stat-card{padding:12px 10px}
+  /* Stats 1 columna en pantallas muy pequeñas */
+  .stats-grid{grid-template-columns:1fr 1fr}
+  .stat-card{padding:10px 8px}
   .stat-info h3{font-size:18px}
+  .stat-info p{font-size:11px}
+  .stat-icon{width:34px;height:34px;font-size:15px}
+
+  /* Admin */
+  .admin-stat-row{grid-template-columns:1fr 1fr}
+  .admin-stat-val{font-size:18px}
+
+  /* Topbar */
+  .topbar{padding:8px 10px;gap:6px}
+  .topbar h1{font-size:13px}
+  .topbar-search{min-width:80px}
+  .theme-toggle-wrap span{display:none}
+
+  /* Contenido */
+  .content{padding:10px 10px 90px}
+
+  /* Cards */
+  .card{padding:14px 12px}
+  .card-header h3{font-size:13px}
+
+  /* Botones */
+  .btn{padding:7px 11px;font-size:12px}
+  .btn-sm{padding:5px 8px;font-size:11px}
+
+  /* Modal visual exam muy pequeño */
+  #modal-examen-visual .modal{padding:14px 12px}
+  #modal-examen-visual h2{font-size:15px}
+
+  /* Login */
+  .login-card{width:300px;padding:0 8px}
+  .lm-letters{font-size:26px}
+
+  /* Calendarios compactos */
+  .cal-day{min-height:30px;font-size:11px;border-radius:7px}
+  .cal-dot-pip{width:3px;height:3px}
+  .cal-nav h4{font-size:12px}
+  .cal-dow{font-size:8.5px;padding:5px 0}
+
+  /* Paciente nombre en tabla */
+  .patient-name-cell{gap:6px}
+  .patient-avatar{width:26px;height:26px;font-size:9px}
+
+  /* Tabs más pequeños */
+  .tab{padding:6px 11px;font-size:12px}
+
+  /* Vitales */
+  .vitales-grid{grid-template-columns:repeat(2,1fr)}
+  .vital-card .v-val{font-size:18px}
+}
+
+/* ══════════ RESPONSIVE MUY PEQUEÑO (max 360px) ══════════ */
+@media(max-width:360px){
+  .stats-grid{grid-template-columns:1fr}
+  .topbar h1{display:none}
+  .cal-day{min-height:26px;font-size:10px}
+  .modal{padding:12px 10px}
 }
 
 /* AGENDAS */
@@ -1276,7 +1398,7 @@ body.dark .inv-badge-salida{background:rgba(239,68,68,.15);color:#FCA5A5}
     <button class="bn-item active" id="bn-dashboard" onclick="navigate('dashboard')"><span class="bn-icon">📊</span><span class="bn-label">Inicio</span></button>
     <button class="bn-item" id="bn-pacientes" onclick="navigate('pacientes')"><span class="bn-icon">👥</span><span class="bn-label">Pacientes</span></button>
     <button class="bn-item" id="bn-citas" onclick="navigate('citas')"><span class="bn-icon">📅</span><span class="bn-label">Citas</span><span class="bn-badge" id="bn-badge-citas" style="display:none">0</span></button>
-    <button class="bn-item" id="bn-medicaciones" onclick="navigate('medicaciones')"><span class="bn-icon">💊</span><span class="bn-label">Meds</span></button>
+    <button class="bn-item" id="bn-agendas" onclick="navigate('agendas')"><span class="bn-icon">🗓️</span><span class="bn-label">Agendas</span></button>
     <button class="bn-item" id="bn-notas" onclick="navigate('notas')"><span class="bn-icon">📝</span><span class="bn-label">Notas</span></button>
   </div>
 </nav>
@@ -2800,7 +2922,7 @@ function closeSidebar(){
 
 // ════════════════════ BOTTOM NAV ════════════════════
 function updateBottomNav(view){
-  const map={dashboard:'bn-dashboard',pacientes:'bn-pacientes',citas:'bn-citas',medicaciones:'bn-medicaciones',notas:'bn-notas',atendidos:null,'paciente-detalle':'bn-pacientes',exportar:null};
+  const map={dashboard:'bn-dashboard',pacientes:'bn-pacientes',citas:'bn-citas',agendas:'bn-agendas',medicaciones:'bn-medicaciones',notas:'bn-notas',atendidos:null,'paciente-detalle':'bn-pacientes',exportar:null};
   document.querySelectorAll('.bn-item').forEach(b=>b.classList.remove('active'));
   const id=map[view]; if(id) { const el=document.getElementById(id); if(el) el.classList.add('active'); }
 }
