@@ -440,6 +440,19 @@ tbody tr:hover td{background:#F8FAFC}
   .stat-info h3{font-size:18px}
 }
 
+/* AGENDAS */
+.doc-card{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:10px;cursor:pointer;transition:all .18s;border:1.5px solid transparent;margin-bottom:6px;user-select:none}
+.doc-card:hover{background:var(--primary-light);border-color:var(--primary)}
+.doc-card.selected{background:var(--primary-light);border-color:var(--primary);box-shadow:0 2px 8px rgba(37,99,235,.15)}
+.doc-emoji{font-size:26px;width:42px;height:42px;display:flex;align-items:center;justify-content:center;background:var(--card);border-radius:10px;flex-shrink:0;border:1px solid var(--border)}
+.doc-name{font-size:13px;font-weight:700;color:var(--text);line-height:1.2}
+.doc-role-lbl{font-size:11px;color:var(--text-light);margin-top:2px}
+.agenda-slot{display:flex;align-items:center;gap:12px;padding:11px 14px;background:var(--bg);border-radius:10px;margin-bottom:7px;border-left:3px solid var(--primary);transition:all .18s;cursor:pointer}
+.agenda-slot:hover{background:var(--primary-light);transform:translateX(2px)}
+.agenda-slot.completada{border-left-color:var(--success)}
+.agenda-slot.cancelada{border-left-color:var(--danger);opacity:.6}
+.agenda-slot.confirmada{border-left-color:var(--accent)}
+
 /* INVENTARIO */
 .inv-stock-ok{color:var(--success);font-weight:700}
 .inv-stock-low{color:var(--warning);font-weight:700}
@@ -519,6 +532,7 @@ body.dark .inv-badge-salida{background:rgba(239,68,68,.15);color:#FCA5A5}
       <div class="menu-section">Clínica</div>
       <div class="menu-item" onclick="navigate('pacientes')"><span class="icon">👥</span> Pacientes <span class="badge" id="badge-pacientes">0</span></div>
       <div class="menu-item" onclick="navigate('citas')"><span class="icon">📅</span> Citas <span class="badge" id="badge-citas">0</span></div>
+      <div class="menu-item" onclick="navigate('agendas')"><span class="icon">🗓️</span> Agendas</div>
       <div class="menu-item" onclick="navigate('medicaciones')"><span class="icon">💊</span> Medicaciones</div>
       <div class="menu-item" onclick="navigate('notas')"><span class="icon">📝</span> Notas Clínicas</div>
       <div class="menu-item" onclick="navigate('atendidos')"><span class="icon">📊</span> Atendidos por Día</div>
@@ -587,6 +601,29 @@ body.dark .inv-badge-salida{background:rgba(239,68,68,.15);color:#FCA5A5}
             <div class="card">
               <div class="card-header"><h3>👥 Últimos pacientes</h3><button class="btn btn-secondary btn-sm" onclick="navigate('pacientes')">Ver todos</button></div>
               <div id="ultimos-pacientes"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AGENDAS -->
+      <div id="view-agendas" class="view">
+        <div style="display:grid;grid-template-columns:270px 1fr;gap:18px;align-items:start">
+          <!-- Panel izquierdo: lista de médicos -->
+          <div>
+            <div class="card">
+              <div class="card-header" style="margin-bottom:14px">
+                <h3>👨‍⚕️ Personal</h3>
+                <button class="btn btn-secondary btn-sm" onclick="navigate('configuracion')" title="Agregar médico">+ Agregar</button>
+              </div>
+              <div id="agendas-doctors-list"></div>
+            </div>
+          </div>
+          <!-- Panel derecho: agenda del médico seleccionado -->
+          <div id="agendas-right-panel">
+            <div class="empty-state" style="padding:72px 20px;background:var(--card);border-radius:var(--radius);border:1px solid var(--border)">
+              <div class="empty-icon">🗓️</div>
+              <p>Selecciona un médico o profesional<br>para ver su agenda</p>
             </div>
           </div>
         </div>
@@ -1584,7 +1621,7 @@ async function navigate(view, patientId) {
   if(el) el.classList.add('active');
   const mi=document.querySelector(`.menu-item[onclick*="'${view}'"]`);
   if(mi) mi.classList.add('active');
-  const titles={dashboard:'Dashboard',pacientes:'Pacientes',citas:'Citas',medicaciones:'Medicaciones',notas:'Notas Clínicas',atendidos:'Atendidos por Día',estadisticas:'Estadísticas',configuracion:'Configuración Clínica',exportar:'Exportar / Enviar','paciente-detalle':'Expediente del Paciente',admin:'Administración',inventario:'Inventario'};
+  const titles={dashboard:'Dashboard',pacientes:'Pacientes',citas:'Citas',agendas:'Agendas',medicaciones:'Medicaciones',notas:'Notas Clínicas',atendidos:'Atendidos por Día',estadisticas:'Estadísticas',configuracion:'Configuración Clínica',exportar:'Exportar / Enviar','paciente-detalle':'Expediente del Paciente',admin:'Administración',inventario:'Inventario'};
   document.getElementById('page-title').textContent = titles[view]||view;
   currentView=view;
   if(patientId) currentPatientId=patientId;
@@ -1605,6 +1642,7 @@ function renderView(v) {
     case 'dashboard': renderDashboard(); break;
     case 'pacientes': renderPacientes(); break;
     case 'citas': renderCitas(); break;
+    case 'agendas': renderAgendas(); break;
     case 'medicaciones': renderMedicaciones(); break;
     case 'notas': renderNotas(); break;
     case 'atendidos': renderAtendidos(); break;
@@ -3042,6 +3080,183 @@ async function doLogout() {
 }
 
 async function cargarUsuariosLogin() { /* reemplazado por login email+password */ }
+
+// ════════════════════ AGENDAS ════════════════════
+let selAgendasDoc = null;
+let selAgendasDate = hoy();
+
+const rolLabel2 = r => ({admin:'Administrador',medico:'Médico',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin'}[r]||r);
+
+function renderAgendas() {
+  selAgendasDate = hoy();
+  renderAgendasDoctors();
+  if(selAgendasDoc) renderAgendasRight();
+}
+
+function renderAgendasDoctors() {
+  const el = document.getElementById('agendas-doctors-list');
+  if(!el) return;
+  const staff = C.prof.length ? C.prof : [];
+  if(!staff.length) {
+    el.innerHTML = `<div class="empty-state" style="padding:20px"><div class="empty-icon" style="font-size:28px">👥</div><p style="font-size:12px">No hay personal registrado.<br>Agrega desde el panel Admin.</p></div>`;
+    return;
+  }
+  const today = hoy();
+  el.innerHTML = staff.map(p => {
+    const citasHoy = C.c.filter(c=>c.medicoId==p.id&&c.fecha===today&&c.estado!=='cancelada').length;
+    const isSelected = selAgendasDoc == p.id;
+    return `<div class="doc-card${isSelected?' selected':''}" onclick="selectDoctorAgenda('${p.id}')">
+      <div class="doc-emoji">${p.icono||'👤'}</div>
+      <div style="flex:1;min-width:0">
+        <div class="doc-name">${p.nombre}</div>
+        <div class="doc-role-lbl">${rolLabel2(p.rol)}</div>
+      </div>
+      ${citasHoy>0?`<span style="background:var(--primary);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px">${citasHoy}</span>`:''}
+    </div>`;
+  }).join('');
+}
+
+function selectDoctorAgenda(profileId) {
+  selAgendasDoc = profileId;
+  selAgendasDate = hoy();
+  renderAgendasDoctors();
+  renderAgendasRight();
+}
+
+function renderAgendasRight() {
+  const el = document.getElementById('agendas-right-panel');
+  if(!el) return;
+  const prof = C.prof.find(p=>p.id==selAgendasDoc);
+  if(!prof) return;
+
+  const citasDoc = C.c.filter(c=>c.medicoId==selAgendasDoc);
+  const citaCount = {};
+  citasDoc.forEach(c=>{ citaCount[c.fecha]=(citaCount[c.fecha]||0)+1; });
+
+  const citasDelDia = citasDoc.filter(c=>c.fecha===selAgendasDate).sort((a,b)=>(a.hora||'').localeCompare(b.hora||''));
+  const pendientesTotales = citasDoc.filter(c=>c.estado==='pendiente'||c.estado==='confirmada').length;
+  const atendidosHoy = citasDoc.filter(c=>c.fecha===hoy()&&c.estado==='completada').length;
+
+  el.innerHTML = `
+    <!-- Header del doctor -->
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:14px">
+        <div style="font-size:42px;width:58px;height:58px;display:flex;align-items:center;justify-content:center;background:var(--bg);border-radius:14px;border:1.5px solid var(--border);flex-shrink:0">${prof.icono||'👤'}</div>
+        <div style="flex:1">
+          <div style="font-size:18px;font-weight:800;color:var(--text)">${prof.nombre}</div>
+          <div style="font-size:12px;color:var(--text-light);margin-top:2px">${rolLabel2(prof.rol)}${prof.email?' · '+prof.email:''}</div>
+        </div>
+        <div style="display:flex;gap:10px">
+          <div style="text-align:center;background:var(--bg);border-radius:10px;padding:10px 14px;border:1px solid var(--border)">
+            <div style="font-size:20px;font-weight:800;color:var(--primary)">${atendidosHoy}</div>
+            <div style="font-size:10px;color:var(--text-light);font-weight:600;text-transform:uppercase;margin-top:2px">Hoy</div>
+          </div>
+          <div style="text-align:center;background:var(--bg);border-radius:10px;padding:10px 14px;border:1px solid var(--border)">
+            <div style="font-size:20px;font-weight:800;color:var(--warning)">${pendientesTotales}</div>
+            <div style="font-size:10px;color:var(--text-light);font-weight:600;text-transform:uppercase;margin-top:2px">Pendientes</div>
+          </div>
+          <div style="text-align:center;background:var(--bg);border-radius:10px;padding:10px 14px;border:1px solid var(--border)">
+            <div style="font-size:20px;font-weight:800;color:var(--text)">${citasDoc.length}</div>
+            <div style="font-size:10px;color:var(--text-light);font-weight:600;text-transform:uppercase;margin-top:2px">Total</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <!-- Calendario -->
+      <div class="card">
+        <div class="card-header" style="margin-bottom:14px"><h3>🗓️ Calendario</h3></div>
+        <div class="cal-wrap" id="agenda-cal-${prof.id}"></div>
+        <div class="cal-legend"><div class="cal-legend-dot"></div><span>Tiene citas agendadas</span></div>
+      </div>
+
+      <!-- Citas del día seleccionado -->
+      <div class="card">
+        <div class="card-header" style="margin-bottom:14px">
+          <h3>📋 ${formatFecha(selAgendasDate)}</h3>
+          <button class="btn btn-primary btn-sm" onclick="nuevaCitaParaDoctor('${prof.id}')">+ Nueva Cita</button>
+        </div>
+        <div id="agenda-day-${prof.id}"></div>
+      </div>
+    </div>`;
+
+  // Renderizar calendario de este doctor
+  renderAgendaCalendar(`agenda-cal-${prof.id}`, citaCount, prof.id);
+  renderAgendaDayCitas(`agenda-day-${prof.id}`, citasDelDia);
+}
+
+function renderAgendaCalendar(containerId, citaCount, profId) {
+  const d = new Date(selAgendasDate+'T12:00:00'), year=d.getFullYear(), month=d.getMonth();
+  const today2 = hoy();
+  const first = new Date(year,month,1).getDay(), days = new Date(year,month+1,0).getDate();
+  const months = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const dow = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  let html = `<div class="cal-nav">
+    <div class="cal-nav-btns">
+      <button class="btn-ghost" onclick="agendaCalNav(-1,'${profId}')">‹</button>
+      <button class="btn-ghost" onclick="agendaCalNav(0,'${profId}')" style="font-size:11px;padding:5px 8px">Hoy</button>
+      <button class="btn-ghost" onclick="agendaCalNav(1,'${profId}')">›</button>
+    </div>
+    <h4>${months[month]} <span style="color:var(--text-light);font-weight:500">${year}</span></h4>
+  </div><div class="cal-grid">`;
+  dow.forEach((dw,i)=>html+=`<div class="cal-dow${i===0||i===6?' weekend-dow':''}">${dw}</div>`);
+  for(let i=0;i<first;i++) html+=`<div class="cal-day empty"></div>`;
+  for(let i=1;i<=days;i++){
+    const ds=`${year}-${String(month+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
+    const dow2=new Date(ds+'T12:00:00').getDay();
+    const isToday=ds===today2, isSel=ds===selAgendasDate&&!isToday;
+    const cnt=citaCount[ds]||0;
+    const isWeekend=dow2===0||dow2===6;
+    const cls=['cal-day',isToday?'today':isSel?'selected':'',cnt?'has-event':'',isWeekend&&!isToday&&!isSel?'weekend':''].filter(Boolean).join(' ');
+    const dots=cnt?`<div class="cal-dots">${Array.from({length:Math.min(cnt,3)},()=>`<div class="cal-dot-pip"></div>`).join('')}</div>`:`<div style="height:5px"></div>`;
+    html+=`<div class="${cls}" onclick="selectAgendaDay('${ds}','${profId}')" title="${cnt?cnt+' cita'+(cnt>1?'s':''):''}"><span>${i}</span>${dots}</div>`;
+  }
+  html+='</div>';
+  const el=document.getElementById(containerId);
+  if(el) el.innerHTML=html;
+}
+
+function agendaCalNav(dir, profId) {
+  const d=new Date(selAgendasDate+'T12:00:00');
+  if(dir===0) selAgendasDate=hoy();
+  else d.setMonth(d.getMonth()+dir), selAgendasDate=d.toISOString().split('T')[0];
+  renderAgendasRight();
+}
+
+function selectAgendaDay(date, profId) {
+  selAgendasDate = date;
+  renderAgendasRight();
+}
+
+function renderAgendaDayCitas(containerId, citas) {
+  const el = document.getElementById(containerId);
+  if(!el) return;
+  if(!citas.length) {
+    el.innerHTML=`<div class="empty-state" style="padding:32px 12px"><div class="empty-icon" style="font-size:32px">📭</div><p>Sin citas este día</p></div>`;
+    return;
+  }
+  el.innerHTML = citas.map(c=>{
+    const p=C.p.find(x=>x.id===c.pacienteId);
+    return `<div class="agenda-slot ${c.estado}" onclick="verResumenCita(${c.id})">
+      <div style="font-size:14px;font-weight:800;color:var(--primary);min-width:50px">${c.hora||'—'}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p?p.nombre+' '+p.apellidos:'Paciente'}</div>
+        <div style="font-size:11px;color:var(--text-light);margin-top:2px">${c.motivo}</div>
+      </div>
+      ${estadoTag(c.estado)}
+    </div>`;
+  }).join('');
+}
+
+function nuevaCitaParaDoctor(profId) {
+  openModalCita();
+  setTimeout(()=>{
+    const sel=document.getElementById('c-medico');
+    if(sel) sel.value=profId;
+    document.getElementById('c-fecha').value=selAgendasDate;
+  },50);
+}
 
 // ════════════════════ INVENTARIO ════════════════════
 let invTab = 'productos', invCatFiltro = '', invMovTipo = '', repInvTab = 'dia';
