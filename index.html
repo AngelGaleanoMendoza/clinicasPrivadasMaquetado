@@ -910,7 +910,14 @@ body.dark .inv-badge-salida{background:rgba(239,68,68,.15);color:#FCA5A5}
   <div class="modal">
     <h2 id="modal-producto-title">📦 Nuevo Producto</h2>
     <div class="form-grid">
-      <div class="form-group full"><label>Nombre del producto *</label><input type="text" id="prod-nombre" placeholder="Ej: Amoxicilina 500mg, Jeringa 5ml..."></div>
+      <div class="form-group full">
+        <label>Nombre del producto *</label>
+        <div style="position:relative">
+          <input type="text" id="prod-nombre" placeholder="Escribe para buscar o agregar producto..." autocomplete="off"
+            oninput="buscarProductoInv(this.value)" onkeydown="navProdSug(event)" onblur="setTimeout(()=>{const b=document.getElementById('prod-sug');if(b)b.style.display='none'},180)">
+          <div id="prod-sug" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:400;max-height:240px;overflow-y:auto;margin-top:4px"></div>
+        </div>
+      </div>
       <div class="form-group"><label>Categoría</label>
         <select id="prod-categoria">
           <option value="medicamento">💊 Medicamento</option>
@@ -3130,6 +3137,122 @@ async function guardarMovimiento(tipo){
   toast(tipo==='entrada'?'Entrada registrada 📥':'Salida registrada 📤');
   closeModal('modal-'+tipo);
   await loadAll(); renderInventario(); setLoading(false);
+}
+
+// ════════════════════ CATÁLOGO INVENTARIO ════════════════════
+const INV_CATALOG = [
+  // Medicamentos
+  {n:'Acetaminofén 500mg',cat:'medicamento',u:'tableta'},{n:'Acetaminofén 120mg/5ml jarabe',cat:'medicamento',u:'frasco'},
+  {n:'Ibuprofeno 400mg',cat:'medicamento',u:'tableta'},{n:'Ibuprofeno 200mg/5ml suspensión',cat:'medicamento',u:'frasco'},
+  {n:'Diclofenac 50mg',cat:'medicamento',u:'tableta'},{n:'Diclofenac 75mg/3ml inyectable',cat:'medicamento',u:'ampolla'},
+  {n:'Amoxicilina 500mg',cat:'medicamento',u:'cápsula'},{n:'Amoxicilina 250mg/5ml suspensión',cat:'medicamento',u:'frasco'},
+  {n:'Azitromicina 500mg',cat:'medicamento',u:'tableta'},{n:'Ciprofloxacina 500mg',cat:'medicamento',u:'tableta'},
+  {n:'Metronidazol 500mg',cat:'medicamento',u:'tableta'},{n:'Metronidazol 500mg/100ml IV',cat:'medicamento',u:'frasco'},
+  {n:'Omeprazol 20mg',cat:'medicamento',u:'cápsula'},{n:'Ranitidina 150mg',cat:'medicamento',u:'tableta'},
+  {n:'Metoclopramida 10mg',cat:'medicamento',u:'tableta'},{n:'Metoclopramida 10mg/2ml',cat:'medicamento',u:'ampolla'},
+  {n:'Enalapril 10mg',cat:'medicamento',u:'tableta'},{n:'Losartán 50mg',cat:'medicamento',u:'tableta'},
+  {n:'Amlodipino 5mg',cat:'medicamento',u:'tableta'},{n:'Hidroclorotiazida 25mg',cat:'medicamento',u:'tableta'},
+  {n:'Metformina 500mg',cat:'medicamento',u:'tableta'},{n:'Metformina 850mg',cat:'medicamento',u:'tableta'},
+  {n:'Glibenclamida 5mg',cat:'medicamento',u:'tableta'},{n:'Insulina NPH 100UI/ml',cat:'medicamento',u:'frasco'},
+  {n:'Insulina Regular 100UI/ml',cat:'medicamento',u:'frasco'},{n:'Atorvastatina 20mg',cat:'medicamento',u:'tableta'},
+  {n:'Simvastatina 20mg',cat:'medicamento',u:'tableta'},{n:'Furosemida 40mg',cat:'medicamento',u:'tableta'},
+  {n:'Furosemida 20mg/2ml',cat:'medicamento',u:'ampolla'},{n:'Salbutamol inhalador 100mcg',cat:'medicamento',u:'unidad'},
+  {n:'Salbutamol 2.5mg/2.5ml nebulización',cat:'medicamento',u:'ampolla'},{n:'Dexametasona 4mg/ml',cat:'medicamento',u:'ampolla'},
+  {n:'Hidrocortisona 100mg',cat:'medicamento',u:'ampolla'},{n:'Loratadina 10mg',cat:'medicamento',u:'tableta'},
+  {n:'Cetirizina 10mg',cat:'medicamento',u:'tableta'},{n:'Clonazepam 0.5mg',cat:'medicamento',u:'tableta'},
+  {n:'Diazepam 5mg',cat:'medicamento',u:'tableta'},{n:'Amitriptilina 25mg',cat:'medicamento',u:'tableta'},
+  {n:'Ácido fólico 5mg',cat:'medicamento',u:'tableta'},{n:'Hierro sulfato 300mg',cat:'medicamento',u:'tableta'},
+  {n:'Vitamina C 500mg',cat:'medicamento',u:'tableta'},{n:'Vitamina B-complejo',cat:'medicamento',u:'tableta'},
+  {n:'Calcio + Vitamina D 500mg',cat:'medicamento',u:'tableta'},{n:'Zinc 20mg',cat:'medicamento',u:'tableta'},
+  {n:'Suero oral 27.9g',cat:'medicamento',u:'sobre'},{n:'Doxiciclina 100mg',cat:'medicamento',u:'cápsula'},
+  {n:'Trimetoprim/Sulfametoxazol 400/80mg',cat:'medicamento',u:'tableta'},{n:'Ketoconazol 200mg',cat:'medicamento',u:'tableta'},
+  {n:'Fluconazol 150mg',cat:'medicamento',u:'cápsula'},{n:'Ivermectina 6mg',cat:'medicamento',u:'tableta'},
+  {n:'Albendazol 400mg',cat:'medicamento',u:'tableta'},{n:'Clorfenamina 4mg',cat:'medicamento',u:'tableta'},
+  // Material médico
+  {n:'Jeringa 1ml con aguja 25G',cat:'material',u:'unidad'},{n:'Jeringa 3ml con aguja 23G',cat:'material',u:'unidad'},
+  {n:'Jeringa 5ml con aguja 21G',cat:'material',u:'unidad'},{n:'Jeringa 10ml con aguja 21G',cat:'material',u:'unidad'},
+  {n:'Jeringa 20ml sin aguja',cat:'material',u:'unidad'},{n:'Aguja 21G x 1.5"',cat:'material',u:'caja'},
+  {n:'Guantes látex S',cat:'material',u:'caja'},{n:'Guantes látex M',cat:'material',u:'caja'},
+  {n:'Guantes látex L',cat:'material',u:'caja'},{n:'Guantes nitrilo M sin polvo',cat:'material',u:'caja'},
+  {n:'Mascarilla quirúrgica 3 capas',cat:'material',u:'caja'},{n:'Mascarilla N95',cat:'material',u:'unidad'},
+  {n:'Alcohol isopropílico 70%',cat:'material',u:'litro'},{n:'Alcohol en gel 500ml',cat:'material',u:'frasco'},
+  {n:'Agua oxigenada 10V',cat:'material',u:'frasco'},{n:'Yodo povidona 10%',cat:'material',u:'frasco'},
+  {n:'Gasas estériles 4x4"',cat:'material',u:'paquete'},{n:'Algodón hidrófilo 500g',cat:'material',u:'rollo'},
+  {n:'Venda de gasa 4"',cat:'material',u:'rollo'},{n:'Venda elástica 4"',cat:'material',u:'rollo'},
+  {n:'Esparadrapo de tela 1"',cat:'material',u:'rollo'},{n:'Micropore 1"',cat:'material',u:'rollo'},
+  {n:'Bajalenguas de madera',cat:'material',u:'paquete'},{n:'Hisopo estéril',cat:'material',u:'paquete'},
+  {n:'Catéter IV 18G',cat:'material',u:'unidad'},{n:'Catéter IV 20G',cat:'material',u:'unidad'},
+  {n:'Catéter IV 22G',cat:'material',u:'unidad'},{n:'Catéter IV 24G',cat:'material',u:'unidad'},
+  {n:'Equipo de venoclisis macrogotero',cat:'material',u:'unidad'},{n:'Equipo de venoclisis microgotero',cat:'material',u:'unidad'},
+  {n:'Solución salina 0.9% 500ml',cat:'material',u:'frasco'},{n:'Solución salina 0.9% 1000ml',cat:'material',u:'frasco'},
+  {n:'Dextrosa 5% 500ml',cat:'material',u:'frasco'},{n:'Hartmann 500ml',cat:'material',u:'frasco'},
+  {n:'Sonda Foley 14Fr',cat:'material',u:'unidad'},{n:'Sonda Foley 16Fr',cat:'material',u:'unidad'},
+  {n:'Sonda nasogástrica 14Fr',cat:'material',u:'unidad'},{n:'Guantes estériles 7.0',cat:'material',u:'par'},
+  {n:'Guantes estériles 7.5',cat:'material',u:'par'},{n:'Lanceta estéril',cat:'material',u:'caja'},
+  {n:'Tira reactiva glucosa',cat:'material',u:'caja'},{n:'Tira reactiva orina',cat:'material',u:'caja'},
+  // Equipos
+  {n:'Termómetro digital',cat:'equipo',u:'unidad'},{n:'Termómetro infrarrojo',cat:'equipo',u:'unidad'},
+  {n:'Tensiómetro manual aneroide',cat:'equipo',u:'unidad'},{n:'Tensiómetro digital',cat:'equipo',u:'unidad'},
+  {n:'Estetoscopio',cat:'equipo',u:'unidad'},{n:'Oxímetro de pulso',cat:'equipo',u:'unidad'},
+  {n:'Glucómetro',cat:'equipo',u:'unidad'},{n:'Linterna médica',cat:'equipo',u:'unidad'},
+  {n:'Martillo de reflejos',cat:'equipo',u:'unidad'},{n:'Otoscopio',cat:'equipo',u:'unidad'},
+  {n:'Oftalmoscopio',cat:'equipo',u:'unidad'},{n:'Nebulizador',cat:'equipo',u:'unidad'},
+  // Insumos
+  {n:'Jabón líquido antibacterial',cat:'insumo',u:'frasco'},{n:'Cloro al 5% desinfectante',cat:'insumo',u:'litro'},
+  {n:'Desinfectante de superficies',cat:'insumo',u:'litro'},{n:'Toallas de papel',cat:'insumo',u:'paquete'},
+  {n:'Bolsas rojas desechos bioinfecciosos',cat:'insumo',u:'paquete'},{n:'Bolsas negras',cat:'insumo',u:'paquete'},
+  {n:'Contenedor desechos cortopunzantes',cat:'insumo',u:'unidad'},
+  // Papelería
+  {n:'Recetarios médicos',cat:'papeleria',u:'paquete'},{n:'Talonarios incapacidad laboral',cat:'papeleria',u:'paquete'},
+  {n:'Formularios de laboratorio',cat:'papeleria',u:'paquete'},{n:'Expedientes clínicos',cat:'papeleria',u:'paquete'},
+];
+
+let prodSugIdx = -1;
+
+function buscarProductoInv(q) {
+  const box = document.getElementById('prod-sug');
+  if(!q || q.length < 2) { box.style.display='none'; prodSugIdx=-1; return; }
+  const q2 = q.toLowerCase();
+  const matches = INV_CATALOG.filter(p => p.n.toLowerCase().includes(q2)).slice(0,9);
+  if(!matches.length) { box.style.display='none'; return; }
+  const catIcon = c=>({medicamento:'💊',material:'🩺',equipo:'🔬',insumo:'🧹',papeleria:'📄',general:'📦'}[c]||'📦');
+  box.innerHTML = matches.map((p,i) => `
+    <div class="prod-sug-item" data-idx="${i}"
+      onmousedown="seleccionarProductoInv(${JSON.stringify(p).replace(/"/g,'&quot;')})"
+      onmouseenter="prodSugIdx=${i};resaltarProdSug()"
+      style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--text)">${catIcon(p.cat)} ${p.n}</div>
+        <div style="font-size:11px;color:var(--text-light);margin-top:1px">${p.cat} · ${p.u}</div>
+      </div>
+    </div>`).join('');
+  box.querySelector('.prod-sug-item:last-child').style.borderBottom='none';
+  box.style.display='block'; prodSugIdx=-1; box._matches=matches;
+}
+
+function resaltarProdSug() {
+  document.querySelectorAll('.prod-sug-item').forEach((el,i)=>{
+    el.style.background = i===prodSugIdx ? 'var(--primary-light)' : '';
+  });
+}
+
+function navProdSug(e) {
+  const box=document.getElementById('prod-sug');
+  const items=box.querySelectorAll('.prod-sug-item');
+  if(!items.length) return;
+  if(e.key==='ArrowDown'){e.preventDefault();prodSugIdx=Math.min(prodSugIdx+1,items.length-1);resaltarProdSug();}
+  else if(e.key==='ArrowUp'){e.preventDefault();prodSugIdx=Math.max(prodSugIdx-1,0);resaltarProdSug();}
+  else if(e.key==='Enter'&&prodSugIdx>=0){e.preventDefault();seleccionarProductoInv(box._matches[prodSugIdx]);}
+  else if(e.key==='Escape'){box.style.display='none';}
+}
+
+function seleccionarProductoInv(p) {
+  document.getElementById('prod-nombre').value   = p.n;
+  document.getElementById('prod-categoria').value = p.cat;
+  document.getElementById('prod-unidad').value    = p.u;
+  document.getElementById('prod-sug').style.display='none';
+  prodSugIdx=-1;
+  document.getElementById('prod-stock').focus();
 }
 
 // ════════════════════ DIAGNÓSTICOS SUGERIDOS ════════════════════
