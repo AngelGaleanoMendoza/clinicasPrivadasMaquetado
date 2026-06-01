@@ -962,7 +962,13 @@ tbody tr:hover td{background:#F8FAFC}
     <h2 id="modal-med-title">💊 Nueva Medicación</h2>
     <div class="form-grid">
       <div class="form-group full"><label>Paciente *</label><select id="m-paciente"><option value="">Seleccionar paciente...</option></select></div>
-      <div class="form-group full"><label>Medicamento *</label><input type="text" id="m-nombre" placeholder="Ej: Amoxicilina 500mg"></div>
+      <div class="form-group full"><label>Medicamento *</label>
+        <div style="position:relative">
+          <input type="text" id="m-nombre" placeholder="Escribe para buscar medicamento..." autocomplete="off"
+            oninput="buscarMedicamento(this.value)" onkeydown="navMedSug(event)">
+          <div id="med-sugerencias" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:400;max-height:220px;overflow-y:auto;margin-top:4px"></div>
+        </div>
+      </div>
       <div class="form-group"><label>Dosis *</label><input type="text" id="m-dosis" placeholder="Ej: 1 tableta"></div>
       <div class="form-group"><label>Frecuencia *</label><input type="text" id="m-frecuencia" placeholder="Ej: Cada 8 horas"></div>
       <div class="form-group"><label>Fecha Inicio</label><input type="date" id="m-inicio"></div>
@@ -2444,7 +2450,205 @@ function closeModal(id){ document.getElementById(id).classList.remove('open'); e
 document.addEventListener('click',e=>{
   if(e.target.classList.contains('modal-overlay')){ e.target.classList.remove('open'); editingId=null; }
   if(!e.target.closest('#global-search')&&!e.target.closest('#search-dropdown')) document.getElementById('search-dropdown').style.display='none';
+  if(!e.target.closest('#m-nombre')&&!e.target.closest('#med-sugerencias')) { const b=document.getElementById('med-sugerencias'); if(b) b.style.display='none'; }
 });
+
+// ════════════════════ MEDICAMENTOS NICARAGUA ════════════════════
+const MEDICAMENTOS_NI = [
+  // Analgésicos / Antiinflamatorios
+  {n:'Acetaminofén 500mg',p:'Tableta',d:'1 tab cada 6-8h',v:'oral'},
+  {n:'Acetaminofén 120mg/5ml',p:'Jarabe',d:'10-15mg/kg cada 6h',v:'oral'},
+  {n:'Ibuprofeno 400mg',p:'Tableta',d:'1 tab cada 6-8h con alimentos',v:'oral'},
+  {n:'Ibuprofeno 200mg/5ml',p:'Suspensión',d:'5-10mg/kg cada 6-8h',v:'oral'},
+  {n:'Diclofenaco 50mg',p:'Tableta',d:'1 tab cada 8h con alimentos',v:'oral'},
+  {n:'Diclofenaco 75mg/3ml',p:'Inyectable',d:'1 amp cada 12-24h',v:'inyectable'},
+  {n:'Naproxeno 500mg',p:'Tableta',d:'1 tab cada 12h',v:'oral'},
+  {n:'Ketorolaco 10mg',p:'Tableta',d:'1 tab cada 8h (máx 5 días)',v:'oral'},
+  {n:'Ketorolaco 30mg/1ml',p:'Inyectable',d:'1 amp cada 6-8h',v:'inyectable'},
+  {n:'Aspirina 100mg',p:'Tableta',d:'1 tab diaria',v:'oral'},
+  {n:'Aspirina 500mg',p:'Tableta',d:'1-2 tab cada 8h',v:'oral'},
+  {n:'Tramadol 50mg',p:'Cápsula',d:'1 cap cada 6-8h',v:'oral'},
+  {n:'Tramadol 100mg/2ml',p:'Inyectable',d:'100mg IV/IM cada 8h',v:'inyectable'},
+  {n:'Metamizol 500mg',p:'Tableta',d:'1 tab cada 8h',v:'oral'},
+  {n:'Metamizol 1g/2ml',p:'Inyectable',d:'1-2g IV/IM cada 8h',v:'inyectable'},
+  // Antibióticos
+  {n:'Amoxicilina 500mg',p:'Cápsula',d:'1 cap cada 8h x 7 días',v:'oral'},
+  {n:'Amoxicilina 250mg/5ml',p:'Suspensión',d:'40mg/kg/día cada 8h',v:'oral'},
+  {n:'Amoxicilina + Ác. Clavulánico 875mg',p:'Tableta',d:'1 tab cada 12h x 7 días',v:'oral'},
+  {n:'Ampicilina 500mg',p:'Cápsula',d:'1 cap cada 6h',v:'oral'},
+  {n:'Ampicilina 1g',p:'Inyectable',d:'1g IV cada 6h',v:'inyectable'},
+  {n:'Azitromicina 500mg',p:'Tableta',d:'1 tab diaria x 3 días',v:'oral'},
+  {n:'Ciprofloxacino 500mg',p:'Tableta',d:'1 tab cada 12h x 7 días',v:'oral'},
+  {n:'Clindamicina 300mg',p:'Cápsula',d:'1 cap cada 8h',v:'oral'},
+  {n:'Doxiciclina 100mg',p:'Cápsula',d:'1 cap cada 12h',v:'oral'},
+  {n:'Eritromicina 500mg',p:'Tableta',d:'1 tab cada 6h x 7 días',v:'oral'},
+  {n:'Metronidazol 500mg',p:'Tableta',d:'1 tab cada 8h x 7 días',v:'oral'},
+  {n:'Metronidazol 500mg/100ml',p:'Inyectable IV',d:'500mg IV cada 8h',v:'inyectable'},
+  {n:'Trimetoprim/Sulfametoxazol 160/800mg',p:'Tableta',d:'1 tab cada 12h x 7 días',v:'oral'},
+  {n:'Trimetoprim/Sulfametoxazol 40/200mg/5ml',p:'Suspensión',d:'1ml/kg/día en 2 dosis',v:'oral'},
+  {n:'Ceftriaxona 1g',p:'Inyectable',d:'1-2g cada 12-24h IV/IM',v:'inyectable'},
+  {n:'Cefalexina 500mg',p:'Cápsula',d:'1 cap cada 6-8h x 7 días',v:'oral'},
+  {n:'Gentamicina 80mg/2ml',p:'Inyectable',d:'1.5mg/kg cada 8h IM',v:'inyectable'},
+  {n:'Claritromicina 500mg',p:'Tableta',d:'1 tab cada 12h x 7 días',v:'oral'},
+  {n:'Nitrofurantoína 100mg',p:'Cápsula',d:'1 cap cada 6h x 7 días',v:'oral'},
+  {n:'Penicilina Benzatínica 1.200.000UI',p:'Inyectable',d:'1 amp IM dosis única',v:'inyectable'},
+  // Antihipertensivos
+  {n:'Enalapril 10mg',p:'Tableta',d:'1 tab cada 12-24h',v:'oral'},
+  {n:'Enalapril 5mg',p:'Tableta',d:'1 tab diaria',v:'oral'},
+  {n:'Losartán 50mg',p:'Tableta',d:'1 tab diaria',v:'oral'},
+  {n:'Losartán 100mg',p:'Tableta',d:'1 tab diaria',v:'oral'},
+  {n:'Amlodipino 5mg',p:'Tableta',d:'1 tab diaria',v:'oral'},
+  {n:'Amlodipino 10mg',p:'Tableta',d:'1 tab diaria',v:'oral'},
+  {n:'Hidroclorotiazida 25mg',p:'Tableta',d:'1 tab diaria por la mañana',v:'oral'},
+  {n:'Atenolol 50mg',p:'Tableta',d:'1 tab diaria',v:'oral'},
+  {n:'Nifedipino 10mg',p:'Tableta',d:'1 tab cada 8h',v:'oral'},
+  {n:'Captopril 25mg',p:'Tableta',d:'1 tab cada 8-12h',v:'oral'},
+  {n:'Metoprolol 50mg',p:'Tableta',d:'1 tab cada 12h',v:'oral'},
+  {n:'Furosemida 40mg',p:'Tableta',d:'1 tab diaria por la mañana',v:'oral'},
+  {n:'Furosemida 20mg/2ml',p:'Inyectable',d:'20-40mg IV/IM',v:'inyectable'},
+  {n:'Espironolactona 25mg',p:'Tableta',d:'1-2 tab diarias',v:'oral'},
+  // Diabetes
+  {n:'Metformina 500mg',p:'Tableta',d:'1 tab con el desayuno y la cena',v:'oral'},
+  {n:'Metformina 850mg',p:'Tableta',d:'1 tab con las comidas',v:'oral'},
+  {n:'Glibenclamida 5mg',p:'Tableta',d:'1 tab 30min antes del desayuno',v:'oral'},
+  {n:'Glimepirida 2mg',p:'Tableta',d:'1 tab diaria antes del desayuno',v:'oral'},
+  {n:'Insulina NPH 100UI/ml',p:'Inyectable',d:'Según indicación médica',v:'inyectable'},
+  {n:'Insulina Regular 100UI/ml',p:'Inyectable',d:'Según indicación médica',v:'inyectable'},
+  // Gastrointestinal
+  {n:'Omeprazol 20mg',p:'Cápsula',d:'1 cap en ayunas x 14-28 días',v:'oral'},
+  {n:'Omeprazol 40mg',p:'Cápsula',d:'1 cap en ayunas',v:'oral'},
+  {n:'Pantoprazol 40mg',p:'Tableta',d:'1 tab en ayunas',v:'oral'},
+  {n:'Ranitidina 150mg',p:'Tableta',d:'1 tab cada 12h',v:'oral'},
+  {n:'Metoclopramida 10mg',p:'Tableta',d:'1 tab 30min antes de comidas',v:'oral'},
+  {n:'Metoclopramida 10mg/2ml',p:'Inyectable',d:'10mg IV/IM cada 8h',v:'inyectable'},
+  {n:'Domperidona 10mg',p:'Tableta',d:'1 tab 30min antes de comidas',v:'oral'},
+  {n:'Loperamida 2mg',p:'Cápsula',d:'2 cap inicial, luego 1 cap tras evacuación',v:'oral'},
+  {n:'Sales de Rehidratación Oral',p:'Sobre',d:'1 sobre en 1 litro de agua',v:'oral'},
+  {n:'Bismuto subcitrato 240mg',p:'Tableta',d:'1 tab cada 8h lejos de comidas',v:'oral'},
+  // Respiratorio
+  {n:'Salbutamol 100mcg/dosis',p:'Inhalador',d:'1-2 puffs cada 4-6h',v:'inhalada'},
+  {n:'Salbutamol 2mg',p:'Tableta',d:'1 tab cada 8h',v:'oral'},
+  {n:'Beclometasona 250mcg',p:'Inhalador',d:'1-2 puffs cada 12h',v:'inhalada'},
+  {n:'Budesonida 200mcg',p:'Inhalador',d:'1-2 puffs cada 12h',v:'inhalada'},
+  {n:'Ambroxol 30mg',p:'Tableta',d:'1 tab cada 8h',v:'oral'},
+  {n:'Ambroxol 15mg/5ml',p:'Jarabe',d:'10ml cada 8h',v:'oral'},
+  {n:'Dexametasona 4mg/1ml',p:'Inyectable',d:'4-8mg IV/IM según indicación',v:'inyectable'},
+  {n:'Prednisona 5mg',p:'Tableta',d:'Según indicación médica',v:'oral'},
+  {n:'Prednisona 20mg',p:'Tableta',d:'Según indicación médica',v:'oral'},
+  // Antiparasitarios
+  {n:'Albendazol 400mg',p:'Tableta',d:'1 tab dosis única (desparasitación)',v:'oral'},
+  {n:'Mebendazol 100mg',p:'Tableta',d:'1 tab cada 12h x 3 días',v:'oral'},
+  {n:'Ivermectina 6mg',p:'Tableta',d:'200mcg/kg dosis única',v:'oral'},
+  {n:'Tinidazol 500mg',p:'Tableta',d:'4 tab dosis única',v:'oral'},
+  {n:'Nistatina 100.000UI/ml',p:'Suspensión',d:'1ml 4 veces al día',v:'oral'},
+  // Antihistamínicos
+  {n:'Loratadina 10mg',p:'Tableta',d:'1 tab diaria',v:'oral'},
+  {n:'Cetirizina 10mg',p:'Tableta',d:'1 tab diaria',v:'oral'},
+  {n:'Difenhidramina 25mg',p:'Cápsula',d:'1 cap cada 6-8h',v:'oral'},
+  {n:'Clorfeniramina 4mg',p:'Tableta',d:'1 tab cada 8h',v:'oral'},
+  // Antifúngicos
+  {n:'Fluconazol 150mg',p:'Cápsula',d:'1 cap dosis única',v:'oral'},
+  {n:'Ketoconazol 200mg',p:'Tableta',d:'1 tab diaria x 2-4 semanas',v:'oral'},
+  {n:'Miconazol 2%',p:'Crema',d:'Aplicar 2 veces al día x 2-4 semanas',v:'topica'},
+  {n:'Clotrimazol 1%',p:'Crema',d:'Aplicar 2-3 veces al día',v:'topica'},
+  // Vitaminas / Suplementos
+  {n:'Ácido Fólico 5mg',p:'Tableta',d:'1 tab diaria',v:'oral'},
+  {n:'Ácido Fólico 1mg',p:'Tableta',d:'1 tab diaria',v:'oral'},
+  {n:'Sulfato Ferroso 300mg',p:'Tableta',d:'1 tab diaria en ayunas',v:'oral'},
+  {n:'Vitamina C 500mg',p:'Tableta',d:'1 tab diaria',v:'oral'},
+  {n:'Calcio 500mg',p:'Tableta',d:'1-2 tab diarias con comida',v:'oral'},
+  {n:'Vitamina B12 1000mcg',p:'Inyectable',d:'1 amp IM semanal',v:'inyectable'},
+  {n:'Complejo B',p:'Tableta',d:'1 tab diaria',v:'oral'},
+  {n:'Zinc 20mg',p:'Tableta',d:'1 tab diaria x 10-14 días',v:'oral'},
+  // Cardiovascular
+  {n:'Simvastatina 20mg',p:'Tableta',d:'1 tab en la noche',v:'oral'},
+  {n:'Atorvastatina 20mg',p:'Tableta',d:'1 tab diaria',v:'oral'},
+  {n:'Digoxina 0.25mg',p:'Tableta',d:'Según indicación médica',v:'oral'},
+  {n:'Nitroglicerina 0.5mg SL',p:'Tableta sublingual',d:'1 tab SL al inicio del dolor',v:'sublingual'},
+  {n:'Warfarina 5mg',p:'Tableta',d:'Según INR y prescripción',v:'oral'},
+  // Neurológico
+  {n:'Diazepam 5mg',p:'Tableta',d:'1 tab cada 8-12h',v:'oral'},
+  {n:'Diazepam 10mg/2ml',p:'Inyectable',d:'5-10mg IV/IM según crisis',v:'inyectable'},
+  {n:'Clonazepam 0.5mg',p:'Tableta',d:'1 tab cada 12h',v:'oral'},
+  {n:'Carbamazepina 200mg',p:'Tableta',d:'1 tab cada 8-12h',v:'oral'},
+  {n:'Ácido Valproico 250mg',p:'Tableta',d:'Según indicación neurológica',v:'oral'},
+  {n:'Fluoxetina 20mg',p:'Cápsula',d:'1 cap diaria en la mañana',v:'oral'},
+  {n:'Amitriptilina 25mg',p:'Tableta',d:'1 tab en la noche',v:'oral'},
+  {n:'Alprazolam 0.25mg',p:'Tableta',d:'1 tab cada 8-12h',v:'oral'},
+  // Tiroides
+  {n:'Levotiroxina 50mcg',p:'Tableta',d:'1 tab en ayunas 30min antes del desayuno',v:'oral'},
+  {n:'Levotiroxina 100mcg',p:'Tableta',d:'1 tab en ayunas 30min antes del desayuno',v:'oral'},
+  // Tópicos
+  {n:'Hidrocortisona 1%',p:'Crema',d:'Aplicar 2 veces al día',v:'topica'},
+  {n:'Betametasona 0.05%',p:'Crema',d:'Aplicar 1-2 veces al día',v:'topica'},
+  {n:'Neomicina + Bacitracina',p:'Ungüento',d:'Aplicar 2-3 veces al día',v:'topica'},
+  {n:'Ciprofloxacino 0.3% oftálmico',p:'Gotas',d:'1-2 gotas cada 4-6h',v:'topica'},
+  {n:'Gentamicina 0.3% oftálmico',p:'Gotas',d:'1-2 gotas cada 6h',v:'topica'},
+  // Antimaláricos
+  {n:'Cloroquina 250mg',p:'Tableta',d:'Según protocolo malaria',v:'oral'},
+  {n:'Primaquina 15mg',p:'Tableta',d:'Según protocolo malaria',v:'oral'},
+  // Urgencias / Hospitalario
+  {n:'Adrenalina 1mg/1ml',p:'Inyectable',d:'0.3-0.5mg SC en anafilaxia',v:'inyectable'},
+  {n:'Atropina 0.5mg/1ml',p:'Inyectable',d:'0.5-1mg IV/IM',v:'inyectable'},
+  {n:'Dexametasona 8mg/2ml',p:'Inyectable',d:'Según indicación médica',v:'inyectable'},
+  {n:'Lidocaína 2%',p:'Inyectable',d:'Según procedimiento',v:'inyectable'},
+  {n:'Oxitocina 10UI/1ml',p:'Inyectable',d:'Según protocolo obstétrico',v:'inyectable'},
+  {n:'Heparina 5000UI/0.2ml',p:'Inyectable',d:'Según protocolo médico',v:'inyectable'},
+  {n:'Enoxaparina 40mg/0.4ml',p:'Inyectable SC',d:'40mg SC diaria',v:'inyectable'},
+];
+
+let medSugIdx = -1;
+
+function buscarMedicamento(q) {
+  const box = document.getElementById('med-sugerencias');
+  if(!q || q.length < 2) { box.style.display='none'; medSugIdx=-1; return; }
+  const q2 = q.toLowerCase();
+  const matches = MEDICAMENTOS_NI.filter(m =>
+    m.n.toLowerCase().includes(q2) || m.p.toLowerCase().includes(q2)
+  ).slice(0, 8);
+  if(!matches.length) { box.style.display='none'; return; }
+  box.innerHTML = matches.map((m, i) => `
+    <div class="med-sug-item" data-idx="${i}"
+      onmousedown="seleccionarMedicamento(${JSON.stringify(m).replace(/"/g,'&quot;')})"
+      onmouseenter="medSugIdx=${i};resaltarSug()"
+      style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--text)">${m.n}</div>
+        <div style="font-size:11px;color:var(--text-light);margin-top:1px">${m.p} · ${m.d}</div>
+      </div>
+      <span class="tag tag-gray" style="font-size:10px;flex-shrink:0;margin-left:10px">${m.v}</span>
+    </div>`).join('');
+  box.querySelector('.med-sug-item:last-child').style.borderBottom = 'none';
+  box.style.display = 'block';
+  medSugIdx = -1;
+  box._matches = matches;
+}
+
+function resaltarSug() {
+  document.querySelectorAll('.med-sug-item').forEach((el, i) => {
+    el.style.background = i === medSugIdx ? 'var(--primary-light)' : '';
+  });
+}
+
+function navMedSug(e) {
+  const box = document.getElementById('med-sugerencias');
+  const items = box.querySelectorAll('.med-sug-item');
+  if(!items.length) return;
+  if(e.key === 'ArrowDown') { e.preventDefault(); medSugIdx = Math.min(medSugIdx+1, items.length-1); resaltarSug(); }
+  else if(e.key === 'ArrowUp') { e.preventDefault(); medSugIdx = Math.max(medSugIdx-1, 0); resaltarSug(); }
+  else if(e.key === 'Enter' && medSugIdx >= 0) { e.preventDefault(); seleccionarMedicamento(box._matches[medSugIdx]); }
+  else if(e.key === 'Escape') { box.style.display='none'; }
+}
+
+function seleccionarMedicamento(m) {
+  document.getElementById('m-nombre').value = m.n;
+  document.getElementById('m-dosis').value = m.d;
+  const viaMap = {oral:'oral',inyectable:'inyectable',topica:'topica',inhalada:'inhalada',sublingual:'sublingual'};
+  const viaEl = document.getElementById('m-via');
+  if(viaMap[m.v]) viaEl.value = viaMap[m.v];
+  document.getElementById('med-sugerencias').style.display = 'none';
+  medSugIdx = -1;
+}
 
 // ════════════════════ INIT ════════════════════
 document.addEventListener('DOMContentLoaded', async () => {
