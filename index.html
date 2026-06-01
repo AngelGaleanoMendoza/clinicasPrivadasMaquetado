@@ -1319,6 +1319,7 @@ async function entrarConPerfil(profile) {
   const rolLabel = {admin:'Administrador',medico:'Médico',recepcion:'Recepcionista',enfermeria:'Enfermería'}[profile.rol]||profile.rol;
   currentClinicaId = profile.clinica_id || 1;
   currentUser = {
+    id: profile.id,
     name: profile.nombre,
     role: rolLabel,
     avatar: profile.icono || profile.nombre[0].toUpperCase(),
