@@ -436,6 +436,17 @@ tbody tr:hover td{background:#F8FAFC}
   .stat-info h3{font-size:18px}
 }
 
+/* INVENTARIO */
+.inv-stock-ok{color:var(--success);font-weight:700}
+.inv-stock-low{color:var(--warning);font-weight:700}
+.inv-stock-out{color:var(--danger);font-weight:700}
+.mov-entrada{border-left-color:var(--success)!important}
+.mov-salida{border-left-color:var(--danger)!important}
+.inv-badge-entrada{background:#F0FDF4;color:#15803D;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700}
+.inv-badge-salida{background:#FEF2F2;color:#B91C1C;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700}
+body.dark .inv-badge-entrada{background:rgba(16,185,129,.15);color:#6EE7B7}
+body.dark .inv-badge-salida{background:rgba(239,68,68,.15);color:#FCA5A5}
+
 /* ADMIN PANEL */
 .admin-stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:20px}
 .admin-stat{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;display:flex;align-items:center;gap:12px}
@@ -508,6 +519,7 @@ tbody tr:hover td{background:#F8FAFC}
       <div class="menu-item" onclick="navigate('notas')"><span class="icon">📝</span> Notas Clínicas</div>
       <div class="menu-item" onclick="navigate('atendidos')"><span class="icon">📊</span> Atendidos por Día</div>
       <div class="menu-item" onclick="navigate('estadisticas')"><span class="icon">📈</span> Estadísticas</div>
+      <div class="menu-item" onclick="navigate('inventario')"><span class="icon">📦</span> Inventario</div>
       <div class="menu-section">Sistema</div>
       <div class="menu-item" onclick="navigate('exportar')"><span class="icon">📤</span> Exportar / Enviar</div>
       <div class="menu-item" onclick="navigate('configuracion')"><span class="icon">⚙️</span> Configuración Clínica</div>
@@ -764,6 +776,84 @@ tbody tr:hover td{background:#F8FAFC}
         </div>
       </div>
 
+      <!-- INVENTARIO -->
+      <div id="view-inventario" class="view">
+        <div class="card" style="margin-bottom:18px">
+          <div class="card-header">
+            <h3>📦 Inventario de Clínica</h3>
+            <div style="display:flex;gap:8px" id="inv-action-btns">
+              <button class="btn btn-secondary btn-sm" onclick="openModalEntrada()">📥 Entrada</button>
+              <button class="btn btn-secondary btn-sm" onclick="openModalSalida()">📤 Salida</button>
+              <button class="btn btn-primary btn-sm" onclick="openModalProducto()">+ Producto</button>
+            </div>
+          </div>
+          <div id="inv-stats-row" class="stats-grid" style="margin-bottom:14px"></div>
+          <div class="tabs" style="margin-bottom:0">
+            <button class="tab active" id="tab-inv-productos"   onclick="switchInvTab('productos')">📦 Productos</button>
+            <button class="tab"        id="tab-inv-movimientos" onclick="switchInvTab('movimientos')">🔄 Movimientos</button>
+            <button class="tab"        id="tab-inv-reportes"    onclick="switchInvTab('reportes')">📈 Reportes</button>
+          </div>
+        </div>
+
+        <div id="inv-panel-productos">
+          <div class="card">
+            <div class="search-bar" style="margin-bottom:14px">
+              <div class="search-bar-input">
+                <span style="color:var(--text-light)">🔍</span>
+                <input type="text" id="inv-search" placeholder="Buscar producto..." oninput="filterInventario(this.value)">
+              </div>
+              <div class="filter-chips">
+                <span class="chip active" onclick="setInvCat('',this)">Todos</span>
+                <span class="chip" onclick="setInvCat('medicamento',this)">💊 Medicamentos</span>
+                <span class="chip" onclick="setInvCat('material',this)">🩺 Material médico</span>
+                <span class="chip" onclick="setInvCat('equipo',this)">🔬 Equipos</span>
+                <span class="chip" onclick="setInvCat('insumo',this)">🧹 Insumos</span>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table><thead><tr><th>Producto</th><th>Categoría</th><th>Unidad</th><th>Stock</th><th>Mín.</th><th>Precio Unit.</th><th>Estado</th><th>Acciones</th></tr></thead>
+              <tbody id="tabla-inventario"></tbody></table>
+            </div>
+            <div id="inv-empty" class="empty-state" style="display:none">
+              <div class="empty-icon">📦</div>
+              <p>No hay productos en inventario.<br>Agrega el primero con <strong>+ Producto</strong></p>
+            </div>
+          </div>
+        </div>
+
+        <div id="inv-panel-movimientos" style="display:none">
+          <div class="card">
+            <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+              <input type="date" id="inv-mov-fecha" onchange="renderMovimientos()" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit;outline:none;color:var(--text);background:var(--card)">
+              <button class="btn btn-secondary btn-sm" onclick="document.getElementById('inv-mov-fecha').value='';renderMovimientos()">Todos</button>
+              <div class="filter-chips">
+                <span class="chip active" id="chip-mov-todos"    onclick="setMovTipo('',this)">Todos</span>
+                <span class="chip"        id="chip-mov-entrada"  onclick="setMovTipo('entrada',this)">📥 Entradas</span>
+                <span class="chip"        id="chip-mov-salida"   onclick="setMovTipo('salida',this)">📤 Salidas</span>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table><thead><tr><th>Fecha</th><th>Producto</th><th>Tipo</th><th>Cantidad</th><th>Motivo</th></tr></thead>
+              <tbody id="tabla-movimientos"></tbody></table>
+            </div>
+            <div id="mov-empty" class="empty-state" style="display:none"><div class="empty-icon">🔄</div><p>Sin movimientos registrados</p></div>
+          </div>
+        </div>
+
+        <div id="inv-panel-reportes" style="display:none">
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-header"><h3>📈 Período</h3></div>
+            <div class="tabs" style="margin-bottom:16px">
+              <button class="tab active" id="tab-rep-dia"    onclick="switchRepTab('dia')">📅 Diario</button>
+              <button class="tab"        id="tab-rep-semana" onclick="switchRepTab('semana')">📆 Semanal</button>
+              <button class="tab"        id="tab-rep-mes"    onclick="switchRepTab('mes')">🗓️ Mensual</button>
+              <button class="tab"        id="tab-rep-anual"  onclick="switchRepTab('anual')">📊 Anual</button>
+            </div>
+            <div id="rep-inv-content"></div>
+          </div>
+        </div>
+      </div>
+
       <!-- ADMIN SUPER -->
       <div id="view-admin" class="view">
         <div class="card" style="margin-bottom:18px">
@@ -811,6 +901,82 @@ tbody tr:hover td{background:#F8FAFC}
         </div>
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PRODUCTO -->
+<div class="modal-overlay" id="modal-producto">
+  <div class="modal">
+    <h2 id="modal-producto-title">📦 Nuevo Producto</h2>
+    <div class="form-grid">
+      <div class="form-group full"><label>Nombre del producto *</label><input type="text" id="prod-nombre" placeholder="Ej: Amoxicilina 500mg, Jeringa 5ml..."></div>
+      <div class="form-group"><label>Categoría</label>
+        <select id="prod-categoria">
+          <option value="medicamento">💊 Medicamento</option>
+          <option value="material">🩺 Material médico</option>
+          <option value="equipo">🔬 Equipo</option>
+          <option value="insumo">🧹 Insumo de limpieza</option>
+          <option value="papeleria">📄 Papelería</option>
+          <option value="general">📦 General</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Unidad de medida</label>
+        <select id="prod-unidad">
+          <option value="unidad">Unidad</option>
+          <option value="caja">Caja</option>
+          <option value="frasco">Frasco</option>
+          <option value="ampolla">Ampolla</option>
+          <option value="tableta">Tableta</option>
+          <option value="rollo">Rollo</option>
+          <option value="litro">Litro</option>
+          <option value="ml">Mililitro</option>
+          <option value="par">Par</option>
+          <option value="paquete">Paquete</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Stock actual</label><input type="number" id="prod-stock" placeholder="0" min="0"></div>
+      <div class="form-group"><label>Stock mínimo (alerta)</label><input type="number" id="prod-stock-min" placeholder="0" min="0"></div>
+      <div class="form-group full"><label>Precio unitario (C$)</label><input type="number" id="prod-precio" placeholder="0.00" min="0" step="0.01"></div>
+      <div class="form-group full"><label>Descripción</label><textarea id="prod-descripcion" placeholder="Observaciones, proveedor, lote..." style="min-height:70px"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-producto')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarProducto()">💾 Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ENTRADA -->
+<div class="modal-overlay" id="modal-entrada">
+  <div class="modal" style="max-width:480px">
+    <h2>📥 Registrar Entrada</h2>
+    <div class="form-grid cols-1">
+      <div class="form-group"><label>Producto *</label><select id="ent-producto"><option value="">Seleccionar...</option></select></div>
+      <div class="form-group"><label>Cantidad *</label><input type="number" id="ent-cantidad" placeholder="0" min="1"></div>
+      <div class="form-group"><label>Fecha</label><input type="date" id="ent-fecha"></div>
+      <div class="form-group"><label>Motivo / Proveedor</label><input type="text" id="ent-motivo" placeholder="Ej: Compra mensual, donación, MINSA..."></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-entrada')">Cancelar</button>
+      <button class="btn btn-primary" style="background:linear-gradient(135deg,var(--success),#059669)" onclick="guardarMovimiento('entrada')">📥 Confirmar Entrada</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL SALIDA -->
+<div class="modal-overlay" id="modal-salida">
+  <div class="modal" style="max-width:480px">
+    <h2>📤 Registrar Salida</h2>
+    <div class="form-grid cols-1">
+      <div class="form-group"><label>Producto *</label><select id="sal-producto"><option value="">Seleccionar...</option></select></div>
+      <div class="form-group"><label>Cantidad *</label><input type="number" id="sal-cantidad" placeholder="0" min="1"></div>
+      <div class="form-group"><label>Fecha</label><input type="date" id="sal-fecha"></div>
+      <div class="form-group"><label>Motivo / Uso</label><input type="text" id="sal-motivo" placeholder="Ej: Usado en consulta, vencido, pérdida..."></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-salida')">Cancelar</button>
+      <button class="btn btn-danger" onclick="guardarMovimiento('salida')">📤 Confirmar Salida</button>
     </div>
   </div>
 </div>
@@ -1051,7 +1217,7 @@ const SKEY = 'sb_publishable_2W-uJNSJSFLMYn5NJShPKw_sRCynIka';
 const sb = supabase.createClient(SURL, SKEY);
 
 // ════════════════════ CACHE LOCAL ════════════════════
-const C = { p:[], c:[], m:[], n:[], e:[], prof:[] };
+const C = { p:[], c:[], m:[], n:[], e:[], prof:[], inv:[], mov:[] };
 let currentClinicaId = null;
 let currentClinica   = null;
 
@@ -1064,20 +1230,25 @@ const fromC = r => ({ id:r.id, pacienteId:r.paciente_id, medicoId:r.medico_id||n
 const toC   = x => ({ paciente_id:x.pacienteId, medico_id:x.medicoId||null, fecha:x.fecha, hora:x.hora, motivo:x.motivo, tipo:x.tipo||'consulta', estado:x.estado||'pendiente', notas:x.notas||null, clinica_id:currentClinicaId });
 const fromM = r => ({ id:r.id, pacienteId:r.paciente_id, nombre:r.nombre, dosis:r.dosis, frecuencia:r.frecuencia, inicio:r.inicio, fin:r.fin, via:r.via, estado:r.estado, indicaciones:r.indicaciones });
 const toM   = x => ({ paciente_id:x.pacienteId, nombre:x.nombre, dosis:x.dosis, frecuencia:x.frecuencia, inicio:x.inicio||null, fin:x.fin||null, via:x.via||'oral', estado:x.estado||'activa', indicaciones:x.indicaciones||null, clinica_id:currentClinicaId });
-const fromN = r => ({ id:r.id, pacienteId:r.paciente_id, tipo:r.tipo, fecha:r.fecha, titulo:r.titulo, contenido:r.contenido });
-const toN   = x => ({ paciente_id:x.pacienteId, tipo:x.tipo||'evolucion', fecha:x.fecha||hoy(), titulo:x.titulo||null, contenido:x.contenido, clinica_id:currentClinicaId });
+const fromN   = r => ({ id:r.id, pacienteId:r.paciente_id, tipo:r.tipo, fecha:r.fecha, titulo:r.titulo, contenido:r.contenido });
+const toN     = x => ({ paciente_id:x.pacienteId, tipo:x.tipo||'evolucion', fecha:x.fecha||hoy(), titulo:x.titulo||null, contenido:x.contenido, clinica_id:currentClinicaId });
+const fromInv = r => ({ id:r.id, nombre:r.nombre, categoria:r.categoria||'general', unidad:r.unidad||'unidad', stock:Number(r.stock_actual||0), stockMin:Number(r.stock_minimo||0), precio:r.precio_unitario!=null?Number(r.precio_unitario):null, descripcion:r.descripcion||null });
+const toInv   = x => ({ nombre:x.nombre, categoria:x.categoria||'general', unidad:x.unidad||'unidad', stock_actual:Number(x.stock||0), stock_minimo:Number(x.stockMin||0), precio_unitario:x.precio||null, descripcion:x.descripcion||null, clinica_id:currentClinicaId });
+const fromMov = r => ({ id:r.id, invId:r.inventario_id, tipo:r.tipo, cantidad:Number(r.cantidad), motivo:r.motivo||null, fecha:r.fecha });
 
 // ════════════════════ LOAD DATA ════════════════════
 async function loadAll() {
   setLoading(true);
   try {
-    const [rp,rc,rm,rn,re,rpf] = await Promise.all([
+    const [rp,rc,rm,rn,re,rpf,ri,rmov] = await Promise.all([
       sb.from('pacientes').select('*').order('id'),
       sb.from('citas').select('*').order('id'),
       sb.from('medicaciones').select('*').order('id'),
       sb.from('notas').select('*').order('id'),
       sb.from('expediente').select('*').order('id'),
-      sb.from('profiles').select('id,nombre,rol,email,icono,clinica_id').eq('clinica_id', currentClinicaId)
+      sb.from('profiles').select('id,nombre,rol,email,icono,clinica_id').eq('clinica_id', currentClinicaId),
+      sb.from('inventario').select('*').eq('clinica_id', currentClinicaId).order('nombre'),
+      sb.from('inventario_movimientos').select('*').eq('clinica_id', currentClinicaId).order('fecha', {ascending:false}).limit(500)
     ]);
     if(rp.error) throw rp.error;
     if(rc.error) throw rc.error;
@@ -1089,6 +1260,8 @@ async function loadAll() {
     C.n = (rn.data||[]).map(fromN);
     C.e = re.error ? [] : (re.data||[]).map(fromE);
     C.prof = rpf.error ? [] : (rpf.data||[]);
+    C.inv = ri.error ? [] : (ri.data||[]).map(fromInv);
+    C.mov = rmov.error ? [] : (rmov.data||[]).map(fromMov);
     setDbStatus(true);
   } catch(e) {
     console.error('Supabase:', e);
@@ -1224,7 +1397,7 @@ async function navigate(view, patientId) {
   if(el) el.classList.add('active');
   const mi=document.querySelector(`.menu-item[onclick*="'${view}'"]`);
   if(mi) mi.classList.add('active');
-  const titles={dashboard:'Dashboard',pacientes:'Pacientes',citas:'Citas',medicaciones:'Medicaciones',notas:'Notas Clínicas',atendidos:'Atendidos por Día',estadisticas:'Estadísticas',configuracion:'Configuración Clínica',exportar:'Exportar / Enviar','paciente-detalle':'Expediente del Paciente',admin:'Administración'};
+  const titles={dashboard:'Dashboard',pacientes:'Pacientes',citas:'Citas',medicaciones:'Medicaciones',notas:'Notas Clínicas',atendidos:'Atendidos por Día',estadisticas:'Estadísticas',configuracion:'Configuración Clínica',exportar:'Exportar / Enviar','paciente-detalle':'Expediente del Paciente',admin:'Administración',inventario:'Inventario'};
   document.getElementById('page-title').textContent = titles[view]||view;
   currentView=view;
   if(patientId) currentPatientId=patientId;
@@ -1251,6 +1424,7 @@ function renderView(v) {
     case 'estadisticas': renderEstadisticas(); break;
     case 'configuracion': renderConfiguracion(); break;
     case 'exportar': renderExportar(); break;
+    case 'inventario': renderInventario(); break;
     case 'paciente-detalle': renderDetalleP(currentPatientId); break;
   }
   updateBadges();
@@ -2698,6 +2872,265 @@ async function doLogout() {
 }
 
 async function cargarUsuariosLogin() { /* reemplazado por login email+password */ }
+
+// ════════════════════ INVENTARIO ════════════════════
+let invTab = 'productos', invCatFiltro = '', invMovTipo = '', repInvTab = 'dia';
+let editingProdId = null;
+
+function renderInventario() {
+  const hoy2 = hoy();
+  const entHoy  = C.mov.filter(m=>m.tipo==='entrada'&&m.fecha===hoy2).reduce((s,m)=>s+m.cantidad,0);
+  const salHoy  = C.mov.filter(m=>m.tipo==='salida' &&m.fecha===hoy2).reduce((s,m)=>s+m.cantidad,0);
+  const bajoStock = C.inv.filter(p=>p.stock<=p.stockMin&&p.stockMin>0).length;
+  const sinStock  = C.inv.filter(p=>p.stock===0).length;
+  const statsEl = document.getElementById('inv-stats-row');
+  if(statsEl) statsEl.innerHTML=`
+    <div class="stat-card"><div class="stat-icon si-blue">📦</div><div class="stat-info"><h3>${C.inv.length}</h3><p>Productos</p></div></div>
+    <div class="stat-card"><div class="stat-icon si-green">📥</div><div class="stat-info"><h3>${entHoy}</h3><p>Unidades entrada hoy</p></div></div>
+    <div class="stat-card"><div class="stat-icon si-orange">📤</div><div class="stat-info"><h3>${salHoy}</h3><p>Unidades salida hoy</p></div></div>
+    <div class="stat-card"><div class="stat-icon" style="background:linear-gradient(135deg,#FEF2F2,#FEE2E2)">⚠️</div><div class="stat-info"><h3>${bajoStock}</h3><p>Bajo stock / sin stock (${sinStock})</p></div></div>`;
+  switchInvTab(invTab);
+}
+
+function switchInvTab(tab) {
+  invTab = tab;
+  ['productos','movimientos','reportes'].forEach(t=>{
+    document.getElementById('inv-panel-'+t).style.display = t===tab?'block':'none';
+    document.getElementById('tab-inv-'+t).classList.toggle('active',t===tab);
+  });
+  if(tab==='productos')   renderProductos();
+  if(tab==='movimientos') renderMovimientos();
+  if(tab==='reportes')    renderReportesInv();
+}
+
+function renderProductos(filtro) {
+  const search = filtro !== undefined ? filtro : (document.getElementById('inv-search')?.value||'');
+  const tbody = document.getElementById('tabla-inventario');
+  const empty = document.getElementById('inv-empty');
+  let items = C.inv;
+  if(invCatFiltro) items = items.filter(p=>p.categoria===invCatFiltro);
+  if(search) { const q=search.toLowerCase(); items=items.filter(p=>p.nombre.toLowerCase().includes(q)||(p.descripcion||'').toLowerCase().includes(q)); }
+  if(!items.length){ tbody.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+  const catIcon = c=>({medicamento:'💊',material:'🩺',equipo:'🔬',insumo:'🧹',papeleria:'📄',general:'📦'}[c]||'📦');
+  tbody.innerHTML = items.map(p=>{
+    const stCls = p.stock===0?'inv-stock-out':p.stockMin>0&&p.stock<=p.stockMin?'inv-stock-low':'inv-stock-ok';
+    const stLbl = p.stock===0?'Sin stock':p.stockMin>0&&p.stock<=p.stockMin?'Stock bajo':'OK';
+    return `<tr>
+      <td><strong>${p.nombre}</strong>${p.descripcion?`<div style="font-size:11px;color:var(--text-light)">${p.descripcion}</div>`:''}</td>
+      <td>${catIcon(p.categoria)} ${p.categoria}</td>
+      <td>${p.unidad}</td>
+      <td><span class="${stCls}">${p.stock}</span></td>
+      <td style="color:var(--text-light)">${p.stockMin}</td>
+      <td>${p.precio!=null?'C$ '+p.precio.toFixed(2):'—'}</td>
+      <td><span class="tag ${p.stock===0?'tag-red':p.stockMin>0&&p.stock<=p.stockMin?'tag-orange':'tag-green'}">${stLbl}</span></td>
+      <td><div class="actions-cell">
+        <button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff" onclick="openModalEntrada(${p.id})">📥</button>
+        <button class="btn btn-sm btn-danger" onclick="openModalSalida(${p.id})">📤</button>
+        <button class="btn btn-secondary btn-sm" onclick="openModalProducto(${p.id})">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="eliminarProducto(${p.id})">🗑️</button>
+      </div></td></tr>`;
+  }).join('');
+}
+
+function filterInventario(v){ renderProductos(v); }
+function setInvCat(cat,el){ invCatFiltro=cat; document.querySelectorAll('#inv-panel-productos .chip').forEach(c=>c.classList.remove('active')); el.classList.add('active'); renderProductos(); }
+function setMovTipo(tipo,el){ invMovTipo=tipo; document.querySelectorAll('#inv-panel-movimientos .chip').forEach(c=>c.classList.remove('active')); el.classList.add('active'); renderMovimientos(); }
+
+function renderMovimientos() {
+  const fecha = document.getElementById('inv-mov-fecha')?.value||'';
+  const tbody = document.getElementById('tabla-movimientos');
+  const empty = document.getElementById('mov-empty');
+  let movs = [...C.mov];
+  if(fecha) movs = movs.filter(m=>m.fecha===fecha);
+  if(invMovTipo) movs = movs.filter(m=>m.tipo===invMovTipo);
+  if(!movs.length){ tbody.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+  tbody.innerHTML = movs.map(m=>{
+    const prod = C.inv.find(p=>p.id===m.invId);
+    return `<tr>
+      <td>${formatFecha(m.fecha)}</td>
+      <td><strong>${prod?prod.nombre:'—'}</strong>${prod?`<span style="font-size:11px;color:var(--text-light);margin-left:6px">${prod.unidad}</span>`:''}</td>
+      <td><span class="inv-badge-${m.tipo}">${m.tipo==='entrada'?'📥 Entrada':'📤 Salida'}</span></td>
+      <td><strong style="font-size:15px">${m.cantidad}</strong></td>
+      <td style="color:var(--text-light);font-size:12px">${m.motivo||'—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Reportes de inventario ──
+function switchRepTab(tab){
+  repInvTab=tab;
+  ['dia','semana','mes','anual'].forEach(t=>{
+    document.getElementById('tab-rep-'+t).classList.toggle('active',t===tab);
+  });
+  renderReportesInv();
+}
+
+function renderReportesInv(){
+  const el=document.getElementById('rep-inv-content'); if(!el) return;
+  const now=new Date();
+  let movsFiltro=[], titulo='', rangoLabel='';
+
+  if(repInvTab==='dia'){
+    const fecha=hoy();
+    movsFiltro=C.mov.filter(m=>m.fecha===fecha);
+    titulo=`Reporte Diario — ${formatFecha(fecha)}`;
+  } else if(repInvTab==='semana'){
+    const lunes=new Date(now); lunes.setDate(now.getDate()-(now.getDay()||7)+1); lunes.setHours(0,0,0,0);
+    const dom=new Date(lunes); dom.setDate(lunes.getDate()+6);
+    const s=d=>d.toISOString().split('T')[0];
+    movsFiltro=C.mov.filter(m=>m.fecha>=s(lunes)&&m.fecha<=s(dom));
+    titulo=`Reporte Semanal — ${formatFecha(s(lunes))} al ${formatFecha(s(dom))}`;
+  } else if(repInvTab==='mes'){
+    const mes=hoy().slice(0,7);
+    movsFiltro=C.mov.filter(m=>m.fecha.startsWith(mes));
+    titulo=`Reporte Mensual — ${new Date(now.getFullYear(),now.getMonth(),1).toLocaleDateString('es-ES',{month:'long',year:'numeric'})}`;
+  } else {
+    const yr=now.getFullYear().toString();
+    movsFiltro=C.mov.filter(m=>m.fecha.startsWith(yr));
+    titulo=`Reporte Anual — ${yr}`;
+  }
+
+  const entradas=movsFiltro.filter(m=>m.tipo==='entrada');
+  const salidas =movsFiltro.filter(m=>m.tipo==='salida');
+  const totEnt=entradas.reduce((s,m)=>s+m.cantidad,0);
+  const totSal=salidas.reduce((s,m)=>s+m.cantidad,0);
+
+  // Top productos con más movimiento
+  const freq={};
+  movsFiltro.forEach(m=>{ freq[m.invId]=(freq[m.invId]||0)+m.cantidad; });
+  const topProds=Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([id,v])=>{
+    const p=C.inv.find(x=>x.id==id); return {k:p?p.nombre:'#'+id,v};
+  });
+  const maxV=topProds.length?Math.max(...topProds.map(x=>x.v),1):1;
+
+  el.innerHTML=`
+    <h3 style="font-size:14px;font-weight:700;color:var(--text-light);margin-bottom:14px">${titulo}</h3>
+    <div class="stats-grid" style="margin-bottom:18px">
+      <div class="stat-card"><div class="stat-icon si-green">📥</div><div class="stat-info"><h3>${totEnt}</h3><p>Total entradas</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-orange">📤</div><div class="stat-info"><h3>${totSal}</h3><p>Total salidas</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-blue">🔄</div><div class="stat-info"><h3>${movsFiltro.length}</h3><p>Movimientos</p></div></div>
+      <div class="stat-card"><div class="stat-icon" style="background:linear-gradient(135deg,#FEF2F2,#FEE2E2)">⚠️</div><div class="stat-info"><h3>${C.inv.filter(p=>p.stock<=p.stockMin&&p.stockMin>0).length}</h3><p>Bajo stock ahora</p></div></div>
+    </div>
+    ${topProds.length?`<div class="card" style="margin-bottom:14px">
+      <div class="card-header"><h3>🏆 Productos con más movimiento</h3></div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${topProds.map(d=>`<div style="display:flex;align-items:center;gap:10px">
+          <div style="min-width:160px;font-size:12px;font-weight:600;color:var(--text-light);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.k}</div>
+          <div style="flex:1;background:var(--bg);border-radius:8px;height:26px;overflow:hidden">
+            <div style="height:100%;width:${Math.round(d.v/maxV*100)}%;background:linear-gradient(90deg,var(--primary),var(--accent));border-radius:8px;display:flex;align-items:center;padding-left:8px;min-width:${d.v?'24px':'0'}">
+              ${d.v?`<span style="color:#fff;font-size:11px;font-weight:700">${d.v}</span>`:''}
+            </div>
+          </div>
+          <div style="min-width:28px;font-size:13px;font-weight:800;color:var(--text)">${d.v}</div>
+        </div>`).join('')}
+      </div>
+    </div>`:''}
+    ${!movsFiltro.length?`<div class="empty-state"><div class="empty-icon">📊</div><p>Sin movimientos en este período</p></div>`:''}`;
+}
+
+// ── Modal Producto ──
+function openModalProducto(id){
+  editingProdId=id||null;
+  document.getElementById('modal-producto-title').textContent=id?'✏️ Editar Producto':'📦 Nuevo Producto';
+  if(id){
+    const p=C.inv.find(x=>x.id===id); if(!p) return;
+    document.getElementById('prod-nombre').value=p.nombre;
+    document.getElementById('prod-categoria').value=p.categoria;
+    document.getElementById('prod-unidad').value=p.unidad;
+    document.getElementById('prod-stock').value=p.stock;
+    document.getElementById('prod-stock-min').value=p.stockMin;
+    document.getElementById('prod-precio').value=p.precio!=null?p.precio:'';
+    document.getElementById('prod-descripcion').value=p.descripcion||'';
+  } else {
+    ['prod-nombre','prod-stock','prod-stock-min','prod-precio','prod-descripcion'].forEach(f=>document.getElementById(f).value='');
+    document.getElementById('prod-categoria').value='medicamento';
+    document.getElementById('prod-unidad').value='unidad';
+  }
+  document.getElementById('modal-producto').classList.add('open');
+}
+
+async function guardarProducto(){
+  const nombre=document.getElementById('prod-nombre').value.trim();
+  if(!nombre){ toast('El nombre es obligatorio','error'); return; }
+  const obj=toInv({
+    nombre, categoria:document.getElementById('prod-categoria').value,
+    unidad:document.getElementById('prod-unidad').value,
+    stock:document.getElementById('prod-stock').value||0,
+    stockMin:document.getElementById('prod-stock-min').value||0,
+    precio:document.getElementById('prod-precio').value||null,
+    descripcion:document.getElementById('prod-descripcion').value||null
+  });
+  setLoading(true);
+  if(editingProdId){
+    const{error}=await sb.from('inventario').update(obj).eq('id',editingProdId);
+    if(error){ toast('Error: '+error.message,'error'); setLoading(false); return; }
+    toast('Producto actualizado');
+  } else {
+    const{error}=await sb.from('inventario').insert(obj);
+    if(error){ toast('Error: '+error.message,'error'); setLoading(false); return; }
+    toast('Producto agregado ✅');
+  }
+  closeModal('modal-producto');
+  await loadAll(); renderInventario(); setLoading(false);
+}
+
+async function eliminarProducto(id){
+  const p=C.inv.find(x=>x.id===id);
+  if(!confirm(`¿Eliminar "${p?.nombre}"? También se eliminarán sus movimientos.`)) return;
+  setLoading(true);
+  const{error}=await sb.from('inventario').delete().eq('id',id);
+  if(error){ toast('Error: '+error.message,'error'); setLoading(false); return; }
+  toast('Producto eliminado');
+  await loadAll(); renderInventario(); setLoading(false);
+}
+
+// ── Modales Entrada / Salida ──
+function fillProdSelect(selId, selectedId){
+  const sel=document.getElementById(selId);
+  sel.innerHTML='<option value="">Seleccionar producto...</option>'+
+    C.inv.map(p=>`<option value="${p.id}" ${p.id===selectedId?'selected':''}>${p.nombre} (stock: ${p.stock} ${p.unidad})</option>`).join('');
+}
+
+function openModalEntrada(prodId){
+  fillProdSelect('ent-producto', prodId);
+  document.getElementById('ent-cantidad').value='';
+  document.getElementById('ent-fecha').value=hoy();
+  document.getElementById('ent-motivo').value='';
+  document.getElementById('modal-entrada').classList.add('open');
+}
+
+function openModalSalida(prodId){
+  fillProdSelect('sal-producto', prodId);
+  document.getElementById('sal-cantidad').value='';
+  document.getElementById('sal-fecha').value=hoy();
+  document.getElementById('sal-motivo').value='';
+  document.getElementById('modal-salida').classList.add('open');
+}
+
+async function guardarMovimiento(tipo){
+  const prefix=tipo==='entrada'?'ent':'sal';
+  const invId=parseInt(document.getElementById(prefix+'-producto').value);
+  const cantidad=Number(document.getElementById(prefix+'-cantidad').value);
+  const fecha=document.getElementById(prefix+'-fecha').value||hoy();
+  const motivo=document.getElementById(prefix+'-motivo').value.trim();
+  if(!invId||!cantidad||cantidad<=0){ toast('Selecciona un producto y cantidad válida','error'); return; }
+  const prod=C.inv.find(p=>p.id===invId);
+  if(tipo==='salida'&&prod&&cantidad>prod.stock){
+    if(!confirm(`Stock actual: ${prod.stock} ${prod.unidad}. ¿Registrar salida de ${cantidad} de todas formas?`)) return;
+  }
+  setLoading(true);
+  const nuevoStock=(prod?.stock||0)+(tipo==='entrada'?cantidad:-cantidad);
+  const[{error:e1},{error:e2}]=await Promise.all([
+    sb.from('inventario_movimientos').insert({inventario_id:invId,clinica_id:currentClinicaId,tipo,cantidad,motivo:motivo||null,fecha}),
+    sb.from('inventario').update({stock_actual:Math.max(0,nuevoStock)}).eq('id',invId)
+  ]);
+  if(e1||e2){ toast('Error al registrar movimiento','error'); setLoading(false); return; }
+  toast(tipo==='entrada'?'Entrada registrada 📥':'Salida registrada 📤');
+  closeModal('modal-'+tipo);
+  await loadAll(); renderInventario(); setLoading(false);
+}
 
 // ════════════════════ DIAGNÓSTICOS SUGERIDOS ════════════════════
 const DX_MAP = {
