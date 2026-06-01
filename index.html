@@ -1015,6 +1015,87 @@ body.dark .inv-badge-salida{background:rgba(239,68,68,.15);color:#FCA5A5}
   </div>
 </div>
 
+<!-- MODAL EXAMEN VISUAL (Óptica) -->
+<div class="modal-overlay" id="modal-examen-visual">
+  <div class="modal modal-lg">
+    <h2>👁️ Examen Visual</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:16px">
+      <!-- OD -->
+      <div style="background:var(--bg);border-radius:12px;padding:16px;border:1.5px solid var(--border)">
+        <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--primary);margin-bottom:12px">👁 OD — Ojo Derecho</div>
+        <div class="form-grid">
+          <div class="form-group"><label>AV sin corrección</label><input type="text" id="ev-av-sc-od" placeholder="20/20"></div>
+          <div class="form-group"><label>AV con corrección</label><input type="text" id="ev-av-cc-od" placeholder="20/20"></div>
+          <div class="form-group"><label>Esfera (Sph)</label><input type="number" id="ev-esf-od" placeholder="-0.00" step="0.25"></div>
+          <div class="form-group"><label>Cilindro (Cyl)</label><input type="number" id="ev-cil-od" placeholder="-0.00" step="0.25"></div>
+          <div class="form-group"><label>Eje (Axis) °</label><input type="number" id="ev-eje-od" placeholder="0" min="0" max="180"></div>
+          <div class="form-group"><label>Adición (Add)</label><input type="number" id="ev-add-od" placeholder="+0.00" step="0.25"></div>
+          <div class="form-group full"><label>PIO (mmHg)</label><input type="number" id="ev-pio-od" placeholder="14" step="0.5"></div>
+        </div>
+      </div>
+      <!-- OI -->
+      <div style="background:var(--bg);border-radius:12px;padding:16px;border:1.5px solid var(--border)">
+        <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--accent);margin-bottom:12px">👁 OI — Ojo Izquierdo</div>
+        <div class="form-grid">
+          <div class="form-group"><label>AV sin corrección</label><input type="text" id="ev-av-sc-oi" placeholder="20/20"></div>
+          <div class="form-group"><label>AV con corrección</label><input type="text" id="ev-av-cc-oi" placeholder="20/20"></div>
+          <div class="form-group"><label>Esfera (Sph)</label><input type="number" id="ev-esf-oi" placeholder="-0.00" step="0.25"></div>
+          <div class="form-group"><label>Cilindro (Cyl)</label><input type="number" id="ev-cil-oi" placeholder="-0.00" step="0.25"></div>
+          <div class="form-group"><label>Eje (Axis) °</label><input type="number" id="ev-eje-oi" placeholder="0" min="0" max="180"></div>
+          <div class="form-group"><label>Adición (Add)</label><input type="number" id="ev-add-oi" placeholder="+0.00" step="0.25"></div>
+          <div class="form-group full"><label>PIO (mmHg)</label><input type="number" id="ev-pio-oi" placeholder="14" step="0.5"></div>
+        </div>
+      </div>
+    </div>
+    <div class="form-grid">
+      <div class="form-group"><label>DIP Visión Lejana (mm)</label><input type="number" id="ev-dip-vl" placeholder="62" step="0.5"></div>
+      <div class="form-group"><label>DIP Visión Próxima (mm)</label><input type="number" id="ev-dip-vp" placeholder="59" step="0.5"></div>
+      <div class="form-group"><label>Cover Test</label>
+        <select id="ev-cover">
+          <option value="">—</option>
+          <option value="Ortoforia">Ortoforia</option>
+          <option value="Esoforia">Esoforia</option>
+          <option value="Exoforia">Exoforia</option>
+          <option value="Hiperforia OD">Hiperforia OD</option>
+          <option value="Hiperforia OI">Hiperforia OI</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Dominancia ocular</label>
+        <select id="ev-dominancia">
+          <option value="">—</option>
+          <option value="OD">OD (Ojo Derecho)</option>
+          <option value="OI">OI (Ojo Izquierdo)</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Visión de colores</label>
+        <select id="ev-colores">
+          <option value="">—</option>
+          <option value="Normal">Normal</option>
+          <option value="Daltonismo parcial">Daltonismo parcial</option>
+          <option value="Daltonismo total">Daltonismo total</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Corrección recomendada</label>
+        <select id="ev-correccion">
+          <option value="Ninguna">Ninguna</option>
+          <option value="Lentes de armazón">Lentes de armazón</option>
+          <option value="Lentes de contacto blandos">Lentes de contacto blandos</option>
+          <option value="Lentes de contacto rígidos">Lentes de contacto rígidos</option>
+          <option value="Lentes bifocales">Lentes bifocales</option>
+          <option value="Lentes progresivos">Lentes progresivos</option>
+          <option value="Cirugía refractiva">Cirugía refractiva</option>
+        </select>
+      </div>
+      <div class="form-group full"><label>Observaciones / Diagnóstico</label><textarea id="ev-observaciones" placeholder="Hallazgos, recomendaciones, próximo control..." style="min-height:80px"></textarea></div>
+    </div>
+    <input type="hidden" id="ev-paciente-id">
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-examen-visual')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarExamenVisual()">💾 Guardar Examen</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL CLÍNICA (Admin) -->
 <div class="modal-overlay" id="modal-clinica">
   <div class="modal" style="max-width:480px">
@@ -1023,6 +1104,14 @@ body.dark .inv-badge-salida{background:rgba(239,68,68,.15);color:#FCA5A5}
       <div class="form-group"><label>Nombre de la Clínica *</label><input type="text" id="cl-nombre" placeholder="Clínica Galeano"></div>
       <div class="form-group"><label>Código único *</label><input type="text" id="cl-codigo" placeholder="clinica-galeano" oninput="this.value=this.value.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')">
         <span style="font-size:11px;color:var(--text-light)">Solo letras minúsculas, números y guiones. Ej: clinica-galeano</span>
+      </div>
+      <div class="form-group"><label>Tipo de establecimiento</label>
+        <select id="cl-tipo">
+          <option value="clinica">🏥 Clínica General</option>
+          <option value="optica">👁️ Óptica / Optometría</option>
+          <option value="dental">🦷 Clínica Dental</option>
+          <option value="especialidad">🩺 Clínica de Especialidad</option>
+        </select>
       </div>
       <div class="form-group"><label>Estado</label>
         <select id="cl-activa"><option value="true">Activa</option><option value="false">Inactiva</option></select>
@@ -1199,7 +1288,7 @@ body.dark .inv-badge-salida{background:rgba(239,68,68,.15);color:#FCA5A5}
     <h2 id="modal-nota-title">📝 Nueva Nota Clínica</h2>
     <div class="form-grid cols-1">
       <div class="form-group"><label>Paciente *</label><select id="n-paciente"><option value="">Seleccionar paciente...</option></select></div>
-      <div class="form-group"><label>Tipo de Nota</label><select id="n-tipo"><option value="evolucion">Evolución</option><option value="diagnostico">Diagnóstico</option><option value="tratamiento">Tratamiento</option><option value="laboratorio">Laboratorio</option><option value="imagen">Imagen / Radiología</option><option value="cirugia">Cirugía</option><option value="alta">Alta médica</option><option value="otro">Otro</option></select></div>
+      <div class="form-group"><label>Tipo de Nota</label><select id="n-tipo"><option value="evolucion">Evolución</option><option value="diagnostico">Diagnóstico</option><option value="tratamiento">Tratamiento</option><option value="laboratorio">Laboratorio</option><option value="imagen">Imagen / Radiología</option><option value="cirugia">Cirugía</option><option value="alta">Alta médica</option><option value="examen_visual">👁️ Examen Visual</option><option value="otro">Otro</option></select></div>
       <div class="form-group"><label>Fecha</label><input type="date" id="n-fecha"></div>
       <div class="form-group"><label>Título</label><input type="text" id="n-titulo" placeholder="Breve título de la nota"></div>
       <div class="form-group"><label>Nota Clínica *</label><textarea id="n-contenido" placeholder="Descripción detallada, hallazgos, diagnóstico..." style="min-height:130px"></textarea></div>
@@ -1361,6 +1450,8 @@ async function entrarConPerfil(profile) {
   document.getElementById('sf-avatar').textContent = currentUser.avatar;
   toggleAdminMenu();
   setLoading(true);
+  const {data:clData} = await sb.from('clinicas').select('*').eq('id',currentClinicaId).single();
+  currentClinica = clData || null;
   await loadAll();
   setLoading(false);
   navigate('dashboard');
@@ -1734,7 +1825,12 @@ function renderDetalleP(pid){
   const imc=(exp.peso&&exp.talla)?(exp.peso/((exp.talla/100)**2)).toFixed(1):null;
   document.getElementById('tab-expediente').innerHTML=`
   <div class="card">
-    <div class="card-header"><h3>📁 Expediente Médico</h3><button class="btn btn-primary btn-sm" onclick="guardarExpediente(${pid})">💾 Guardar</button></div>
+    <div class="card-header"><h3>📁 Expediente Médico</h3>
+      <div style="display:flex;gap:8px">
+        ${currentClinica?.tipo==='optica'?`<button class="btn btn-secondary btn-sm" onclick="abrirExamenVisual(${pid})">👁️ Examen Visual</button>`:''}
+        <button class="btn btn-primary btn-sm" onclick="guardarExpediente(${pid})">💾 Guardar</button>
+      </div>
+    </div>
 
     <div class="exp-section">
       <div class="exp-section-title">⚡ Signos Vitales</div>
@@ -1930,12 +2026,22 @@ async function marcarCitaCompletada(id){
   atendidosFecha=c.fecha;
   toast(`Cita de ${nombre} marcada como completada ✅`,'success');
   await loadAll(); renderView(currentView); updateBadges();
-  const t=document.createElement('div');
-  t.className='toast info'; t.style.cursor='pointer';
-  t.innerHTML='📊 Ver en Atendidos por Día →';
-  t.onclick=()=>{ t.remove(); navigate('atendidos'); };
-  document.getElementById('toasts').appendChild(t);
-  setTimeout(()=>t.remove(),5000);
+  // Abrir nota de evolución automáticamente
+  setTimeout(() => abrirNotaEvolucion(c.pacienteId, c), 400);
+}
+
+function abrirNotaEvolucion(pacienteId, cita) {
+  editingId = null;
+  document.getElementById('modal-nota-title').textContent = '📝 Nota de Evolución';
+  fillSelect('n-paciente');
+  document.getElementById('n-paciente').value = pacienteId;
+  document.getElementById('n-tipo').value = 'evolucion';
+  document.getElementById('n-fecha').value = hoy();
+  document.getElementById('n-titulo').value = `Consulta ${formatFecha(hoy())}`;
+  const motivo = cita?.motivo ? `Motivo de consulta: ${cita.motivo}\n\n` : '';
+  document.getElementById('n-contenido').value = motivo;
+  document.getElementById('modal-nota').classList.add('open');
+  setTimeout(() => document.getElementById('n-contenido').focus(), 150);
 }
 
 // ════════════════════ MEDICACIONES ════════════════════
@@ -3839,6 +3945,71 @@ function renderTimeline(desde) {
   </div>`;
 }
 
+// ── Examen Visual (Óptica) ──
+function abrirExamenVisual(pacienteId) {
+  document.getElementById('ev-paciente-id').value = pacienteId;
+  ['ev-av-sc-od','ev-av-sc-oi','ev-av-cc-od','ev-av-cc-oi','ev-esf-od','ev-esf-oi',
+   'ev-cil-od','ev-cil-oi','ev-eje-od','ev-eje-oi','ev-add-od','ev-add-oi',
+   'ev-pio-od','ev-pio-oi','ev-dip-vl','ev-dip-vp','ev-observaciones'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('ev-cover').value = '';
+  document.getElementById('ev-dominancia').value = '';
+  document.getElementById('ev-colores').value = '';
+  document.getElementById('ev-correccion').value = 'Ninguna';
+  document.getElementById('modal-examen-visual').classList.add('open');
+}
+
+async function guardarExamenVisual() {
+  const pid = document.getElementById('ev-paciente-id').value;
+  if(!pid){ toast('Error: paciente no encontrado','error'); return; }
+  const g = id => document.getElementById(id).value.trim();
+  const linea = (lbl, val) => val ? `${lbl}: ${val}` : '';
+  const contenido = [
+    '══════════════════════════════',
+    '       EXAMEN VISUAL COMPLETO',
+    '══════════════════════════════',
+    '',
+    '▸ AGUDEZA VISUAL',
+    `  Sin corrección:  OD: ${g('ev-av-sc-od')||'—'}    OI: ${g('ev-av-sc-oi')||'—'}`,
+    `  Con corrección:  OD: ${g('ev-av-cc-od')||'—'}    OI: ${g('ev-av-cc-oi')||'—'}`,
+    '',
+    '▸ REFRACCIÓN',
+    `  OD — Esfera: ${g('ev-esf-od')||'—'}  Cilindro: ${g('ev-cil-od')||'—'}  Eje: ${g('ev-eje-od')||'—'}°`,
+    `  OI — Esfera: ${g('ev-esf-oi')||'—'}  Cilindro: ${g('ev-cil-oi')||'—'}  Eje: ${g('ev-eje-oi')||'—'}°`,
+    g('ev-add-od')||g('ev-add-oi') ? `  Adición — OD: ${g('ev-add-od')||'—'}  OI: ${g('ev-add-oi')||'—'}` : '',
+    '',
+    '▸ PRESIÓN INTRAOCULAR (PIO)',
+    `  OD: ${g('ev-pio-od')||'—'} mmHg    OI: ${g('ev-pio-oi')||'—'} mmHg`,
+    '',
+    '▸ DISTANCIA INTERPUPILAR (DIP)',
+    `  Visión lejana: ${g('ev-dip-vl')||'—'} mm    Visión próxima: ${g('ev-dip-vp')||'—'} mm`,
+    '',
+    '▸ OTROS',
+    linea('  Cover test', g('ev-cover')),
+    linea('  Dominancia ocular', g('ev-dominancia')),
+    linea('  Visión de colores', g('ev-colores')),
+    linea('  Corrección recomendada', g('ev-correccion')),
+    g('ev-observaciones') ? `\n▸ OBSERVACIONES\n  ${g('ev-observaciones')}` : '',
+  ].filter(l => l !== '').join('\n');
+
+  setLoading(true);
+  const {error} = await sb.from('notas').insert([toN({
+    pacienteId: Number(pid),
+    tipo: 'examen_visual',
+    fecha: hoy(),
+    titulo: `Examen Visual — ${formatFecha(hoy())}`,
+    contenido
+  })]);
+  setLoading(false);
+  if(error){ toast('Error al guardar: '+error.message,'error'); return; }
+  toast('Examen visual guardado ✅','success');
+  closeModal('modal-examen-visual');
+  await loadAll();
+  if(currentView==='paciente-detalle') renderDetalleP(currentPatientId);
+  logActivity('nota');
+}
+
 // ── logActivity ──
 async function logActivity(accion) {
   if(!currentUser||!currentClinicaId) return;
@@ -3856,6 +4027,7 @@ function openModalClinica() {
   document.getElementById('modal-clinica-title').textContent = '🏥 Nueva Clínica';
   document.getElementById('cl-nombre').value = '';
   document.getElementById('cl-codigo').value = '';
+  document.getElementById('cl-tipo').value = 'clinica';
   document.getElementById('cl-activa').value = 'true';
   editingClinicaId = null;
   document.getElementById('modal-clinica').classList.add('open');
@@ -3867,6 +4039,7 @@ function openModalClinicaEdit(id) {
   document.getElementById('modal-clinica-title').textContent = '✏️ Editar Clínica';
   document.getElementById('cl-nombre').value = c.nombre;
   document.getElementById('cl-codigo').value = c.codigo;
+  document.getElementById('cl-tipo').value = c.tipo||'clinica';
   document.getElementById('cl-activa').value = String(c.activa);
   editingClinicaId = id;
   document.getElementById('modal-clinica').classList.add('open');
@@ -3875,15 +4048,16 @@ function openModalClinicaEdit(id) {
 async function guardarClinica() {
   const nombre = document.getElementById('cl-nombre').value.trim();
   const codigo = document.getElementById('cl-codigo').value.trim();
+  const tipo   = document.getElementById('cl-tipo').value;
   const activa = document.getElementById('cl-activa').value === 'true';
   if(!nombre||!codigo){ toast('Nombre y código son obligatorios','error'); return; }
   setLoading(true);
   if(editingClinicaId) {
-    const {error} = await sb.from('clinicas').update({nombre,codigo,activa}).eq('id',editingClinicaId);
+    const {error} = await sb.from('clinicas').update({nombre,codigo,tipo,activa}).eq('id',editingClinicaId);
     if(error){ toast('Error al actualizar: '+error.message,'error'); setLoading(false); return; }
     toast('Clínica actualizada','success');
   } else {
-    const {error} = await sb.from('clinicas').insert({nombre,codigo,activa});
+    const {error} = await sb.from('clinicas').insert({nombre,codigo,tipo,activa});
     if(error){ toast('Error al crear: '+error.message,'error'); setLoading(false); return; }
     toast('Clínica creada exitosamente','success');
   }
