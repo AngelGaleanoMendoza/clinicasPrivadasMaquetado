@@ -571,7 +571,10 @@ body.dark .inv-badge-salida{background:rgba(239,68,68,.15);color:#FCA5A5}
           <div class="card">
             <div class="card-header">
               <h3>📅 Pacientes del día</h3>
-              <button class="btn btn-primary btn-sm" onclick="navigate('citas')">Ver citas</button>
+              <div style="display:flex;gap:6px">
+                <button class="btn btn-secondary btn-sm" onclick="openModalPaciente();document.querySelector('#modal-paciente .modal-footer .btn-primary').textContent='📋 Guardar y abrir expediente'" title="Registrar paciente nuevo y abrir su expediente">🚶 Nuevo paciente</button>
+                <button class="btn btn-primary btn-sm" onclick="navigate('citas')">Ver citas</button>
+              </div>
             </div>
             <div id="agenda-hoy"></div>
           </div>
@@ -687,6 +690,7 @@ body.dark .inv-badge-salida{background:rgba(239,68,68,.15);color:#FCA5A5}
           <div class="card-header">
             <h3>📊 Pacientes Atendidos por Día</h3>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <button class="btn btn-secondary btn-sm" onclick="openModalPaciente()" title="Registrar paciente que llegó sin cita previa">🚶 Nuevo paciente</button>
               <input type="date" id="atendidos-fecha-picker" onchange="renderAtendidos(this.value)" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;outline:none;cursor:pointer;color:var(--text);background:var(--card)">
               <button class="btn btn-secondary btn-sm" onclick="renderAtendidos(hoy())">Hoy</button>
             </div>
@@ -1126,7 +1130,8 @@ body.dark .inv-badge-salida{background:rgba(239,68,68,.15);color:#FCA5A5}
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-paciente')">Cancelar</button>
-      <button class="btn btn-primary" onclick="guardarPaciente()">💾 Guardar Paciente</button>
+      <button class="btn btn-secondary" onclick="guardarPaciente(false)">💾 Guardar</button>
+      <button class="btn btn-primary" onclick="guardarPaciente(true)">📋 Guardar y abrir expediente</button>
     </div>
   </div>
 </div>
@@ -1632,7 +1637,7 @@ function openModalPaciente(id){
   document.getElementById('modal-paciente').classList.add('open');
 }
 
-async function guardarPaciente(){
+async function guardarPaciente(irExpediente=false){
   const nombre=document.getElementById('p-nombre').value.trim();
   const apellidos=document.getElementById('p-apellidos').value.trim();
   if(!nombre||!apellidos){ toast('Nombre y apellidos son obligatorios','error'); return; }
@@ -1651,6 +1656,7 @@ async function guardarPaciente(){
   if(!editingId) logActivity('paciente');
   closeModal('modal-paciente');
   await loadAll(); renderPacientes(); updateBadges();
+  if(irExpediente && savedId) navigate('paciente-detalle', savedId);
 }
 
 async function eliminarPaciente(id){
@@ -1721,7 +1727,7 @@ function renderDetalleP(pid){
 
   document.getElementById('tab-notas-p').innerHTML=`<div class="card">
     <div class="card-header"><h3>📝 Notas Clínicas</h3><button class="btn btn-primary btn-sm" onclick="openModalNotaP(${p.id})">+ Nueva</button></div>
-    ${notas.length?`<div class="timeline">${notas.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(n=>`<div class="timeline-item"><div class="timeline-date">${formatFecha(n.fecha)} · <span class="tag tag-blue" style="font-size:10px">${n.tipo}</span></div><div class="timeline-content">${n.titulo?`<strong style="display:block;margin-bottom:5px">${n.titulo}</strong>`:''}<p style="white-space:pre-wrap;line-height:1.7">${n.contenido}</p><div style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-secondary btn-sm" onclick="verNota(${n.id})">👁️ Ver</button><button class="btn btn-danger btn-sm" onclick="eliminarNota(${n.id})">🗑️</button></div></div></div>`).join('')}</div>`:'<div class="empty-state"><div class="empty-icon">📝</div><p>Sin notas</p></div>'}
+    ${notas.length?`<div class="timeline">${notas.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(n=>`<div class="timeline-item"><div class="timeline-date">${formatFecha(n.fecha)} · <span class="tag tag-blue" style="font-size:10px">${n.tipo}</span></div><div class="timeline-content">${n.titulo?`<strong style="display:block;margin-bottom:5px">${n.titulo}</strong>`:''}<p style="white-space:pre-wrap;line-height:1.7">${n.contenido}</p><div style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-secondary btn-sm" onclick="verNota(${n.id})">👁️ Ver</button><button class="btn btn-secondary btn-sm" onclick="openModalNota(${n.id})">✏️ Editar</button><button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})">🖨️</button><button class="btn btn-danger btn-sm" onclick="eliminarNota(${n.id})">🗑️</button></div></div></div>`).join('')}</div>`:'<div class="empty-state"><div class="empty-icon">📝</div><p>Sin notas</p></div>'}
   </div>`;
 
   const exp=C.e.find(x=>x.pacienteId===pid)||{};
@@ -2003,6 +2009,7 @@ function renderNotas(){
       <td><div class="actions-cell">
         <button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})">🖨️</button>
         <button class="btn btn-secondary btn-sm" onclick="verNota(${n.id})">👁️</button>
+        <button class="btn btn-secondary btn-sm" onclick="openModalNota(${n.id})">✏️</button>
         <button class="btn btn-danger btn-sm" onclick="eliminarNota(${n.id})">🗑️</button>
       </div></td></tr>`;
   }).join('');
