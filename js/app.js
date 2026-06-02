@@ -82,18 +82,24 @@ async function verificarLogin() {
     return;
   }
   setLoading(true);
-  const { data, error } = await sb.from('profiles')
-    .select('*').eq('email', email).eq('password', password).maybeSingle();
-  setLoading(false);
-  if(error || !data) {
-    shakeLogin();
-    errEl.textContent = 'Email o contraseña incorrectos';
-    errEl.style.display = 'block';
-    document.getElementById('login-password').value = '';
-    return;
+
+  // — Intento 1: Supabase Auth (usuarios migrados) —
+  const { data: authData, error: authError } = await sb.auth.signInWithPassword({ email, password });
+  if(authData?.user) {
+    const { data: profile } = await sb.from('profiles').select('*').eq('id', authData.user.id).single();
+    if(profile) { await entrarConPerfil(profile); return; }
+    await sb.auth.signOut();
   }
-  sessionStorage.setItem('lm_user', JSON.stringify(data));
-  await entrarConPerfil(data);
+
+  // — Intento 2: fallback legacy (usuarios aún no migrados) —
+  const { data: legacy } = await sb.from('profiles').select('*').eq('email', email).eq('password', password).maybeSingle();
+  if(legacy) { await entrarConPerfil(legacy); return; }
+
+  setLoading(false);
+  shakeLogin();
+  errEl.textContent = 'Email o contraseña incorrectos';
+  errEl.style.display = 'block';
+  document.getElementById('login-password').value = '';
 }
 
 async function entrarConPerfil(profile) {
@@ -129,6 +135,7 @@ async function checkSession() {}
 async function doLogout() {
   const ok = await customConfirm({icon:'👋',title:'¿Cerrar sesión?',msg:`Vas a salir de la sesión de <strong>${currentUser?.nombre||'usuario'}</strong>`,okText:'Cerrar sesión',cancelText:'Quedarse',danger:false});
   if(!ok) return;
+  await sb.auth.signOut();
   currentUser = null; currentClinicaId = null;
   const app = document.getElementById('app');
   app.style.transition = 'opacity .3s';
@@ -1895,11 +1902,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.body.classList.add('dark');
     document.getElementById('theme-icon').textContent = '🌙';
   }
-  const saved = sessionStorage.getItem('lm_user');
-  if(saved) {
-    try { await entrarConPerfil(JSON.parse(saved)); }
-    catch(e) { sessionStorage.removeItem('lm_user'); }
-  }
+  // Restaurar sesión — primero via Supabase Auth, luego legacy sessionStorage
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if(session?.user) {
+      const { data: profile } = await sb.from('profiles').select('*').eq('id', session.user.id).single();
+      if(profile) { await entrarConPerfil(profile); return; }
+      await sb.auth.signOut();
+    }
+    // Legacy fallback
+    const saved = sessionStorage.getItem('lm_user');
+    if(saved) await entrarConPerfil(JSON.parse(saved));
+  } catch(e) { sessionStorage.removeItem('lm_user'); }
 });
 
 async function verificarPin() {
@@ -1912,6 +1926,7 @@ async function verificarPin() {
 async function doLogout() {
   const ok=await customConfirm({icon:'👋',title:'¿Cerrar sesión?',msg:`Vas a salir de la sesión de <strong>${currentUser?.nombre||'usuario'}</strong>`,okText:'Cerrar sesión',cancelText:'Quedarse',danger:false});
   if(!ok) return;
+  await sb.auth.signOut();
   sessionStorage.removeItem('lm_user');
   currentUser = null; currentClinicaId = null;
   const app = document.getElementById('app');
@@ -3609,7 +3624,13 @@ async function guardarUsuario() {
     if(error){ toast('Error al actualizar: '+error.message,'error'); setLoading(false); return; }
     toast('Usuario actualizado','success');
   } else {
-    const {error} = await sb.from('profiles').insert({id:crypto.randomUUID(),nombre,email:email||null,rol,icono,clinica_id,password});
+    // Crear en Supabase Auth y restaurar sesión del super admin
+    const { data: { session: adminSess } } = await sb.auth.getSession();
+    const { data: newAuth, error: authErr } = await sb.auth.signUp({ email, password });
+    if(adminSess) await sb.auth.setSession(adminSess);
+    if(authErr){ toast('Error Auth: '+authErr.message,'error'); setLoading(false); return; }
+    const newId = newAuth?.user?.id || crypto.randomUUID();
+    const {error} = await sb.from('profiles').insert({id:newId,nombre,email:email||null,rol,icono,clinica_id,password});
     if(error){ toast('Error al crear: '+error.message,'error'); setLoading(false); return; }
     toast('Usuario creado exitosamente','success');
   }
@@ -3774,6 +3795,82 @@ function descargarPDFInventario() {
     }).join('')}</tbody></table>`:'<p style="color:#94A3B8;text-align:center;padding:16px">Sin movimientos este mes</p>'}`;
 
   pdfAbrir('Control de Inventario — '+nomMes, body, cfg);
+}
+
+// ════════════════════ MIGRACIÓN A SUPABASE AUTH ════════════════════
+async function verificarEstadoAuth() {
+  const { data: profiles } = await sb.from('profiles').select('id,email,nombre,password');
+  if(!profiles) return;
+  const conAuth = profiles.filter(p => !p.password || p.password === '');
+  const sinAuth = profiles.filter(p => p.password && p.password !== '');
+  const badge = document.getElementById('auth-status-badge');
+  const prog  = document.getElementById('migracion-progress');
+  if(sinAuth.length === 0) {
+    if(badge) { badge.textContent = '✅ Migrado'; badge.className = 'tag tag-green'; }
+    if(prog) prog.textContent = `Todos los usuarios (${profiles.length}) usan Supabase Auth.`;
+  } else {
+    if(badge) { badge.textContent = 'Pendiente'; badge.className = 'tag tag-orange'; }
+    if(prog) prog.textContent = `${conAuth.length}/${profiles.length} migrados. ${sinAuth.length} pendiente(s).`;
+  }
+}
+
+async function migrarUsuariosAAuth() {
+  const { data: profiles, error } = await sb.from('profiles').select('*');
+  if(error || !profiles?.length) { toast('No se pudieron cargar los perfiles','error'); return; }
+
+  const pendientes = profiles.filter(p => p.password && p.email);
+  if(!pendientes.length) { toast('Todos los usuarios ya están migrados ✅','success'); return; }
+
+  const ok = await customConfirm({
+    icon: '🔐', title: 'Migrar a Supabase Auth',
+    msg: `Se van a migrar <strong>${pendientes.length} usuario(s)</strong> al sistema de Auth seguro.<br><br>
+          <strong>Antes de continuar:</strong> en Supabase → Authentication → Settings → Email → desactiva <em>"Confirm email"</em>.`,
+    okText: 'Migrar ahora', danger: false
+  });
+  if(!ok) return;
+
+  const log = document.getElementById('migracion-log');
+  const prog = document.getElementById('migracion-progress');
+  if(log) { log.style.display = 'block'; log.innerHTML = ''; }
+
+  const addLog = (msg, ok=true) => {
+    if(log) log.innerHTML += `<div style="color:${ok?'#10B981':'#EF4444'}">${msg}</div>`;
+  };
+
+  let migrados = 0, errores = 0;
+  const { data: { session: adminSess } } = await sb.auth.getSession();
+
+  for(const p of pendientes) {
+    if(prog) prog.textContent = `Migrando ${migrados + errores + 1}/${pendientes.length}...`;
+    const { data: newAuth, error: authErr } = await sb.auth.signUp({ email: p.email, password: p.password });
+    // Restaurar sesión del super admin inmediatamente
+    if(adminSess) await sb.auth.setSession(adminSess);
+
+    if(authErr) {
+      if(authErr.message.includes('already registered')) {
+        addLog(`⚠️ ${p.email} — ya existe en Auth (OK)`);
+        migrados++;
+      } else {
+        addLog(`❌ ${p.email} — ${authErr.message}`, false);
+        errores++;
+      }
+      continue;
+    }
+
+    const newId = newAuth?.user?.id;
+    if(newId && newId !== p.id) {
+      await sb.from('profiles').update({ id: newId, password: null }).eq('id', p.id);
+    } else {
+      await sb.from('profiles').update({ password: null }).eq('id', p.id);
+    }
+    addLog(`✅ ${p.nombre} (${p.email}) — migrado`);
+    migrados++;
+  }
+
+  if(prog) prog.textContent = `Completado: ${migrados} migrados, ${errores} error(es).`;
+  toast(`Migración completada: ${migrados} usuario(s) migrados`, migrados > 0 ? 'success' : 'warning');
+  await loadAdminData();
+  await verificarEstadoAuth();
 }
 
 // ════════════════════ DATE PICKERS ════════════════════

@@ -480,6 +480,24 @@
             <div id="prod-timeline"></div>
           </div>
         </div>
+        <!-- MIGRACIÓN A SUPABASE AUTH -->
+        <div class="card" id="card-migracion" style="margin-top:18px;border:1.5px solid rgba(245,158,11,.3);background:rgba(245,158,11,.04)">
+          <div class="card-header">
+            <h3>🔐 Supabase Auth — Seguridad real</h3>
+            <span id="auth-status-badge" class="tag tag-orange">Pendiente</span>
+          </div>
+          <p style="font-size:13px;color:var(--text-light);margin-bottom:16px;line-height:1.6">
+            Migra todos los usuarios al sistema de autenticación seguro de Supabase.<br>
+            Las contraseñas se cifrarán con <strong>bcrypt</strong> y dejarán de guardarse en texto plano.<br>
+            <strong>Requisito previo:</strong> En Supabase → Authentication → Settings → Email → desactivar <em>"Confirm email"</em>.
+          </p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+            <button class="btn btn-primary" onclick="migrarUsuariosAAuth()">🚀 Migrar usuarios a Supabase Auth</button>
+            <button class="btn btn-secondary" onclick="verificarEstadoAuth()">🔍 Verificar estado</button>
+            <span id="migracion-progress" style="font-size:12px;color:var(--text-light)"></span>
+          </div>
+          <div id="migracion-log" style="margin-top:14px;font-size:12px;font-family:monospace;max-height:140px;overflow-y:auto;background:var(--bg);border-radius:8px;padding:10px;display:none"></div>
+        </div>
       </div>
 
       <!-- EXPORTAR -->
