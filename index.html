@@ -2034,7 +2034,7 @@ function renderDetalleP(pid){
 
   document.getElementById('tab-meds-p').innerHTML=`<div class="card">
     <div class="card-header"><h3>💊 Medicaciones</h3><button class="btn btn-primary btn-sm" onclick="openModalMedP(${p.id})">+ Nueva</button></div>
-    ${meds.length?meds.map(m=>`<div class="med-item"><span style="font-size:22px">💊</span><div class="med-info" style="flex:1"><h4>${m.nombre}</h4><div class="med-dosis">${m.dosis} — ${m.frecuencia} (${m.via})</div><p>${m.inicio?`Del ${formatFecha(m.inicio)} al ${m.fin?formatFecha(m.fin):'indefinido'}`:''}${m.indicaciones?' · '+m.indicaciones:''}</p></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">${estadoTag(m.estado)}<div class="actions-cell"><button class="btn btn-secondary btn-sm" onclick="openModalMedicacion(${m.id})">✏️</button><button class="btn btn-danger btn-sm" onclick="eliminarMedicacion(${m.id})">🗑️</button></div></div></div>`).join(''):'<div class="empty-state"><div class="empty-icon">💊</div><p>Sin medicaciones</p></div>'}
+    ${meds.length?meds.map(m=>`<div class="med-item"><span style="font-size:22px">💊</span><div class="med-info" style="flex:1"><h4>${m.nombre}</h4><div class="med-dosis">${m.dosis} — ${m.frecuencia} (${m.via})</div><p>${m.inicio?`Del ${formatFecha(m.inicio)} al ${m.fin?formatFecha(m.fin):'indefinido'}`:''}${m.indicaciones?' · '+m.indicaciones:''}</p></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">${estadoTag(m.estado)}<div class="actions-cell"><button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirReceta(${m.id})">🖨️</button><button class="btn btn-secondary btn-sm" onclick="openModalMedicacion(${m.id})">✏️</button><button class="btn btn-danger btn-sm" onclick="eliminarMedicacion(${m.id})">🗑️</button></div></div></div>`).join(''):'<div class="empty-state"><div class="empty-icon">💊</div><p>Sin medicaciones</p></div>'}
   </div>`;
 
   document.getElementById('tab-notas-p').innerHTML=`<div class="card">
@@ -2273,7 +2273,7 @@ function renderMedicaciones(){
   tbody.innerHTML=C.m.map(x=>{ const p=C.p.find(q=>q.id===x.pacienteId); return `<tr>
     <td><div class="patient-name-cell"><div class="patient-avatar" style="background:${colAvatar(x.pacienteId||0)};width:28px;height:28px;font-size:10px">${p?ini(p.nombre,p.apellidos):'?'}</div><div>${p?p.nombre+' '+p.apellidos:'Desconocido'}</div></div></td>
     <td><strong>${x.nombre}</strong></td><td>${x.dosis}</td><td>${x.frecuencia}</td><td>${formatFecha(x.inicio)}</td><td>${x.fin?formatFecha(x.fin):'—'}</td><td>${estadoTag(x.estado)}</td>
-    <td><div class="actions-cell"><button class="btn btn-secondary btn-sm" onclick="openModalMedicacion(${x.id})">✏️</button><button class="btn btn-danger btn-sm" onclick="eliminarMedicacion(${x.id})">🗑️</button></div></td></tr>`; }).join('');
+    <td><div class="actions-cell"><button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirReceta(${x.id})">🖨️</button><button class="btn btn-secondary btn-sm" onclick="openModalMedicacion(${x.id})">✏️</button><button class="btn btn-danger btn-sm" onclick="eliminarMedicacion(${x.id})">🗑️</button></div></td></tr>`; }).join('');
 }
 
 function openModalMedicacion(id){
@@ -2439,6 +2439,68 @@ function imprimirNota(id) {
       </div>
     </div>`;
   pdfAbrir(`Nota Clínica — ${n.titulo||n.tipo}`, body, cfg);
+}
+
+// ════════════════════ RECETA ELECTRÓNICA (IMPRESIÓN) ════════════════════
+function imprimirReceta(id) {
+  const m = C.m.find(x => x.id === id); if(!m) return;
+  const p = C.p.find(x => x.id === m.pacienteId);
+  const e = C.e.find(x => x.pacienteId === m.pacienteId);
+  const cfg = getClinicaConfig();
+  const fmtF = f => { if(!f) return '—'; const d=new Date(f+'T12:00:00'); return d.toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'}); };
+
+  const viaLabel = ({oral:'Oral',inyectable:'Inyectable',topica:'Tópica',inhalada:'Inhalada',sublingual:'Sublingual',otra:'Otra'})[m.via||'oral'] || m.via || 'Oral';
+  const estadoEstilo = {activa:'background:#D1FAE5;color:#065F46;border:1px solid #6EE7B7',finalizada:'background:#F1F5F9;color:#475569;border:1px solid #CBD5E1',suspendida:'background:#FEE2E2;color:#B91C1C;border:1px solid #FECACA'}[m.estado||'activa'] || 'background:#F1F5F9;color:#475569;border:1px solid #CBD5E1';
+  const pNombre = p ? p.nombre+' '+p.apellidos : 'Paciente no registrado';
+  const pIni = p ? ini(p.nombre, p.apellidos) : '?';
+  const pEdad = (p && p.fechaNac) ? calcEdad(p.fechaNac) : '';
+  const eSexo = p ? (p.sexo==='M' ? '&#9794; Masculino' : p.sexo==='F' ? '&#9792; Femenino' : (p.sexo||'')) : '';
+  const antecedentes = [
+    (p && p.alergias) ? '<div style="margin-bottom:6px"><strong style="color:#B45309">Alergias:</strong> <span style="color:#78350F">'+p.alergias+'</span></div>' : '',
+    (e && e.enfermedadesCronicas) ? '<div><strong style="color:#B45309">Enfermedades cr&#243;nicas:</strong> <span style="color:#78350F">'+e.enfermedadesCronicas+'</span></div>' : ''
+  ].join('');
+
+  const body = '<div class="badge-tipo" style="background:#059669">&#128138; RECETA ELECTR&#211;NICA</div>'
+    + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px">'
+    +   '<div>'
+    +     '<div style="font-size:19px;font-weight:900;color:#0F172A;margin-bottom:3px">'+m.nombre+'</div>'
+    +     '<div style="font-size:11px;color:#64748B;font-weight:600">Fecha de emisi&#243;n: '+fmtF(hoy())+' &middot; N&deg; RX-'+m.id+'</div>'
+    +   '</div>'
+    +   '<span style="padding:4px 14px;border-radius:20px;font-size:11px;font-weight:700;'+estadoEstilo+'">'+((m.estado||'').toUpperCase())+'</span>'
+    + '</div>'
+    + '<div class="patient-box">'
+    +   '<div class="patient-av">'+pIni+'</div>'
+    +   '<div>'
+    +     '<div class="patient-name">'+pNombre+'</div>'
+    +     '<div class="patient-meta">'
+    +       (p && p.identificacion ? '<span>&#128266; '+p.identificacion+'</span>' : '')
+    +       (pEdad ? '<span>'+pEdad+'</span>' : '')
+    +       (eSexo ? '<span>'+eSexo+'</span>' : '')
+    +       (p && p.telefono ? '<span>&#128222; '+p.telefono+'</span>' : '')
+    +       (e && e.peso ? '<span>'+e.peso+' kg</span>' : '')
+    +     '</div>'
+    +     (p && p.alergias ? '<div style="margin-top:6px;background:#FEF2F2;border:1px solid #FECACA;border-radius:6px;padding:5px 10px;font-size:11px;color:#DC2626;font-weight:600">&#9888; Alergias: '+p.alergias+'</div>' : '')
+    +   '</div>'
+    + '</div>'
+    + '<div class="section-title">&#128138; Prescripci&#243;n</div>'
+    + '<div style="border:2px solid #D1FAE5;border-radius:14px;padding:20px 22px;background:#F0FDF4;margin-bottom:18px">'
+    +   '<div style="font-size:22px;font-weight:900;color:#065F46;margin-bottom:14px">Rx. '+m.nombre+'</div>'
+    +   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 24px">'
+    +     '<div><div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#6B7280;margin-bottom:2px">Dosis</div><div style="font-size:15px;font-weight:700;color:#0F172A">'+m.dosis+'</div></div>'
+    +     '<div><div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#6B7280;margin-bottom:2px">Frecuencia</div><div style="font-size:15px;font-weight:700;color:#0F172A">'+m.frecuencia+'</div></div>'
+    +     '<div><div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#6B7280;margin-bottom:2px">V&#237;a de administraci&#243;n</div><div style="font-size:15px;font-weight:700;color:#0F172A">'+viaLabel+'</div></div>'
+    +     '<div><div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#6B7280;margin-bottom:2px">Duraci&#243;n</div><div style="font-size:13px;font-weight:600;color:#0F172A">'+(m.inicio ? fmtF(m.inicio) : '—')+(m.fin ? ' &rarr; '+fmtF(m.fin) : ' &rarr; Sin fecha de fin')+'</div></div>'
+    +   '</div>'
+    +   (m.indicaciones ? '<div style="margin-top:14px;padding:10px 14px;background:#fff;border-radius:10px;border:1px solid #A7F3D0"><div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#6B7280;margin-bottom:4px">Indicaciones especiales</div><div style="font-size:13px;color:#0F172A;font-style:italic">'+m.indicaciones+'</div></div>' : '')
+    + '</div>'
+    + (antecedentes ? '<div class="section-title">&#9888; Antecedentes relevantes</div><div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;padding:12px 16px;margin-bottom:18px;font-size:12px">'+antecedentes+'</div>' : '')
+    + '<div class="sig-wrap"><div class="sig-box"><div style="height:46px"></div><div class="sig-line"></div>'
+    +   '<div class="sig-name">'+(currentUser && currentUser.name ? currentUser.name : cfg.nombreDoctor || 'M&#233;dico Responsable')+'</div>'
+    +   (cfg.especialidad ? '<div class="sig-role">'+cfg.especialidad+'</div>' : '')
+    +   (cfg.registro ? '<div class="sig-role">Reg. Med. '+cfg.registro+'</div>' : '')
+    + '</div></div>';
+
+  pdfAbrir('Receta Electronica - '+m.nombre, body, cfg);
 }
 
 // ════════════════════ FOTO PACIENTE ════════════════════
