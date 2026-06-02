@@ -84,9 +84,21 @@ async function verificarLogin() {
   setLoading(true);
 
   // — Intento 1: Supabase Auth (usuarios migrados) —
-  const { data: authData, error: authError } = await sb.auth.signInWithPassword({ email, password });
+  const { data: authData } = await sb.auth.signInWithPassword({ email, password });
   if(authData?.user) {
-    const { data: profile } = await sb.from('profiles').select('*').eq('id', authData.user.id).single();
+    // Buscar perfil por ID (migración completa) o por email (migración parcial)
+    let profile = null;
+    const { data: p1 } = await sb.from('profiles').select('*').eq('id', authData.user.id).maybeSingle();
+    if(p1) {
+      profile = p1;
+    } else {
+      const { data: p2 } = await sb.from('profiles').select('*').eq('email', email).maybeSingle();
+      if(p2) {
+        // Sincronizar el ID del perfil con el de Auth
+        await sb.from('profiles').update({ id: authData.user.id }).eq('email', email);
+        profile = { ...p2, id: authData.user.id };
+      }
+    }
     if(profile) { await entrarConPerfil(profile); return; }
     await sb.auth.signOut();
   }
