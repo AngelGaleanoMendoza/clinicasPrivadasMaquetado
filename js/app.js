@@ -3,6 +3,27 @@ const SURL = 'https://ckpskotpdkmojgaqxyht.supabase.co';
 const SKEY = 'sb_publishable_2W-uJNSJSFLMYn5NJShPKw_sRCynIka';
 const sb = supabase.createClient(SURL, SKEY);
 
+// Detectar recovery token lo antes posible
+sb.auth.onAuthStateChange((event) => {
+  if(event === 'PASSWORD_RECOVERY') {
+    document.addEventListener('DOMContentLoaded', () => {
+      const el = document.getElementById('recovery-overlay');
+      if(el) el.style.display = 'flex';
+    }, { once: true });
+    const el = document.getElementById('recovery-overlay');
+    if(el) el.style.display = 'flex';
+  }
+});
+
+// Fallback: detectar hash directamente en la URL
+window.addEventListener('DOMContentLoaded', () => {
+  const hash = new URLSearchParams(window.location.hash.replace('#',''));
+  if(hash.get('type') === 'recovery') {
+    const el = document.getElementById('recovery-overlay');
+    if(el) el.style.display = 'flex';
+  }
+}, { once: true });
+
 // ════════════════════ CACHE LOCAL ════════════════════
 const C = { p:[], c:[], m:[], n:[], e:[], prof:[], inv:[], mov:[] };
 let currentClinicaId = null;
@@ -1914,14 +1935,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.body.classList.add('dark');
     document.getElementById('theme-icon').textContent = '🌙';
   }
-
-  // Detectar token de recuperación de contraseña en la URL
-  sb.auth.onAuthStateChange((event) => {
-    if(event === 'PASSWORD_RECOVERY') {
-      const el = document.getElementById('recovery-overlay');
-      if(el) el.style.display = 'flex';
-    }
-  });
 
   // Restaurar sesión — primero via Supabase Auth, luego legacy sessionStorage
   try {
