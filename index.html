@@ -1210,9 +1210,17 @@ body.dark .inv-badge-salida{background:rgba(239,68,68,.15);color:#FCA5A5}
     <!-- AV sin corrección -->
     <div style="margin-bottom:16px">
       <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--primary);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--primary)">👁️ Agudeza Visual Sin Corrección</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
         <div class="form-group"><label>OD — Ojo Derecho</label><input type="text" id="av-sc-od" placeholder="20/200"></div>
         <div class="form-group"><label>OI — Ojo Izquierdo</label><input type="text" id="av-sc-oi" placeholder="20/200"></div>
+        <div class="form-group"><label>AO — Ambos Ojos</label><input type="text" id="av-sc-ao" placeholder="20/200"></div>
+      </div>
+      <div style="background:var(--bg);border-radius:8px;padding:10px 12px;border:1px solid var(--border)">
+        <div style="font-size:10px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🔵 Agujero Estenopeico</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-group"><label>OD</label><input type="text" id="ae-od" placeholder="20/—"></div>
+          <div class="form-group"><label>OI</label><input type="text" id="ae-oi" placeholder="20/—"></div>
+        </div>
       </div>
     </div>
 
@@ -1261,40 +1269,70 @@ body.dark .inv-badge-salida{background:rgba(239,68,68,.15);color:#FCA5A5}
     <!-- AV con corrección -->
     <div style="margin-bottom:16px">
       <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--primary);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--primary)">✅ Agudeza Visual Con Corrección</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
         <div class="form-group"><label>OD — Ojo Derecho</label><input type="text" id="av-cc-od" placeholder="20/20"></div>
         <div class="form-group"><label>OI — Ojo Izquierdo</label><input type="text" id="av-cc-oi" placeholder="20/20"></div>
+        <div class="form-group"><label>AO — Ambos Ojos</label><input type="text" id="av-cc-ao" placeholder="20/20"></div>
       </div>
+      <div class="form-group"><label>Observaciones</label><input type="text" id="av-cc-obs" placeholder="Observaciones sobre la agudeza con corrección..."></div>
     </div>
 
-    <!-- Reflejos pupilares + Fondo de ojo -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
-      <div>
-        <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--primary);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--primary)">💡 Reflejos Pupilares</div>
-        <div class="form-group" style="margin-bottom:8px"><label>OD</label>
-          <select id="ev-rp-od"><option value="">—</option><option>Normal</option><option>Lento</option><option>Ausente</option><option>Alterado</option></select>
+    <!-- Reflejos pupilares -->
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--primary);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--primary)">💡 Reflejos Pupilares</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px">
+        <div class="form-group"><label>OD</label>
+          <select id="ev-rp-od">
+            <option value="">—</option>
+            <option value="PIRRLA">PIRRLA (normal)</option>
+            <option value="Alterado">Alterado</option>
+            <option value="No se tomó">No se tomó</option>
+          </select>
         </div>
         <div class="form-group"><label>OI</label>
-          <select id="ev-rp-oi"><option value="">—</option><option>Normal</option><option>Lento</option><option>Ausente</option><option>Alterado</option></select>
+          <select id="ev-rp-oi">
+            <option value="">—</option>
+            <option value="PIRRLA">PIRRLA (normal)</option>
+            <option value="Alterado">Alterado</option>
+            <option value="No se tomó">No se tomó</option>
+          </select>
         </div>
       </div>
-      <div>
-        <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--primary);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--primary)">🔎 Fondo de Ojo</div>
-        <div class="form-group" style="margin-bottom:8px"><label>OD</label>
-          <select id="ev-fo-od"><option value="">—</option><option>Normal</option><option>No explorado</option><option>Alterado</option></select>
-        </div>
-        <div class="form-group"><label>OI</label>
-          <select id="ev-fo-oi"><option value="">—</option><option>Normal</option><option>No explorado</option><option>Alterado</option></select>
-        </div>
-      </div>
+      <div class="form-group"><label>Observaciones</label><input type="text" id="ev-rp-obs" placeholder="Observaciones sobre reflejos pupilares..."></div>
     </div>
 
-    <!-- Diagnóstico y Recomendaciones -->
+    <!-- Fondo de ojo -->
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--primary);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--primary)">🔎 Fondo de Ojo</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px">
+        <div class="form-group"><label>OD</label>
+          <select id="ev-fo-od">
+            <option value="">—</option>
+            <option value="Normal">Normal</option>
+            <option value="Alterado">Alterado</option>
+            <option value="No se tomó">No se tomó</option>
+          </select>
+        </div>
+        <div class="form-group"><label>OI</label>
+          <select id="ev-fo-oi">
+            <option value="">—</option>
+            <option value="Normal">Normal</option>
+            <option value="Alterado">Alterado</option>
+            <option value="No se tomó">No se tomó</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group"><label>Observaciones</label><input type="text" id="ev-fo-obs" placeholder="Observaciones sobre fondo de ojo..."></div>
+    </div>
+
+    <!-- Diagnóstico y Prescripción -->
     <div style="margin-bottom:4px">
-      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--primary);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--primary)">📋 Diagnóstico y Recomendaciones</div>
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--primary);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--primary)">📋 Diagnóstico y Prescripción</div>
       <div class="form-grid cols-1">
-        <div class="form-group"><label>Diagnóstico</label><textarea id="ev-diagnostico" placeholder="Ej: Miopía bilateral, Astigmatismo OD, Presbicia..." style="min-height:70px"></textarea></div>
-        <div class="form-group"><label>Corrección recomendada</label>
+        <div class="form-group"><label>Diagnóstico</label><textarea id="ev-diagnostico" placeholder="Ej: Miopía bilateral, Astigmatismo OD, Presbicia..." style="min-height:65px"></textarea></div>
+
+        <!-- Corrección recomendada -->
+        <div class="form-group"><label>Tipo de corrección recomendada</label>
           <select id="ev-correccion">
             <option value="Ninguna por ahora">Ninguna por ahora</option>
             <option value="Lentes de armazón (monofocales)">Lentes de armazón (monofocales)</option>
@@ -1305,7 +1343,33 @@ body.dark .inv-badge-salida{background:rgba(239,68,68,.15);color:#FCA5A5}
             <option value="Cirugía refractiva (evaluación)">Cirugía refractiva (evaluación)</option>
           </select>
         </div>
-        <div class="form-group"><label>Recomendaciones adicionales</label><textarea id="ev-recomendaciones" placeholder="Próximo control, indicaciones, referencias..." style="min-height:70px"></textarea></div>
+
+        <!-- Material -->
+        <div class="form-group"><label>Material del lente</label>
+          <select id="ev-material">
+            <option value="">— Sin especificar —</option>
+            <option value="CR-39">CR-39 (plástico estándar)</option>
+            <option value="Policarbonato">Policarbonato</option>
+            <option value="1.60">Índice 1.60</option>
+            <option value="1.67">Índice 1.67</option>
+            <option value="1.74">Índice 1.74</option>
+            <option value="Trivex">Trivex</option>
+          </select>
+        </div>
+
+        <!-- Tratamientos -->
+        <div class="form-group">
+          <label>Tratamientos de protección</label>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:6px;margin-top:6px;background:var(--bg);border-radius:8px;padding:10px;border:1px solid var(--border)">
+            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:500"><input type="checkbox" id="tr-blueray"> Blue Ray</label>
+            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:500"><input type="checkbox" id="tr-fotocrom"> Fotocromático</label>
+            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:500"><input type="checkbox" id="tr-antireflejo"> Filtro Antirreflejo</label>
+            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:500"><input type="checkbox" id="tr-amarillo"> Filtro Amarillo</label>
+            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:500"><input type="checkbox" id="tr-polarizado"> Polarizado</label>
+          </div>
+        </div>
+
+        <div class="form-group"><label>Observaciones adicionales</label><textarea id="ev-recomendaciones" placeholder="Próximo control, indicaciones especiales, referencias..." style="min-height:65px"></textarea></div>
       </div>
     </div>
 
@@ -4473,13 +4537,17 @@ function abrirExamenVisual(pacienteId) {
   document.getElementById('ev-paciente-id').value = pacienteId;
   const campos = ['lm-esf-od','lm-cil-od','lm-eje-od','lm-add-od',
     'lm-esf-oi','lm-cil-oi','lm-eje-oi','lm-add-oi',
-    'av-sc-od','av-sc-oi','ev-cover-obs',
+    'av-sc-od','av-sc-oi','av-sc-ao','ae-od','ae-oi','ev-cover-obs',
     'rx-esf-od','rx-cil-od','rx-eje-od','rx-add-od',
     'rx-esf-oi','rx-cil-oi','rx-eje-oi','rx-add-oi',
-    'av-cc-od','av-cc-oi','ev-diagnostico','ev-recomendaciones'];
+    'av-cc-od','av-cc-oi','av-cc-ao','av-cc-obs',
+    'ev-rp-obs','ev-fo-obs','ev-diagnostico','ev-recomendaciones'];
   campos.forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
-  ['ev-cover','ev-rp-od','ev-rp-oi','ev-fo-od','ev-fo-oi'].forEach(id=>{
+  ['ev-cover','ev-rp-od','ev-rp-oi','ev-fo-od','ev-fo-oi','ev-material'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
+  });
+  ['tr-blueray','tr-fotocrom','tr-antireflejo','tr-amarillo','tr-polarizado'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.checked=false;
   });
   document.getElementById('ev-correccion').value = 'Ninguna por ahora';
   document.getElementById('modal-examen-visual').classList.add('open');
@@ -4503,7 +4571,8 @@ async function guardarExamenVisual() {
     fila('OI Eje', g('lm-eje-oi')?g('lm-eje-oi')+'°':''), fila('OI Adición', g('lm-add-oi')),
     '',
     '▸ AGUDEZA VISUAL SIN CORRECCIÓN',
-    fila('OD', g('av-sc-od')||'—'), fila('OI', g('av-sc-oi')||'—'),
+    fila('OD', g('av-sc-od')||'—'), fila('OI', g('av-sc-oi')||'—'), fila('AO', g('av-sc-ao')),
+    g('ae-od')||g('ae-oi') ? `  Agujero estenopeico — OD: ${g('ae-od')||'—'}  OI: ${g('ae-oi')||'—'}` : '',
     '',
     '▸ COVER TEST',
     fila('Resultado', g('ev-cover')||'—'),
@@ -4516,18 +4585,23 @@ async function guardarExamenVisual() {
     fila('OI Eje', g('rx-eje-oi')?g('rx-eje-oi')+'°':''), fila('OI Adición', g('rx-add-oi')),
     '',
     '▸ AGUDEZA VISUAL CON CORRECCIÓN',
-    fila('OD', g('av-cc-od')||'—'), fila('OI', g('av-cc-oi')||'—'),
+    fila('OD', g('av-cc-od')||'—'), fila('OI', g('av-cc-oi')||'—'), fila('AO', g('av-cc-ao')),
+    fila('Observaciones', g('av-cc-obs')),
     '',
     '▸ REFLEJOS PUPILARES',
     fila('OD', g('ev-rp-od')||'—'), fila('OI', g('ev-rp-oi')||'—'),
+    fila('Observaciones', g('ev-rp-obs')),
     '',
     '▸ FONDO DE OJO',
     fila('OD', g('ev-fo-od')||'—'), fila('OI', g('ev-fo-oi')||'—'),
+    fila('Observaciones', g('ev-fo-obs')),
     '',
     g('ev-diagnostico') ? `▸ DIAGNÓSTICO\n  ${g('ev-diagnostico')}` : '',
     '',
     `▸ CORRECCIÓN RECOMENDADA\n  ${g('ev-correccion')}`,
-    g('ev-recomendaciones') ? `\n▸ RECOMENDACIONES\n  ${g('ev-recomendaciones')}` : '',
+    g('ev-material') ? fila('  Material', g('ev-material')) : '',
+    (()=>{ const tr=[]; if(document.getElementById('tr-blueray')?.checked) tr.push('Blue Ray'); if(document.getElementById('tr-fotocrom')?.checked) tr.push('Fotocromático'); if(document.getElementById('tr-antireflejo')?.checked) tr.push('Antirreflejo'); if(document.getElementById('tr-amarillo')?.checked) tr.push('Filtro Amarillo'); if(document.getElementById('tr-polarizado')?.checked) tr.push('Polarizado'); return tr.length ? fila('  Tratamientos', tr.join(', ')) : ''; })(),
+    g('ev-recomendaciones') ? `\n▸ OBSERVACIONES\n  ${g('ev-recomendaciones')}` : '',
   ].filter(l => l !== '').join('\n');
 
   setLoading(true);
