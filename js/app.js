@@ -3774,3 +3774,40 @@ function descargarPDFInventario() {
 
   pdfAbrir('Control de Inventario — '+nomMes, body, cfg);
 }
+
+// ════════════════════ DATE PICKERS ════════════════════
+const fpEs = {
+  firstDayOfWeek: 1,
+  weekdays: {
+    shorthand: ['Do','Lu','Ma','Mi','Ju','Vi','Sa'],
+    longhand:  ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado']
+  },
+  months: {
+    shorthand: ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'],
+    longhand:  ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+  }
+};
+
+function initDatePickers() {
+  if(typeof flatpickr === 'undefined') return;
+  document.querySelectorAll('input[type="date"]').forEach(el => {
+    if(el._flatpickr) return;
+    const isBirthDate = el.id === 'p-fechanac';
+    flatpickr(el, {
+      locale:        fpEs,
+      dateFormat:    'Y-m-d',
+      allowInput:    true,
+      disableMobile: true,
+      maxDate:       isBirthDate ? 'today' : null,
+      minDate:       isBirthDate ? '1900-01-01' : null,
+      defaultDate:   el.value || null,
+      prevArrow:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>',
+      nextArrow:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>',
+      onReady(_, __, fp) {
+        fp.calendarContainer.style.fontFamily = "'Inter', sans-serif";
+      }
+    });
+  });
+}
+
+document.addEventListener('DOMContentLoaded', initDatePickers);
