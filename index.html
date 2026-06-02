@@ -881,7 +881,7 @@ body.dark .inv-badge-salida{background:rgba(239,68,68,.15);color:#FCA5A5}
                   <button class="btn btn-secondary btn-sm" onclick="document.getElementById('config-logo-file').click()">📁 Subir logo</button>
                   <button class="btn btn-sm" id="config-logo-remove" onclick="removeConfigLogo()" style="display:none;background:#FEE2E2;color:#DC2626;border:1px solid #FECACA">✕ Quitar</button>
                 </div>
-                <p class="text-light" style="margin-top:6px;font-size:11px">PNG, JPG o SVG · Máx. 500 KB · Aparece en todos los PDFs e impresiones</p>
+                <p class="text-light" style="margin-top:6px;font-size:11px">PNG, JPG o SVG · Aparece en todos los PDFs e impresiones</p>
               </div>
             </div>
             <div class="form-grid">
@@ -1494,7 +1494,7 @@ body.dark .inv-badge-salida{background:rgba(239,68,68,.15);color:#FCA5A5}
             <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('cl-logo-file').click()">📁 Seleccionar imagen</button>
             <button type="button" class="btn btn-sm" id="cl-logo-remove" onclick="removeAdminLogo()" style="display:none;background:#FEE2E2;color:#DC2626;border:1px solid #FECACA;margin-left:6px">✕ Quitar</button>
             <input type="file" id="cl-logo-file" accept="image/*" style="display:none" onchange="onAdminLogoSelected(this)">
-            <p style="font-size:11px;color:var(--text-light);margin-top:6px">PNG, JPG o SVG · Recomendado 256×256 px · Máx. 500 KB</p>
+            <p style="font-size:11px;color:var(--text-light);margin-top:6px">PNG, JPG o SVG · Cualquier tamaño</p>
           </div>
         </div>
       </div>
@@ -2878,7 +2878,6 @@ function setConfigLogoPreview(src) {
 function onConfigLogoSelected(input) {
   const file = input.files[0];
   if(!file) return;
-  if(file.size > 512 * 1024) { toast('La imagen no debe superar 500 KB','error'); input.value=''; return; }
   const reader = new FileReader();
   reader.onload = e => {
     document.getElementById('config-logo-url').value = e.target.result;
@@ -4927,7 +4926,6 @@ function setAdminLogoPreview(src) {
 function onAdminLogoSelected(input) {
   const file = input.files[0];
   if(!file) return;
-  if(file.size > 512 * 1024) { toast('La imagen no debe superar 500 KB','error'); input.value=''; return; }
   const reader = new FileReader();
   reader.onload = e => {
     document.getElementById('cl-logo-url').value = e.target.result;
