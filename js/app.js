@@ -1914,6 +1914,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.body.classList.add('dark');
     document.getElementById('theme-icon').textContent = '🌙';
   }
+
+  // Detectar token de recuperación de contraseña en la URL
+  sb.auth.onAuthStateChange((event) => {
+    if(event === 'PASSWORD_RECOVERY') {
+      const el = document.getElementById('recovery-overlay');
+      if(el) el.style.display = 'flex';
+    }
+  });
+
   // Restaurar sesión — primero via Supabase Auth, luego legacy sessionStorage
   try {
     const { data: { session } } = await sb.auth.getSession();
@@ -1927,6 +1936,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     if(saved) await entrarConPerfil(JSON.parse(saved));
   } catch(e) { sessionStorage.removeItem('lm_user'); }
 });
+
+async function setNewPassword() {
+  const p1 = document.getElementById('rec-pass1').value;
+  const p2 = document.getElementById('rec-pass2').value;
+  const errEl = document.getElementById('rec-error');
+  errEl.style.display = 'none';
+  if(!p1 || p1.length < 6) { errEl.textContent = 'Mínimo 6 caracteres'; errEl.style.display = 'block'; return; }
+  if(p1 !== p2) { errEl.textContent = 'Las contraseñas no coinciden'; errEl.style.display = 'block'; return; }
+  const { error } = await sb.auth.updateUser({ password: p1 });
+  if(error) { errEl.textContent = 'Error: ' + error.message; errEl.style.display = 'block'; return; }
+  document.getElementById('recovery-overlay').style.display = 'none';
+  toast('Contraseña actualizada ✅ — inicia sesión', 'success');
+  window.location.hash = '';
+}
 
 async function verificarPin() {
   // deprecated — kept para compatibilidad
