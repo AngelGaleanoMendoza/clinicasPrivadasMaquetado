@@ -25,6 +25,7 @@ const fromMov = r => ({ id:r.id, invId:r.inventario_id, tipo:r.tipo, cantidad:Nu
 
 // ════════════════════ LOAD DATA ════════════════════
 async function loadAll() {
+  if(!currentClinicaId) { setDbStatus(true); setLoading(false); return; }
   setLoading(true);
   try {
     const [rp,rc,rm,rn,re,rpf,ri,rmov] = await Promise.all([
