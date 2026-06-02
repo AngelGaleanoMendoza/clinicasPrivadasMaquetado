@@ -1074,9 +1074,9 @@ body.dark .inv-badge-salida{background:rgba(239,68,68,.15);color:#FCA5A5}
               <button class="btn btn-primary" onclick="exportarEmail()">📧 Enviar</button>
             </div>
             <div class="export-box" style="margin-bottom:14px">
-              <div class="export-icon">💾</div><h3>Backup JSON</h3>
-              <p>Descarga todos los datos como archivo de respaldo</p>
-              <button class="btn btn-secondary" onclick="exportarJSON()">💾 Descargar Backup</button>
+              <div class="export-icon">📩</div><h3>Backup por Correo</h3>
+              <p>Envía un respaldo completo a <strong>sebasgale65@gmail.com</strong></p>
+              <button class="btn btn-secondary" onclick="exportarJSON()">📩 Enviar Backup</button>
             </div>
             <div class="export-box">
               <div class="export-icon">📥</div><h3>Importar Backup</h3>
@@ -2945,12 +2945,75 @@ async function exportarEmail(){
 }
 
 async function exportarJSON(){
-  const data={exportDate:new Date().toISOString(),sistema:'Lumea Med v3.0',pacientes:C.p,citas:C.c,medicaciones:C.m,notas:C.n};
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));
-  a.download=`lumeamed-backup-${hoy()}.json`;
-  a.click();
-  toast('Backup descargado');
+  const fechaStr = new Date().toLocaleString('es-ES');
+  const h = hoy();
+  const sep = '─'.repeat(52);
+
+  const lineasP = C.p.map(x =>
+    `  • ${x.nombre} ${x.apellidos} | ${x.identificacion||'—'} | ${x.fechaNac||'—'} | ${x.telefono||'—'} | ${x.email||'—'} | ${x.estado||'activo'}`
+  ).join('\n') || '  (sin registros)';
+
+  const lineasC = C.c.map(x => {
+    const p = C.p.find(q=>q.id===x.pacienteId);
+    return `  • ${x.fecha} ${x.hora} | ${p?p.nombre+' '+p.apellidos:'N/A'} | ${x.motivo} | ${x.tipo} | ${x.estado}`;
+  }).join('\n') || '  (sin registros)';
+
+  const lineasM = C.m.map(x => {
+    const p = C.p.find(q=>q.id===x.pacienteId);
+    return `  • ${p?p.nombre+' '+p.apellidos:'N/A'} | ${x.nombre} | ${x.dosis} | ${x.frecuencia} | vía ${x.via} | ${x.estado}`;
+  }).join('\n') || '  (sin registros)';
+
+  const lineasN = C.n.map(x => {
+    const p = C.p.find(q=>q.id===x.pacienteId);
+    return `  • ${x.fecha} | ${p?p.nombre+' '+p.apellidos:'N/A'} | ${x.tipo}${x.titulo?' — '+x.titulo:''}`;
+  }).join('\n') || '  (sin registros)';
+
+  const citasHoy = C.c.filter(x=>x.fecha===h);
+  const lineasHoy = citasHoy.map(x => {
+    const p = C.p.find(q=>q.id===x.pacienteId);
+    return `  • ${x.hora} | ${p?p.nombre+' '+p.apellidos:'N/A'} | ${x.motivo} | ${x.estado}`;
+  }).join('\n') || '  (ninguna)';
+
+  const cuerpo =
+`BACKUP LUMEA MED — ${fechaStr}
+${sep}
+Clínica ID: ${currentClinicaId} | Usuario: ${currentUser?.name||'—'}
+${sep}
+
+RESUMEN
+  Pacientes:        ${C.p.length}
+  Citas totales:    ${C.c.length}
+  Citas hoy:        ${citasHoy.length}
+  Medicaciones:     ${C.m.length} (activas: ${C.m.filter(x=>x.estado==='activa').length})
+  Notas clínicas:   ${C.n.length}
+
+${sep}
+CITAS DE HOY (${h})
+${lineasHoy}
+
+${sep}
+PACIENTES (${C.p.length})
+${lineasP}
+
+${sep}
+CITAS (${C.c.length})
+${lineasC}
+
+${sep}
+MEDICACIONES (${C.m.length})
+${lineasM}
+
+${sep}
+NOTAS CLÍNICAS (${C.n.length})
+${lineasN}
+
+${sep}
+Generado automáticamente por Lumea Med v3.0
+${fechaStr}`;
+
+  const asunto = `Backup Lumea Med — ${h}`;
+  window.location.href = `mailto:sebasgale65@gmail.com?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+  toast('Abriendo cliente de correo con el backup...','info');
 }
 
 function importarJSON(e){
