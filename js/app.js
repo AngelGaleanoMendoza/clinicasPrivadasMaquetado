@@ -97,14 +97,15 @@ async function verificarLogin() {
 
 async function entrarConPerfil(profile) {
   const rolLabel = {admin:'Administrador',medico:'Médico',recepcion:'Recepcionista',enfermeria:'Enfermería'}[profile.rol]||profile.rol;
-  currentClinicaId = profile.clinica_id || 1;
+  currentClinicaId = profile.clinica_id || null;
   currentUser = {
-    id: profile.id,
-    name: profile.nombre,
-    role: rolLabel,
+    id:     profile.id,
+    name:   profile.nombre,
+    nombre: profile.nombre,
+    role:   rolLabel,
     avatar: profile.icono || profile.nombre[0].toUpperCase(),
-    email: profile.email,
-    key: profile.rol
+    email:  profile.email,
+    key:    profile.rol
   };
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').classList.add('visible');
@@ -477,6 +478,7 @@ function openModalPaciente(id){
 }
 
 async function guardarPaciente(irExpediente=false){
+  if(!currentClinicaId){ toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
   const nombre=document.getElementById('p-nombre').value.trim();
   const apellidos=document.getElementById('p-apellidos').value.trim();
   if(!nombre||!apellidos){ toast('Nombre y apellidos son obligatorios','error'); return; }
@@ -738,6 +740,7 @@ function openModalCita(id){
 function openModalCitaP(pid){ openModalCita(); document.getElementById('c-paciente').value=pid; }
 
 async function guardarCita(){
+  if(!currentClinicaId){ toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
   const pid=parseInt(document.getElementById('c-paciente').value);
   const fecha=document.getElementById('c-fecha').value;
   const hora=document.getElementById('c-hora').value;
@@ -848,6 +851,7 @@ function openModalMedicacion(id){
 function openModalMedP(pid){ openModalMedicacion(); document.getElementById('m-paciente').value=pid; }
 
 async function guardarMedicacion(){
+  if(!currentClinicaId){ toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
   const pid=parseInt(document.getElementById('m-paciente').value);
   const nombre=document.getElementById('m-nombre').value.trim();
   const dosis=document.getElementById('m-dosis').value.trim();
@@ -914,6 +918,7 @@ function openModalNota(id){
 function openModalNotaP(pid){ openModalNota(); document.getElementById('n-paciente').value=pid; }
 
 async function guardarNota(){
+  if(!currentClinicaId){ toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
   const pid=parseInt(document.getElementById('n-paciente').value);
   const contenido=document.getElementById('n-contenido').value.trim();
   if(!pid||!contenido){ toast('Completa los campos obligatorios','error'); return; }
@@ -2304,6 +2309,7 @@ function openModalProducto(id){
 }
 
 async function guardarProducto(){
+  if(!currentClinicaId){ toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
   const nombre=document.getElementById('prod-nombre').value.trim();
   if(!nombre){ toast('El nombre es obligatorio','error'); return; }
   const obj=toInv({
@@ -2363,6 +2369,7 @@ function openModalSalida(prodId){
 }
 
 async function guardarMovimiento(tipo){
+  if(!currentClinicaId){ toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
   const prefix=tipo==='entrada'?'ent':'sal';
   const invId=parseInt(document.getElementById(prefix+'-producto').value);
   const cantidad=Number(document.getElementById(prefix+'-cantidad').value);
