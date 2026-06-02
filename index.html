@@ -723,8 +723,14 @@ body.dark .inv-badge-salida{background:rgba(239,68,68,.15);color:#FCA5A5}
               <div class="cal-legend"><div class="cal-legend-dot"></div><span>Tiene citas</span></div>
             </div>
             <div class="card">
-              <div class="card-header"><h3>👥 Últimos pacientes</h3><button class="btn btn-secondary btn-sm" onclick="navigate('pacientes')">Ver todos</button></div>
-              <div id="ultimos-pacientes"></div>
+              <div class="card-header" style="margin-bottom:10px"><h3>🕐 Actividad Reciente</h3></div>
+              <div class="tabs" style="margin-bottom:12px">
+                <button class="tab active" id="tab-rec-pacientes"   onclick="switchRecTab('pacientes')">👥 Pacientes</button>
+                <button class="tab"        id="tab-rec-citas"       onclick="switchRecTab('citas')">📅 Citas</button>
+                <button class="tab"        id="tab-rec-meds"        onclick="switchRecTab('meds')">💊 Meds</button>
+                <button class="tab"        id="tab-rec-inv"         onclick="switchRecTab('inv')">📦 Inventario</button>
+              </div>
+              <div id="recientes-content"></div>
             </div>
           </div>
         </div>
@@ -1517,7 +1523,7 @@ body.dark .inv-badge-salida{background:rgba(239,68,68,.15);color:#FCA5A5}
       <div class="form-group full"><label>Paciente *</label><select id="c-paciente"><option value="">Seleccionar paciente...</option></select></div>
       <div class="form-group full"><label>Médico</label><select id="c-medico"><option value="">Sin asignar</option></select></div>
       <div class="form-group"><label>Fecha *</label><input type="date" id="c-fecha"></div>
-      <div class="form-group"><label>Hora *</label><input type="time" id="c-hora"></div>
+      <div class="form-group"><label>Hora *</label><select id="c-hora"><option value="">Seleccionar hora...</option></select></div>
       <div class="form-group full" style="position:relative">
         <label>Motivo de Consulta *</label>
         <input type="text" id="c-motivo" placeholder="Ej: dolor de cabeza, fiebre, control..." autocomplete="off" oninput="mostrarSugerenciasDx(this.value)" onblur="setTimeout(()=>ocultarSugerenciasDx(),180)">
@@ -1945,12 +1951,74 @@ function renderDashboard(){
 
   renderCalendar('dashboard-cal',false);
 
-  const ult=[...C.p].reverse().slice(0,5);
-  document.getElementById('ultimos-pacientes').innerHTML=ult.length?ult.map(p=>`
-    <div class="search-result-item" onclick="navigate('paciente-detalle',${p.id})">
-      <div class="patient-avatar" style="background:${colAvatar(p.id)}">${ini(p.nombre,p.apellidos)}</div>
-      <div style="flex:1"><div style="font-weight:600;font-size:13px">${p.nombre} ${p.apellidos}</div><div class="text-light">${calcEdad(p.fechaNac)} · ${p.telefono||'Sin teléfono'}</div></div>
-    </div>`).join(''):`<div class="empty-state" style="padding:28px 0"><div class="empty-icon" style="font-size:32px">👥</div><p>Sin pacientes aún</p></div>`;
+  switchRecTab('pacientes');
+}
+
+let recTab = 'pacientes';
+function switchRecTab(tab) {
+  recTab = tab;
+  ['pacientes','citas','meds','inv'].forEach(t => {
+    const el = document.getElementById('tab-rec-'+t);
+    if(el) el.classList.toggle('active', t===tab);
+  });
+  renderRecientes();
+}
+
+function renderRecientes() {
+  const el = document.getElementById('recientes-content'); if(!el) return;
+  const empty = msg => `<div class="empty-state" style="padding:24px 0"><div class="empty-icon" style="font-size:28px">${msg}</div></div>`;
+
+  if(recTab === 'pacientes') {
+    const items = [...C.p].reverse().slice(0,10);
+    el.innerHTML = items.length ? items.map(p=>`
+      <div class="search-result-item" onclick="navigate('paciente-detalle',${p.id})">
+        <div class="patient-avatar" style="background:${colAvatar(p.id)};flex-shrink:0">${ini(p.nombre,p.apellidos)}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.nombre} ${p.apellidos}</div>
+          <div class="text-light">${formatFecha(p.fechaRegistro)} · ${p.telefono||'Sin tel.'}</div>
+        </div>
+        <span class="tag ${p.estado==='activo'?'tag-green':'tag-gray'}" style="flex-shrink:0">${p.estado}</span>
+      </div>`).join('') : empty('👥<br><small>Sin pacientes aún</small>');
+
+  } else if(recTab === 'citas') {
+    const items = [...C.c].sort((a,b)=>b.fecha.localeCompare(a.fecha)||(b.id-a.id)).slice(0,10);
+    el.innerHTML = items.length ? items.map(c=>{
+      const p=C.p.find(x=>x.id===c.pacienteId);
+      return `<div class="search-result-item" style="cursor:default">
+        <div style="min-width:70px;font-size:12px;font-weight:700;color:var(--primary)">${formatHora12(c.hora)}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p?p.nombre+' '+p.apellidos:'—'}</div>
+          <div class="text-light">${formatFecha(c.fecha)} · ${c.motivo}</div>
+        </div>
+        ${estadoTag(c.estado)}
+      </div>`;}).join('') : empty('📅<br><small>Sin citas aún</small>');
+
+  } else if(recTab === 'meds') {
+    const items = [...C.m].reverse().slice(0,10);
+    el.innerHTML = items.length ? items.map(m=>{
+      const p=C.p.find(x=>x.id===m.pacienteId);
+      return `<div class="search-result-item" style="cursor:default">
+        <div style="font-size:22px;flex-shrink:0">💊</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:13px">${m.nombre}</div>
+          <div class="text-light">${p?p.nombre+' '+p.apellidos:'—'} · ${m.dosis} ${m.frecuencia}</div>
+        </div>
+        <span class="tag ${m.estado==='activa'?'tag-green':m.estado==='suspendida'?'tag-red':'tag-gray'}" style="flex-shrink:0">${m.estado}</span>
+      </div>`;}).join('') : empty('💊<br><small>Sin medicaciones aún</small>');
+
+  } else {
+    const items = [...C.mov].slice(0,10);
+    el.innerHTML = items.length ? items.map(m=>{
+      const p=C.inv.find(x=>x.id===m.invId);
+      return `<div class="search-result-item" style="cursor:default">
+        <span class="inv-badge-${m.tipo}" style="flex-shrink:0">${m.tipo==='entrada'?'📥':'📤'}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p?p.nombre:'—'}</div>
+          <div class="text-light">${formatFecha(m.fecha)} · Cant: ${m.cantidad} ${p?p.unidad:''}</div>
+        </div>
+        <span style="font-size:12px;color:var(--text-light);flex-shrink:0">${m.motivo||''}</span>
+      </div>`;}).join('') : empty('📦<br><small>Sin movimientos aún</small>');
+  }
 }
 
 // ════════════════════ PACIENTES ════════════════════
@@ -2219,13 +2287,40 @@ function fillMedicoSelect(selId, selectedId) {
   else if (currentUser?.key==='medico'||currentUser?.key==='admin') sel.value = currentUser.id;
 }
 
+function fillHoraSelect(selectedValue) {
+  const sel = document.getElementById('c-hora');
+  sel.innerHTML = '<option value="">Seleccionar hora...</option>';
+  for(let h = 6; h <= 22; h++) {
+    for(let m = 0; m < 60; m += 30) {
+      const h24 = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+      const period = h < 12 ? 'AM' : 'PM';
+      const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+      const opt = document.createElement('option');
+      opt.value = h24;
+      opt.textContent = `${h12}:${String(m).padStart(2,'0')} ${period}`;
+      if(h24 === selectedValue) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  }
+}
+
+function formatHora12(h24) {
+  if(!h24) return '—';
+  const parts = h24.split(':');
+  const h = parseInt(parts[0]), m = parts[1]||'00';
+  const period = h < 12 ? 'AM' : 'PM';
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return `${h12}:${m} ${period}`;
+}
+
 function openModalCita(id){
   editingId=id||null;
   document.getElementById('modal-cita-title').textContent=id?'✏️ Editar Cita':'📅 Nueva Cita';
   fillSelect('c-paciente');
   fillMedicoSelect('c-medico');
   document.getElementById('c-fecha').value=hoy();
-  ['hora','motivo','notas'].forEach(f=>document.getElementById('c-'+f).value='');
+  fillHoraSelect('');
+  ['motivo','notas'].forEach(f=>document.getElementById('c-'+f).value='');
   dxElegidos=[]; renderDxElegidos(); ocultarSugerenciasDx();
   document.getElementById('c-estado').value='pendiente';
   document.getElementById('c-tipo').value='consulta';
@@ -2234,7 +2329,7 @@ function openModalCita(id){
     if(c){
       document.getElementById('c-paciente').value=c.pacienteId;
       document.getElementById('c-fecha').value=c.fecha;
-      document.getElementById('c-hora').value=c.hora;
+      fillHoraSelect(c.hora);
       document.getElementById('c-motivo').value=c.motivo;
       document.getElementById('c-tipo').value=c.tipo;
       document.getElementById('c-estado').value=c.estado;
@@ -3546,20 +3641,29 @@ function renderAgendaDayCitas(containerId, citas) {
   const el = document.getElementById(containerId);
   if(!el) return;
   if(!citas.length) {
-    el.innerHTML=`<div class="empty-state" style="padding:32px 12px"><div class="empty-icon" style="font-size:32px">📭</div><p>Sin citas este día</p></div>`;
+    el.innerHTML=`<div class="empty-state" style="padding:24px 12px">
+      <div class="empty-icon" style="font-size:28px">📭</div>
+      <p style="margin-bottom:8px">Sin citas agendadas</p>
+      <div style="font-size:11px;color:var(--text-light)">Horario disponible: 6:00 AM – 10:00 PM</div>
+    </div>`;
     return;
   }
+  const ocupadas = citas.filter(c=>c.estado!=='cancelada').length;
   el.innerHTML = citas.map(c=>{
     const p=C.p.find(x=>x.id===c.pacienteId);
     return `<div class="agenda-slot ${c.estado}" onclick="verResumenCita(${c.id})">
-      <div style="font-size:14px;font-weight:800;color:var(--primary);min-width:50px">${c.hora||'—'}</div>
+      <div style="font-size:12px;font-weight:800;color:var(--primary);min-width:68px;white-space:nowrap">${formatHora12(c.hora||'')}</div>
       <div style="flex:1;min-width:0">
         <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p?p.nombre+' '+p.apellidos:'Paciente'}</div>
         <div style="font-size:11px;color:var(--text-light);margin-top:2px">${c.motivo}</div>
       </div>
       ${estadoTag(c.estado)}
     </div>`;
-  }).join('');
+  }).join('') +
+  `<div style="margin-top:10px;padding:8px 10px;background:var(--bg);border-radius:8px;font-size:11px;color:var(--text-light);display:flex;justify-content:space-between">
+    <span>🔴 <strong>${ocupadas}</strong> ocupada${ocupadas!==1?'s':''}</span>
+    <span>🟢 <strong>${34-ocupadas}</strong> disponible${34-ocupadas!==1?'s':''}</span>
+  </div>`;
 }
 
 function nuevaCitaParaDoctor(profId) {
@@ -3568,7 +3672,23 @@ function nuevaCitaParaDoctor(profId) {
     const sel=document.getElementById('c-medico');
     if(sel) sel.value=profId;
     document.getElementById('c-fecha').value=selAgendasDate;
-  },50);
+    // Marcar horas ya ocupadas por este médico ese día
+    marcarHorasOcupadas(profId, selAgendasDate);
+  },80);
+}
+
+function marcarHorasOcupadas(profId, fecha) {
+  const ocupadas = new Set(
+    C.c.filter(c=>c.medicoId==profId&&c.fecha===fecha&&c.estado!=='cancelada').map(c=>c.hora)
+  );
+  const sel = document.getElementById('c-hora');
+  if(!sel) return;
+  Array.from(sel.options).forEach(opt=>{
+    if(opt.value && ocupadas.has(opt.value)) {
+      opt.textContent = opt.textContent.replace(' 🔴','') + ' 🔴';
+      opt.style.color = 'var(--danger)';
+    }
+  });
 }
 
 // ════════════════════ INVENTARIO ════════════════════
