@@ -3341,7 +3341,9 @@ async function verDetalleClinica(id) {
 
   const isProd = c.en_produccion === true;
   document.getElementById('detalle-clinica-prod-badge').style.display = isProd ? 'inline-flex' : 'none';
-  document.getElementById('detalle-btn-prod').style.display = isProd ? 'none' : 'inline-flex';
+  const btnProd = document.getElementById('detalle-btn-prod');
+  btnProd.textContent = isProd ? '✕ Quitar de Producción' : '★ Marcar en Producción';
+  btnProd.className   = isProd ? 'btn btn-danger' : 'btn btn-secondary';
   document.getElementById('detalle-clinica-status-tag').innerHTML = c.activa
     ? '<span class="tag tag-green">Activa</span>'
     : '<span class="tag tag-red">Inactiva</span>';
@@ -3471,22 +3473,26 @@ function renderDetallePanel(tab) {
 async function setClinicaProduccion(id) {
   const c = adminClinicas.find(x=>x.id===id);
   if(!c) return;
-  if(!confirm(`¿Marcar "${c.nombre}" como clínica en producción?\n\nSe quitará el indicador de las demás clínicas.`)) return;
+  const nuevoEstado = !(c.en_produccion === true);
+  const msg = nuevoEstado
+    ? `¿Marcar "${c.nombre}" como clínica en producción?\n\nVarias clínicas pueden estar en producción al mismo tiempo.`
+    : `¿Quitar "${c.nombre}" de producción?`;
+  if(!confirm(msg)) return;
   setLoading(true);
-  // Quitar producción de todas
-  const {error: e1} = await sb.from('clinicas').update({en_produccion: false}).gt('id', 0);
-  // Poner producción en esta
-  const {error: e2} = await sb.from('clinicas').update({en_produccion: true}).eq('id', id);
-  if(e2) {
+  const {error} = await sb.from('clinicas').update({en_produccion: nuevoEstado}).eq('id', id);
+  if(error) {
     setLoading(false);
     toast('Ejecuta este SQL en Supabase → SQL Editor:\nALTER TABLE clinicas ADD COLUMN IF NOT EXISTS en_produccion BOOLEAN DEFAULT FALSE;', 'error');
     return;
   }
   await loadAdminData();
   renderAdminClinicas();
-  document.getElementById('detalle-clinica-prod-badge').style.display = 'inline-flex';
-  document.getElementById('detalle-btn-prod').style.display = 'none';
-  toast(`"${c.nombre}" marcada como producción`, 'success');
+  // Actualizar modal abierto
+  document.getElementById('detalle-clinica-prod-badge').style.display = nuevoEstado ? 'inline-flex' : 'none';
+  const btnProd = document.getElementById('detalle-btn-prod');
+  btnProd.textContent = nuevoEstado ? '✕ Quitar de Producción' : '★ Marcar en Producción';
+  btnProd.className   = nuevoEstado ? 'btn btn-danger' : 'btn btn-secondary';
+  toast(nuevoEstado ? `"${c.nombre}" marcada en producción` : `"${c.nombre}" quitada de producción`, 'success');
   setLoading(false);
 }
 
