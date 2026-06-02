@@ -1460,12 +1460,13 @@ body.dark .inv-badge-salida{background:rgba(239,68,68,.15);color:#FCA5A5}
 
 <!-- MODAL CLÍNICA (Admin) -->
 <div class="modal-overlay" id="modal-clinica">
-  <div class="modal" style="max-width:480px">
+  <div class="modal" style="max-width:600px">
     <h2 id="modal-clinica-title">🏥 Nueva Clínica</h2>
-    <div class="form-grid cols-1">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-light);margin-bottom:10px">Datos del sistema</div>
+    <div class="form-grid">
       <div class="form-group"><label>Nombre de la Clínica *</label><input type="text" id="cl-nombre" placeholder="Clínica Galeano"></div>
       <div class="form-group"><label>Código único *</label><input type="text" id="cl-codigo" placeholder="clinica-galeano" oninput="this.value=this.value.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')">
-        <span style="font-size:11px;color:var(--text-light)">Solo letras minúsculas, números y guiones. Ej: clinica-galeano</span>
+        <span style="font-size:11px;color:var(--text-light)">Solo letras minúsculas y guiones</span>
       </div>
       <div class="form-group"><label>Tipo de establecimiento</label>
         <select id="cl-tipo">
@@ -1478,6 +1479,24 @@ body.dark .inv-badge-salida{background:rgba(239,68,68,.15);color:#FCA5A5}
       <div class="form-group"><label>Estado</label>
         <select id="cl-activa"><option value="true">Activa</option><option value="false">Inactiva</option></select>
       </div>
+      <div class="form-group"><label>Máx. agendas</label><input type="number" id="cl-max-agendas" placeholder="10" min="1" max="999"></div>
+      <div class="form-group"><label>Máx. pacientes</label><input type="number" id="cl-max-pacientes" placeholder="500" min="1" max="99999"></div>
+    </div>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-light);margin:14px 0 10px">Perfil para documentos e impresiones</div>
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>URL del Logo</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="text" id="cl-logo-url" placeholder="https://..." style="flex:1" oninput="previewAdminLogo()">
+          <div id="cl-logo-preview" style="width:52px;height:52px;border-radius:10px;background:linear-gradient(135deg,var(--primary),var(--accent));display:flex;align-items:center;justify-content:center;font-size:22px;overflow:hidden;flex-shrink:0">🏥</div>
+        </div>
+      </div>
+      <div class="form-group"><label>Nombre del Doctor / Profesional</label><input type="text" id="cl-nombre-doctor" placeholder="Dr. Juan Pérez"></div>
+      <div class="form-group"><label>Especialidad</label><input type="text" id="cl-especialidad" placeholder="Medicina General"></div>
+      <div class="form-group"><label>Registro médico / Licencia</label><input type="text" id="cl-registro" placeholder="RM-12345"></div>
+      <div class="form-group"><label>Teléfono</label><input type="text" id="cl-telefono" placeholder="+503 2200-0000"></div>
+      <div class="form-group full"><label>Dirección</label><input type="text" id="cl-direccion" placeholder="Calle Principal #123, Ciudad"></div>
+      <div class="form-group full"><label>Nota al pie de página (PDFs)</label><input type="text" id="cl-nota-pie" placeholder="Horario: Lun–Vie 8am–5pm · Emergencias 24h"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-clinica')">Cancelar</button>
@@ -2804,7 +2823,21 @@ async function guardarExpediente(pid) {
 // ════════════════════ CONFIGURACIÓN CLÍNICA ════════════════════
 function getClinicaConfig() {
   const key = 'lumeamed_clinica' + (currentClinicaId ? '_' + currentClinicaId : '');
-  try { return JSON.parse(localStorage.getItem(key) || '{}'); } catch { return {}; }
+  let local = {};
+  try { local = JSON.parse(localStorage.getItem(key) || '{}'); } catch { local = {}; }
+  const cl = currentClinica || {};
+  // Supabase (currentClinica) es la fuente principal; localStorage puede sobrescribir si el usuario lo configuró localmente
+  return {
+    nombreClinica: local.nombreClinica || cl.nombre || '',
+    nombreDoctor:  local.nombreDoctor  || cl.nombre_doctor || '',
+    especialidad:  local.especialidad  || cl.especialidad || '',
+    registro:      local.registro      || cl.registro || '',
+    telefono:      local.telefono      || cl.telefono || '',
+    email:         local.email         || '',
+    direccion:     local.direccion     || cl.direccion || '',
+    notaPie:       local.notaPie       || cl.nota_pie || '',
+    logoUrl:       local.logoUrl       || cl.logo_url || '',
+  };
 }
 
 function renderConfiguracion() {
@@ -2885,8 +2918,9 @@ function imprimirNotaConsulta(citaId) {
   const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Nota de Consulta</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@page{size:auto;margin:10mm}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Inter',Arial,sans-serif;color:#1a1a1a;padding:32px;font-size:13px;line-height:1.5;max-width:800px;margin:0 auto}
+body{font-family:'Inter',Arial,sans-serif;color:#1a1a1a;padding:20px 28px;font-size:13px;line-height:1.5;max-width:800px;margin:0 auto}
 .h{display:flex;align-items:flex-start;gap:18px;border-bottom:3px solid #2563EB;padding-bottom:14px;margin-bottom:18px}
 .logo{width:72px;height:72px;border-radius:12px;background:linear-gradient(135deg,#2563EB,#06B6D4);display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0;overflow:hidden}
 .logo img{width:100%;height:100%;object-fit:contain;border-radius:12px}
@@ -4262,9 +4296,10 @@ function quitarDx(i) {
 // ════════════════════ PDF HELPERS ════════════════════
 const PDF_CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@page{size:auto;margin:10mm}
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Inter',Arial,sans-serif;color:#111827;background:#fff;font-size:13px;line-height:1.55}
-.page{max-width:820px;margin:0 auto;padding:44px 48px 36px}
+.page{max-width:820px;margin:0 auto;padding:28px 32px 24px}
 .pdf-header{display:flex;align-items:flex-start;gap:18px;padding-bottom:18px;border-bottom:3px solid #1D4ED8;margin-bottom:26px}
 .pdf-logo{width:68px;height:68px;border-radius:14px;background:linear-gradient(135deg,#2563EB,#06B6D4);display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;overflow:hidden}
 .pdf-logo img{width:100%;height:100%;object-fit:contain;border-radius:14px}
@@ -4851,12 +4886,20 @@ async function logActivity(accion) {
 }
 
 // ── Modal Clínica ──
+function previewAdminLogo() {
+  const url = document.getElementById('cl-logo-url').value.trim();
+  const box = document.getElementById('cl-logo-preview');
+  box.innerHTML = url ? `<img src="${url}" style="width:100%;height:100%;object-fit:contain;border-radius:10px" alt="logo">` : '🏥';
+}
+
 function openModalClinica() {
   document.getElementById('modal-clinica-title').textContent = '🏥 Nueva Clínica';
-  document.getElementById('cl-nombre').value = '';
-  document.getElementById('cl-codigo').value = '';
+  ['cl-nombre','cl-codigo','cl-logo-url','cl-nombre-doctor','cl-especialidad','cl-registro','cl-telefono','cl-direccion','cl-nota-pie'].forEach(id => { document.getElementById(id).value = ''; });
   document.getElementById('cl-tipo').value = 'clinica';
   document.getElementById('cl-activa').value = 'true';
+  document.getElementById('cl-max-agendas').value = '10';
+  document.getElementById('cl-max-pacientes').value = '500';
+  document.getElementById('cl-logo-preview').innerHTML = '🏥';
   editingClinicaId = null;
   document.getElementById('modal-clinica').classList.add('open');
 }
@@ -4865,10 +4908,21 @@ function openModalClinicaEdit(id) {
   const c = adminClinicas.find(x=>x.id===id);
   if(!c) return;
   document.getElementById('modal-clinica-title').textContent = '✏️ Editar Clínica';
-  document.getElementById('cl-nombre').value = c.nombre;
-  document.getElementById('cl-codigo').value = c.codigo;
-  document.getElementById('cl-tipo').value = c.tipo||'clinica';
+  document.getElementById('cl-nombre').value = c.nombre || '';
+  document.getElementById('cl-codigo').value = c.codigo || '';
+  document.getElementById('cl-tipo').value = c.tipo || 'clinica';
   document.getElementById('cl-activa').value = String(c.activa);
+  document.getElementById('cl-max-agendas').value = c.max_agendas ?? 10;
+  document.getElementById('cl-max-pacientes').value = c.max_pacientes ?? 500;
+  document.getElementById('cl-logo-url').value = c.logo_url || '';
+  document.getElementById('cl-nombre-doctor').value = c.nombre_doctor || '';
+  document.getElementById('cl-especialidad').value = c.especialidad || '';
+  document.getElementById('cl-registro').value = c.registro || '';
+  document.getElementById('cl-telefono').value = c.telefono || '';
+  document.getElementById('cl-direccion').value = c.direccion || '';
+  document.getElementById('cl-nota-pie').value = c.nota_pie || '';
+  const box = document.getElementById('cl-logo-preview');
+  box.innerHTML = c.logo_url ? `<img src="${c.logo_url}" style="width:100%;height:100%;object-fit:contain;border-radius:10px" alt="logo">` : '🏥';
   editingClinicaId = id;
   document.getElementById('modal-clinica').classList.add('open');
 }
@@ -4878,14 +4932,28 @@ async function guardarClinica() {
   const codigo = document.getElementById('cl-codigo').value.trim();
   const tipo   = document.getElementById('cl-tipo').value;
   const activa = document.getElementById('cl-activa').value === 'true';
+  const max_agendas  = parseInt(document.getElementById('cl-max-agendas').value) || 10;
+  const max_pacientes = parseInt(document.getElementById('cl-max-pacientes').value) || 500;
+  const logo_url      = document.getElementById('cl-logo-url').value.trim() || null;
+  const nombre_doctor = document.getElementById('cl-nombre-doctor').value.trim() || null;
+  const especialidad  = document.getElementById('cl-especialidad').value.trim() || null;
+  const registro      = document.getElementById('cl-registro').value.trim() || null;
+  const telefono      = document.getElementById('cl-telefono').value.trim() || null;
+  const direccion     = document.getElementById('cl-direccion').value.trim() || null;
+  const nota_pie      = document.getElementById('cl-nota-pie').value.trim() || null;
   if(!nombre||!codigo){ toast('Nombre y código son obligatorios','error'); return; }
   setLoading(true);
+  const payload = {nombre,codigo,tipo,activa,max_agendas,max_pacientes,logo_url,nombre_doctor,especialidad,registro,telefono,direccion,nota_pie};
   if(editingClinicaId) {
-    const {error} = await sb.from('clinicas').update({nombre,codigo,tipo,activa}).eq('id',editingClinicaId);
+    const {error} = await sb.from('clinicas').update(payload).eq('id',editingClinicaId);
     if(error){ toast('Error al actualizar: '+error.message,'error'); setLoading(false); return; }
+    if(editingClinicaId === currentClinicaId) {
+      const {data} = await sb.from('clinicas').select('*').eq('id',currentClinicaId).single();
+      if(data) currentClinica = data;
+    }
     toast('Clínica actualizada','success');
   } else {
-    const {error} = await sb.from('clinicas').insert({nombre,codigo,tipo,activa});
+    const {error} = await sb.from('clinicas').insert(payload);
     if(error){ toast('Error al crear: '+error.message,'error'); setLoading(false); return; }
     toast('Clínica creada exitosamente','success');
   }
