@@ -1247,6 +1247,22 @@ body.dark .inv-badge-salida{background:rgba(239,68,68,.15);color:#FCA5A5}
       </div>
     </div>
 
+    <!-- Motilidad ocular extrínseca -->
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--primary);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--primary)">👁️ Motilidad Ocular Extrínseca</div>
+      <div class="form-group"><label>Observaciones</label><input type="text" id="ev-moe-obs" placeholder="Ej: Movimientos normales en todas las direcciones, restricción en..."></div>
+    </div>
+
+    <!-- Examinación de Acomodación -->
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--primary);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--primary)">🔬 Examinación de Acomodación</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px">
+        <div class="form-group"><label>PPC (Punto Próximo de Convergencia)</label><input type="text" id="ev-ppc" placeholder="Ej: 8 cm"></div>
+        <div class="form-group"><label>PPA (Punto Próximo de Acomodación)</label><input type="text" id="ev-ppa" placeholder="Ej: 10 cm"></div>
+      </div>
+      <div class="form-group"><label>Observaciones</label><input type="text" id="ev-acomo-obs" placeholder="Observaciones sobre la acomodación..."></div>
+    </div>
+
     <!-- Refracción -->
     <div style="margin-bottom:16px">
       <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--primary);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--primary)">🔭 Refracción</div>
@@ -1269,6 +1285,31 @@ body.dark .inv-badge-salida{background:rgba(239,68,68,.15);color:#FCA5A5}
             <div class="form-group"><label>Adición</label><input type="text" id="rx-add-oi" placeholder="+0.00"></div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Parámetros de adaptación -->
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--primary);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--primary)">📐 Parámetros de Adaptación</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+        <div class="form-group"><label>DIP General (mm)</label><input type="text" id="pa-dip" placeholder="Ej: 62"></div>
+        <div class="form-group"><label>DIP OD (mm)</label><input type="text" id="pa-dip-od" placeholder="Ej: 31"></div>
+        <div class="form-group"><label>DIP OI (mm)</label><input type="text" id="pa-dip-oi" placeholder="Ej: 31"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+        <div class="form-group"><label>Altura Pupilar (mm)</label><input type="text" id="pa-altura" placeholder="Ej: 22"></div>
+        <div class="form-group"><label>Distancia al Vértice (mm)</label><input type="text" id="pa-vertice" placeholder="Ej: 12"></div>
+        <div class="form-group"><label>Ángulo Pantoscópico (°)</label><input type="text" id="pa-pantoscopico" placeholder="Ej: 8°"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+        <div class="form-group"><label>Ángulo Panorámico (°)</label><input type="text" id="pa-panoramico" placeholder="Ej: 5°"></div>
+        <div class="form-group"><label>Dist. Horizontal (mm)</label><input type="text" id="pa-horizontal" placeholder="—"></div>
+        <div class="form-group"><label>Dist. Vertical (mm)</label><input type="text" id="pa-vertical" placeholder="—"></div>
+        <div class="form-group"><label>Dist. Diagonal (mm)</label><input type="text" id="pa-diagonal" placeholder="—"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 3fr;gap:10px">
+        <div class="form-group"><label>Puente (mm)</label><input type="text" id="pa-puente" placeholder="Ej: 18"></div>
+        <div class="form-group"><label>Observaciones</label><input type="text" id="pa-obs" placeholder="Observaciones sobre los parámetros de adaptación..."></div>
       </div>
     </div>
 
@@ -1305,6 +1346,37 @@ body.dark .inv-badge-salida{background:rgba(239,68,68,.15);color:#FCA5A5}
         </div>
       </div>
       <div class="form-group"><label>Observaciones</label><input type="text" id="ev-rp-obs" placeholder="Observaciones sobre reflejos pupilares..."></div>
+    </div>
+
+    <!-- Biomicroscopía -->
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--primary);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--primary)">🔬 Biomicroscopía</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="background:var(--bg);border-radius:10px;padding:12px;border:1px solid var(--border)">
+          <div style="font-size:11px;font-weight:700;color:var(--primary);margin-bottom:8px">OD — Ojo Derecho</div>
+          <div class="form-group" style="margin-bottom:8px"><label>Resultado</label>
+            <select id="ev-bm-od">
+              <option value="">—</option>
+              <option value="Normal">Normal</option>
+              <option value="Alterado">Alterado</option>
+              <option value="No se tomó">No se tomó</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Observaciones OD</label><input type="text" id="ev-bm-obs-od" placeholder="Hallazgos biomicroscópicos OD..."></div>
+        </div>
+        <div style="background:var(--bg);border-radius:10px;padding:12px;border:1px solid var(--border)">
+          <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:8px">OI — Ojo Izquierdo</div>
+          <div class="form-group" style="margin-bottom:8px"><label>Resultado</label>
+            <select id="ev-bm-oi">
+              <option value="">—</option>
+              <option value="Normal">Normal</option>
+              <option value="Alterado">Alterado</option>
+              <option value="No se tomó">No se tomó</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Observaciones OI</label><input type="text" id="ev-bm-obs-oi" placeholder="Hallazgos biomicroscópicos OI..."></div>
+        </div>
+      </div>
     </div>
 
     <!-- Fondo de ojo -->
@@ -4658,12 +4730,15 @@ function abrirExamenVisual(pacienteId) {
   const campos = ['lm-esf-od','lm-cil-od','lm-eje-od','lm-add-od',
     'lm-esf-oi','lm-cil-oi','lm-eje-oi','lm-add-oi',
     'av-sc-od','av-sc-oi','av-sc-ao','ae-od','ae-oi','ev-cover-obs',
+    'ev-moe-obs','ev-ppc','ev-ppa','ev-acomo-obs',
     'rx-esf-od','rx-cil-od','rx-eje-od','rx-add-od',
     'rx-esf-oi','rx-cil-oi','rx-eje-oi','rx-add-oi',
+    'pa-dip','pa-dip-od','pa-dip-oi','pa-altura','pa-vertice',
+    'pa-pantoscopico','pa-panoramico','pa-horizontal','pa-vertical','pa-diagonal','pa-puente','pa-obs',
     'av-cc-od','av-cc-oi','av-cc-ao','av-cc-obs',
-    'ev-rp-obs','ev-fo-obs','ev-diagnostico','ev-recomendaciones'];
+    'ev-rp-obs','ev-bm-obs-od','ev-bm-obs-oi','ev-fo-obs','ev-diagnostico','ev-recomendaciones'];
   campos.forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
-  ['ev-cover','ev-rp-od','ev-rp-oi','ev-fo-od','ev-fo-oi','ev-material'].forEach(id=>{
+  ['ev-cover','ev-rp-od','ev-rp-oi','ev-bm-od','ev-bm-oi','ev-fo-od','ev-fo-oi','ev-material'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
   ['tr-blueray','tr-fotocrom','tr-antireflejo','tr-amarillo','tr-polarizado'].forEach(id=>{
@@ -4698,11 +4773,32 @@ async function guardarExamenVisual() {
     fila('Resultado', g('ev-cover')||'—'),
     fila('Observación', g('ev-cover-obs')),
     '',
+    '▸ MOTILIDAD OCULAR EXTRÍNSECA',
+    fila('Observaciones', g('ev-moe-obs')||'—'),
+    '',
+    '▸ EXAMINACIÓN DE ACOMODACIÓN',
+    fila('PPC', g('ev-ppc')||'—'), fila('PPA', g('ev-ppa')||'—'),
+    fila('Observaciones', g('ev-acomo-obs')),
+    '',
     '▸ REFRACCIÓN',
     fila('OD Esfera', g('rx-esf-od')), fila('OD Cilindro', g('rx-cil-od')),
     fila('OD Eje', g('rx-eje-od')?g('rx-eje-od')+'°':''), fila('OD Adición', g('rx-add-od')),
     fila('OI Esfera', g('rx-esf-oi')), fila('OI Cilindro', g('rx-cil-oi')),
     fila('OI Eje', g('rx-eje-oi')?g('rx-eje-oi')+'°':''), fila('OI Adición', g('rx-add-oi')),
+    '',
+    '▸ PARÁMETROS DE ADAPTACIÓN',
+    fila('DIP General', g('pa-dip')?g('pa-dip')+' mm':'—'),
+    fila('DIP OD', g('pa-dip-od')?g('pa-dip-od')+' mm':'—'),
+    fila('DIP OI', g('pa-dip-oi')?g('pa-dip-oi')+' mm':'—'),
+    fila('Altura pupilar', g('pa-altura')?g('pa-altura')+' mm':'—'),
+    fila('Dist. al vértice', g('pa-vertice')?g('pa-vertice')+' mm':'—'),
+    fila('Áng. pantoscópico', g('pa-pantoscopico')||'—'),
+    fila('Áng. panorámico', g('pa-panoramico')||'—'),
+    fila('Dist. horizontal', g('pa-horizontal')||'—'),
+    fila('Dist. vertical', g('pa-vertical')||'—'),
+    fila('Dist. diagonal', g('pa-diagonal')||'—'),
+    fila('Puente', g('pa-puente')?g('pa-puente')+' mm':'—'),
+    fila('Observaciones', g('pa-obs')),
     '',
     '▸ AGUDEZA VISUAL CON CORRECCIÓN',
     fila('OD', g('av-cc-od')||'—'), fila('OI', g('av-cc-oi')||'—'), fila('AO', g('av-cc-ao')),
@@ -4711,6 +4807,10 @@ async function guardarExamenVisual() {
     '▸ REFLEJOS PUPILARES',
     fila('OD', g('ev-rp-od')||'—'), fila('OI', g('ev-rp-oi')||'—'),
     fila('Observaciones', g('ev-rp-obs')),
+    '',
+    '▸ BIOMICROSCOPÍA',
+    fila('OD', g('ev-bm-od')||'—'), fila('  Obs. OD', g('ev-bm-obs-od')),
+    fila('OI', g('ev-bm-oi')||'—'), fila('  Obs. OI', g('ev-bm-obs-oi')),
     '',
     '▸ FONDO DE OJO',
     fila('OD', g('ev-fo-od')||'—'), fila('OI', g('ev-fo-oi')||'—'),
