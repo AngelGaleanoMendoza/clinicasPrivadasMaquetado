@@ -1132,6 +1132,45 @@
   </div>
 </div>
 
+<!-- MODAL DETALLE CLÍNICA (Super Admin) -->
+<div class="modal-overlay" id="modal-clinica-detalle">
+  <div class="modal modal-xl">
+    <div class="detalle-header">
+      <div class="detalle-logo" id="detalle-clinica-logo-box">🏥</div>
+      <div style="flex:1;min-width:180px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <h2 id="detalle-clinica-nombre" style="margin:0;font-size:20px"></h2>
+          <span id="detalle-clinica-prod-badge" class="tag-purple" style="display:none">★ En Producción</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
+          <code id="detalle-clinica-codigo" style="background:var(--bg);padding:3px 10px;border-radius:6px;font-size:12px;color:var(--text-light)"></code>
+          <span id="detalle-clinica-status-tag"></span>
+        </div>
+      </div>
+      <button class="modal-close" onclick="closeModal('modal-clinica-detalle')">✕</button>
+    </div>
+
+    <div id="detalle-stats-row" class="admin-stat-row" style="margin-bottom:18px">
+      <div class="admin-stat" style="opacity:.5"><div class="admin-stat-icon">⏳</div><div><div class="admin-stat-val">—</div><div class="admin-stat-label">Cargando...</div></div></div>
+    </div>
+
+    <div class="tabs" style="margin-bottom:14px">
+      <button class="tab active" id="detalle-tab-info"      onclick="switchDetalleTab('info')">ℹ️ Información</button>
+      <button class="tab"        id="detalle-tab-usuarios"  onclick="switchDetalleTab('usuarios')">👥 Usuarios</button>
+      <button class="tab"        id="detalle-tab-actividad" onclick="switchDetalleTab('actividad')">📊 Actividad</button>
+    </div>
+
+    <div id="detalle-panel-info"></div>
+    <div id="detalle-panel-usuarios"  style="display:none"></div>
+    <div id="detalle-panel-actividad" style="display:none"></div>
+
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;padding-top:14px;border-top:1px solid var(--border)">
+      <button class="btn btn-secondary" id="detalle-btn-prod" onclick="setClinicaProduccion(currentDetalleClinicaId)">★ Marcar en Producción</button>
+      <button class="btn btn-primary"   onclick="closeModal('modal-clinica-detalle')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <script src="js/app.js"></script>
 </body>
 </html>

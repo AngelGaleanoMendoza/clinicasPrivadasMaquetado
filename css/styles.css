@@ -587,3 +587,13 @@ body.dark .inv-badge-salida{background:rgba(239,68,68,.15);color:#FCA5A5}
 .icon-select{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:4px}
 .icon-opt{width:100%;aspect-ratio:1;border:1.5px solid var(--border);border-radius:10px;background:var(--bg);cursor:pointer;font-size:22px;display:flex;align-items:center;justify-content:center;transition:all .15s;padding:0}
 .icon-opt:hover,.icon-opt.selected{border-color:var(--primary);background:var(--primary-light)}
+/* DETALLE CLÍNICA */
+.tag-purple{background:rgba(124,58,237,.12);color:#7c3aed;border:1px solid rgba(124,58,237,.25);padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:4px}
+.clinica-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 20px}
+.clinica-detail-grid .full{grid-column:1/-1}
+.field-val{padding:8px 12px;background:var(--bg);border-radius:8px;font-size:14px;color:var(--text);margin-top:4px;min-height:34px;display:flex;align-items:center}
+.prod-row-highlight{background:rgba(124,58,237,.04)!important}
+.detalle-header{display:flex;align-items:flex-start;gap:16px;margin-bottom:20px;flex-wrap:wrap}
+.detalle-logo{width:64px;height:64px;border-radius:12px;border:2px solid var(--border);overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--primary-light),var(--bg))}
+.detalle-logo img{width:100%;height:100%;object-fit:contain}
+.modal-xl{max-width:720px!important;width:95%!important}

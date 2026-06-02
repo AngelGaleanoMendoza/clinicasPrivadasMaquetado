@@ -2836,6 +2836,8 @@ let adminTab = 'clinicas';
 let prodPeriodo = 'hoy';
 let editingClinicaId = null;
 let editingUsuarioId = null;
+let currentDetalleClinicaId = null;
+let detalleTab = 'info';
 
 function isSuperAdmin() {
   return currentUser && currentUser.email === SUPER_ADMIN_EMAIL;
@@ -2906,14 +2908,19 @@ function renderAdminClinicas() {
     <thead><tr><th>#</th><th>Nombre</th><th>Código</th><th>Estado</th><th>Usuarios</th><th>Acciones</th></tr></thead>
     <tbody>${adminClinicas.map(c => {
       const cnt = adminUsuarios.filter(u=>u.clinica_id===c.id).length;
-      return `<tr>
+      const isProd = c.en_produccion === true;
+      return `<tr class="${isProd?'prod-row-highlight':''}">
         <td><strong style="color:var(--text-light)">#${c.id}</strong></td>
-        <td><strong>${c.nombre}</strong></td>
+        <td>
+          <strong>${c.nombre}</strong>
+          ${isProd?'<span class="tag-purple" style="margin-left:8px">★ Producción</span>':''}
+        </td>
         <td><code style="background:var(--bg);padding:2px 8px;border-radius:6px;font-size:11px;color:var(--text-light)">${c.codigo}</code></td>
         <td>${c.activa?'<span class="tag tag-green">Activa</span>':'<span class="tag tag-red">Inactiva</span>'}</td>
         <td><span class="tag tag-blue">${cnt} usuario${cnt!==1?'s':''}</span></td>
         <td class="actions-cell">
-          <button class="btn btn-sm btn-secondary" data-cid="${c.id}" onclick="openModalClinicaEdit(Number(this.dataset.cid))">✏️ Editar</button>
+          <button class="btn btn-sm btn-primary" data-cid="${c.id}" onclick="verDetalleClinica(Number(this.dataset.cid))">🔍 Ver</button>
+          <button class="btn btn-sm btn-secondary" data-cid="${c.id}" onclick="openModalClinicaEdit(Number(this.dataset.cid))">✏️</button>
           <button class="btn btn-sm btn-danger" data-cid="${c.id}" onclick="eliminarClinica(Number(this.dataset.cid))">🗑️</button>
         </td></tr>`;
     }).join('')}</tbody></table></div>`;
@@ -3311,6 +3318,175 @@ async function eliminarClinica(id) {
   await loadAdminData();
   renderAdminClinicas();
   renderAdminStats();
+  setLoading(false);
+}
+
+// ── Ver Detalle Clínica ──
+async function verDetalleClinica(id) {
+  const c = adminClinicas.find(x=>x.id===id);
+  if(!c) return;
+  currentDetalleClinicaId = id;
+  detalleTab = 'info';
+
+  // Header
+  document.getElementById('detalle-clinica-nombre').textContent = c.nombre;
+  document.getElementById('detalle-clinica-codigo').textContent = c.codigo;
+
+  const logoBox = document.getElementById('detalle-clinica-logo-box');
+  if(c.logo_url) {
+    logoBox.innerHTML = `<img src="${c.logo_url}" alt="Logo">`;
+  } else {
+    logoBox.innerHTML = `<span style="font-size:30px">🏥</span>`;
+  }
+
+  const isProd = c.en_produccion === true;
+  document.getElementById('detalle-clinica-prod-badge').style.display = isProd ? 'inline-flex' : 'none';
+  document.getElementById('detalle-btn-prod').style.display = isProd ? 'none' : 'inline-flex';
+  document.getElementById('detalle-clinica-status-tag').innerHTML = c.activa
+    ? '<span class="tag tag-green">Activa</span>'
+    : '<span class="tag tag-red">Inactiva</span>';
+
+  // Reset tabs
+  ['info','usuarios','actividad'].forEach(t => {
+    document.getElementById('detalle-panel-'+t).style.display = t==='info' ? 'block' : 'none';
+    document.getElementById('detalle-tab-'+t).classList.toggle('active', t==='info');
+  });
+  renderDetallePanel('info');
+
+  document.getElementById('modal-clinica-detalle').classList.add('open');
+
+  // Fetch counts async — no loading overlay para no bloquear la UI
+  const [rPac, rCit, rCitMes, rInv] = await Promise.all([
+    sb.from('pacientes').select('*',{count:'exact',head:true}).eq('clinica_id',id),
+    sb.from('citas').select('*',{count:'exact',head:true}).eq('clinica_id',id),
+    sb.from('citas').select('*',{count:'exact',head:true}).eq('clinica_id',id).gte('fecha',hoy().slice(0,7)+'-01'),
+    sb.from('inventario').select('*',{count:'exact',head:true}).eq('clinica_id',id)
+  ]);
+  const nPac   = rPac.count  || 0;
+  const nCit   = rCit.count  || 0;
+  const nCitM  = rCitMes.count || 0;
+  const nInv   = rInv.count  || 0;
+  const nUsers = adminUsuarios.filter(u=>u.clinica_id===id).length;
+
+  const sEl = document.getElementById('detalle-stats-row');
+  if(sEl) sEl.innerHTML = `
+    <div class="admin-stat"><div class="admin-stat-icon">👤</div><div><div class="admin-stat-val">${nPac}</div><div class="admin-stat-label">Pacientes</div></div></div>
+    <div class="admin-stat"><div class="admin-stat-icon">📅</div><div><div class="admin-stat-val">${nCit}</div><div class="admin-stat-label">Citas totales</div></div></div>
+    <div class="admin-stat"><div class="admin-stat-icon">📆</div><div><div class="admin-stat-val">${nCitM}</div><div class="admin-stat-label">Citas este mes</div></div></div>
+    <div class="admin-stat"><div class="admin-stat-icon">📦</div><div><div class="admin-stat-val">${nInv}</div><div class="admin-stat-label">Productos inv.</div></div></div>
+    <div class="admin-stat"><div class="admin-stat-icon">👥</div><div><div class="admin-stat-val">${nUsers}</div><div class="admin-stat-label">Usuarios</div></div></div>`;
+}
+
+function switchDetalleTab(tab) {
+  detalleTab = tab;
+  ['info','usuarios','actividad'].forEach(t => {
+    document.getElementById('detalle-panel-'+t).style.display = t===tab ? 'block' : 'none';
+    document.getElementById('detalle-tab-'+t).classList.toggle('active', t===tab);
+  });
+  renderDetallePanel(tab);
+}
+
+function renderDetallePanel(tab) {
+  const id = currentDetalleClinicaId;
+  const c  = adminClinicas.find(x=>x.id===id);
+  if(!c) return;
+
+  if(tab === 'info') {
+    const f = (lbl,val) => `<div class="form-group"><label style="font-size:11px;font-weight:600;color:var(--text-light);text-transform:uppercase;letter-spacing:.04em">${lbl}</label><div class="field-val">${val||'<span style="color:var(--text-light)">—</span>'}</div></div>`;
+    document.getElementById('detalle-panel-info').innerHTML = `
+      <div class="clinica-detail-grid">
+        ${f('Doctor / Responsable', c.nombre_doctor)}
+        ${f('Especialidad', c.especialidad)}
+        ${f('Registro médico', c.registro)}
+        ${f('Teléfono', c.telefono)}
+        ${f('Tipo', c.tipo||'clinica')}
+        ${f('Máx. agendas / pacientes', `${c.max_agendas??10} / ${c.max_pacientes??500}`)}
+        <div class="form-group full"><label style="font-size:11px;font-weight:600;color:var(--text-light);text-transform:uppercase;letter-spacing:.04em">Dirección</label><div class="field-val">${c.direccion||'<span style="color:var(--text-light)">—</span>'}</div></div>
+        <div class="form-group full"><label style="font-size:11px;font-weight:600;color:var(--text-light);text-transform:uppercase;letter-spacing:.04em">Nota de pie (PDFs/facturas)</label><div class="field-val" style="font-size:12px;font-style:italic">${c.nota_pie||'<span style="color:var(--text-light)">—</span>'}</div></div>
+      </div>`;
+  }
+
+  if(tab === 'usuarios') {
+    const usuarios = adminUsuarios.filter(u=>u.clinica_id===id);
+    const rolLabel = r => ({admin:'Administrador',medico:'Médico',recepcion:'Recepcionista',enfermeria:'Enfermería'}[r]||r);
+    const rolTag   = r => ({admin:'tag-blue',medico:'tag-cyan',recepcion:'tag-orange',enfermeria:'tag-green'}[r]||'tag-gray');
+    document.getElementById('detalle-panel-usuarios').innerHTML = usuarios.length
+      ? `<div class="table-wrap"><table>
+          <thead><tr><th>Usuario</th><th>Email</th><th>Rol</th></tr></thead>
+          <tbody>${usuarios.map(u=>`<tr>
+            <td><div class="patient-name-cell">
+              <div class="patient-avatar" style="background:linear-gradient(135deg,var(--primary),var(--accent));font-size:18px;width:34px;height:34px">${u.icono||'👤'}</div>
+              <strong>${u.nombre}</strong>
+            </div></td>
+            <td style="font-size:12px;color:var(--text-light)">${u.email||'—'}</td>
+            <td><span class="tag ${rolTag(u.rol)}">${rolLabel(u.rol)}</span></td>
+          </tr>`).join('')}</tbody>
+        </table></div>`
+      : `<div class="empty-state"><div class="empty-icon">👥</div><p>Sin usuarios asignados a esta clínica</p></div>`;
+  }
+
+  if(tab === 'actividad') {
+    const usuarios = adminUsuarios.filter(u=>u.clinica_id===id);
+    const uids = new Set(usuarios.map(u=>u.id));
+    const acts = adminActividad.filter(a=>uids.has(a.user_id));
+    const logins    = acts.filter(a=>a.accion==='login').length;
+    const pacActs   = acts.filter(a=>a.accion==='paciente').length;
+    const citaActs  = acts.filter(a=>a.accion==='cita').length;
+    const notaActs  = acts.filter(a=>a.accion==='nota').length;
+
+    const diasNom = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+    const dias = Array.from({length:7},(_,i)=>{
+      const d = new Date(); d.setDate(d.getDate()-6+i); return d.toISOString().split('T')[0];
+    });
+    const porDia = dias.map(f=>({
+      f, nom:diasNom[new Date(f+'T12:00:00').getDay()],
+      total: acts.filter(a=>a.fecha===f).length
+    }));
+    const maxT = Math.max(...porDia.map(d=>d.total),1);
+
+    document.getElementById('detalle-panel-actividad').innerHTML = `
+      <div class="admin-stat-row" style="margin-bottom:18px">
+        <div class="admin-stat"><div class="admin-stat-icon">🔑</div><div><div class="admin-stat-val">${logins}</div><div class="admin-stat-label">Logins registrados</div></div></div>
+        <div class="admin-stat"><div class="admin-stat-icon">👤</div><div><div class="admin-stat-val">${pacActs}</div><div class="admin-stat-label">Altas de pacientes</div></div></div>
+        <div class="admin-stat"><div class="admin-stat-icon">📅</div><div><div class="admin-stat-val">${citaActs}</div><div class="admin-stat-label">Citas agendadas</div></div></div>
+        <div class="admin-stat"><div class="admin-stat-icon">📝</div><div><div class="admin-stat-val">${notaActs}</div><div class="admin-stat-label">Notas médicas</div></div></div>
+      </div>
+      <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px">Actividad últimos 7 días</div>
+      <div style="display:flex;gap:8px;align-items:flex-end;height:110px;padding:0 4px">
+        ${porDia.map(d=>`
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%">
+            <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;width:100%">
+              <div style="width:100%;background:linear-gradient(to top,var(--primary),var(--accent));border-radius:5px 5px 0 0;height:${Math.max(d.total?Math.round(d.total/maxT*85):0,0)}%;min-height:${d.total?'4px':'0'};position:relative">
+                ${d.total?`<div style="position:absolute;top:-17px;left:50%;transform:translateX(-50%);font-size:10px;font-weight:700;color:var(--primary)">${d.total}</div>`:''}
+              </div>
+            </div>
+            <div style="font-size:9px;font-weight:700;color:var(--text-light);text-transform:uppercase">${d.nom}</div>
+            <div style="font-size:9px;color:var(--text-light)">${d.f.slice(5)}</div>
+          </div>`).join('')}
+      </div>
+      ${!acts.length?'<div style="text-align:center;color:var(--text-light);font-size:13px;margin-top:16px;padding:20px">Sin actividad registrada para esta clínica</div>':''}`;
+  }
+}
+
+async function setClinicaProduccion(id) {
+  const c = adminClinicas.find(x=>x.id===id);
+  if(!c) return;
+  if(!confirm(`¿Marcar "${c.nombre}" como clínica en producción?\n\nSe quitará el indicador de las demás clínicas.`)) return;
+  setLoading(true);
+  // Quitar producción de todas
+  const {error: e1} = await sb.from('clinicas').update({en_produccion: false}).gt('id', 0);
+  // Poner producción en esta
+  const {error: e2} = await sb.from('clinicas').update({en_produccion: true}).eq('id', id);
+  if(e2) {
+    setLoading(false);
+    toast('Ejecuta este SQL en Supabase → SQL Editor:\nALTER TABLE clinicas ADD COLUMN IF NOT EXISTS en_produccion BOOLEAN DEFAULT FALSE;', 'error');
+    return;
+  }
+  await loadAdminData();
+  renderAdminClinicas();
+  document.getElementById('detalle-clinica-prod-badge').style.display = 'inline-flex';
+  document.getElementById('detalle-btn-prod').style.display = 'none';
+  toast(`"${c.nombre}" marcada como producción`, 'success');
   setLoading(false);
 }
 
