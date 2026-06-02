@@ -270,12 +270,29 @@ tbody tr:hover td{background:var(--bg)}
 .form-group textarea{resize:vertical;min-height:90px}
 
 /* TOAST */
-.toast-container{position:fixed;bottom:22px;right:22px;z-index:999;display:flex;flex-direction:column;gap:8px}
-.toast{background:#0F172A;color:#fff;padding:12px 18px;border-radius:12px;font-size:13px;display:flex;align-items:center;gap:10px;box-shadow:0 8px 32px rgba(0,0,0,.25);animation:toastIn .3s cubic-bezier(.34,1.56,.64,1);min-width:240px;border:1px solid rgba(255,255,255,.08)}
-@keyframes toastIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:none}}
+.toast-container{position:fixed;bottom:22px;right:22px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+.toast{background:#0F172A;color:#fff;padding:11px 14px 18px;border-radius:12px;font-size:13px;display:flex;align-items:flex-start;gap:10px;box-shadow:0 8px 32px rgba(0,0,0,.3);animation:toastIn .35s cubic-bezier(.34,1.56,.64,1);min-width:260px;max-width:340px;border:1px solid rgba(255,255,255,.08);position:relative;overflow:hidden}
+@keyframes toastIn{from{opacity:0;transform:translateX(32px) scale(.96)}to{opacity:1;transform:none}}
 .toast.success{background:#064E3B;border-color:rgba(16,185,129,.3)}
 .toast.error{background:#7F1D1D;border-color:rgba(239,68,68,.3)}
 .toast.info{background:#1E3A5F;border-color:rgba(37,99,235,.3)}
+.toast.warning{background:#451A03;border-color:rgba(245,158,11,.3)}
+.t-icon{font-size:17px;flex-shrink:0;margin-top:1px}
+.t-msg{flex:1;line-height:1.45}
+.t-close{background:none;border:none;color:rgba(255,255,255,.35);cursor:pointer;font-size:14px;padding:0;line-height:1;flex-shrink:0;margin-top:-1px;transition:color .15s}
+.t-close:hover{color:#fff}
+.t-bar{position:absolute;bottom:0;left:0;right:0;height:3px;transform-origin:left;animation:toastProg 3.8s linear forwards}
+.toast.success .t-bar{background:rgba(16,185,129,.55)}
+.toast.error   .t-bar{background:rgba(239,68,68,.55)}
+.toast.info    .t-bar{background:rgba(59,130,246,.55)}
+.toast.warning .t-bar{background:rgba(245,158,11,.55)}
+@keyframes toastProg{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+/* MODAL CONFIRM */
+.mc-box{max-width:420px;text-align:center;padding:32px 28px 24px}
+#mc-icon{font-size:52px;line-height:1;margin-bottom:14px}
+.mc-box h2{font-size:18px;font-weight:700;margin-bottom:8px}
+.mc-box .mc-msg{color:var(--text-light);font-size:14px;line-height:1.65;margin-bottom:28px}
+.mc-actions{display:flex;gap:10px;justify-content:center}
 
 /* LOGIN USER CARDS */
 .login-select-title{color:#94A3B8;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;margin-bottom:14px;text-align:center}

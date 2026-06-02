@@ -125,7 +125,8 @@ async function entrarConPerfil(profile) {
 async function checkSession() {}
 
 async function doLogout() {
-  if (!confirm('¿Cerrar sesión?')) return;
+  const ok = await customConfirm({icon:'👋',title:'¿Cerrar sesión?',msg:`Vas a salir de la sesión de <strong>${currentUser?.nombre||'usuario'}</strong>`,okText:'Cerrar sesión',cancelText:'Quedarse',danger:false});
+  if(!ok) return;
   currentUser = null; currentClinicaId = null;
   const app = document.getElementById('app');
   app.style.transition = 'opacity .3s';
@@ -172,11 +173,31 @@ function estadoTag(e) {
   return `<span class="tag ${m[e]||'tag-gray'}">${e}</span>`;
 }
 function toast(msg, type='success') {
-  const c=document.getElementById('toasts'), t=document.createElement('div');
-  t.className='toast '+type;
-  t.innerHTML={'success':'✅','error':'❌','info':'ℹ️'}[type]+' '+msg;
-  c.appendChild(t); setTimeout(()=>t.remove(),3800);
+  const icons = {success:'✅',error:'❌',info:'ℹ️',warning:'⚠️'};
+  const c = document.getElementById('toasts');
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.innerHTML = `<span class="t-icon">${icons[type]||'ℹ️'}</span><span class="t-msg">${msg}</span><button class="t-close" onclick="this.closest('.toast').remove()">✕</button><div class="t-bar"></div>`;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 3800);
 }
+
+let _confirmResolve = null;
+function customConfirm({icon='⚠️', title, msg, okText='Confirmar', cancelText='Cancelar', danger=true}) {
+  return new Promise(resolve => {
+    _confirmResolve = resolve;
+    document.getElementById('mc-icon').textContent   = icon;
+    document.getElementById('mc-title').textContent  = title;
+    document.getElementById('mc-msg').innerHTML      = msg;
+    document.getElementById('mc-cancel').textContent = cancelText;
+    const ok = document.getElementById('mc-ok');
+    ok.textContent = okText;
+    ok.className   = 'btn ' + (danger ? 'btn-danger' : 'btn-primary');
+    document.getElementById('modal-confirm').classList.add('open');
+  });
+}
+function _confirmOk()     { document.getElementById('modal-confirm').classList.remove('open'); if(_confirmResolve) { _confirmResolve(true);  _confirmResolve=null; } }
+function _confirmCancel() { document.getElementById('modal-confirm').classList.remove('open'); if(_confirmResolve) { _confirmResolve(false); _confirmResolve=null; } }
 
 // ════════════════════ NAVIGATION ════════════════════
 let currentView='dashboard', editingId=null, currentPatientId=null, selCalDate=hoy(), currentResumenCitaId=null, currentNotaId=null;
@@ -479,7 +500,8 @@ async function guardarPaciente(irExpediente=false){
 
 async function eliminarPaciente(id){
   const x=C.p.find(p=>p.id===id);
-  if(!confirm(`¿Eliminar a ${x.nombre} ${x.apellidos}? Esto también eliminará sus citas, medicaciones y notas.`)) return;
+  const ok=await customConfirm({icon:'🗑️',title:'Eliminar paciente',msg:`¿Eliminar a <strong>${x.nombre} ${x.apellidos}</strong>?<br><br>También se eliminarán sus citas, medicaciones y notas.`,okText:'Eliminar'});
+  if(!ok) return;
   setLoading(true);
   const {error}=await sb.from('pacientes').delete().eq('id',id);
   setLoading(false);
@@ -736,7 +758,8 @@ async function guardarCita(){
 }
 
 async function eliminarCita(id){
-  if(!confirm('¿Eliminar esta cita?')) return;
+  const ok=await customConfirm({icon:'📅',title:'Eliminar cita',msg:'¿Eliminar esta cita? Esta acción no se puede deshacer.',okText:'Eliminar'});
+  if(!ok) return;
   setLoading(true);
   const {error}=await sb.from('citas').delete().eq('id',id);
   setLoading(false);
@@ -772,7 +795,8 @@ async function marcarCitaCompletada(id){
   const c=C.c.find(x=>x.id===id); if(!c) return;
   const p=C.p.find(x=>x.id===c.pacienteId);
   const nombre=p?p.nombre+' '+p.apellidos:'el paciente';
-  if(!confirm(`¿Confirmar que ${nombre} acudió a la cita correctamente?`)) return;
+  const ok=await customConfirm({icon:'✅',title:'Confirmar asistencia',msg:`¿Confirmar que <strong>${nombre}</strong> acudió a la cita correctamente?`,okText:'Confirmar asistencia',danger:false});
+  if(!ok) return;
   setLoading(true);
   const {error}=await sb.from('citas').update({estado:'completada'}).eq('id',id);
   setLoading(false);
@@ -844,7 +868,8 @@ async function guardarMedicacion(){
 }
 
 async function eliminarMedicacion(id){
-  if(!confirm('¿Eliminar esta medicación?')) return;
+  const ok=await customConfirm({icon:'💊',title:'Eliminar medicación',msg:'¿Eliminar esta medicación? Se perderá el registro permanentemente.',okText:'Eliminar'});
+  if(!ok) return;
   setLoading(true);
   const {error}=await sb.from('medicaciones').delete().eq('id',id);
   setLoading(false);
@@ -907,7 +932,8 @@ async function guardarNota(){
 }
 
 async function eliminarNota(id){
-  if(!confirm('¿Eliminar esta nota clínica?')) return;
+  const ok=await customConfirm({icon:'📝',title:'Eliminar nota clínica',msg:'¿Eliminar esta nota clínica? Esta acción no se puede deshacer.',okText:'Eliminar'});
+  if(!ok) return;
   setLoading(true);
   const {error}=await sb.from('notas').delete().eq('id',id);
   setLoading(false);
@@ -1587,7 +1613,8 @@ function importarJSON(e){
   r.onload=async ev=>{
     try{
       const d=JSON.parse(ev.target.result);
-      if(!confirm('¿Importar backup? Esto insertará los datos en Supabase (no borra los existentes).')) return;
+      const ok=await customConfirm({icon:'📥',title:'Importar backup',msg:'Esto insertará los datos del archivo en Supabase.<br><small style="color:var(--text-light)">No se borran los registros existentes.</small>',okText:'Importar',danger:false});
+      if(!ok) return;
       setLoading(true);
       if(d.pacientes?.length) await sb.from('pacientes').upsert(d.pacientes.map(toP));
       if(d.citas?.length) await sb.from('citas').upsert(d.citas.map(toC));
@@ -1877,7 +1904,8 @@ async function verificarPin() {
 }
 
 async function doLogout() {
-  if (!confirm('¿Cerrar sesión?')) return;
+  const ok=await customConfirm({icon:'👋',title:'¿Cerrar sesión?',msg:`Vas a salir de la sesión de <strong>${currentUser?.nombre||'usuario'}</strong>`,okText:'Cerrar sesión',cancelText:'Quedarse',danger:false});
+  if(!ok) return;
   sessionStorage.removeItem('lm_user');
   currentUser = null; currentClinicaId = null;
   const app = document.getElementById('app');
@@ -2302,7 +2330,8 @@ async function guardarProducto(){
 
 async function eliminarProducto(id){
   const p=C.inv.find(x=>x.id===id);
-  if(!confirm(`¿Eliminar "${p?.nombre}"? También se eliminarán sus movimientos.`)) return;
+  const ok=await customConfirm({icon:'📦',title:'Eliminar producto',msg:`¿Eliminar <strong>${p?.nombre}</strong>?<br><br>También se eliminarán todos sus movimientos de inventario.`,okText:'Eliminar'});
+  if(!ok) return;
   setLoading(true);
   const{error}=await sb.from('inventario').delete().eq('id',id);
   if(error){ toast('Error: '+error.message,'error'); setLoading(false); return; }
@@ -2342,7 +2371,8 @@ async function guardarMovimiento(tipo){
   if(!invId||!cantidad||cantidad<=0){ toast('Selecciona un producto y cantidad válida','error'); return; }
   const prod=C.inv.find(p=>p.id===invId);
   if(tipo==='salida'&&prod&&cantidad>prod.stock){
-    if(!confirm(`Stock actual: ${prod.stock} ${prod.unidad}. ¿Registrar salida de ${cantidad} de todas formas?`)) return;
+    const ok=await customConfirm({icon:'⚠️',title:'Stock insuficiente',msg:`Stock actual: <strong>${prod.stock} ${prod.unidad}</strong>.<br>¿Registrar salida de <strong>${cantidad}</strong> de todas formas?`,okText:'Registrar igual',danger:true});
+    if(!ok) return;
   }
   setLoading(true);
   const nuevoStock=(prod?.stock||0)+(tipo==='entrada'?cantidad:-cantidad);
@@ -3298,10 +3328,14 @@ async function guardarClinica() {
 async function eliminarClinica(id) {
   const c = adminClinicas.find(x=>x.id===id);
   const cnt = adminUsuarios.filter(u=>u.clinica_id===id).length;
-  const msg = cnt > 0
-    ? `La clínica "${c?.nombre}" tiene ${cnt} usuario(s). ¿Eliminar de todas formas?\n\nSe borrarán TODOS sus datos: pacientes, citas, inventario y usuarios.`
-    : `¿Eliminar la clínica "${c?.nombre}"?\n\nSe borrarán TODOS sus datos y no se puede deshacer.`;
-  if(!confirm(msg)) return;
+  const ok = await customConfirm({
+    icon:'🗑️', title:'Eliminar clínica',
+    msg: cnt > 0
+      ? `La clínica <strong>${c?.nombre}</strong> tiene <strong>${cnt} usuario(s)</strong>.<br><br>Se borrarán <strong>TODOS</strong> sus datos: pacientes, citas, inventario y usuarios.`
+      : `¿Eliminar la clínica <strong>${c?.nombre}</strong>?<br><br>Se borrarán <strong>TODOS</strong> sus datos y no se puede deshacer.`,
+    okText:'Eliminar clínica', danger:true
+  });
+  if(!ok) return;
   setLoading(true);
   // Borrar datos relacionados en orden para evitar violaciones de FK
   await sb.from('inventario_movimientos').delete().eq('clinica_id', id);
@@ -3474,10 +3508,16 @@ async function setClinicaProduccion(id) {
   const c = adminClinicas.find(x=>x.id===id);
   if(!c) return;
   const nuevoEstado = !(c.en_produccion === true);
-  const msg = nuevoEstado
-    ? `¿Marcar "${c.nombre}" como clínica en producción?\n\nVarias clínicas pueden estar en producción al mismo tiempo.`
-    : `¿Quitar "${c.nombre}" de producción?`;
-  if(!confirm(msg)) return;
+  const ok = await customConfirm({
+    icon: nuevoEstado ? '🚀' : '✕',
+    title: nuevoEstado ? 'Marcar en producción' : 'Quitar de producción',
+    msg: nuevoEstado
+      ? `¿Marcar <strong>${c.nombre}</strong> como clínica en producción?<br><small style="color:var(--text-light)">Varias clínicas pueden estar en producción al mismo tiempo.</small>`
+      : `¿Quitar <strong>${c.nombre}</strong> del estado de producción?`,
+    okText: nuevoEstado ? 'Marcar en producción' : 'Quitar',
+    danger: !nuevoEstado
+  });
+  if(!ok) return;
   setLoading(true);
   const {error} = await sb.from('clinicas').update({en_produccion: nuevoEstado}).eq('id', id);
   if(error) {
@@ -3574,7 +3614,8 @@ async function guardarUsuario() {
 
 async function eliminarUsuario(id) {
   const u = adminUsuarios.find(x=>x.id===id);
-  if(!confirm(`¿Eliminar el usuario "${u?.nombre}"?`)) return;
+  const ok=await customConfirm({icon:'👤',title:'Eliminar usuario',msg:`¿Eliminar el usuario <strong>${u?.nombre}</strong>?<br><br>Esta acción no se puede deshacer.`,okText:'Eliminar'});
+  if(!ok) return;
   setLoading(true);
   const {error} = await sb.from('profiles').delete().eq('id',id);
   if(error){ toast('Error al eliminar: '+error.message,'error'); setLoading(false); return; }

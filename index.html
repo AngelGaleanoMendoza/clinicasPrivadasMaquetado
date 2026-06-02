@@ -1132,6 +1132,19 @@
   </div>
 </div>
 
+<!-- MODAL CONFIRMACIÓN GLOBAL -->
+<div class="modal-overlay" id="modal-confirm">
+  <div class="modal mc-box">
+    <div id="mc-icon"></div>
+    <h2 id="mc-title"></h2>
+    <p class="mc-msg" id="mc-msg"></p>
+    <div class="mc-actions">
+      <button class="btn btn-secondary" id="mc-cancel" onclick="_confirmCancel()">Cancelar</button>
+      <button class="btn btn-danger"    id="mc-ok"     onclick="_confirmOk()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL DETALLE CLÍNICA (Super Admin) -->
 <div class="modal-overlay" id="modal-clinica-detalle">
   <div class="modal modal-xl">
