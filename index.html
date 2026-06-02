@@ -872,15 +872,16 @@ body.dark .inv-badge-salida{background:rgba(239,68,68,.15);color:#FCA5A5}
         <div class="grid-2">
           <div class="card">
             <div class="card-header"><h3>⚙️ Datos de la Clínica</h3></div>
-            <div style="display:flex;gap:18px;align-items:flex-start;margin-bottom:22px">
-              <div id="config-logo-box" class="config-logo-box">🏥</div>
+            <div style="display:flex;gap:18px;align-items:center;margin-bottom:22px">
+              <div id="config-logo-box" class="config-logo-box" onclick="document.getElementById('config-logo-file').click()" style="cursor:pointer;border:2px dashed transparent;transition:border-color .2s" onmouseenter="this.style.borderColor='var(--primary)'" onmouseleave="this.style.borderColor='transparent'" title="Haz clic para cambiar el logo">🏥</div>
               <div style="flex:1">
-                <p class="text-light" style="margin-bottom:8px">Logo de la clínica (URL de imagen)</p>
-                <div style="display:flex;gap:8px">
-                  <input type="text" id="config-logo-url" placeholder="https://..." style="flex:1;padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit;outline:none">
-                  <button class="btn btn-secondary btn-sm" onclick="previewLogo()">Ver</button>
+                <input type="hidden" id="config-logo-url">
+                <input type="file" id="config-logo-file" accept="image/*" style="display:none" onchange="onConfigLogoSelected(this)">
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                  <button class="btn btn-secondary btn-sm" onclick="document.getElementById('config-logo-file').click()">📁 Subir logo</button>
+                  <button class="btn btn-sm" id="config-logo-remove" onclick="removeConfigLogo()" style="display:none;background:#FEE2E2;color:#DC2626;border:1px solid #FECACA">✕ Quitar</button>
                 </div>
-                <p class="text-light" style="margin-top:6px;font-size:11px">O pega la URL de tu logo para que aparezca en las notas de consulta</p>
+                <p class="text-light" style="margin-top:6px;font-size:11px">PNG, JPG o SVG · Máx. 500 KB · Aparece en todos los PDFs e impresiones</p>
               </div>
             </div>
             <div class="form-grid">
@@ -1485,10 +1486,16 @@ body.dark .inv-badge-salida{background:rgba(239,68,68,.15);color:#FCA5A5}
     <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-light);margin:14px 0 10px">Perfil para documentos e impresiones</div>
     <div class="form-grid">
       <div class="form-group full">
-        <label>URL del Logo</label>
-        <div style="display:flex;gap:8px;align-items:center">
-          <input type="text" id="cl-logo-url" placeholder="https://..." style="flex:1" oninput="previewAdminLogo()">
-          <div id="cl-logo-preview" style="width:52px;height:52px;border-radius:10px;background:linear-gradient(135deg,var(--primary),var(--accent));display:flex;align-items:center;justify-content:center;font-size:22px;overflow:hidden;flex-shrink:0">🏥</div>
+        <label>Logo de la clínica</label>
+        <input type="hidden" id="cl-logo-url">
+        <div style="display:flex;align-items:center;gap:14px">
+          <div id="cl-logo-preview" onclick="document.getElementById('cl-logo-file').click()" style="width:80px;height:80px;border-radius:14px;background:linear-gradient(135deg,var(--primary),var(--accent));display:flex;align-items:center;justify-content:center;font-size:28px;overflow:hidden;flex-shrink:0;cursor:pointer;border:2px dashed transparent;transition:border-color .2s" onmouseenter="this.style.borderColor='var(--primary)'" onmouseleave="this.style.borderColor='transparent'">🏥</div>
+          <div style="flex:1">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('cl-logo-file').click()">📁 Seleccionar imagen</button>
+            <button type="button" class="btn btn-sm" id="cl-logo-remove" onclick="removeAdminLogo()" style="display:none;background:#FEE2E2;color:#DC2626;border:1px solid #FECACA;margin-left:6px">✕ Quitar</button>
+            <input type="file" id="cl-logo-file" accept="image/*" style="display:none" onchange="onAdminLogoSelected(this)">
+            <p style="font-size:11px;color:var(--text-light);margin-top:6px">PNG, JPG o SVG · Recomendado 256×256 px · Máx. 500 KB</p>
+          </div>
         </div>
       </div>
       <div class="form-group"><label>Nombre del Doctor / Profesional</label><input type="text" id="cl-nombre-doctor" placeholder="Dr. Juan Pérez"></div>
@@ -2842,12 +2849,8 @@ function getClinicaConfig() {
 
 function renderConfiguracion() {
   const cfg = getClinicaConfig();
-  ['nombre-clinica','nombre-doctor','especialidad','direccion','telefono','email','registro','nota-pie','logo-url'].forEach(k => {
-    const el = document.getElementById('config-' + k.replace('-','') === 'config-logo-url' ? 'config-logo-url' : 'config-' + k);
-    if(el) el.value = cfg[k.replace(/-([a-z])/g, (_,c) => c.toUpperCase())] || '';
-  });
-  if(cfg.logoUrl) { const b = document.getElementById('config-logo-box'); b.innerHTML = `<img src="${cfg.logoUrl}" alt="logo">`; }
   document.getElementById('config-logo-url').value = cfg.logoUrl || '';
+  setConfigLogoPreview(cfg.logoUrl || null);
   document.getElementById('config-nombre-clinica').value = cfg.nombreClinica || '';
   document.getElementById('config-nombre-doctor').value = cfg.nombreDoctor || '';
   document.getElementById('config-especialidad').value = cfg.especialidad || '';
@@ -2859,11 +2862,34 @@ function renderConfiguracion() {
   actualizarPreviewConfig(cfg);
 }
 
-function previewLogo() {
-  const url = document.getElementById('config-logo-url').value.trim();
-  const b = document.getElementById('config-logo-box');
-  if(url) b.innerHTML = `<img src="${url}" alt="logo">`;
-  else b.innerHTML = '🏥';
+function setConfigLogoPreview(src) {
+  const box = document.getElementById('config-logo-box');
+  const btn = document.getElementById('config-logo-remove');
+  if(src) {
+    box.innerHTML = `<img src="${src}" alt="logo">`;
+    if(btn) btn.style.display = 'inline-flex';
+  } else {
+    box.innerHTML = '🏥';
+    if(btn) btn.style.display = 'none';
+    document.getElementById('config-logo-url').value = '';
+  }
+}
+
+function onConfigLogoSelected(input) {
+  const file = input.files[0];
+  if(!file) return;
+  if(file.size > 512 * 1024) { toast('La imagen no debe superar 500 KB','error'); input.value=''; return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('config-logo-url').value = e.target.result;
+    setConfigLogoPreview(e.target.result);
+  };
+  reader.readAsDataURL(file);
+  input.value = '';
+}
+
+function removeConfigLogo() {
+  setConfigLogoPreview(null);
 }
 
 function guardarConfigClinica() {
@@ -2883,7 +2909,6 @@ function guardarConfigClinica() {
   localStorage.setItem(key, JSON.stringify(cfg));
   toast('Configuración guardada ✅');
   actualizarPreviewConfig(cfg);
-  previewLogo();
 }
 
 function actualizarPreviewConfig(cfg) {
@@ -4886,10 +4911,34 @@ async function logActivity(accion) {
 }
 
 // ── Modal Clínica ──
-function previewAdminLogo() {
-  const url = document.getElementById('cl-logo-url').value.trim();
+function setAdminLogoPreview(src) {
   const box = document.getElementById('cl-logo-preview');
-  box.innerHTML = url ? `<img src="${url}" style="width:100%;height:100%;object-fit:contain;border-radius:10px" alt="logo">` : '🏥';
+  const btn = document.getElementById('cl-logo-remove');
+  if(src) {
+    box.innerHTML = `<img src="${src}" style="width:100%;height:100%;object-fit:contain;border-radius:12px" alt="logo">`;
+    if(btn) btn.style.display = 'inline-flex';
+  } else {
+    box.innerHTML = '🏥';
+    if(btn) btn.style.display = 'none';
+    document.getElementById('cl-logo-url').value = '';
+  }
+}
+
+function onAdminLogoSelected(input) {
+  const file = input.files[0];
+  if(!file) return;
+  if(file.size > 512 * 1024) { toast('La imagen no debe superar 500 KB','error'); input.value=''; return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('cl-logo-url').value = e.target.result;
+    setAdminLogoPreview(e.target.result);
+  };
+  reader.readAsDataURL(file);
+  input.value = '';
+}
+
+function removeAdminLogo() {
+  setAdminLogoPreview(null);
 }
 
 function openModalClinica() {
@@ -4899,7 +4948,7 @@ function openModalClinica() {
   document.getElementById('cl-activa').value = 'true';
   document.getElementById('cl-max-agendas').value = '10';
   document.getElementById('cl-max-pacientes').value = '500';
-  document.getElementById('cl-logo-preview').innerHTML = '🏥';
+  setAdminLogoPreview(null);
   editingClinicaId = null;
   document.getElementById('modal-clinica').classList.add('open');
 }
@@ -4921,8 +4970,7 @@ function openModalClinicaEdit(id) {
   document.getElementById('cl-telefono').value = c.telefono || '';
   document.getElementById('cl-direccion').value = c.direccion || '';
   document.getElementById('cl-nota-pie').value = c.nota_pie || '';
-  const box = document.getElementById('cl-logo-preview');
-  box.innerHTML = c.logo_url ? `<img src="${c.logo_url}" style="width:100%;height:100%;object-fit:contain;border-radius:10px" alt="logo">` : '🏥';
+  setAdminLogoPreview(c.logo_url || null);
   editingClinicaId = id;
   document.getElementById('modal-clinica').classList.add('open');
 }
