@@ -664,7 +664,7 @@ body.dark .inv-badge-salida{background:rgba(239,68,68,.15);color:#FCA5A5}
       <div class="menu-item" onclick="navigate('inventario')"><span class="icon">📦</span> Inventario</div>
       <div class="menu-section">Sistema</div>
       <div class="menu-item" onclick="navigate('exportar')"><span class="icon">📤</span> Exportar / Enviar</div>
-      <div class="menu-item" onclick="navigate('configuracion')"><span class="icon">⚙️</span> Configuración Clínica</div>
+      <div class="menu-item" id="menu-configuracion" onclick="navigate('configuracion')" style="display:none"><span class="icon">⚙️</span> Configuración Clínica</div>
       <div class="menu-section" id="menu-admin-section" style="display:none">Super Admin</div>
       <div class="menu-item" id="menu-admin" onclick="navigate('admin')" style="display:none"><span class="icon">👑</span> Administración</div>
     </nav>
@@ -1924,6 +1924,7 @@ async function navigate(view, patientId) {
     if(window.innerWidth<=768) closeSidebar();
     return;
   }
+  if(view==='configuracion' && !isSuperAdmin()){navigate('dashboard');return;}
   await loadAll();
   renderView(view);
   if(window.innerWidth<=768) closeSidebar();
@@ -2983,7 +2984,7 @@ body{font-family:'Inter',Arial,sans-serif;color:#1a1a1a;padding:20px 28px;font-s
 .sn{font-size:13px;font-weight:700}
 .sd{font-size:11px;color:#666}
 .ft{margin-top:22px;border-top:1px solid #E2E8F0;padding-top:10px;text-align:center;font-size:10px;color:#94A3B8}
-@media print{body{padding:15px}.no-print{display:none}}
+@media print{body{padding:15px;print-color-adjust:exact;-webkit-print-color-adjust:exact}.no-print{display:none}img{max-width:100%;display:block}}
 </style></head><body>
 <div class="h">
   <div class="logo">${cfg.logoUrl?`<img src="${cfg.logoUrl}" alt="logo">`:'🏥'}</div>
@@ -4568,9 +4569,11 @@ function isSuperAdmin() {
 function toggleAdminMenu() {
   const sa = isSuperAdmin();
   const section = document.getElementById('menu-admin-section');
-  const item = document.getElementById('menu-admin');
+  const item    = document.getElementById('menu-admin');
+  const cfg     = document.getElementById('menu-configuracion');
   if(section) section.style.display = sa ? 'block' : 'none';
-  if(item) item.style.display = sa ? 'flex' : 'none';
+  if(item)    item.style.display    = sa ? 'flex'  : 'none';
+  if(cfg)     cfg.style.display     = sa ? 'flex'  : 'none';
 }
 
 async function loadAdminData() {
