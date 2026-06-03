@@ -124,6 +124,7 @@
 
       <!-- DASHBOARD -->
       <div id="view-dashboard" class="view active">
+        <div id="panel-pendientes-sesion" style="display:none;margin-bottom:18px"></div>
         <div class="stats-grid">
           <div class="stat-card"><div class="stat-icon si-blue">👥</div><div class="stat-info"><h3 id="stat-pacientes">—</h3><p>Pacientes registrados</p></div></div>
           <div class="stat-card"><div class="stat-icon si-green">📅</div><div class="stat-info"><h3 id="stat-citas-hoy">—</h3><p>Citas hoy</p></div></div>
@@ -1203,6 +1204,23 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-resumen-cita')">Cerrar</button>
       <button class="btn btn-primary" onclick="imprimirNotaConsulta(currentResumenCitaId)">🖨️ Imprimir Nota</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL INACTIVIDAD -->
+<div class="modal-overlay" id="modal-inactividad" style="z-index:9999">
+  <div class="modal mc-box" style="max-width:380px;text-align:center">
+    <div style="font-size:48px;margin-bottom:12px">⏱️</div>
+    <h2 style="margin-bottom:8px">Sesión por expirar</h2>
+    <p style="color:var(--text-light);font-size:14px;margin-bottom:18px">
+      Por inactividad tu sesión se cerrará en
+      <strong style="color:var(--danger);font-size:20px;display:block;margin:8px 0" id="inactividad-count">30</strong>
+      segundos. Los formularios abiertos se guardarán como <strong>pendientes de finalización</strong>.
+    </p>
+    <div style="display:flex;gap:10px;justify-content:center">
+      <button class="btn btn-primary" onclick="continuarSesion()" style="min-width:140px">✋ Seguir aquí</button>
+      <button class="btn btn-secondary" onclick="autoLogout()" style="min-width:120px">Salir ahora</button>
     </div>
   </div>
 </div>

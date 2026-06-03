@@ -167,6 +167,238 @@ async function resolverPerfil(authId, email) {
   return null;
 }
 
+// ════════════════════ INACTIVIDAD ════════════════════
+const INAC_TOTAL = 2 * 60 * 1000;   // 2 minutos
+const INAC_AVISO  = 30 * 1000;       // aviso 30s antes
+
+let _inacTimer    = null;
+let _inacCuenta   = null;
+let _inacActivo   = false;
+
+function _inacReset() {
+  if(!_inacActivo) return;
+  clearTimeout(_inacTimer);
+  clearInterval(_inacCuenta);
+  const el = document.getElementById('modal-inactividad');
+  if(el) el.classList.remove('open');
+  _inacTimer = setTimeout(_inacAviso, INAC_TOTAL - INAC_AVISO);
+}
+
+function _inacAviso() {
+  const overlay = document.getElementById('modal-inactividad');
+  const countEl = document.getElementById('inactividad-count');
+  if(!overlay) { autoLogout(); return; }
+  overlay.classList.add('open');
+  let secs = 30;
+  if(countEl) countEl.textContent = secs;
+  _inacCuenta = setInterval(() => {
+    secs--;
+    if(countEl) countEl.textContent = secs;
+    if(secs <= 0) { clearInterval(_inacCuenta); autoLogout(); }
+  }, 1000);
+}
+
+function iniciarInactividad() {
+  _inacActivo = true;
+  ['click','mousemove','keydown','touchstart','scroll'].forEach(e =>
+    document.addEventListener(e, _inacReset, { passive: true }));
+  _inacReset();
+}
+
+function detenerInactividad() {
+  _inacActivo = false;
+  clearTimeout(_inacTimer);
+  clearInterval(_inacCuenta);
+  ['click','mousemove','keydown','touchstart','scroll'].forEach(e =>
+    document.removeEventListener(e, _inacReset));
+  const el = document.getElementById('modal-inactividad');
+  if(el) el.classList.remove('open');
+}
+
+function continuarSesion() {
+  clearInterval(_inacCuenta);
+  const el = document.getElementById('modal-inactividad');
+  if(el) el.classList.remove('open');
+  _inacReset();
+}
+
+function _draftsKey() { return 'lm_pendientes_' + (currentClinicaId || 'gen'); }
+
+function guardarBorradoresSesion() {
+  const drafts = [];
+  const modalCita = document.getElementById('modal-cita');
+  const modalMed  = document.getElementById('modal-medicacion');
+  const modalNota = document.getElementById('modal-nota');
+  const modalPac  = document.getElementById('modal-paciente');
+
+  if(modalCita?.classList.contains('open')) {
+    const motivo = document.getElementById('c-motivo')?.value?.trim();
+    const fecha  = document.getElementById('c-fecha')?.value;
+    const pid    = document.getElementById('c-paciente')?.value;
+    if(motivo || fecha) {
+      const p = pid ? C.p.find(x=>x.id==pid) : null;
+      drafts.push({ id: Date.now()+1, modulo:'cita', titulo:'Cita pendiente'+(p?` — ${p.nombre} ${p.apellidos}`:''),
+        icono:'📅', data:{ pacienteId:pid||null, fecha, hora:document.getElementById('c-hora')?.value,
+        motivo, tipo:document.getElementById('c-tipo')?.value, estado:'pendiente',
+        notas:document.getElementById('c-notas')?.value }});
+    }
+  }
+
+  if(modalMed?.classList.contains('open')) {
+    const pid   = document.getElementById('m-paciente')?.value;
+    const items = (typeof medItems!=='undefined' ? medItems : []).filter(m => m.nombre);
+    if(items.length) {
+      const p = pid ? C.p.find(x=>x.id==pid) : null;
+      drafts.push({ id: Date.now()+2, modulo:'medicacion', titulo:'Medicación pendiente'+(p?` — ${p.nombre} ${p.apellidos}`:''),
+        icono:'💊', data:{ pacienteId:pid||null, items,
+        inicio:document.getElementById('m-inicio')?.value, fin:document.getElementById('m-fin')?.value,
+        estado:document.getElementById('m-estado')?.value }});
+    }
+  }
+
+  if(modalNota?.classList.contains('open')) {
+    const contenido = document.getElementById('n-contenido')?.value?.trim();
+    const pid       = document.getElementById('n-paciente')?.value;
+    if(contenido) {
+      const p = pid ? C.p.find(x=>x.id==pid) : null;
+      drafts.push({ id: Date.now()+3, modulo:'nota', titulo:'Nota clínica pendiente'+(p?` — ${p.nombre} ${p.apellidos}`:''),
+        icono:'📝', data:{ pacienteId:pid||null, tipo:document.getElementById('n-tipo')?.value,
+        tituloNota:document.getElementById('n-titulo')?.value, contenido }});
+    }
+  }
+
+  if(modalPac?.classList.contains('open')) {
+    const nombre    = document.getElementById('p-nombre')?.value?.trim();
+    const apellidos = document.getElementById('p-apellidos')?.value?.trim();
+    if(nombre) {
+      drafts.push({ id: Date.now()+4, modulo:'paciente', titulo:'Registro de paciente pendiente'+(apellidos?` — ${nombre} ${apellidos}`:` — ${nombre}`),
+        icono:'👤', data:{ nombre, apellidos, identificacion:document.getElementById('p-id')?.value,
+        telefono:document.getElementById('p-telefono')?.value }});
+    }
+  }
+
+  if(drafts.length) {
+    const key  = _draftsKey();
+    const prev = JSON.parse(localStorage.getItem(key) || '[]');
+    const ts   = new Date().toLocaleString('es-ES');
+    localStorage.setItem(key, JSON.stringify([...prev, ...drafts.map(d => ({...d, ts, usuario: currentUser?.name }))]));
+  }
+  return drafts.length;
+}
+
+async function autoLogout() {
+  detenerInactividad();
+  const guardados = guardarBorradoresSesion();
+  await sb.auth.signOut();
+  currentUser = null; currentClinicaId = null;
+  const app = document.getElementById('app');
+  app.style.transition = 'opacity .3s';
+  app.style.opacity = '0';
+  setTimeout(() => {
+    app.classList.remove('visible');
+    app.style.opacity = '';
+    const ls = document.getElementById('login-screen');
+    ls.style.cssText = 'display:flex;opacity:0;transform:scale(.95);transition:opacity .4s,transform .4s';
+    setTimeout(() => { ls.style.opacity='1'; ls.style.transform='none'; }, 10);
+    cargarUsuariosLogin();
+    if(guardados) toast(`Sesión cerrada por inactividad · ${guardados} elemento${guardados>1?'s':''} guardado${guardados>1?'s':''} como pendiente${guardados>1?'s':''}`, 'warning');
+    else toast('Sesión cerrada por inactividad', 'warning');
+  }, 300);
+}
+
+function renderPendientesSesion() {
+  const key    = _draftsKey();
+  const drafts = JSON.parse(localStorage.getItem(key) || '[]');
+  const el     = document.getElementById('panel-pendientes-sesion');
+  if(!el) return;
+  if(!drafts.length) { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  el.innerHTML = `
+    <div class="card" style="border:2px solid var(--warning);background:linear-gradient(135deg,#FFFBEB,#FEF3C7)">
+      <div class="card-header" style="border-bottom:1px solid #FDE68A;padding-bottom:14px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:22px">⏳</span>
+          <div>
+            <h3 style="color:#92400E;margin:0">Pendientes de finalización</h3>
+            <p style="font-size:12px;color:#B45309;margin:0">${drafts.length} elemento${drafts.length>1?'s':''} guardado${drafts.length>1?'s':''} al cerrar la sesión anterior</p>
+          </div>
+        </div>
+        <button class="btn btn-sm" style="background:#FEF3C7;color:#92400E;border:1px solid #FDE68A" onclick="limpiarPendientesSesion()">✕ Descartar todos</button>
+      </div>
+      <div style="padding-top:12px;display:flex;flex-direction:column;gap:8px">
+        ${drafts.map((d,i) => `
+          <div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #FDE68A;border-radius:10px;padding:12px 14px">
+            <span style="font-size:20px;flex-shrink:0">${d.icono||'📋'}</span>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:700;font-size:13px;color:#0F172A">${d.titulo}</div>
+              <div style="font-size:11px;color:#B45309;margin-top:2px">Guardado: ${d.ts||''} · Por: ${d.usuario||''}</div>
+            </div>
+            <div style="display:flex;gap:6px;flex-shrink:0">
+              <button class="btn btn-sm btn-primary" onclick="recuperarDraft(${i})">♻️ Recuperar</button>
+              <button class="btn btn-sm btn-secondary" onclick="descartarDraft(${i})">✕</button>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+}
+
+function recuperarDraft(idx) {
+  const key    = _draftsKey();
+  const drafts = JSON.parse(localStorage.getItem(key) || '[]');
+  const d      = drafts[idx];
+  if(!d) return;
+  if(d.modulo === 'cita') {
+    openModalCita();
+    setTimeout(() => {
+      if(d.data.pacienteId) setPacienteSelect('c-paciente', d.data.pacienteId);
+      if(d.data.fecha)   document.getElementById('c-fecha').value   = d.data.fecha;
+      if(d.data.hora)    fillHoraSelect(d.data.hora);
+      if(d.data.motivo)  document.getElementById('c-motivo').value  = d.data.motivo;
+      if(d.data.tipo)    document.getElementById('c-tipo').value    = d.data.tipo;
+      if(d.data.notas)   document.getElementById('c-notas').value   = d.data.notas;
+    }, 80);
+  } else if(d.modulo === 'medicacion') {
+    openModalMedicacion();
+    setTimeout(() => {
+      if(d.data.pacienteId) setPacienteSelect('m-paciente', d.data.pacienteId);
+      if(d.data.items) { medItems = d.data.items; renderMedItems(); }
+      if(d.data.inicio) document.getElementById('m-inicio').value = d.data.inicio;
+      if(d.data.fin)    document.getElementById('m-fin').value    = d.data.fin;
+      if(d.data.estado) document.getElementById('m-estado').value = d.data.estado;
+    }, 80);
+  } else if(d.modulo === 'nota') {
+    openModalNota();
+    setTimeout(() => {
+      if(d.data.pacienteId) setPacienteSelect('n-paciente', d.data.pacienteId);
+      if(d.data.tipo)      document.getElementById('n-tipo').value     = d.data.tipo;
+      if(d.data.tituloNota)document.getElementById('n-titulo').value   = d.data.tituloNota;
+      if(d.data.contenido) document.getElementById('n-contenido').value= d.data.contenido;
+    }, 80);
+  } else if(d.modulo === 'paciente') {
+    openModalPaciente();
+    setTimeout(() => {
+      if(d.data.nombre)       document.getElementById('p-nombre').value    = d.data.nombre;
+      if(d.data.apellidos)    document.getElementById('p-apellidos').value  = d.data.apellidos;
+      if(d.data.identificacion) document.getElementById('p-id').value      = d.data.identificacion;
+      if(d.data.telefono)     document.getElementById('p-telefono').value   = d.data.telefono;
+    }, 80);
+  }
+  descartarDraft(idx);
+}
+
+function descartarDraft(idx) {
+  const key    = _draftsKey();
+  const drafts = JSON.parse(localStorage.getItem(key) || '[]');
+  drafts.splice(idx, 1);
+  localStorage.setItem(key, JSON.stringify(drafts));
+  renderPendientesSesion();
+}
+
+function limpiarPendientesSesion() {
+  localStorage.removeItem(_draftsKey());
+  renderPendientesSesion();
+}
+
 async function entrarConPerfil(profile) {
   const rolLabel = {admin:'Administrador',medico:'Médico',recepcion:'Recepcionista',enfermeria:'Enfermería'}[profile.rol]||profile.rol;
   currentClinicaId = profile.clinica_id || null;
@@ -193,6 +425,7 @@ async function entrarConPerfil(profile) {
   navigate('dashboard');
   toast(`Bienvenido, ${currentUser.name} 👋`, 'info');
   logActivity('login');
+  iniciarInactividad();
 }
 
 async function checkSession() {}
@@ -200,6 +433,7 @@ async function checkSession() {}
 async function doLogout() {
   const ok = await customConfirm({icon:'👋',title:'¿Cerrar sesión?',msg:`Vas a salir de la sesión de <strong>${currentUser?.nombre||'usuario'}</strong>`,okText:'Cerrar sesión',cancelText:'Quedarse',danger:false});
   if(!ok) return;
+  detenerInactividad();
   await sb.auth.signOut();
   currentUser = null; currentClinicaId = null;
   const app = document.getElementById('app');
@@ -392,6 +626,7 @@ function renderCalDayCitas(date){
 
 // ════════════════════ DASHBOARD ════════════════════
 function renderDashboard(){
+  renderPendientesSesion();
   const h=hoy();
   const pendientes=C.c.filter(c=>c.estado==='pendiente');
   document.getElementById('stat-pacientes').textContent=C.p.length;
