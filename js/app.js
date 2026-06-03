@@ -909,6 +909,35 @@ function renderMedicaciones(){
     <td><div class="actions-cell"><button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirRecetaPaciente(${x.pacienteId})" title="Imprimir receta del paciente">🖨️</button><button class="btn btn-secondary btn-sm" onclick="openModalMedicacion(${x.id})">✏️</button><button class="btn btn-danger btn-sm" onclick="eliminarMedicacion(${x.id})">🗑️</button></div></td></tr>`; }).join('');
 }
 
+const DOSIS_UNIDADES = ['tableta(s)','cápsula(s)','mg','g','mcg','ml','oz','gota(s)','UI','sobre(s)','ampolleta(s)','supositorio(s)','parche(s)','inhalación(es)','aplicación(es)'];
+
+function parseDosisStr(d) {
+  if(!d) return {qty:'1', unit:'tableta(s)'};
+  const m = d.match(/^([\d.\/]+)\s*(.+)$/);
+  if(m) {
+    const num = m[1];
+    const raw = m[2].toLowerCase().trim();
+    if(raw.startsWith('tab')) return {qty:num, unit:'tableta(s)'};
+    if(raw.startsWith('cap') || raw.startsWith('cáp')) return {qty:num, unit:'cápsula(s)'};
+    if(raw === 'mg' || raw.startsWith('mg/')) return {qty:num, unit:'mg'};
+    if(raw === 'g' || raw === 'gr') return {qty:num, unit:'g'};
+    if(raw === 'mcg' || raw === 'μg' || raw === 'ug') return {qty:num, unit:'mcg'};
+    if(raw === 'ml' || raw.startsWith('ml/')) return {qty:num, unit:'ml'};
+    if(raw === 'oz') return {qty:num, unit:'oz'};
+    if(raw.startsWith('gota')) return {qty:num, unit:'gota(s)'};
+    if(raw === 'ui' || raw === 'u.i.') return {qty:num, unit:'UI'};
+    if(raw.startsWith('ampo')) return {qty:num, unit:'ampolleta(s)'};
+    if(raw.startsWith('sobre')) return {qty:num, unit:'sobre(s)'};
+    if(raw.startsWith('supo')) return {qty:num, unit:'supositorio(s)'};
+    if(raw.startsWith('par')) return {qty:num, unit:'parche(s)'};
+    if(raw.startsWith('inha')) return {qty:num, unit:'inhalación(es)'};
+    const found = DOSIS_UNIDADES.find(u => u.toLowerCase().startsWith(raw.split('(')[0]));
+    return {qty:num, unit: found || raw};
+  }
+  if(/^[\d.]+$/.test(d)) return {qty:d, unit:'tableta(s)'};
+  return {qty:'1', unit:'tableta(s)'};
+}
+
 let medItems = [];
 
 function openModalMedicacion(id) {
@@ -925,10 +954,11 @@ function openModalMedicacion(id) {
       document.getElementById('m-inicio').value = m.inicio || '';
       document.getElementById('m-fin').value = m.fin || '';
       document.getElementById('m-estado').value = m.estado;
-      medItems = [{nombre:m.nombre, dosis:m.dosis, frecuencia:m.frecuencia, via:m.via||'oral', indicaciones:m.indicaciones||''}];
+      const dp = parseDosisStr(m.dosis);
+      medItems = [{nombre:m.nombre, dosisQty:dp.qty, dosisUnit:dp.unit, frecuencia:m.frecuencia, via:m.via||'oral', indicaciones:m.indicaciones||''}];
     }
   } else {
-    medItems = [{nombre:'', dosis:'', frecuencia:'Cada 8 horas', via:'oral', indicaciones:''}];
+    medItems = [{nombre:'', dosisQty:'1', dosisUnit:'tableta(s)', frecuencia:'Cada 8 horas', via:'oral', indicaciones:''}];
   }
   document.getElementById('btn-add-med-item').style.display = editingId ? 'none' : 'inline-flex';
   renderMedItems();
@@ -949,7 +979,10 @@ function renderMedItems() {
     +     '<input type="text" id="mi-nombre-'+i+'" value="'+item.nombre+'" placeholder="Buscar medicamento..." autocomplete="off" oninput="medItems['+i+'].nombre=this.value;buscarMedItem(this.value,'+i+')" onblur="setTimeout(()=>hideMedItemSug('+i+'),180)">'
     +     '<div id="mi-sug-'+i+'" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:400;max-height:200px;overflow-y:auto;margin-top:4px"></div>'
     +   '</div>'
-    +   '<div class="form-group"><label>Dosis *</label><input type="text" id="mi-dosis-'+i+'" value="'+item.dosis+'" placeholder="Ej: 1 tableta" oninput="medItems['+i+'].dosis=this.value"></div>'
+    +   '<div class="form-group"><label>Dosificación *</label><div style="display:flex;gap:8px">'
+    +     '<input type="number" id="mi-dosis-qty-'+i+'" value="'+(item.dosisQty||1)+'" min="0.25" step="0.25" style="width:80px;flex-shrink:0" oninput="medItems['+i+'].dosisQty=this.value">'
+    +     '<select id="mi-dosis-unit-'+i+'" style="flex:1" onchange="medItems['+i+'].dosisUnit=this.value">'+DOSIS_UNIDADES.map(u=>'<option value="'+u+'"'+((item.dosisUnit||'tableta(s)')===u?' selected':'')+'>'+u+'</option>').join('')+'</select>'
+    +   '</div></div>'
     +   '<div class="form-group"><label>Frecuencia *</label><select id="mi-freq-'+i+'" onchange="medItems['+i+'].frecuencia=this.value">'
     +     ['Cada 4 horas','Cada 8 horas','Cada 12 horas','Cada 24 horas','Cada 2 días','Cada 3 días','1 vez al día','Una vez con alimentos','En ayunas','Al almorzar','Al cenar','Antes de dormir'].map(f=>'<option value="'+f+'"'+(item.frecuencia===f?' selected':'')+'>'+f+'</option>').join('')
     +     '</select></div>'
@@ -960,7 +993,7 @@ function renderMedItems() {
 }
 
 function addMedItem() {
-  medItems.push({nombre:'', dosis:'', frecuencia:'Cada 8 horas', via:'oral', indicaciones:''});
+  medItems.push({nombre:'', dosisQty:'1', dosisUnit:'tableta(s)', frecuencia:'Cada 8 horas', via:'oral', indicaciones:''});
   renderMedItems();
 }
 
@@ -993,7 +1026,9 @@ function hideMedItemSug(idx) {
 
 function seleccionarMedItem(m, idx) {
   medItems[idx].nombre = m.n;
-  medItems[idx].dosis = m.d;
+  const dp = parseDosisStr(m.d);
+  medItems[idx].dosisQty = dp.qty;
+  medItems[idx].dosisUnit = dp.unit;
   const viaMap = {oral:'oral',inyectable:'inyectable',topica:'topica',inhalada:'inhalada',sublingual:'sublingual'};
   medItems[idx].via = viaMap[m.v] || 'oral';
   hideMedItemSug(idx);
@@ -1008,19 +1043,20 @@ async function guardarMedicacion() {
   const inicio = document.getElementById('m-inicio').value;
   const fin = document.getElementById('m-fin').value;
   const estado = document.getElementById('m-estado').value;
+  const buildDosis = item => ((item.dosisQty||'1') + ' ' + (item.dosisUnit||'tableta(s)')).trim();
   if(editingId) {
     const item = medItems[0];
-    if(!item.nombre||!item.dosis||!item.frecuencia) { toast('Completa nombre, dosis y frecuencia','error'); return; }
-    const obj = {pacienteId:pid,nombre:item.nombre,dosis:item.dosis,frecuencia:item.frecuencia,inicio,fin,via:item.via,estado,indicaciones:item.indicaciones};
+    if(!item.nombre||!item.dosisQty||!item.frecuencia) { toast('Completa nombre, dosificación y frecuencia','error'); return; }
+    const obj = {pacienteId:pid,nombre:item.nombre,dosis:buildDosis(item),frecuencia:item.frecuencia,inicio,fin,via:item.via,estado,indicaciones:item.indicaciones};
     setLoading(true);
     const {error} = await sb.from('medicaciones').update(toM(obj)).eq('id',editingId);
     setLoading(false);
     if(error) { toast('Error: '+error.message,'error'); return; }
     toast('Medicación actualizada');
   } else {
-    const valid = medItems.filter(item => item.nombre && item.dosis && item.frecuencia);
-    if(!valid.length) { toast('Agrega al menos un medicamento con nombre, dosis y frecuencia','error'); return; }
-    const rows = valid.map(item => toM({pacienteId:pid,nombre:item.nombre,dosis:item.dosis,frecuencia:item.frecuencia,inicio,fin,via:item.via,estado,indicaciones:item.indicaciones}));
+    const valid = medItems.filter(item => item.nombre && item.dosisQty && item.frecuencia);
+    if(!valid.length) { toast('Agrega al menos un medicamento con nombre, dosificación y frecuencia','error'); return; }
+    const rows = valid.map(item => toM({pacienteId:pid,nombre:item.nombre,dosis:buildDosis(item),frecuencia:item.frecuencia,inicio,fin,via:item.via,estado,indicaciones:item.indicaciones}));
     setLoading(true);
     const {error} = await sb.from('medicaciones').insert(rows);
     setLoading(false);
