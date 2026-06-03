@@ -400,7 +400,7 @@ function limpiarPendientesSesion() {
 }
 
 async function entrarConPerfil(profile) {
-  const rolLabel = {admin:'Administrador',medico:'Médico',recepcion:'Recepcionista',enfermeria:'Enfermería'}[profile.rol]||profile.rol;
+  const rolLabel = {admin:'Administración',medico:'Médico',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin'}[profile.rol]||profile.rol;
   currentClinicaId = profile.clinica_id || null;
   currentUser = {
     id:     profile.id,
@@ -1077,7 +1077,7 @@ function renderCitas(){
 }
 
 function fillMedicoSelect(selId, selectedId) {
-  const medicos = C.prof.filter(p => p.rol==='medico'||p.rol==='admin');
+  const medicos = C.prof.filter(p => p.rol==='medico'||p.rol==='dr'||p.rol==='dra'||p.rol==='admin');
   const sel = document.getElementById(selId);
   sel.innerHTML = '<option value="">Sin asignar</option>' +
     medicos.map(m=>`<option value="${m.id}">${m.icono||'👨‍⚕️'} ${m.nombre}</option>`).join('');
@@ -2503,7 +2503,7 @@ async function cargarUsuariosLogin() { /* reemplazado por login email+password *
 let selAgendasDoc = null;
 let selAgendasDate = hoy();
 
-const rolLabel2 = r => ({admin:'Administrador',medico:'Médico',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin'}[r]||r);
+const rolLabel2 = r => ({admin:'Administración',medico:'Médico',dr:'Dr.',dra:'Dra.',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin'}[r]||r);
 
 function renderAgendas() {
   selAgendasDate = hoy();
@@ -3538,8 +3538,8 @@ function renderAdminClinicas() {
 function renderAdminUsuarios() {
   const el = document.getElementById('admin-usuarios-list');
   if(!el) return;
-  const rolLabel = r => ({admin:'Administrador',medico:'Médico',recepcion:'Recepcionista',enfermeria:'Enfermería'}[r]||r);
-  const rolTag = r => ({admin:'tag-blue',medico:'tag-cyan',recepcion:'tag-orange',enfermeria:'tag-green'}[r]||'tag-gray');
+  const rolLabel = r => ({admin:'Administración',medico:'Médico',dr:'Dr.',dra:'Dra.',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin'}[r]||r);
+  const rolTag = r => ({admin:'tag-blue',medico:'tag-cyan',dr:'tag-cyan',dra:'tag-cyan',recepcion:'tag-orange',enfermeria:'tag-green'}[r]||'tag-gray');
   if(!adminUsuarios.length) {
     el.innerHTML = `<div class="empty-state"><div class="empty-icon">👥</div><p>No hay usuarios registrados.<br>Crea el primero con <strong>+ Nuevo Usuario</strong></p></div>`;
     return;
