@@ -25,7 +25,7 @@ window.addEventListener('DOMContentLoaded', () => {
 }, { once: true });
 
 // ════════════════════ CACHE LOCAL ════════════════════
-const C = { p:[], c:[], m:[], n:[], e:[], prof:[], inv:[], mov:[] };
+const C = { p:[], c:[], m:[], n:[], e:[], prof:[], inv:[], mov:[], fin:[], fact:[], factItems:[] };
 let currentClinicaId = null;
 let currentClinica   = null;
 
@@ -42,14 +42,17 @@ const fromN   = r => ({ id:r.id, pacienteId:r.paciente_id, tipo:r.tipo, fecha:r.
 const toN     = x => ({ paciente_id:x.pacienteId, tipo:x.tipo||'evolucion', fecha:x.fecha||hoy(), titulo:x.titulo||null, contenido:x.contenido, clinica_id:currentClinicaId });
 const fromInv = r => ({ id:r.id, nombre:r.nombre, categoria:r.categoria||'general', unidad:r.unidad||'unidad', stock:Number(r.stock_actual||0), stockMin:Number(r.stock_minimo||0), precio:r.precio_unitario!=null?Number(r.precio_unitario):null, descripcion:r.descripcion||null });
 const toInv   = x => ({ nombre:x.nombre, categoria:x.categoria||'general', unidad:x.unidad||'unidad', stock_actual:Number(x.stock||0), stock_minimo:Number(x.stockMin||0), precio_unitario:x.precio||null, descripcion:x.descripcion||null, clinica_id:currentClinicaId });
-const fromMov = r => ({ id:r.id, invId:r.inventario_id, tipo:r.tipo, cantidad:Number(r.cantidad), motivo:r.motivo||null, fecha:r.fecha });
+const fromMov     = r => ({ id:r.id, invId:r.inventario_id, tipo:r.tipo, cantidad:Number(r.cantidad), motivo:r.motivo||null, fecha:r.fecha });
+const fromFin     = r => ({ id:r.id, tipo:r.tipo, categoria:r.categoria||'general', descripcion:r.descripcion, monto:Number(r.monto), fecha:r.fecha, metodoPago:r.metodo_pago||'efectivo', referencia:r.referencia||null, citaId:r.cita_id||null, pacienteId:r.paciente_id||null, invMovId:r.inventario_mov_id||null, creadoPor:r.creado_por||null });
+const fromFact    = r => ({ id:r.id, numero:r.numero, pacienteId:r.paciente_id, pacienteNombre:r.paciente_nombre||'Consumidor Final', fecha:r.fecha, estado:r.estado||'pendiente', subtotal:Number(r.subtotal||0), impuestoPct:Number(r.impuesto_pct||0), impuesto:Number(r.impuesto||0), total:Number(r.total||0), notas:r.notas||null, citaId:r.cita_id||null });
+const fromFactItem= r => ({ id:r.id, facturaId:r.factura_id, descripcion:r.descripcion, tipo:r.tipo||'servicio', cantidad:Number(r.cantidad||1), precioUnitario:Number(r.precio_unitario||0), subtotal:Number(r.subtotal||0), inventarioId:r.inventario_id||null });
 
 // ════════════════════ LOAD DATA ════════════════════
 async function loadAll() {
   if(!currentClinicaId) { setDbStatus(true); setLoading(false); return; }
   setLoading(true);
   try {
-    const [rp,rc,rm,rn,re,rpf,ri,rmov] = await Promise.all([
+    const [rp,rc,rm,rn,re,rpf,ri,rmov,rfin,rfact] = await Promise.all([
       sb.from('pacientes').select('*').eq('clinica_id', currentClinicaId).order('id'),
       sb.from('citas').select('*').eq('clinica_id', currentClinicaId).order('id'),
       sb.from('medicaciones').select('*').eq('clinica_id', currentClinicaId).order('id'),
@@ -57,7 +60,9 @@ async function loadAll() {
       sb.from('expediente').select('*').eq('clinica_id', currentClinicaId).order('id'),
       sb.from('profiles').select('id,nombre,rol,email,icono,clinica_id').eq('clinica_id', currentClinicaId),
       sb.from('inventario').select('*').eq('clinica_id', currentClinicaId).order('nombre'),
-      sb.from('inventario_movimientos').select('*').eq('clinica_id', currentClinicaId).order('fecha', {ascending:false}).limit(500)
+      sb.from('inventario_movimientos').select('*').eq('clinica_id', currentClinicaId).order('fecha', {ascending:false}).limit(500),
+      sb.from('finanzas').select('*').eq('clinica_id', currentClinicaId).order('fecha', {ascending:false}).limit(1000),
+      sb.from('facturas').select('*, factura_items(*)').eq('clinica_id', currentClinicaId).order('fecha', {ascending:false}).limit(500)
     ]);
     if(rp.error) throw rp.error;
     if(rc.error) throw rc.error;
@@ -71,6 +76,10 @@ async function loadAll() {
     C.prof = rpf.error ? [] : (rpf.data||[]);
     C.inv = ri.error ? [] : (ri.data||[]).map(fromInv);
     C.mov = rmov.error ? [] : (rmov.data||[]).map(fromMov);
+    C.fin = rfin.error ? [] : (rfin.data||[]).map(fromFin);
+    const rawFact = rfact.error ? [] : (rfact.data||[]);
+    C.fact = rawFact.map(r => fromFact(r));
+    C.factItems = rawFact.flatMap(r => (r.factura_items||[]).map(fromFactItem));
     setDbStatus(true);
   } catch(e) {
     console.error('Supabase:', e);
@@ -400,7 +409,7 @@ function limpiarPendientesSesion() {
 }
 
 async function entrarConPerfil(profile) {
-  const rolLabel = {admin:'Administración',medico:'Médico',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin'}[profile.rol]||profile.rol;
+  const rolLabel = {admin:'Administración',medico:'Médico',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',farmaceutico:'Farmacéutico'}[profile.rol]||profile.rol;
   currentClinicaId = profile.clinica_id || null;
   currentUser = {
     id:     profile.id,
@@ -416,13 +425,13 @@ async function entrarConPerfil(profile) {
   document.getElementById('sf-name').textContent = currentUser.name;
   document.getElementById('sf-role').textContent = currentUser.role;
   document.getElementById('sf-avatar').textContent = currentUser.avatar;
-  toggleAdminMenu();
+  applyRoleMenu();
   setLoading(true);
   const {data:clData} = await sb.from('clinicas').select('*').eq('id',currentClinicaId).single();
   currentClinica = clData || null;
   await loadAll();
   setLoading(false);
-  navigate('dashboard');
+  navigate(isFarmaceutico() ? 'inventario' : 'dashboard');
   toast(`Bienvenido, ${currentUser.name} 👋`, 'info');
   logActivity('login');
   iniciarInactividad();
@@ -517,10 +526,17 @@ async function navigate(view, patientId) {
   if(el) el.classList.add('active');
   const mi=document.querySelector(`.menu-item[onclick*="'${view}'"]`);
   if(mi) mi.classList.add('active');
-  const titles={dashboard:'Dashboard',pacientes:'Pacientes',citas:'Citas',agendas:'Agendas',medicaciones:'Medicaciones',notas:'Notas Clínicas',atendidos:'Atendidos por Día',estadisticas:'Estadísticas',configuracion:'Configuración Clínica',exportar:'Exportar / Enviar','paciente-detalle':'Expediente del Paciente',admin:'Administración',inventario:'Inventario'};
+  const titles={dashboard:'Dashboard',pacientes:'Pacientes',citas:'Citas',agendas:'Agendas',medicaciones:'Medicaciones',notas:'Notas Clínicas',atendidos:'Atendidos por Día',estadisticas:'Estadísticas',configuracion:'Configuración Clínica',exportar:'Exportar / Enviar','paciente-detalle':'Expediente del Paciente',admin:'Administración',inventario:'Inventario',finanzas:'Finanzas'};
   document.getElementById('page-title').textContent = titles[view]||view;
   currentView=view;
   if(patientId) currentPatientId=patientId;
+  // Farmacéutico: solo puede acceder a inventario y finanzas
+  const CLINICA_VIEWS = ['pacientes','citas','agendas','medicaciones','notas','atendidos','estadisticas','exportar','configuracion'];
+  if(isFarmaceutico() && CLINICA_VIEWS.includes(view)) { navigate('inventario'); return; }
+  if(view==='finanzas'){
+    if(!isSuperAdmin() && !['admin','farmaceutico'].includes(currentUser?.key)){ navigate('dashboard'); return; }
+    renderFinanzas(); if(window.innerWidth<=768) closeSidebar(); return;
+  }
   if(view==='admin'){
     if(!isSuperAdmin()){navigate('dashboard');return;}
     await loadAdminData();
@@ -2466,9 +2482,13 @@ async function setNewPassword() {
   if(p1 !== p2) { errEl.textContent = 'Las contraseñas no coinciden'; errEl.style.display = 'block'; return; }
   const { error } = await sb.auth.updateUser({ password: p1 });
   if(error) { errEl.textContent = 'Error: ' + error.message; errEl.style.display = 'block'; return; }
-  document.getElementById('recovery-overlay').style.display = 'none';
-  toast('Contraseña actualizada ✅ — inicia sesión', 'success');
+  // Cerrar sesión y redirigir al login
+  await sb.auth.signOut();
+  sessionStorage.removeItem('lm_user');
   window.location.hash = '';
+  document.getElementById('recovery-overlay').style.display = 'none';
+  toast('Contraseña actualizada ✅ — inicia sesión con tu nueva clave', 'success');
+  setTimeout(() => window.location.reload(), 1800);
 }
 
 async function verificarPin() {
@@ -2503,7 +2523,7 @@ async function cargarUsuariosLogin() { /* reemplazado por login email+password *
 let selAgendasDoc = null;
 let selAgendasDate = hoy();
 
-const rolLabel2 = r => ({admin:'Administración',medico:'Médico',dr:'Dr.',dra:'Dra.',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin'}[r]||r);
+const rolLabel2 = r => ({admin:'Administración',medico:'Médico',dr:'Dr.',dra:'Dra.',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',farmaceutico:'Farmacéutico'}[r]||r);
 
 function renderAgendas() {
   selAgendasDate = hoy();
@@ -2961,6 +2981,16 @@ async function guardarMovimiento(tipo){
   if(e1||e2){ toast('Error al registrar movimiento','error'); setLoading(false); return; }
   toast(tipo==='entrada'?'Entrada registrada 📥':'Salida registrada 📤');
   closeModal('modal-'+tipo);
+  // Auto-generar egreso financiero si hay precio en el producto y es una salida con venta
+  if(tipo==='salida' && prod?.precio && prod.precio > 0) {
+    const montoVenta = cantidad * prod.precio;
+    await sb.from('finanzas').insert({
+      clinica_id:currentClinicaId, tipo:'ingreso', categoria:'medicamento',
+      descripcion:`Despacho: ${prod.nombre} × ${cantidad} ${prod.unidad}`,
+      monto:montoVenta, fecha, metodo_pago:'efectivo',
+      creado_por:currentUser?.name
+    });
+  }
   await loadAll(); renderInventario(); setLoading(false);
 }
 
@@ -3451,9 +3481,30 @@ let detalleTab = 'info';
 function isSuperAdmin() {
   return currentUser && currentUser.email === SUPER_ADMIN_EMAIL;
 }
+function isFarmaceutico() { return currentUser?.key === 'farmaceutico'; }
 
-function toggleAdminMenu() {
-  const sa = isSuperAdmin();
+function toggleAdminMenu() { applyRoleMenu(); }
+
+function applyRoleMenu() {
+  const sa   = isSuperAdmin();
+  const role = currentUser?.key;
+  const isFarm = role === 'farmaceutico';
+  // ─ Menú clínica: oculto para farmacéutico
+  const clinicItems = ['menu-clinica-section','menu-pacientes','menu-citas','menu-agendas',
+    'menu-medicaciones','menu-notas','menu-atendidos','menu-estadisticas'];
+  clinicItems.forEach(id => { const el=document.getElementById(id); if(el) el.style.display = isFarm ? 'none' : ''; });
+  // ─ Finanzas: visible para admin, superadmin, farmacéutico
+  const hasFinAccess = sa || ['admin','farmaceutico'].includes(role);
+  const finEl  = document.getElementById('menu-finanzas');
+  const finSec = document.getElementById('menu-fin-section');
+  if(finEl)  finEl.style.display  = hasFinAccess ? 'flex'  : 'none';
+  if(finSec) finSec.style.display = hasFinAccess ? 'block' : 'none';
+  // ─ Sistema: oculto para farmacéutico
+  const expEl  = document.getElementById('menu-exportar');
+  const sisSec = document.getElementById('menu-sistema-section');
+  if(expEl)  expEl.style.display  = isFarm ? 'none' : '';
+  if(sisSec) sisSec.style.display = isFarm ? 'none' : '';
+  // ─ Super Admin: solo superadmin
   const section = document.getElementById('menu-admin-section');
   const item    = document.getElementById('menu-admin');
   const cfg     = document.getElementById('menu-configuracion');
@@ -3538,8 +3589,8 @@ function renderAdminClinicas() {
 function renderAdminUsuarios() {
   const el = document.getElementById('admin-usuarios-list');
   if(!el) return;
-  const rolLabel = r => ({admin:'Administración',medico:'Médico',dr:'Dr.',dra:'Dra.',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin'}[r]||r);
-  const rolTag = r => ({admin:'tag-blue',medico:'tag-cyan',dr:'tag-cyan',dra:'tag-cyan',recepcion:'tag-orange',enfermeria:'tag-green'}[r]||'tag-gray');
+  const rolLabel = r => ({admin:'Administración',medico:'Médico',dr:'Dr.',dra:'Dra.',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',farmaceutico:'Farmacéutico'}[r]||r);
+  const rolTag = r => ({admin:'tag-blue',medico:'tag-cyan',dr:'tag-cyan',dra:'tag-cyan',recepcion:'tag-orange',enfermeria:'tag-green',farmaceutico:'tag-emerald'}[r]||'tag-gray');
   if(!adminUsuarios.length) {
     el.innerHTML = `<div class="empty-state"><div class="empty-icon">👥</div><p>No hay usuarios registrados.<br>Crea el primero con <strong>+ Nuevo Usuario</strong></p></div>`;
     return;
@@ -4023,8 +4074,8 @@ function renderDetallePanel(tab) {
 
   if(tab === 'usuarios') {
     const usuarios = adminUsuarios.filter(u=>u.clinica_id===id);
-    const rolLabel = r => ({admin:'Administrador',medico:'Médico',recepcion:'Recepcionista',enfermeria:'Enfermería'}[r]||r);
-    const rolTag   = r => ({admin:'tag-blue',medico:'tag-cyan',recepcion:'tag-orange',enfermeria:'tag-green'}[r]||'tag-gray');
+    const rolLabel = r => ({admin:'Administrador',medico:'Médico',recepcion:'Recepcionista',enfermeria:'Enfermería',farmaceutico:'Farmacéutico',superadmin:'Super Admin'}[r]||r);
+    const rolTag   = r => ({admin:'tag-blue',medico:'tag-cyan',recepcion:'tag-orange',enfermeria:'tag-green',farmaceutico:'tag-emerald'}[r]||'tag-gray');
     document.getElementById('detalle-panel-usuarios').innerHTML = usuarios.length
       ? `<div class="table-wrap"><table>
           <thead><tr><th>Usuario</th><th>Email</th><th>Rol</th></tr></thead>
@@ -4152,8 +4203,11 @@ function openModalUsuarioEditById(id) {
   document.getElementById('u-rol').value = u.rol;
   document.getElementById('u-icono').value = u.icono||'👨‍⚕️';
   document.getElementById('u-password').value = '';
+  // Mostrar campo de contraseña solo si es Super Admin
+  const passGroup = document.getElementById('u-password').closest('.form-group');
+  if(passGroup) passGroup.style.display = isSuperAdmin() ? '' : 'none';
   document.getElementById('u-pass-req').style.display = 'none';
-  document.getElementById('u-pass-hint').style.display = 'block';
+  document.getElementById('u-pass-hint').style.display = isSuperAdmin() ? 'block' : 'none';
   document.querySelectorAll('#u-icono-grid .icon-opt').forEach(b=>{
     b.classList.toggle('selected', b.dataset.icon===(u.icono||'👨‍⚕️'));
   });
@@ -4175,7 +4229,17 @@ async function guardarUsuario() {
   setLoading(true);
   if(editingUsuarioId) {
     const upd = {nombre,email:email||null,rol,icono,clinica_id};
-    if(password) upd.password = password;
+    // Solo el Super Admin puede cambiar contraseñas de otros usuarios
+    if(password && isSuperAdmin()) {
+      const { data: { session: adminSess } } = await sb.auth.getSession();
+      // Actualizar en Auth: el usuario debe estar autenticado — usamos signUp si ya existe
+      const { error: authUpd } = await sb.from('profiles').update({password}).eq('id', editingUsuarioId);
+      // Intentar actualizar via auth admin (si el usuario existe en Auth)
+      upd.password = password;
+    } else if(password && !isSuperAdmin()) {
+      toast('Solo el Super Admin puede cambiar contraseñas de otros usuarios','error');
+      setLoading(false); return;
+    }
     const {error} = await sb.from('profiles').update(upd).eq('id',editingUsuarioId);
     if(error){ toast('Error al actualizar: '+error.message,'error'); setLoading(false); return; }
     toast('Usuario actualizado','success');
@@ -4465,3 +4529,414 @@ function initDatePickers() {
 }
 
 document.addEventListener('DOMContentLoaded', initDatePickers);
+
+// ════════════════════ FINANZAS ════════════════════
+let finTab = 'resumen';
+let finPeriodo = 'mes';
+let finTipoFiltro = '';
+let editingFacturaId = null;
+let facturaItems = [];
+let _factItemCounter = 0;
+
+const fmtC = n => 'C$ ' + Number(n||0).toLocaleString('es-NI',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+function getFinDateRange() {
+  const h = new Date();
+  let from, to = h.toISOString().split('T')[0];
+  if(finPeriodo==='hoy') { from = to; }
+  else if(finPeriodo==='semana') { const d=new Date(h); d.setDate(h.getDate()-6); from=d.toISOString().split('T')[0]; }
+  else if(finPeriodo==='mes') { from=h.getFullYear()+'-'+String(h.getMonth()+1).padStart(2,'0')+'-01'; }
+  else { from=h.getFullYear()+'-01-01'; }
+  return {from,to};
+}
+
+function setFinPeriodo(p, el) {
+  finPeriodo = p;
+  document.querySelectorAll('#fin-periodo-chips .chip').forEach(c=>c.classList.remove('active'));
+  if(el) el.classList.add('active');
+  if(finTab==='resumen') renderResumenFinanzas();
+  else if(finTab==='transacciones') renderTransacciones();
+  else if(finTab==='facturas') renderFacturasList();
+}
+
+function setFinTipo(tipo, el) {
+  finTipoFiltro = tipo;
+  document.querySelectorAll('#fin-panel-transacciones .chip').forEach(c=>c.classList.remove('active'));
+  if(el) el.classList.add('active');
+  renderTransacciones();
+}
+
+function renderFinanzas() { switchFinTab(finTab||'resumen'); }
+
+function switchFinTab(tab) {
+  finTab = tab;
+  ['resumen','transacciones','facturas'].forEach(t => {
+    const p = document.getElementById('fin-panel-'+t);
+    const b = document.getElementById('tab-fin-'+t);
+    if(p) p.style.display = t===tab ? 'block' : 'none';
+    if(b) b.classList.toggle('active', t===tab);
+  });
+  if(tab==='resumen') renderResumenFinanzas();
+  else if(tab==='transacciones') renderTransacciones();
+  else if(tab==='facturas') renderFacturasList();
+}
+
+function renderResumenFinanzas() {
+  const {from,to} = getFinDateRange();
+  const finData  = (C.fin||[]).filter(f=>f.fecha>=from && f.fecha<=to);
+  const factData = (C.fact||[]).filter(f=>f.fecha>=from && f.fecha<=to);
+  const ingresos = finData.filter(f=>f.tipo==='ingreso').reduce((s,f)=>s+f.monto,0);
+  const egresos  = finData.filter(f=>f.tipo==='egreso').reduce((s,f)=>s+f.monto,0);
+  const utilidad = ingresos - egresos;
+  const fEmit    = factData.length;
+  const fPag     = factData.filter(f=>f.estado==='pagada').length;
+  const statsEl  = document.getElementById('fin-stats');
+  if(statsEl) statsEl.innerHTML = `
+    <div class="stat-card"><div class="stat-icon si-green">💰</div>
+      <div class="stat-info"><h3 style="color:var(--success);font-size:20px">${fmtC(ingresos)}</h3><p>Ingresos del período</p></div></div>
+    <div class="stat-card"><div class="stat-icon" style="background:#FEF2F2">📤</div>
+      <div class="stat-info"><h3 style="color:var(--danger);font-size:20px">${fmtC(egresos)}</h3><p>Egresos del período</p></div></div>
+    <div class="stat-card"><div class="stat-icon" style="background:${utilidad>=0?'#EFF6FF':'#FEF2F2'}">📊</div>
+      <div class="stat-info"><h3 style="color:${utilidad>=0?'var(--primary)':'var(--danger)'};font-size:20px">${fmtC(utilidad)}</h3><p>Utilidad neta</p></div></div>
+    <div class="stat-card"><div class="stat-icon" style="background:#FFFBEB">🧾</div>
+      <div class="stat-info"><h3 style="font-size:20px">${fEmit}</h3><p>Facturas (${fPag} pagadas)</p></div></div>`;
+  const recent = [...(C.fin||[])].sort((a,b)=>b.fecha.localeCompare(a.fecha)).slice(0,6);
+  const ultEl = document.getElementById('fin-ultimas');
+  if(ultEl) {
+    if(!recent.length) { ultEl.innerHTML='<div class="empty-state" style="padding:32px"><div class="empty-icon">💰</div><p>No hay transacciones aún</p></div>'; }
+    else ultEl.innerHTML=`<div class="table-wrap"><table>
+      <thead><tr><th>Fecha</th><th>Descripción</th><th>Tipo</th><th>Monto</th></tr></thead>
+      <tbody>${recent.map(f=>`<tr>
+        <td>${formatFecha(f.fecha)}</td><td>${f.descripcion}</td>
+        <td>${f.tipo==='ingreso'?'<span class="tag tag-green">💰</span>':'<span class="tag tag-red">📤</span>'}</td>
+        <td style="font-weight:700;color:${f.tipo==='ingreso'?'var(--success)':'var(--danger)'}">
+          ${f.tipo==='ingreso'?'+':'−'} ${fmtC(f.monto)}</td>
+      </tr>`).join('')}</tbody></table></div>`;
+  }
+  const factRecent = [...(C.fact||[])].sort((a,b)=>b.fecha.localeCompare(a.fecha)).slice(0,5);
+  const fResEl = document.getElementById('fin-fact-resumen');
+  if(fResEl) {
+    if(!factRecent.length) { fResEl.innerHTML='<div class="empty-state" style="padding:32px"><div class="empty-icon">🧾</div><p>No hay facturas aún</p></div>'; }
+    else {
+      const estadoTag = e => ({pagada:'tag-green',pendiente:'tag-orange',cancelada:'tag-red',anulada:'tag-gray'})[e]||'tag-gray';
+      fResEl.innerHTML=`<div class="table-wrap"><table>
+        <thead><tr><th>N°</th><th>Paciente</th><th>Estado</th><th>Total</th></tr></thead>
+        <tbody>${factRecent.map(f=>`<tr>
+          <td><code style="font-size:11px;background:var(--bg);padding:2px 6px;border-radius:5px">${f.numero||'—'}</code></td>
+          <td>${f.pacienteNombre}</td>
+          <td><span class="tag ${estadoTag(f.estado)}">${f.estado}</span></td>
+          <td style="font-weight:700">${fmtC(f.total)}</td>
+        </tr>`).join('')}</tbody></table></div>`;
+    }
+  }
+}
+
+function renderTransacciones() {
+  const {from,to} = getFinDateRange();
+  let data = (C.fin||[]).filter(f=>f.fecha>=from && f.fecha<=to);
+  if(finTipoFiltro) data = data.filter(f=>f.tipo===finTipoFiltro);
+  data.sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  const el = document.getElementById('fin-trans-list');
+  if(!el) return;
+  if(!data.length) { el.innerHTML='<div class="empty-state" style="padding:40px"><div class="empty-icon">📋</div><p>No hay transacciones en este período</p></div>'; return; }
+  el.innerHTML=`<div class="table-wrap"><table>
+    <thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Método</th><th>Tipo</th><th>Monto</th><th>Acciones</th></tr></thead>
+    <tbody>${data.map(f=>`<tr>
+      <td>${formatFecha(f.fecha)}</td>
+      <td><strong>${f.descripcion}</strong>${f.referencia?`<div style="font-size:10px;color:var(--text-light)">Ref: ${f.referencia}</div>`:''}</td>
+      <td><span class="tag tag-gray" style="font-size:10px">${f.categoria||'general'}</span></td>
+      <td style="font-size:11px;color:var(--text-light)">${f.metodoPago}</td>
+      <td>${f.tipo==='ingreso'?'<span class="tag tag-green">💰 Ingreso</span>':'<span class="tag tag-red">📤 Egreso</span>'}</td>
+      <td style="font-weight:700;color:${f.tipo==='ingreso'?'var(--success)':'var(--danger)'}">
+        ${f.tipo==='ingreso'?'+':'−'} ${fmtC(f.monto)}</td>
+      <td class="actions-cell">
+        <button class="btn btn-sm btn-danger" onclick="eliminarTransaccion(${f.id})">🗑️</button>
+      </td>
+    </tr>`).join('')}</tbody></table></div>`;
+}
+
+function renderFacturasList() {
+  const {from,to} = getFinDateRange();
+  let data = (C.fact||[]).filter(f=>f.fecha>=from && f.fecha<=to).sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  const estadoTag = e => ({pagada:'tag-green',pendiente:'tag-orange',cancelada:'tag-red',anulada:'tag-gray'})[e]||'tag-gray';
+  const el = document.getElementById('fin-fact-list');
+  if(!el) return;
+  if(!data.length) { el.innerHTML='<div class="empty-state" style="padding:40px"><div class="empty-icon">🧾</div><p>No hay facturas en este período.<br>Usa <strong>+ Nueva Factura</strong> para comenzar.</p></div>'; return; }
+  el.innerHTML=`<div class="table-wrap"><table>
+    <thead><tr><th>N° Factura</th><th>Paciente</th><th>Fecha</th><th>Estado</th><th>Total</th><th>Acciones</th></tr></thead>
+    <tbody>${data.map(f=>`<tr>
+      <td><code style="background:var(--bg);padding:2px 8px;border-radius:6px;font-size:11px">${f.numero||'—'}</code></td>
+      <td><strong>${f.pacienteNombre}</strong></td>
+      <td>${formatFecha(f.fecha)}</td>
+      <td><span class="tag ${estadoTag(f.estado)}">${f.estado}</span></td>
+      <td style="font-weight:700">${fmtC(f.total)}</td>
+      <td class="actions-cell">
+        ${f.estado==='pendiente'?`<button class="btn btn-sm btn-primary" onclick="pagarFactura(${f.id})">✅ Pagar</button>`:''}
+        <button class="btn btn-sm btn-secondary" onclick="verFacturaPDF(${f.id})">🖨️ PDF</button>
+        ${f.estado==='pendiente'?`<button class="btn btn-sm btn-danger" onclick="anularFactura(${f.id})">❌</button>`:''}
+      </td>
+    </tr>`).join('')}</tbody></table></div>`;
+}
+
+// ── Modal Transacción ──
+function openModalTransaccion(tipo='ingreso') {
+  document.getElementById('trans-tipo').value = tipo;
+  document.getElementById('modal-trans-title').textContent = tipo==='ingreso' ? '💰 Nuevo Ingreso' : '📤 Nuevo Egreso';
+  document.getElementById('trans-descripcion').value = '';
+  document.getElementById('trans-monto').value = '';
+  document.getElementById('trans-fecha').value = hoy();
+  document.getElementById('trans-categoria').value = 'consulta';
+  document.getElementById('trans-metodo').value = 'efectivo';
+  document.getElementById('trans-referencia').value = '';
+  document.getElementById('modal-transaccion').classList.add('open');
+  setTimeout(initDatePickers, 50);
+}
+
+async function guardarTransaccion() {
+  if(!currentClinicaId){ toast('Sin clínica asignada','error'); return; }
+  const tipo   = document.getElementById('trans-tipo').value;
+  const desc   = document.getElementById('trans-descripcion').value.trim();
+  const monto  = parseFloat(document.getElementById('trans-monto').value);
+  const fecha  = document.getElementById('trans-fecha').value || hoy();
+  const cat    = document.getElementById('trans-categoria').value||'general';
+  const metodo = document.getElementById('trans-metodo').value||'efectivo';
+  const ref    = document.getElementById('trans-referencia').value.trim();
+  if(!desc){ toast('Ingresa una descripción','error'); return; }
+  if(!monto||monto<=0){ toast('Ingresa un monto válido','error'); return; }
+  setLoading(true);
+  const {error} = await sb.from('finanzas').insert({
+    clinica_id:currentClinicaId, tipo, descripcion:desc, monto, fecha,
+    categoria:cat, metodo_pago:metodo, referencia:ref||null, creado_por:currentUser?.name
+  });
+  if(error){ toast('Error al guardar transacción','error'); setLoading(false); return; }
+  toast(tipo==='ingreso'?'Ingreso registrado 💰':'Egreso registrado 📤');
+  closeModal('modal-transaccion');
+  await loadAll(); renderFinanzas(); setLoading(false);
+}
+
+async function eliminarTransaccion(id) {
+  const ok = await customConfirm({icon:'🗑️',title:'Eliminar transacción',msg:'¿Seguro que deseas eliminar esta transacción? No se puede deshacer.',okText:'Eliminar',danger:true});
+  if(!ok) return;
+  setLoading(true);
+  await sb.from('finanzas').delete().eq('id',id);
+  toast('Transacción eliminada');
+  await loadAll(); renderFinanzas(); setLoading(false);
+}
+
+// ── Modal Factura ──
+function generarNumFactura() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const seq = String((C.fact||[]).length + 1).padStart(4,'0');
+  return `FACT-${y}${m}-${seq}`;
+}
+
+function openModalFactura(citaId=null, pacienteId=null) {
+  editingFacturaId = null;
+  facturaItems = [];
+  _factItemCounter = 0;
+  document.getElementById('fact-numero').value = generarNumFactura();
+  document.getElementById('fact-fecha').value = hoy();
+  document.getElementById('fact-cita-id').value = citaId||'';
+  document.getElementById('fact-impuesto').value = '15';
+  document.getElementById('fact-notas').value = '';
+  const sel = document.getElementById('fact-paciente');
+  sel.innerHTML = '<option value="">Consumidor Final</option>' +
+    C.p.map(p=>`<option value="${p.id}"${p.id==pacienteId?' selected':''}>${p.nombre} ${p.apellidos}</option>`).join('');
+  renderFacturaItemsUI();
+  calcFacturaTotals();
+  document.getElementById('modal-factura').classList.add('open');
+  setTimeout(initDatePickers, 50);
+}
+
+function addFacturaItem(desc='', tipo='servicio', cant=1, precio=0, invId=null) {
+  const id = ++_factItemCounter;
+  facturaItems.push({id, desc, tipo, cant:Number(cant)||1, precio:Number(precio)||0, invId});
+  renderFacturaItemsUI();
+  calcFacturaTotals();
+}
+
+function addFacturaItemFromInv() {
+  const inv = C.inv.filter(p=>p.precio>0);
+  if(!inv.length){ toast('No hay productos con precio en el inventario','warning'); return; }
+  const options = inv.map(p=>`<option value="${p.id}">${p.nombre} (${fmtC(p.precio)})</option>`).join('');
+  const sel = document.createElement('select');
+  sel.innerHTML = '<option value="">Seleccionar producto...</option>' + options;
+  sel.style.cssText = 'width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;margin-bottom:12px';
+  const wrap = document.getElementById('fact-items-list');
+  wrap.prepend(sel);
+  sel.onchange = () => {
+    const p = inv.find(x=>x.id==sel.value);
+    if(p){ addFacturaItem(p.nombre,'producto',1,p.precio,p.id); sel.remove(); }
+  };
+}
+
+function removeFacturaItem(id) {
+  facturaItems = facturaItems.filter(i=>i.id!==id);
+  renderFacturaItemsUI();
+  calcFacturaTotals();
+}
+
+function updateFactItem(id, field, value) {
+  const item = facturaItems.find(i=>i.id===id);
+  if(item){ item[field]=value; calcFacturaTotals(); }
+}
+
+function renderFacturaItemsUI() {
+  const el = document.getElementById('fact-items-list');
+  if(!el) return;
+  if(!facturaItems.length) {
+    el.innerHTML='<p style="color:var(--text-light);font-size:13px;text-align:center;padding:20px 0">Agrega líneas usando los botones de arriba</p>';
+    return;
+  }
+  el.innerHTML = facturaItems.map(item=>`
+    <div class="fact-item-row">
+      <select style="width:120px;flex-shrink:0" onchange="updateFactItem(${item.id},'tipo',this.value)">
+        <option value="consulta"${item.tipo==='consulta'?' selected':''}>👨‍⚕️ Consulta</option>
+        <option value="servicio"${item.tipo==='servicio'?' selected':''}>🩺 Servicio</option>
+        <option value="producto"${item.tipo==='producto'?' selected':''}>📦 Producto</option>
+        <option value="procedimiento"${item.tipo==='procedimiento'?' selected':''}>🔬 Procedimiento</option>
+      </select>
+      <input type="text" value="${item.desc}" placeholder="Descripción..."
+        oninput="updateFactItem(${item.id},'desc',this.value)" style="flex:1;min-width:120px">
+      <input type="number" value="${item.cant}" min="0.01" step="0.01" placeholder="Cant."
+        oninput="updateFactItem(${item.id},'cant',parseFloat(this.value)||0)" style="width:65px;flex-shrink:0">
+      <input type="number" value="${item.precio}" min="0" step="0.01" placeholder="Precio"
+        oninput="updateFactItem(${item.id},'precio',parseFloat(this.value)||0)" style="width:100px;flex-shrink:0">
+      <span class="fact-item-sub">${fmtC((item.cant||0)*(item.precio||0))}</span>
+      <button onclick="removeFacturaItem(${item.id})" style="background:#FEF2F2;color:#B91C1C;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;flex-shrink:0;font-size:13px">✕</button>
+    </div>`).join('');
+}
+
+function calcFacturaTotals() {
+  const sub  = facturaItems.reduce((s,i)=>s+(i.cant||0)*(i.precio||0),0);
+  const pct  = parseFloat(document.getElementById('fact-impuesto')?.value||0);
+  const imp  = sub * pct / 100;
+  const tot  = sub + imp;
+  const s=document.getElementById('fact-subtotal'), i=document.getElementById('fact-imp-display'), t=document.getElementById('fact-total');
+  if(s) s.textContent=fmtC(sub);
+  if(i) i.textContent=fmtC(imp);
+  if(t) t.textContent=fmtC(tot);
+}
+
+async function guardarFactura() {
+  if(!currentClinicaId){ toast('Sin clínica asignada','error'); return; }
+  if(!facturaItems.length){ toast('Agrega al menos un servicio o producto','error'); return; }
+  const numero  = document.getElementById('fact-numero').value.trim()||generarNumFactura();
+  const fecha   = document.getElementById('fact-fecha').value||hoy();
+  const pacId   = parseInt(document.getElementById('fact-paciente').value)||null;
+  const citaId  = parseInt(document.getElementById('fact-cita-id').value)||null;
+  const impPct  = parseFloat(document.getElementById('fact-impuesto').value)||0;
+  const notas   = document.getElementById('fact-notas').value.trim();
+  const sub     = facturaItems.reduce((s,i)=>s+(i.cant||0)*(i.precio||0),0);
+  const imp     = sub * impPct / 100;
+  const tot     = sub + imp;
+  const pac     = pacId ? C.p.find(p=>p.id===pacId) : null;
+  const pacNom  = pac ? `${pac.nombre} ${pac.apellidos}` : 'Consumidor Final';
+  setLoading(true);
+  const {data:factData, error:factErr} = await sb.from('facturas').insert({
+    clinica_id:currentClinicaId, numero, paciente_id:pacId, paciente_nombre:pacNom,
+    fecha, estado:'pendiente', subtotal:sub, impuesto_pct:impPct, impuesto:imp,
+    total:tot, notas:notas||null, cita_id:citaId
+  }).select().single();
+  if(factErr){ toast('Error al generar factura','error'); setLoading(false); return; }
+  if(facturaItems.length) {
+    await sb.from('factura_items').insert(facturaItems.map(i=>({
+      factura_id:factData.id, descripcion:i.desc, tipo:i.tipo,
+      cantidad:i.cant, precio_unitario:i.precio,
+      subtotal:(i.cant||0)*(i.precio||0), inventario_id:i.invId||null
+    })));
+  }
+  toast('Factura generada 🧾');
+  closeModal('modal-factura');
+  await loadAll(); renderFinanzas(); setLoading(false);
+}
+
+async function pagarFactura(id) {
+  const fact = (C.fact||[]).find(f=>f.id===id);
+  if(!fact) return;
+  const ok = await customConfirm({icon:'✅',title:'Confirmar pago',
+    msg:`¿Confirmas el pago de la factura <strong>${fact.numero||'#'+id}</strong>?<br>Total: <strong>${fmtC(fact.total)}</strong>`,
+    okText:'Confirmar pago',danger:false});
+  if(!ok) return;
+  setLoading(true);
+  await sb.from('facturas').update({estado:'pagada'}).eq('id',id);
+  await sb.from('finanzas').insert({
+    clinica_id:currentClinicaId, tipo:'ingreso', categoria:'factura',
+    descripcion:`Pago factura ${fact.numero||'#'+id} — ${fact.pacienteNombre}`,
+    monto:fact.total, fecha:hoy(), metodo_pago:'efectivo',
+    referencia:fact.numero||null, creado_por:currentUser?.name
+  });
+  toast('Factura pagada ✅ — ingreso registrado automáticamente');
+  await loadAll(); renderFacturasList(); setLoading(false);
+}
+
+async function anularFactura(id) {
+  const ok = await customConfirm({icon:'❌',title:'Anular factura',msg:'¿Seguro que deseas anular esta factura?',okText:'Anular',danger:true});
+  if(!ok) return;
+  setLoading(true);
+  await sb.from('facturas').update({estado:'anulada'}).eq('id',id);
+  toast('Factura anulada');
+  await loadAll(); renderFacturasList(); setLoading(false);
+}
+
+function verFacturaPDF(id) {
+  const fact = (C.fact||[]).find(f=>f.id===id);
+  if(!fact) return;
+  const items = (C.factItems||[]).filter(i=>i.facturaId===id);
+  const cl = currentClinica;
+  const body = `
+    <div style="text-align:center;margin-bottom:24px;padding-bottom:20px;border-bottom:2px solid #e2e8f0">
+      <h1 style="font-size:22px;font-weight:800;color:#0f172a;margin-bottom:4px">${cl?.nombre||'Clínica'}</h1>
+      <p style="color:#64748b;font-size:12px">${cl?.direccion||''} ${cl?.telefono?'· Tel: '+cl.telefono:''}</p>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:20px;padding:14px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0">
+      <div>
+        <p style="font-size:18px;font-weight:800;color:#0f172a">FACTURA</p>
+        <p style="color:#64748b;font-size:13px">N°: <strong>${fact.numero||'—'}</strong></p>
+        <p style="color:#64748b;font-size:13px">Fecha: ${formatFecha(fact.fecha)}</p>
+        <p style="color:#64748b;font-size:13px">Estado: <strong style="color:${fact.estado==='pagada'?'#16a34a':'#b45309'}">${fact.estado.toUpperCase()}</strong></p>
+      </div>
+      <div style="text-align:right">
+        <p style="font-weight:700;color:#0f172a">Facturar a:</p>
+        <p style="font-size:14px">${fact.pacienteNombre}</p>
+      </div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:20px;font-size:13px">
+      <thead style="background:#0f172a;color:#fff">
+        <tr>
+          <th style="padding:8px 12px;text-align:left">Descripción</th>
+          <th style="padding:8px 12px;text-align:center">Cant.</th>
+          <th style="padding:8px 12px;text-align:right">Precio Unit.</th>
+          <th style="padding:8px 12px;text-align:right">Subtotal</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${items.map((i,idx)=>`<tr style="background:${idx%2===0?'#fff':'#f8fafc'};border-bottom:1px solid #e2e8f0">
+          <td style="padding:8px 12px">${i.descripcion}</td>
+          <td style="padding:8px 12px;text-align:center">${i.cantidad}</td>
+          <td style="padding:8px 12px;text-align:right">${fmtC(i.precioUnitario)}</td>
+          <td style="padding:8px 12px;text-align:right">${fmtC(i.subtotal)}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+    <div style="display:flex;justify-content:flex-end">
+      <div style="min-width:240px;border-top:2px solid #0f172a;padding-top:12px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px">
+          <span style="color:#64748b">Subtotal</span><strong>${fmtC(fact.subtotal)}</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px">
+          <span style="color:#64748b">IVA (${fact.impuestoPct}%)</span><strong>${fmtC(fact.impuesto)}</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:16px;font-weight:800;color:#0f172a;border-top:1px solid #e2e8f0;padding-top:8px;margin-top:8px">
+          <span>TOTAL</span><span>${fmtC(fact.total)}</span>
+        </div>
+      </div>
+    </div>
+    ${fact.notas?`<div style="margin-top:20px;padding:12px;background:#f8fafc;border-radius:8px;font-size:12px;color:#64748b;border:1px solid #e2e8f0"><strong>Notas:</strong> ${fact.notas}</div>`:''}
+    <div style="text-align:center;margin-top:28px;color:#94a3b8;font-size:11px">
+      Lumea Med — Sistema de Gestión Clínica | lumeamed.net
+    </div>`;
+  pdfAbrir(`Factura ${fact.numero||'#'+id}`, body, {orientation:'portrait'});
+}
