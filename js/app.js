@@ -104,35 +104,67 @@ async function verificarLogin() {
   }
   setLoading(true);
 
-  // — Intento 1: Supabase Auth (usuarios migrados) —
+  // ── PASO 1: login directo en Supabase Auth ──
   const { data: authData } = await sb.auth.signInWithPassword({ email, password });
   if(authData?.user) {
-    // Buscar perfil por ID (migración completa) o por email (migración parcial)
-    let profile = null;
-    const { data: p1 } = await sb.from('profiles').select('*').eq('id', authData.user.id).maybeSingle();
-    if(p1) {
-      profile = p1;
-    } else {
-      const { data: p2 } = await sb.from('profiles').select('*').eq('email', email).maybeSingle();
-      if(p2) {
-        // Sincronizar el ID del perfil con el de Auth
-        await sb.from('profiles').update({ id: authData.user.id }).eq('email', email);
-        profile = { ...p2, id: authData.user.id };
-      }
-    }
+    const profile = await resolverPerfil(authData.user.id, email);
     if(profile) { await entrarConPerfil(profile); return; }
     await sb.auth.signOut();
   }
 
-  // — Intento 2: fallback legacy (usuarios aún no migrados) —
+  // ── PASO 2: usuario no está en Auth → intentar registrarlo (auto-migración) ──
+  // Funciona cuando "Confirm email" está desactivado en Supabase
+  const { data: signUpData, error: signUpErr } = await sb.auth.signUp({ email, password });
+  if(!signUpErr && signUpData?.user) {
+    // Si hay sesión activa el usuario quedó confirmado automáticamente
+    if(signUpData.session || signUpData.user.confirmed_at || signUpData.user.email_confirmed_at) {
+      // Intentar login inmediato post-registro
+      const { data: retryAuth } = await sb.auth.signInWithPassword({ email, password });
+      if(retryAuth?.user) {
+        const profile = await resolverPerfil(retryAuth.user.id, email);
+        if(profile) { await entrarConPerfil(profile); return; }
+        await sb.auth.signOut();
+      }
+    } else {
+      // Necesita confirmar correo — no podemos continuar automáticamente
+      setLoading(false);
+      shakeLogin();
+      errEl.innerHTML = 'Cuenta pendiente de confirmación de correo.<br><small>Revisa <strong>' + email + '</strong> o pide al administrador que confirme tu cuenta en el panel de Supabase.</small>';
+      errEl.style.display = 'block';
+      return;
+    }
+  }
+
+  // ── PASO 3: fallback legacy (profiles con password en texto plano) ──
   const { data: legacy } = await sb.from('profiles').select('*').eq('email', email).eq('password', password).maybeSingle();
-  if(legacy) { await entrarConPerfil(legacy); return; }
+  if(legacy) {
+    // Auto-registrar en Auth para futuras sesiones
+    const { data: migrAuth } = await sb.auth.signInWithPassword({ email, password });
+    if(migrAuth?.user) {
+      await sb.from('profiles').update({ id: migrAuth.user.id }).eq('email', email);
+      legacy.id = migrAuth.user.id;
+    }
+    await entrarConPerfil(legacy);
+    return;
+  }
 
   setLoading(false);
   shakeLogin();
   errEl.textContent = 'Email o contraseña incorrectos';
   errEl.style.display = 'block';
   document.getElementById('login-password').value = '';
+}
+
+// Busca perfil por Auth UUID; si no lo encuentra por ID, lo busca por email y sincroniza
+async function resolverPerfil(authId, email) {
+  const { data: p1 } = await sb.from('profiles').select('*').eq('id', authId).maybeSingle();
+  if(p1) return p1;
+  const { data: p2 } = await sb.from('profiles').select('*').eq('email', email).maybeSingle();
+  if(p2) {
+    await sb.from('profiles').update({ id: authId }).eq('email', email);
+    return { ...p2, id: authId };
+  }
+  return null;
 }
 
 async function entrarConPerfil(profile) {
