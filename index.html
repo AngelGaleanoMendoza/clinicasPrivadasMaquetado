@@ -124,6 +124,7 @@
 
       <!-- DASHBOARD -->
       <div id="view-dashboard" class="view active">
+        <div id="panel-pendientes-sesion" style="display:none;margin-bottom:18px"></div>
         <div class="stats-grid">
           <div class="stat-card"><div class="stat-icon si-blue">👥</div><div class="stat-info"><h3 id="stat-pacientes">—</h3><p>Pacientes registrados</p></div></div>
           <div class="stat-card"><div class="stat-icon si-green">📅</div><div class="stat-info"><h3 id="stat-citas-hoy">—</h3><p>Citas hoy</p></div></div>
@@ -202,7 +203,7 @@
           <div id="pacientes-count" style="font-size:12px;color:var(--text-light);margin-bottom:10px"></div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Paciente</th><th>Identificación</th><th>Fecha Nac.</th><th>Teléfono</th><th>Correo</th><th>Estado</th><th>Acciones</th></tr></thead>
+              <thead><tr><th>Paciente</th><th>N° Expediente</th><th>Identificación</th><th>Fecha Nac.</th><th>Teléfono</th><th>Estado</th><th>Acciones</th></tr></thead>
               <tbody id="tabla-pacientes"></tbody>
             </table>
           </div>
@@ -212,9 +213,27 @@
 
       <!-- CITAS -->
       <div id="view-citas" class="view">
+
+        <!-- Buscador rápido de paciente para citar -->
+        <div class="card" style="margin-bottom:18px;padding:14px 18px">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <span style="font-size:14px;font-weight:700;color:var(--text);white-space:nowrap">📅 Nueva cita para:</span>
+            <div style="position:relative;flex:1;min-width:220px">
+              <input type="text" id="cita-pac-buscar"
+                placeholder="Buscar paciente por nombre, expediente o ID..."
+                autocomplete="off" style="margin:0"
+                oninput="citaBuscarPac(this.value)"
+                onfocus="citaBuscarPac(this.value)"
+                onblur="setTimeout(()=>{ const s=document.getElementById('cita-pac-sug'); if(s) s.style.display='none'; },200)">
+              <div id="cita-pac-sug" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;z-index:300;max-height:240px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.15);margin-top:4px"></div>
+            </div>
+            <button class="btn btn-primary btn-sm" style="white-space:nowrap;flex-shrink:0" onclick="openModalCita()">+ Nueva Cita</button>
+          </div>
+        </div>
+
         <div class="grid-2" style="margin-bottom:18px">
           <div class="card">
-            <div class="card-header"><h3>📅 Citas del día</h3><button class="btn btn-primary btn-sm" onclick="openModalCita()">+ Nueva Cita</button></div>
+            <div class="card-header"><h3>📅 Citas del día</h3></div>
             <div id="lista-citas-hoy"></div>
           </div>
           <div class="card">
@@ -225,7 +244,10 @@
           </div>
         </div>
         <div class="card">
-          <div class="card-header"><h3>📋 Todas las Citas</h3></div>
+          <div class="card-header">
+            <h3>📋 Todas las Citas</h3>
+            <input type="text" id="citas-filtro-paciente" placeholder="Filtrar por paciente o motivo..." style="max-width:240px;margin:0" oninput="filtrarTablaCitas(this.value)">
+          </div>
           <div class="table-wrap">
             <table><thead><tr><th>Fecha</th><th>Hora</th><th>Paciente</th><th>Motivo</th><th>Tipo</th><th>Estado</th><th>Acciones</th></tr></thead>
             <tbody id="tabla-citas"></tbody></table>
@@ -964,10 +986,9 @@
       <div class="form-group"><label>Correo electrónico</label><input type="email" id="u-email" placeholder="dr.perez@clinica.com"></div>
       <div class="form-group"><label>Rol</label>
         <select id="u-rol">
-          <option value="admin">Administrador</option>
           <option value="medico">Médico</option>
           <option value="recepcion">Recepcionista</option>
-          <option value="enfermeria">Enfermería</option>
+          <option value="admin">Administración</option>
         </select>
       </div>
       <div class="form-group"><label>Clínica asignada</label>
@@ -1036,11 +1057,18 @@
     <div class="form-grid">
       <div class="form-group"><label>Nombre *</label><input type="text" id="p-nombre" placeholder="Juan"></div>
       <div class="form-group"><label>Apellidos *</label><input type="text" id="p-apellidos" placeholder="García López"></div>
-      <div class="form-group"><label>Identificación / DNI</label><input type="text" id="p-id" placeholder="12345678A"></div>
+      <div class="form-group"><label>Tipo de Identificación</label>
+        <select id="p-id-tipo">
+          <option value="Cédula">Cédula</option>
+          <option value="Pasaporte">Pasaporte</option>
+          <option value="Licencia de conducir">Licencia de conducir</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Número de Identificación</label><input type="text" id="p-id" placeholder="Ingresa el número..."></div>
       <div class="form-group"><label>Fecha de Nacimiento</label><input type="date" id="p-fechanac"></div>
       <div class="form-group"><label>Sexo</label><select id="p-sexo"><option value="">Seleccionar...</option><option value="M">Masculino</option><option value="F">Femenino</option><option value="O">Otro</option></select></div>
       <div class="form-group"><label>Tipo de Sangre</label><select id="p-sangre"><option value="">Desconocido</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select></div>
-      <div class="form-group"><label>Teléfono</label><input type="tel" id="p-telefono" placeholder="+503 7000-0000"></div>
+      <div class="form-group"><label>Teléfono</label><input type="tel" id="p-telefono" placeholder="+503 70000000" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9+\-\s()]/g,'')"></div>
       <div class="form-group"><label>Correo Electrónico</label><input type="email" id="p-email" placeholder="paciente@email.com"></div>
       <div class="form-group full"><label>Dirección</label><input type="text" id="p-direccion" placeholder="Calle, Ciudad, País"></div>
       <div class="form-group full"><label>Alergias</label><input type="text" id="p-alergias" placeholder="Penicilina, látex... (vacío si no hay)"></div>
@@ -1050,8 +1078,9 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-paciente')">Cancelar</button>
-      <button class="btn btn-secondary" onclick="guardarPaciente(false)">💾 Guardar</button>
-      <button class="btn btn-primary" onclick="guardarPaciente(true)">📋 Guardar y abrir expediente</button>
+      <button class="btn btn-secondary" onclick="guardarPaciente(false,false)">💾 Guardar</button>
+      <button class="btn btn-secondary" id="btn-guardar-y-citar" onclick="guardarPaciente(false,true)" style="display:none">📅 Guardar y citar</button>
+      <button class="btn btn-primary" onclick="guardarPaciente(true,false)">📋 Guardar y abrir expediente</button>
     </div>
   </div>
 </div>
@@ -1061,7 +1090,14 @@
   <div class="modal">
     <h2 id="modal-cita-title">📅 Nueva Cita</h2>
     <div class="form-grid">
-      <div class="form-group full"><label>Paciente *</label><select id="c-paciente"><option value="">Seleccionar paciente...</option></select></div>
+      <div class="form-group full"><label>Paciente *</label>
+        <div style="position:relative">
+          <input type="text" id="c-pac-txt" placeholder="Buscar paciente por nombre..." autocomplete="off"
+            oninput="filterPacSug(this.value,'c')" onfocus="filterPacSug(this.value,'c')" onblur="setTimeout(()=>hidePacSug('c'),200)">
+          <input type="hidden" id="c-paciente">
+          <div id="c-pac-sug" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;z-index:300;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.15);margin-top:4px"></div>
+        </div>
+      </div>
       <div class="form-group full"><label>Médico</label><select id="c-medico"><option value="">Sin asignar</option></select></div>
       <div class="form-group"><label>Fecha *</label><input type="date" id="c-fecha"></div>
       <div class="form-group"><label>Hora *</label><select id="c-hora"><option value="">Seleccionar hora...</option></select></div>
@@ -1074,7 +1110,15 @@
         <label>Diagnósticos sugeridos seleccionados</label>
         <div id="dx-elegidos" style="display:flex;flex-wrap:wrap;gap:6px"></div>
       </div>
-      <div class="form-group"><label>Tipo</label><select id="c-tipo"><option value="consulta">Consulta general</option><option value="control">Control</option><option value="urgencia">Urgencia</option><option value="cirugia">Cirugía</option><option value="examen">Examen</option></select></div>
+      <div class="form-group"><label>Tipo</label><select id="c-tipo">
+        <option value="consulta">Consulta general</option>
+        <option value="control">Control</option>
+        <option value="urgencia">Urgencia</option>
+        <option value="cirugia">Cirugía</option>
+        <option value="examen">Examen</option>
+        <option value="optometria">Optometría / Examen visual</option>
+        <option value="odontologia">Odontología</option>
+      </select></div>
       <div class="form-group"><label>Estado</label><select id="c-estado"><option value="pendiente">Pendiente</option><option value="confirmada">Confirmada</option><option value="completada">Completada</option><option value="cancelada">Cancelada</option></select></div>
       <div class="form-group full"><label>Notas / Diagnóstico</label><textarea id="c-notas" placeholder="Observaciones, diagnóstico... (los diagnósticos sugeridos se agregan aquí)"></textarea></div>
     </div>
@@ -1087,25 +1131,23 @@
 
 <!-- MODAL MEDICACION -->
 <div class="modal-overlay" id="modal-medicacion">
-  <div class="modal">
-    <h2 id="modal-med-title">💊 Nueva Medicación</h2>
-    <div class="form-grid">
-      <div class="form-group full"><label>Paciente *</label><select id="m-paciente"><option value="">Seleccionar paciente...</option></select></div>
-      <div class="form-group full"><label>Medicamento *</label>
+  <div class="modal modal-lg" style="max-width:680px">
+    <h2 id="modal-med-title">💊 Nueva Receta</h2>
+    <div class="form-grid" style="margin-bottom:16px">
+      <div class="form-group full"><label>Paciente *</label>
         <div style="position:relative">
-          <input type="text" id="m-nombre" placeholder="Escribe para buscar medicamento..." autocomplete="off"
-            oninput="buscarMedicamento(this.value)" onkeydown="navMedSug(event)">
-          <div id="med-sugerencias" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:400;max-height:220px;overflow-y:auto;margin-top:4px"></div>
+          <input type="text" id="m-pac-txt" placeholder="Buscar paciente por nombre..." autocomplete="off"
+            oninput="filterPacSug(this.value,'m')" onfocus="filterPacSug(this.value,'m')" onblur="setTimeout(()=>hidePacSug('m'),200)">
+          <input type="hidden" id="m-paciente">
+          <div id="m-pac-sug" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;z-index:300;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.15);margin-top:4px"></div>
         </div>
       </div>
-      <div class="form-group"><label>Dosis *</label><input type="text" id="m-dosis" placeholder="Ej: 1 tableta"></div>
-      <div class="form-group"><label>Frecuencia *</label><input type="text" id="m-frecuencia" placeholder="Ej: Cada 8 horas"></div>
       <div class="form-group"><label>Fecha Inicio</label><input type="date" id="m-inicio"></div>
       <div class="form-group"><label>Fecha Fin</label><input type="date" id="m-fin"></div>
-      <div class="form-group"><label>Vía de Administración</label><select id="m-via"><option value="oral">Oral</option><option value="inyectable">Inyectable</option><option value="topica">Tópica</option><option value="inhalada">Inhalada</option><option value="sublingual">Sublingual</option><option value="otra">Otra</option></select></div>
       <div class="form-group"><label>Estado</label><select id="m-estado"><option value="activa">Activa</option><option value="finalizada">Finalizada</option><option value="suspendida">Suspendida</option></select></div>
-      <div class="form-group full"><label>Indicaciones</label><textarea id="m-indicaciones" placeholder="Tomar con alimentos, evitar alcohol..."></textarea></div>
     </div>
+    <div id="med-items-list"></div>
+    <button id="btn-add-med-item" class="btn btn-secondary btn-sm" onclick="addMedItem()" style="margin-bottom:16px">+ Agregar medicamento</button>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-medicacion')">Cancelar</button>
       <button class="btn btn-primary" onclick="guardarMedicacion()">💾 Guardar</button>
@@ -1118,7 +1160,14 @@
   <div class="modal">
     <h2 id="modal-nota-title">📝 Nueva Nota Clínica</h2>
     <div class="form-grid cols-1">
-      <div class="form-group"><label>Paciente *</label><select id="n-paciente"><option value="">Seleccionar paciente...</option></select></div>
+      <div class="form-group"><label>Paciente *</label>
+        <div style="position:relative">
+          <input type="text" id="n-pac-txt" placeholder="Buscar paciente por nombre..." autocomplete="off"
+            oninput="filterPacSug(this.value,'n')" onfocus="filterPacSug(this.value,'n')" onblur="setTimeout(()=>hidePacSug('n'),200)">
+          <input type="hidden" id="n-paciente">
+          <div id="n-pac-sug" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;z-index:300;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.15);margin-top:4px"></div>
+        </div>
+      </div>
       <div class="form-group"><label>Tipo de Nota</label><select id="n-tipo"><option value="evolucion">Evolución</option><option value="diagnostico">Diagnóstico</option><option value="tratamiento">Tratamiento</option><option value="laboratorio">Laboratorio</option><option value="imagen">Imagen / Radiología</option><option value="cirugia">Cirugía</option><option value="alta">Alta médica</option><option value="examen_visual">👁️ Examen Visual</option><option value="otro">Otro</option></select></div>
       <div class="form-group"><label>Fecha</label><input type="date" id="n-fecha"></div>
       <div class="form-group"><label>Título</label><input type="text" id="n-titulo" placeholder="Breve título de la nota"></div>
@@ -1161,6 +1210,23 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-resumen-cita')">Cerrar</button>
       <button class="btn btn-primary" onclick="imprimirNotaConsulta(currentResumenCitaId)">🖨️ Imprimir Nota</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL INACTIVIDAD -->
+<div class="modal-overlay" id="modal-inactividad" style="z-index:9999">
+  <div class="modal mc-box" style="max-width:380px;text-align:center">
+    <div style="font-size:48px;margin-bottom:12px">⏱️</div>
+    <h2 style="margin-bottom:8px">Sesión por expirar</h2>
+    <p style="color:var(--text-light);font-size:14px;margin-bottom:18px">
+      Por inactividad tu sesión se cerrará en
+      <strong style="color:var(--danger);font-size:20px;display:block;margin:8px 0" id="inactividad-count">30</strong>
+      segundos. Los formularios abiertos se guardarán como <strong>pendientes de finalización</strong>.
+    </p>
+    <div style="display:flex;gap:10px;justify-content:center">
+      <button class="btn btn-primary" onclick="continuarSesion()" style="min-width:140px">✋ Seguir aquí</button>
+      <button class="btn btn-secondary" onclick="autoLogout()" style="min-width:120px">Salir ahora</button>
     </div>
   </div>
 </div>
