@@ -636,8 +636,8 @@ function renderDetalleP(pid){
   </div>`;
 
   document.getElementById('tab-meds-p').innerHTML=`<div class="card">
-    <div class="card-header"><h3>💊 Medicaciones</h3><button class="btn btn-primary btn-sm" onclick="openModalMedP(${p.id})">+ Nueva</button></div>
-    ${meds.length?meds.map(m=>`<div class="med-item"><span style="font-size:22px">💊</span><div class="med-info" style="flex:1"><h4>${m.nombre}</h4><div class="med-dosis">${m.dosis} — ${m.frecuencia} (${m.via})</div><p>${m.inicio?`Del ${formatFecha(m.inicio)} al ${m.fin?formatFecha(m.fin):'indefinido'}`:''}${m.indicaciones?' · '+m.indicaciones:''}</p></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">${estadoTag(m.estado)}<div class="actions-cell"><button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirReceta(${m.id})">🖨️</button><button class="btn btn-secondary btn-sm" onclick="openModalMedicacion(${m.id})">✏️</button><button class="btn btn-danger btn-sm" onclick="eliminarMedicacion(${m.id})">🗑️</button></div></div></div>`).join(''):'<div class="empty-state"><div class="empty-icon">💊</div><p>Sin medicaciones</p></div>'}
+    <div class="card-header"><h3>💊 Medicaciones</h3><div style="display:flex;gap:8px">${meds.length?`<button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirRecetaPaciente(${p.id})">🖨️ Receta</button>`:''}<button class="btn btn-primary btn-sm" onclick="openModalMedP(${p.id})">+ Nueva</button></div></div>
+    ${meds.length?meds.map(m=>`<div class="med-item"><span style="font-size:22px">💊</span><div class="med-info" style="flex:1"><h4>${m.nombre}</h4><div class="med-dosis">${m.dosis} — ${m.frecuencia} (${m.via})</div><p>${m.inicio?`Del ${formatFecha(m.inicio)} al ${m.fin?formatFecha(m.fin):'indefinido'}`:''}${m.indicaciones?' · '+m.indicaciones:''}</p></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">${estadoTag(m.estado)}<div class="actions-cell"><button class="btn btn-secondary btn-sm" onclick="openModalMedicacion(${m.id})">✏️</button><button class="btn btn-danger btn-sm" onclick="eliminarMedicacion(${m.id})">🗑️</button></div></div></div>`).join(''):'<div class="empty-state"><div class="empty-icon">💊</div><p>Sin medicaciones</p></div>'}
   </div>`;
 
   document.getElementById('tab-notas-p').innerHTML=`<div class="card">
@@ -651,7 +651,7 @@ function renderDetalleP(pid){
   <div class="card">
     <div class="card-header"><h3>📁 Expediente Médico</h3>
       <div style="display:flex;gap:8px">
-        ${currentClinica?.tipo==='optica'?`<button class="btn btn-secondary btn-sm" onclick="abrirExamenVisual(${pid})">👁️ Examen Visual</button>`:''}
+        ${(currentClinica?.tipo==='optica'||isSuperAdmin())?`<button class="btn btn-secondary btn-sm" onclick="abrirExamenVisual(${pid})">👁️ Examen Visual</button>`:''}
         <button class="btn btn-primary btn-sm" onclick="guardarExpediente(${pid})">💾 Guardar</button>
       </div>
     </div>
@@ -906,39 +906,126 @@ function renderMedicaciones(){
   tbody.innerHTML=C.m.map(x=>{ const p=C.p.find(q=>q.id===x.pacienteId); return `<tr>
     <td><div class="patient-name-cell"><div class="patient-avatar" style="background:${colAvatar(x.pacienteId||0)};width:28px;height:28px;font-size:10px">${p?ini(p.nombre,p.apellidos):'?'}</div><div>${p?p.nombre+' '+p.apellidos:'Desconocido'}</div></div></td>
     <td><strong>${x.nombre}</strong></td><td>${x.dosis}</td><td>${x.frecuencia}</td><td>${formatFecha(x.inicio)}</td><td>${x.fin?formatFecha(x.fin):'—'}</td><td>${estadoTag(x.estado)}</td>
-    <td><div class="actions-cell"><button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirReceta(${x.id})">🖨️</button><button class="btn btn-secondary btn-sm" onclick="openModalMedicacion(${x.id})">✏️</button><button class="btn btn-danger btn-sm" onclick="eliminarMedicacion(${x.id})">🗑️</button></div></td></tr>`; }).join('');
+    <td><div class="actions-cell"><button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirRecetaPaciente(${x.pacienteId})" title="Imprimir receta del paciente">🖨️</button><button class="btn btn-secondary btn-sm" onclick="openModalMedicacion(${x.id})">✏️</button><button class="btn btn-danger btn-sm" onclick="eliminarMedicacion(${x.id})">🗑️</button></div></td></tr>`; }).join('');
 }
 
-function openModalMedicacion(id){
-  editingId=id||null;
-  document.getElementById('modal-med-title').textContent=id?'✏️ Editar Medicación':'💊 Nueva Medicación';
+let medItems = [];
+
+function openModalMedicacion(id) {
+  editingId = id || null;
+  document.getElementById('modal-med-title').textContent = id ? '✏️ Editar Medicación' : '💊 Nueva Receta';
   fillSelect('m-paciente');
-  ['nombre','dosis','frecuencia','fin','indicaciones'].forEach(f=>document.getElementById('m-'+f).value='');
-  document.getElementById('m-estado').value='activa'; document.getElementById('m-via').value='oral'; document.getElementById('m-inicio').value=hoy();
-  if(id){
-    const m=C.m.find(x=>x.id===id);
-    if(m){ document.getElementById('m-paciente').value=m.pacienteId; document.getElementById('m-nombre').value=m.nombre; document.getElementById('m-dosis').value=m.dosis; document.getElementById('m-frecuencia').value=m.frecuencia; document.getElementById('m-inicio').value=m.inicio||''; document.getElementById('m-fin').value=m.fin||''; document.getElementById('m-via').value=m.via||'oral'; document.getElementById('m-estado').value=m.estado; document.getElementById('m-indicaciones').value=m.indicaciones||''; }
+  document.getElementById('m-estado').value = 'activa';
+  document.getElementById('m-inicio').value = hoy();
+  document.getElementById('m-fin').value = '';
+  if(id) {
+    const m = C.m.find(x => x.id === id);
+    if(m) {
+      document.getElementById('m-paciente').value = m.pacienteId;
+      document.getElementById('m-inicio').value = m.inicio || '';
+      document.getElementById('m-fin').value = m.fin || '';
+      document.getElementById('m-estado').value = m.estado;
+      medItems = [{nombre:m.nombre, dosis:m.dosis, frecuencia:m.frecuencia, via:m.via||'oral', indicaciones:m.indicaciones||''}];
+    }
+  } else {
+    medItems = [{nombre:'', dosis:'', frecuencia:'', via:'oral', indicaciones:''}];
   }
+  document.getElementById('btn-add-med-item').style.display = editingId ? 'none' : 'inline-flex';
+  renderMedItems();
   document.getElementById('modal-medicacion').classList.add('open');
 }
-function openModalMedP(pid){ openModalMedicacion(); document.getElementById('m-paciente').value=pid; }
+function openModalMedP(pid) { openModalMedicacion(); document.getElementById('m-paciente').value = pid; }
 
-async function guardarMedicacion(){
-  if(!currentClinicaId){ toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
-  const pid=parseInt(document.getElementById('m-paciente').value);
-  const nombre=document.getElementById('m-nombre').value.trim();
-  const dosis=document.getElementById('m-dosis').value.trim();
-  const freq=document.getElementById('m-frecuencia').value.trim();
-  if(!pid||!nombre||!dosis||!freq){ toast('Completa los campos obligatorios','error'); return; }
-  const obj={pacienteId:pid,nombre,dosis,frecuencia:freq,inicio:document.getElementById('m-inicio').value,fin:document.getElementById('m-fin').value,via:document.getElementById('m-via').value,estado:document.getElementById('m-estado').value,indicaciones:document.getElementById('m-indicaciones').value.trim()};
-  setLoading(true);
-  let err;
-  if(editingId){ const r=await sb.from('medicaciones').update(toM(obj)).eq('id',editingId); err=r.error; }
-  else { const r=await sb.from('medicaciones').insert([toM(obj)]); err=r.error; }
-  setLoading(false);
-  if(err){ toast('Error: '+err.message,'error'); return; }
-  toast(editingId?'Medicación actualizada':'Medicación registrada ✅');
-  if(!editingId) logActivity('medicacion');
+function renderMedItems() {
+  const container = document.getElementById('med-items-list');
+  if(!container) return;
+  const vias = [['oral','Oral'],['inyectable','Inyectable'],['topica','Tópica'],['inhalada','Inhalada'],['sublingual','Sublingual'],['otra','Otra']];
+  container.innerHTML = medItems.map((item, i) =>
+    '<div style="border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px;background:var(--bg)">'
+    + (medItems.length > 1 ? '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><span style="font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.5px">Medicamento ' + (i+1) + '</span><button type="button" onclick="removeMedItem('+i+')" style="background:#FEE2E2;border:none;cursor:pointer;color:#B91C1C;font-size:12px;font-weight:700;padding:3px 9px;border-radius:6px">× Quitar</button></div>' : '')
+    + '<div class="form-grid">'
+    +   '<div class="form-group full" style="position:relative">'
+    +     '<label>Medicamento *</label>'
+    +     '<input type="text" id="mi-nombre-'+i+'" value="'+item.nombre+'" placeholder="Buscar medicamento..." autocomplete="off" oninput="medItems['+i+'].nombre=this.value;buscarMedItem(this.value,'+i+')" onblur="setTimeout(()=>hideMedItemSug('+i+'),180)">'
+    +     '<div id="mi-sug-'+i+'" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:400;max-height:200px;overflow-y:auto;margin-top:4px"></div>'
+    +   '</div>'
+    +   '<div class="form-group"><label>Dosis *</label><input type="text" id="mi-dosis-'+i+'" value="'+item.dosis+'" placeholder="Ej: 1 tableta" oninput="medItems['+i+'].dosis=this.value"></div>'
+    +   '<div class="form-group"><label>Frecuencia *</label><input type="text" id="mi-freq-'+i+'" value="'+item.frecuencia+'" placeholder="Ej: Cada 8 horas" oninput="medItems['+i+'].frecuencia=this.value"></div>'
+    +   '<div class="form-group"><label>Vía</label><select id="mi-via-'+i+'" onchange="medItems['+i+'].via=this.value">'+vias.map(([v,l])=>'<option value="'+v+'"'+(item.via===v?' selected':'')+'>'+l+'</option>').join('')+'</select></div>'
+    +   '<div class="form-group full"><label>Indicaciones</label><input type="text" id="mi-ind-'+i+'" value="'+item.indicaciones+'" placeholder="Tomar con alimentos..." oninput="medItems['+i+'].indicaciones=this.value"></div>'
+    + '</div></div>'
+  ).join('');
+}
+
+function addMedItem() {
+  medItems.push({nombre:'', dosis:'', frecuencia:'', via:'oral', indicaciones:''});
+  renderMedItems();
+}
+
+function removeMedItem(i) {
+  if(medItems.length <= 1) return;
+  medItems.splice(i, 1);
+  renderMedItems();
+}
+
+function buscarMedItem(q, idx) {
+  const box = document.getElementById('mi-sug-'+idx);
+  if(!box) return;
+  if(!q || q.length < 2) { box.style.display='none'; return; }
+  const q2 = q.toLowerCase();
+  const matches = MEDICAMENTOS_NI.filter(m => m.n.toLowerCase().includes(q2) || m.p.toLowerCase().includes(q2)).slice(0, 8);
+  if(!matches.length) { box.style.display='none'; return; }
+  box.innerHTML = matches.map(m =>
+    '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s" onmouseenter="this.style.background=\'var(--primary-light)\'" onmouseleave="this.style.background=\'\'" onmousedown="seleccionarMedItem('+JSON.stringify(m).replace(/"/g,'&quot;')+','+idx+')">'
+    + '<div><div style="font-size:13px;font-weight:600;color:var(--text)">'+m.n+'</div><div style="font-size:11px;color:var(--text-light)">'+m.p+' &middot; '+m.d+'</div></div>'
+    + '<span class="tag tag-gray" style="font-size:10px;flex-shrink:0;margin-left:10px">'+m.v+'</span>'
+    + '</div>'
+  ).join('');
+  box.style.display = 'block';
+}
+
+function hideMedItemSug(idx) {
+  const box = document.getElementById('mi-sug-'+idx);
+  if(box) box.style.display = 'none';
+}
+
+function seleccionarMedItem(m, idx) {
+  medItems[idx].nombre = m.n;
+  medItems[idx].dosis = m.d;
+  const viaMap = {oral:'oral',inyectable:'inyectable',topica:'topica',inhalada:'inhalada',sublingual:'sublingual'};
+  medItems[idx].via = viaMap[m.v] || 'oral';
+  hideMedItemSug(idx);
+  renderMedItems();
+  setTimeout(() => { const el = document.getElementById('mi-freq-'+idx); if(el) el.focus(); }, 50);
+}
+
+async function guardarMedicacion() {
+  if(!currentClinicaId) { toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
+  const pid = parseInt(document.getElementById('m-paciente').value);
+  if(!pid) { toast('Selecciona un paciente','error'); return; }
+  const inicio = document.getElementById('m-inicio').value;
+  const fin = document.getElementById('m-fin').value;
+  const estado = document.getElementById('m-estado').value;
+  if(editingId) {
+    const item = medItems[0];
+    if(!item.nombre||!item.dosis||!item.frecuencia) { toast('Completa nombre, dosis y frecuencia','error'); return; }
+    const obj = {pacienteId:pid,nombre:item.nombre,dosis:item.dosis,frecuencia:item.frecuencia,inicio,fin,via:item.via,estado,indicaciones:item.indicaciones};
+    setLoading(true);
+    const {error} = await sb.from('medicaciones').update(toM(obj)).eq('id',editingId);
+    setLoading(false);
+    if(error) { toast('Error: '+error.message,'error'); return; }
+    toast('Medicación actualizada');
+  } else {
+    const valid = medItems.filter(item => item.nombre && item.dosis && item.frecuencia);
+    if(!valid.length) { toast('Agrega al menos un medicamento con nombre, dosis y frecuencia','error'); return; }
+    const rows = valid.map(item => toM({pacienteId:pid,nombre:item.nombre,dosis:item.dosis,frecuencia:item.frecuencia,inicio,fin,via:item.via,estado,indicaciones:item.indicaciones}));
+    setLoading(true);
+    const {error} = await sb.from('medicaciones').insert(rows);
+    setLoading(false);
+    if(error) { toast('Error: '+error.message,'error'); return; }
+    toast(rows.length > 1 ? rows.length+' medicamentos registrados ✅' : 'Medicación registrada ✅');
+    logActivity('medicacion');
+  }
   closeModal('modal-medicacion');
   await loadAll(); renderMedicaciones();
   if(currentView==='paciente-detalle') renderDetalleP(currentPatientId);
@@ -1041,73 +1128,63 @@ function imprimirNota(id) {
   const tipoColor = {evolucion:'#1D4ED8',diagnostico:'#7C3AED',tratamiento:'#059669',laboratorio:'#D97706',imagen:'#0891B2',cirugia:'#DC2626',alta:'#065F46',otro:'#475569'}[n.tipo]||'#1D4ED8';
 
   const ini2 = (a,b) => ((a||'')[0]||'').toUpperCase()+((b||'')[0]||'').toUpperCase();
-  const body = `
-    <div class="badge-tipo" style="background:${tipoColor}">📝 ${n.tipo.toUpperCase()}</div>
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px">
-      <div>
-        ${n.titulo?`<div style="font-size:20px;font-weight:900;color:#0F172A;margin-bottom:4px">${n.titulo}</div>`:''}
-        <div style="font-size:12px;color:#64748B;font-weight:600">Fecha: ${fmtF(n.fecha)} · N° NC-${n.id}</div>
-      </div>
-    </div>
-    <div class="patient-box">
-      <div class="patient-av">${p?ini2(p.nombre,p.apellidos):'?'}</div>
-      <div>
-        <div class="patient-name">${p?p.nombre+' '+p.apellidos:'Paciente no registrado'}</div>
-        <div class="patient-meta">
-          ${p?.identificacion?`<span>🪪 ${p.identificacion}</span>`:''}
-          ${p?.fechaNac?`<span>🎂 ${calcEdad(p.fechaNac)}</span>`:''}
-          ${p?.sexo?`<span>${p.sexo==='M'?'♂ Masculino':p.sexo==='F'?'♀ Femenino':p.sexo}</span>`:''}
-          ${p?.telefono?`<span>📞 ${p.telefono}</span>`:''}
-        </div>
-        ${p?.alergias?`<div style="margin-top:6px;background:#FEF2F2;border:1px solid #FECACA;border-radius:6px;padding:5px 10px;font-size:11px;color:#DC2626;font-weight:600">⚠️ Alergias: ${p.alergias}</div>`:''}
-      </div>
-    </div>
-    <div class="section-title">📋 Contenido de la nota</div>
-    <div class="note-box" style="border-left-color:${tipoColor}">
-      <div class="note-body">${n.contenido}</div>
-    </div>
-    <div class="sig-wrap">
-      <div class="sig-box">
-        <div style="height:46px"></div>
-        <div class="sig-line"></div>
-        <div class="sig-name">${currentUser?.name||cfg.nombreDoctor||'Médico Responsable'}</div>
-        ${cfg.especialidad?`<div class="sig-role">${cfg.especialidad}</div>`:''}
-        ${cfg.registro?`<div class="sig-role">Reg. Med. ${cfg.registro}</div>`:''}
-      </div>
-    </div>`;
-  pdfAbrir(`Nota Clínica — ${n.titulo||n.tipo}`, body, cfg);
+  const body = '<div class="badge-tipo" style="background:'+tipoColor+'">📝 '+n.tipo.toUpperCase()+'</div>'
+    + (n.titulo?'<div style="font-size:20px;font-weight:900;color:#0F172A;margin-bottom:6px">'+n.titulo+'</div>':'')
+    + '<div class="patient-box" style="margin-bottom:20px">'
+    +   '<div class="patient-av">'+(p?ini2(p.nombre,p.apellidos):'?')+'</div>'
+    +   '<div style="flex:1">'
+    +     '<div class="patient-name">'+(p?p.nombre+' '+p.apellidos:'Paciente no registrado')+'</div>'
+    +     '<div class="patient-meta">'
+    +       (p?.identificacion?'<span>&#128266; '+p.identificacion+'</span>':'')
+    +       (p?.fechaNac?'<span>&#127874; '+calcEdad(p.fechaNac)+'</span>':'')
+    +       (p?.sexo?'<span>'+(p.sexo==='M'?'&#9794; Masculino':p.sexo==='F'?'&#9792; Femenino':p.sexo)+'</span>':'')
+    +       (p?.telefono?'<span>&#128222; '+p.telefono+'</span>':'')
+    +     '</div>'
+    +     (p?.alergias?'<div style="margin-top:6px;background:#FEF2F2;border:1px solid #FECACA;border-radius:6px;padding:5px 10px;font-size:11px;color:#DC2626;font-weight:600">&#9888; Alergias: '+p.alergias+'</div>':'')
+    +   '</div>'
+    + '</div>'
+    + '<div class="section-title">&#128203; Datos de la nota</div>'
+    + '<table><tbody>'
+    +   '<tr><td style="width:130px;font-weight:700;color:#475569">Fecha</td><td>'+fmtF(n.fecha)+'</td><td style="width:130px;font-weight:700;color:#475569">Tipo</td><td><span class="tag tag-blue">'+n.tipo+'</span></td></tr>'
+    +   '<tr><td style="font-weight:700;color:#475569">N&deg; Nota</td><td colspan="3">NC-'+n.id+'</td></tr>'
+    + '</tbody></table>'
+    + '<div class="section-title">&#128203; Contenido de la nota</div>'
+    + '<div class="note-box" style="border-left-color:'+tipoColor+'"><div class="note-body">'+n.contenido+'</div></div>'
+    + '<div class="sig-wrap"><div class="sig-box"><div style="height:46px"></div><div class="sig-line"></div>'
+    +   '<div class="sig-name">'+(currentUser?.name||cfg.nombreDoctor||'M&#233;dico Responsable')+'</div>'
+    +   (cfg.especialidad?'<div class="sig-role">'+cfg.especialidad+'</div>':'')
+    +   (cfg.registro?'<div class="sig-role">Reg. Med. '+cfg.registro+'</div>':'')
+    + '</div></div>';
+  pdfAbrir('Nota Clínica — '+(n.titulo||n.tipo), body, cfg);
 }
 
 // ════════════════════ RECETA ELECTRÓNICA (IMPRESIÓN) ════════════════════
 function imprimirReceta(id) {
   const m = C.m.find(x => x.id === id); if(!m) return;
-  const p = C.p.find(x => x.id === m.pacienteId);
-  const e = C.e.find(x => x.pacienteId === m.pacienteId);
+  imprimirRecetaPaciente(m.pacienteId);
+}
+
+function imprimirRecetaPaciente(pid) {
+  const p = C.p.find(x => x.id === pid);
+  const e = C.e.find(x => x.pacienteId === pid);
+  const meds = C.m.filter(m => m.pacienteId === pid).sort((a,b) => {
+    const ord = {activa:0,finalizada:1,suspendida:2};
+    return (ord[a.estado]||0) - (ord[b.estado]||0);
+  });
+  if(!meds.length) { toast('Este paciente no tiene medicaciones registradas','info'); return; }
   const cfg = getClinicaConfig();
   const fmtF = f => { if(!f) return '—'; const d=new Date(f+'T12:00:00'); return d.toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'}); };
-
-  const viaLabel = ({oral:'Oral',inyectable:'Inyectable',topica:'Tópica',inhalada:'Inhalada',sublingual:'Sublingual',otra:'Otra'})[m.via||'oral'] || m.via || 'Oral';
-  const estadoEstilo = {activa:'background:#D1FAE5;color:#065F46;border:1px solid #6EE7B7',finalizada:'background:#F1F5F9;color:#475569;border:1px solid #CBD5E1',suspendida:'background:#FEE2E2;color:#B91C1C;border:1px solid #FECACA'}[m.estado||'activa'] || 'background:#F1F5F9;color:#475569;border:1px solid #CBD5E1';
+  const viaLabel = v => ({oral:'Oral',inyectable:'Inyectable',topica:'Tópica',inhalada:'Inhalada',sublingual:'Sublingual',otra:'Otra'})[v||'oral'] || v || 'Oral';
   const pNombre = p ? p.nombre+' '+p.apellidos : 'Paciente no registrado';
   const pIni = p ? ini(p.nombre, p.apellidos) : '?';
   const pEdad = (p && p.fechaNac) ? calcEdad(p.fechaNac) : '';
   const eSexo = p ? (p.sexo==='M' ? '&#9794; Masculino' : p.sexo==='F' ? '&#9792; Femenino' : (p.sexo||'')) : '';
-  const antecedentes = [
-    (p && p.alergias) ? '<div style="margin-bottom:6px"><strong style="color:#B45309">Alergias:</strong> <span style="color:#78350F">'+p.alergias+'</span></div>' : '',
-    (e && e.enfermedadesCronicas) ? '<div><strong style="color:#B45309">Enfermedades cr&#243;nicas:</strong> <span style="color:#78350F">'+e.enfermedadesCronicas+'</span></div>' : ''
-  ].join('');
 
   const body = '<div class="badge-tipo" style="background:#059669">&#128138; RECETA ELECTR&#211;NICA</div>'
-    + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px">'
-    +   '<div>'
-    +     '<div style="font-size:19px;font-weight:900;color:#0F172A;margin-bottom:3px">'+m.nombre+'</div>'
-    +     '<div style="font-size:11px;color:#64748B;font-weight:600">Fecha de emisi&#243;n: '+fmtF(hoy())+' &middot; N&deg; RX-'+m.id+'</div>'
-    +   '</div>'
-    +   '<span style="padding:4px 14px;border-radius:20px;font-size:11px;font-weight:700;'+estadoEstilo+'">'+((m.estado||'').toUpperCase())+'</span>'
-    + '</div>'
+    + '<div style="font-size:11px;color:#64748B;font-weight:600;margin-bottom:18px">Fecha de emisi&#243;n: '+fmtF(hoy())+' &middot; N&deg; RX-'+Date.now().toString().slice(-6)+'</div>'
     + '<div class="patient-box">'
     +   '<div class="patient-av">'+pIni+'</div>'
-    +   '<div>'
+    +   '<div style="flex:1">'
     +     '<div class="patient-name">'+pNombre+'</div>'
     +     '<div class="patient-meta">'
     +       (p && p.identificacion ? '<span>&#128266; '+p.identificacion+'</span>' : '')
@@ -1119,25 +1196,32 @@ function imprimirReceta(id) {
     +     (p && p.alergias ? '<div style="margin-top:6px;background:#FEF2F2;border:1px solid #FECACA;border-radius:6px;padding:5px 10px;font-size:11px;color:#DC2626;font-weight:600">&#9888; Alergias: '+p.alergias+'</div>' : '')
     +   '</div>'
     + '</div>'
-    + '<div class="section-title">&#128138; Prescripci&#243;n</div>'
-    + '<div style="border:2px solid #D1FAE5;border-radius:14px;padding:20px 22px;background:#F0FDF4;margin-bottom:18px">'
-    +   '<div style="font-size:22px;font-weight:900;color:#065F46;margin-bottom:14px">Rx. '+m.nombre+'</div>'
-    +   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 24px">'
-    +     '<div><div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#6B7280;margin-bottom:2px">Dosis</div><div style="font-size:15px;font-weight:700;color:#0F172A">'+m.dosis+'</div></div>'
-    +     '<div><div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#6B7280;margin-bottom:2px">Frecuencia</div><div style="font-size:15px;font-weight:700;color:#0F172A">'+m.frecuencia+'</div></div>'
-    +     '<div><div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#6B7280;margin-bottom:2px">V&#237;a de administraci&#243;n</div><div style="font-size:15px;font-weight:700;color:#0F172A">'+viaLabel+'</div></div>'
-    +     '<div><div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#6B7280;margin-bottom:2px">Duraci&#243;n</div><div style="font-size:13px;font-weight:600;color:#0F172A">'+(m.inicio ? fmtF(m.inicio) : '—')+(m.fin ? ' &rarr; '+fmtF(m.fin) : ' &rarr; Sin fecha de fin')+'</div></div>'
-    +   '</div>'
-    +   (m.indicaciones ? '<div style="margin-top:14px;padding:10px 14px;background:#fff;border-radius:10px;border:1px solid #A7F3D0"><div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#6B7280;margin-bottom:4px">Indicaciones especiales</div><div style="font-size:13px;color:#0F172A;font-style:italic">'+m.indicaciones+'</div></div>' : '')
-    + '</div>'
-    + (antecedentes ? '<div class="section-title">&#9888; Antecedentes relevantes</div><div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;padding:12px 16px;margin-bottom:18px;font-size:12px">'+antecedentes+'</div>' : '')
+    + '<div class="section-title">&#128138; Prescripci&#243;n Médica</div>'
+    + '<table><thead><tr><th>#</th><th>Medicamento / Indicaciones</th><th>Dosis</th><th>Frecuencia</th><th>V&#237;a</th><th>Duraci&#243;n</th><th>Estado</th></tr></thead><tbody>'
+    + meds.map((m, i) =>
+        '<tr>'
+        + '<td style="font-weight:800;color:#1D4ED8;text-align:center">' + (i+1) + '</td>'
+        + '<td><strong>Rx. '+m.nombre+'</strong>'+(m.indicaciones?'<br><span style="font-size:11px;color:#64748B;font-style:italic">'+m.indicaciones+'</span>':'')+'</td>'
+        + '<td><strong>'+m.dosis+'</strong></td>'
+        + '<td>'+m.frecuencia+'</td>'
+        + '<td>'+viaLabel(m.via)+'</td>'
+        + '<td style="font-size:11px;white-space:nowrap">'+(m.inicio?fmtF(m.inicio):'—')+(m.fin?'<br>&rarr; '+fmtF(m.fin):'')+'</td>'
+        + '<td><span class="tag '+(m.estado==='activa'?'tag-green':m.estado==='finalizada'?'tag-gray':'tag-red')+'">'+m.estado+'</span></td>'
+        + '</tr>'
+      ).join('')
+    + '</tbody></table>'
+    + ((p&&p.alergias)||(e&&e.enfermedadesCronicas) ? '<div class="section-title">&#9888; Antecedentes relevantes</div>'
+    +   '<table><tbody>'
+    +   (p&&p.alergias?'<tr><td style="font-weight:700;color:#B45309;width:150px;white-space:nowrap">Alergias</td><td>'+p.alergias+'</td></tr>':'')
+    +   (e&&e.enfermedadesCronicas?'<tr><td style="font-weight:700;color:#B45309;white-space:nowrap">Enf. cr&#243;nicas</td><td>'+e.enfermedadesCronicas+'</td></tr>':'')
+    +   '</tbody></table>' : '')
     + '<div class="sig-wrap"><div class="sig-box"><div style="height:46px"></div><div class="sig-line"></div>'
-    +   '<div class="sig-name">'+(currentUser && currentUser.name ? currentUser.name : cfg.nombreDoctor || 'M&#233;dico Responsable')+'</div>'
-    +   (cfg.especialidad ? '<div class="sig-role">'+cfg.especialidad+'</div>' : '')
-    +   (cfg.registro ? '<div class="sig-role">Reg. Med. '+cfg.registro+'</div>' : '')
+    +   '<div class="sig-name">'+(currentUser&&currentUser.name?currentUser.name:cfg.nombreDoctor||'M&#233;dico Responsable')+'</div>'
+    +   (cfg.especialidad?'<div class="sig-role">'+cfg.especialidad+'</div>':'')
+    +   (cfg.registro?'<div class="sig-role">Reg. Med. '+cfg.registro+'</div>':'')
     + '</div></div>';
 
-  pdfAbrir('Receta Electronica - '+m.nombre, body, cfg);
+  pdfAbrir('Receta Electrónica — '+pNombre, body, cfg);
 }
 
 // ════════════════════ FOTO PACIENTE ════════════════════
@@ -1319,115 +1403,65 @@ function imprimirNotaConsulta(citaId) {
   const inits = (a,b) => ((a||'')[0]||'').toUpperCase()+((b||'')[0]||'').toUpperCase();
   const imc = (e?.peso && e?.talla) ? (e.peso/((e.talla/100)**2)).toFixed(1) : null;
 
-  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Nota de Consulta</title>
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-@page{size:auto;margin:10mm}
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Inter',Arial,sans-serif;color:#1a1a1a;padding:20px 28px;font-size:13px;line-height:1.5;max-width:800px;margin:0 auto}
-.h{display:flex;align-items:flex-start;gap:18px;border-bottom:3px solid #2563EB;padding-bottom:14px;margin-bottom:18px}
-.logo{width:72px;height:72px;border-radius:12px;background:linear-gradient(135deg,#2563EB,#06B6D4);display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0;overflow:hidden}
-.logo img{width:100%;height:100%;object-fit:contain;border-radius:12px}
-.ci h1{font-size:20px;font-weight:800;color:#2563EB;line-height:1.2}
-.ci p{font-size:11.5px;color:#555;margin-top:2px}
-.folio{margin-left:auto;text-align:right;flex-shrink:0}
-.folio .fd{font-size:10px;color:#999}
-.folio .fv{font-size:16px;font-weight:800;color:#0F172A}
-.folio .fn{font-size:10px;color:#ccc;margin-top:3px}
-.badge{display:inline-block;background:#2563EB;color:#fff;padding:5px 16px;border-radius:20px;font-size:12px;font-weight:700;margin-bottom:16px}
-.ph{display:flex;gap:14px;align-items:center;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:14px;margin-bottom:16px}
-.av{width:60px;height:60px;border-radius:50%;background:#2563EB;display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;font-weight:800;flex-shrink:0;overflow:hidden}
-.av img{width:100%;height:100%;object-fit:cover}
-.pn{font-size:17px;font-weight:800;margin-bottom:5px}
-.pm{display:flex;flex-wrap:wrap;gap:10px;font-size:11.5px;color:#475569}
-.ab{margin-top:7px;background:#FEF2F2;border:1px solid #FECACA;border-radius:6px;padding:5px 10px;font-size:11.5px;color:#DC2626}
-.cb{background:#EFF6FF;border:1px solid #BFDBFE;border-radius:10px;padding:14px;margin-bottom:14px}
-.mot{font-size:15px;font-weight:700;color:#1D4ED8;margin-bottom:7px}
-.fr{display:flex;flex-wrap:wrap;gap:16px;margin-bottom:7px}
-.fi label{display:block;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94A3B8;margin-bottom:1px}
-.fi span{font-size:13px;font-weight:600}
-.s{margin-bottom:14px}
-.st{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:#94A3B8;padding-bottom:4px;border-bottom:1px solid #E2E8F0;margin-bottom:8px}
-.vs{display:flex;flex-wrap:wrap;gap:10px;background:#F0FDF4;border:1px solid #DCFCE7;border-radius:8px;padding:10px 14px;margin-bottom:14px}
-.vf label{font-size:9px;font-weight:700;text-transform:uppercase;color:#15803D;display:block;margin-bottom:1px}
-.vf span{font-size:15px;font-weight:800;color:#166534}
-.mi{border-left:3px solid #10B981;padding:8px 12px;background:#F0FDF4;border-radius:0 8px 8px 0;margin-bottom:8px}
-.mn{font-weight:700;font-size:13px}
-.md{font-size:11.5px;color:#555;margin-top:2px}
-.ni{background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:10px 12px;margin-bottom:8px}
-.nt{font-size:9.5px;font-weight:700;text-transform:uppercase;color:#2563EB;margin-bottom:4px;letter-spacing:.5px}
-.nc{white-space:pre-wrap;font-size:12.5px;line-height:1.7}
-.sig{display:flex;justify-content:flex-end;margin-top:36px}
-.sb{text-align:center;min-width:200px}
-.sl{border-top:1px solid #333;margin-bottom:5px}
-.sn{font-size:13px;font-weight:700}
-.sd{font-size:11px;color:#666}
-.ft{margin-top:22px;border-top:1px solid #E2E8F0;padding-top:10px;text-align:center;font-size:10px;color:#94A3B8}
-@media print{body{padding:15px;print-color-adjust:exact;-webkit-print-color-adjust:exact}.no-print{display:none}img{max-width:100%;display:block}}
-</style></head><body>
-<div class="h">
-  <div class="logo">${cfg.logoUrl?`<img src="${cfg.logoUrl}" alt="logo">`:'🏥'}</div>
-  <div class="ci">
-    <h1>${cfg.nombreClinica||'Lumea Med Clínica'}</h1>
-    <p><strong>${currentUser?.name||cfg.nombreDoctor||'Médico Responsable'}</strong>${cfg.especialidad?' — '+cfg.especialidad:''}</p>
-    ${cfg.direccion?`<p>📍 ${cfg.direccion}</p>`:''}
-    ${cfg.telefono?`<p>📞 ${cfg.telefono}${cfg.email?' · ✉️ '+cfg.email:''}</p>`:''}
-    ${cfg.registro?`<p>Reg. Med. ${cfg.registro}</p>`:''}
-  </div>
-  <div class="folio">
-    <div class="fd">Fecha de emisión</div>
-    <div class="fv">${new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'})}</div>
-    <div class="fn">N° GS-${c.id}-${Date.now().toString().slice(-5)}</div>
-  </div>
-</div>
-<div class="badge">📋 Nota de Consulta Médica</div>
-<div class="ph">
-  <div class="av">${p?.fotoUrl?`<img src="${p.fotoUrl}" alt="foto">`:inits(p?.nombre,p?.apellidos)}</div>
-  <div style="flex:1">
-    <div class="pn">${p?p.nombre+' '+p.apellidos:'Paciente no registrado'}</div>
-    <div class="pm">
-      ${p?.fechaNac?`<span>🎂 ${edadCalc(p.fechaNac)}</span>`:''}
-      ${p?.sexo?`<span>${p.sexo==='M'?'♂ Masculino':p.sexo==='F'?'♀ Femenino':p.sexo}</span>`:''}
-      ${p?.sangre?`<span>🩸 ${p.sangre}</span>`:''}
-      ${p?.identificacion?`<span>🪪 ${p.identificacion}</span>`:''}
-      ${p?.telefono?`<span>📞 ${p.telefono}</span>`:''}
-      ${e?.ocupacion?`<span>💼 ${e.ocupacion}</span>`:''}
-    </div>
-    ${p?.alergias?`<div class="ab">⚠️ <strong>Alergias:</strong> ${p.alergias}</div>`:''}
-  </div>
-</div>
-<div class="cb">
-  <div class="fr">
-    <div class="fi"><label>Fecha</label><span>${fmtF(c.fecha)}</span></div>
-    <div class="fi"><label>Hora</label><span>${c.hora}</span></div>
-    <div class="fi"><label>Tipo</label><span style="text-transform:capitalize">${c.tipo}</span></div>
-    <div class="fi"><label>Estado</label><span style="text-transform:capitalize">${c.estado}</span></div>
-  </div>
-  <div class="mot">${c.motivo}</div>
-  ${c.notas?`<div style="font-size:12.5px;color:#475569;white-space:pre-wrap">${c.notas}</div>`:''}
-</div>
-${e&&(e.peso||e.talla||e.presion||e.temperatura)?`
-<div class="vs">
-  ${e.peso?`<div class="vf"><label>Peso</label><span>${e.peso} kg</span></div>`:''}
-  ${e.talla?`<div class="vf"><label>Talla</label><span>${e.talla} cm</span></div>`:''}
-  ${e.presion?`<div class="vf"><label>Presión Arterial</label><span>${e.presion}</span></div>`:''}
-  ${e.temperatura?`<div class="vf"><label>Temperatura</label><span>${e.temperatura}°C</span></div>`:''}
-  ${imc?`<div class="vf"><label>IMC</label><span>${imc}</span></div>`:''}
-</div>`:''}
-${notasDia.length?`<div class="s"><div class="st">Diagnóstico / Notas de la Consulta</div>${notasDia.map(n=>`<div class="ni"><div class="nt">${n.tipo}${n.titulo?' — '+n.titulo:''}</div><div class="nc">${n.contenido}</div></div>`).join('')}</div>`:'<div class="s"><div class="st">Diagnóstico</div><p style="font-size:12px;color:#94A3B8">Sin notas registradas para esta consulta</p></div>'}
-<div class="s">
-  <div class="st">Prescripción / Medicación</div>
-  ${meds.length?meds.map(m=>`<div class="mi"><div class="mn">Rx. ${m.nombre}</div><div class="md">${m.dosis} · ${m.frecuencia} · Vía ${m.via}${m.fin?' · Hasta: '+fmtF(m.fin):''}</div>${m.indicaciones?`<div class="md" style="font-style:italic">📌 ${m.indicaciones}</div>`:''}</div>`).join(''):'<p style="font-size:12px;color:#94A3B8">Sin medicamentos prescritos en esta consulta</p>'}
-</div>
-${p?.alergias||e?.enfermedadesCronicas?`<div class="s"><div class="st">Antecedentes Relevantes</div>${p?.alergias?`<p style="font-size:12px;margin-bottom:4px"><strong>Alergias:</strong> ${p.alergias}</p>`:''}${e?.enfermedadesCronicas?`<p style="font-size:12px"><strong>Enf. crónicas:</strong> ${e.enfermedadesCronicas}</p>`:''}</div>`:''}
-<div class="sig"><div class="sb"><div style="height:46px"></div><div class="sl"></div><div class="sn">${currentUser?.name||cfg.nombreDoctor||'Médico Responsable'}</div>${cfg.especialidad?`<div class="sd">${cfg.especialidad}</div>`:''}${cfg.registro?`<div class="sd">Reg. Med. ${cfg.registro}</div>`:''}</div></div>
-<div class="ft">${cfg.nombreClinica||'Lumea Med'} · ${cfg.notaPie||cfg.direccion||''} · Generado: ${new Date().toLocaleString('es-ES')}</div>
-<script>window.onload=function(){window.print()}<\/script>
-</body></html>`;
+  const body = '<div class="badge-tipo" style="background:#2563EB">&#128203; NOTA DE CONSULTA M&#201;DICA</div>'
+    + '<div class="patient-box">'
+    +   '<div class="patient-av">'+(p?.fotoUrl?'<img src="'+p.fotoUrl+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">':inits(p?.nombre,p?.apellidos))+'</div>'
+    +   '<div style="flex:1">'
+    +     '<div class="patient-name">'+(p?p.nombre+' '+p.apellidos:'Paciente no registrado')+'</div>'
+    +     '<div class="patient-meta">'
+    +       (p?.fechaNac?'<span>&#127874; '+edadCalc(p.fechaNac)+'</span>':'')
+    +       (p?.sexo?'<span>'+(p.sexo==='M'?'&#9794; Masculino':p.sexo==='F'?'&#9792; Femenino':p.sexo)+'</span>':'')
+    +       (p?.sangre?'<span>&#129778; '+p.sangre+'</span>':'')
+    +       (p?.identificacion?'<span>&#128266; '+p.identificacion+'</span>':'')
+    +       (p?.telefono?'<span>&#128222; '+p.telefono+'</span>':'')
+    +     '</div>'
+    +     (p?.alergias?'<div style="margin-top:6px;background:#FEF2F2;border:1px solid #FECACA;border-radius:6px;padding:5px 10px;font-size:11px;color:#DC2626;font-weight:600">&#9888; Alergias: '+p.alergias+'</div>':'')
+    +   '</div>'
+    + '</div>'
+    + '<div class="section-title">&#128197; Datos de la consulta</div>'
+    + '<table><tbody>'
+    +   '<tr><td style="font-weight:700;color:#475569;width:130px">Fecha</td><td><strong>'+fmtF(c.fecha)+'</strong></td><td style="font-weight:700;color:#475569;width:100px">Hora</td><td><strong>'+c.hora+'</strong></td></tr>'
+    +   '<tr><td style="font-weight:700;color:#475569">Tipo</td><td style="text-transform:capitalize">'+c.tipo+'</td><td style="font-weight:700;color:#475569">Estado</td><td style="text-transform:capitalize">'+c.estado+'</td></tr>'
+    +   '<tr><td style="font-weight:700;color:#475569">N&deg; Folio</td><td colspan="3">GS-'+c.id+'-'+Date.now().toString().slice(-5)+'</td></tr>'
+    +   '<tr><td style="font-weight:700;color:#1D4ED8">Motivo</td><td colspan="3" style="font-weight:700;color:#1D4ED8;font-size:14px">'+c.motivo+'</td></tr>'
+    +   (c.notas?'<tr><td style="font-weight:700;color:#475569">Observaciones</td><td colspan="3" style="white-space:pre-wrap">'+c.notas+'</td></tr>':'')
+    + '</tbody></table>'
+    + (e&&(e.peso||e.talla||e.presion||e.temperatura)?
+        '<div class="section-title">&#9889; Signos vitales</div>'
+        + '<table><thead><tr>'
+        +   (e.peso?'<th>Peso</th>':'')+(e.talla?'<th>Talla</th>':'')+(e.presion?'<th>Presi&#243;n Arterial</th>':'')+(e.temperatura?'<th>Temperatura</th>':'')+(imc?'<th>IMC</th>':'')
+        + '</tr></thead><tbody><tr>'
+        +   (e.peso?'<td style="font-size:16px;font-weight:800;color:#166534">'+e.peso+' kg</td>':'')
+        +   (e.talla?'<td style="font-size:16px;font-weight:800;color:#166534">'+e.talla+' cm</td>':'')
+        +   (e.presion?'<td style="font-size:16px;font-weight:800;color:#166534">'+e.presion+'</td>':'')
+        +   (e.temperatura?'<td style="font-size:16px;font-weight:800;color:#166534">'+e.temperatura+'&deg;C</td>':'')
+        +   (imc?'<td style="font-size:16px;font-weight:800;color:#166534">'+imc+'</td>':'')
+        + '</tr></tbody></table>'
+      : '')
+    + '<div class="section-title">&#128203; Diagn&#243;stico / Notas de la consulta</div>'
+    + (notasDia.length
+        ? notasDia.map(n=>'<div class="note-box"><div class="note-title">'+(n.tipo.toUpperCase())+(n.titulo?' &mdash; '+n.titulo:'')+'</div><div class="note-body">'+n.contenido+'</div></div>').join('')
+        : '<p style="font-size:12px;color:#94A3B8;margin-bottom:18px">Sin notas registradas para esta consulta</p>')
+    + '<div class="section-title">&#128138; Prescripci&#243;n / Medicaci&#243;n</div>'
+    + (meds.length
+        ? '<table><thead><tr><th>#</th><th>Medicamento</th><th>Dosis</th><th>Frecuencia</th><th>V&#237;a</th><th>Hasta</th></tr></thead><tbody>'
+          + meds.map((m,i)=>'<tr><td style="text-align:center;font-weight:800;color:#1D4ED8">'+(i+1)+'</td><td><strong>Rx. '+m.nombre+'</strong>'+(m.indicaciones?'<br><span style="font-size:11px;color:#64748B;font-style:italic">'+m.indicaciones+'</span>':'')+'</td><td>'+m.dosis+'</td><td>'+m.frecuencia+'</td><td>'+m.via+'</td><td style="font-size:11px">'+(m.fin?fmtF(m.fin):'Indefinido')+'</td></tr>').join('')
+          + '</tbody></table>'
+        : '<p style="font-size:12px;color:#94A3B8;margin-bottom:18px">Sin medicamentos prescritos en esta consulta</p>')
+    + (p?.alergias||e?.enfermedadesCronicas
+        ? '<div class="section-title">&#9888; Antecedentes relevantes</div>'
+          + '<table><tbody>'
+          + (p?.alergias?'<tr><td style="font-weight:700;color:#B45309;width:150px">Alergias</td><td>'+p.alergias+'</td></tr>':'')
+          + (e?.enfermedadesCronicas?'<tr><td style="font-weight:700;color:#B45309">Enf. cr&#243;nicas</td><td>'+e.enfermedadesCronicas+'</td></tr>':'')
+          + '</tbody></table>'
+        : '')
+    + '<div class="sig-wrap"><div class="sig-box"><div style="height:46px"></div><div class="sig-line"></div>'
+    +   '<div class="sig-name">'+(currentUser?.name||cfg.nombreDoctor||'M&#233;dico Responsable')+'</div>'
+    +   (cfg.especialidad?'<div class="sig-role">'+cfg.especialidad+'</div>':'')
+    +   (cfg.registro?'<div class="sig-role">Reg. Med. '+cfg.registro+'</div>':'')
+    + '</div></div>';
 
-  const w = window.open('', '_blank', 'width=860,height=1020');
-  w.document.write(html);
-  w.document.close();
+  pdfAbrir('Nota de Consulta — '+(p?p.nombre+' '+p.apellidos:''), body, cfg);
 }
 
 // ════════════════════ ATENDIDOS POR DÍA ════════════════════
@@ -2699,10 +2733,11 @@ function ocultarSugerenciasDx() {
 let dxElegidos = [];
 function seleccionarDx(dx) {
   ocultarSugerenciasDx();
+  const motivoEl = document.getElementById('c-motivo');
+  if(motivoEl) motivoEl.value = dx;
   if(dxElegidos.includes(dx)) return;
   dxElegidos.push(dx);
   renderDxElegidos();
-  // Agrega al textarea de notas
   const notas = document.getElementById('c-notas');
   const sep = notas.value && !notas.value.endsWith('\n') ? '\n' : '';
   notas.value += (notas.value ? sep : '') + 'Dx: ' + dx;
