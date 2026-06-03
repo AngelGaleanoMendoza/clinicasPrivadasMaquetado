@@ -490,6 +490,17 @@ function renderRecientes() {
   }
 }
 
+// ════════════════════ NÚMERO DE EXPEDIENTE ════════════════════
+function getExpedienteNum(pid) {
+  const codigo = (currentClinica?.codigo || currentClinica?.nombre || 'EXP').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  const initials = codigo.slice(0, 4);
+  const year = new Date().getFullYear();
+  const sorted = [...C.p].sort((a,b) => a.id - b.id);
+  const idx = sorted.findIndex(p => p.id === pid);
+  const num = idx >= 0 ? idx + 1 : C.p.length + 1;
+  return initials + year + '-' + String(num).padStart(3, '0');
+}
+
 // ════════════════════ PACIENTES ════════════════════
 function renderPacientes(){
   const search=document.getElementById('pacientes-search');
@@ -508,7 +519,8 @@ function renderPacientesList(lista){
   tbody.innerHTML=lista.map(x=>`<tr>
     <td><div class="patient-name-cell">${x.fotoUrl?`<img src="${x.fotoUrl}" style="width:34px;height:34px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--border)" alt="foto">`:`<div class="patient-avatar" style="background:${colAvatar(x.id)}">${ini(x.nombre,x.apellidos)}</div>`}
     <div><div style="font-weight:600">${x.nombre} ${x.apellidos}</div><div class="text-light">${calcEdad(x.fechaNac)}</div></div></div></td>
-    <td>${x.identificacion||'—'}</td><td>${formatFecha(x.fechaNac)}</td><td>${x.telefono||'—'}</td><td>${x.email||'—'}</td>
+    <td><code style="background:var(--primary-light);color:var(--primary);padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700">${getExpedienteNum(x.id)}</code></td>
+    <td>${x.identificacion||'—'}</td><td>${formatFecha(x.fechaNac)}</td><td>${x.telefono||'—'}</td>
     <td>${estadoTag(x.estado||'activo')}</td>
     <td><div class="actions-cell">
       <button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;white-space:nowrap" onclick="registrarAcudidoPaciente(${x.id})">✅ Acudió</button>
@@ -550,7 +562,7 @@ function openModalPaciente(id){
   document.getElementById('modal-paciente').classList.add('open');
 }
 
-async function guardarPaciente(irExpediente=false){
+async function guardarPaciente(irExpediente=false, irCita=false){
   if(!currentClinicaId){ toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
   const nombre=document.getElementById('p-nombre').value.trim();
   const apellidos=document.getElementById('p-apellidos').value.trim();
@@ -568,8 +580,15 @@ async function guardarPaciente(irExpediente=false){
   setLoading(false);
   toast(editingId?'Paciente actualizado':'Paciente registrado ✅');
   if(!editingId) logActivity('paciente');
+  const btnCitar = document.getElementById('btn-guardar-y-citar');
+  if(btnCitar) btnCitar.style.display = 'none';
   closeModal('modal-paciente');
   await loadAll(); renderPacientes(); updateBadges();
+  if((!editingId && (irCita || pendingCitaAfterPaciente)) && savedId) {
+    pendingCitaAfterPaciente = false;
+    setTimeout(() => { openModalCita(); setPacienteSelect('c-paciente', savedId); }, 300);
+    return;
+  }
   if(irExpediente && savedId) navigate('paciente-detalle', savedId);
 }
 
@@ -598,6 +617,7 @@ function renderDetalleP(pid){
       ${p.fotoUrl?`<img src="${p.fotoUrl}" class="patient-detail-avatar" style="object-fit:cover;border:3px solid rgba(255,255,255,.4)" alt="foto">`:`<div class="patient-detail-avatar" style="background:${colAvatar(p.id)}">${ini(p.nombre,p.apellidos)}</div>`}
       <div class="patient-detail-info">
         <h2>${p.nombre} ${p.apellidos}</h2>
+        <div style="margin-bottom:6px"><code style="background:rgba(255,255,255,.2);color:#fff;padding:2px 10px;border-radius:6px;font-size:12px;font-weight:700;letter-spacing:.5px">Exp. ${getExpedienteNum(p.id)}</code></div>
         <div class="meta">
           <span>🎂 ${calcEdad(p.fechaNac)}</span>
           ${p.sexo?`<span>${p.sexo==='M'?'♂ Masculino':p.sexo==='F'?'♀ Femenino':p.sexo}</span>`:''}
@@ -614,7 +634,7 @@ function renderDetalleP(pid){
   document.getElementById('tab-info').innerHTML=`
     <div class="grid-2">
       <div class="card"><h3 style="margin-bottom:14px;font-size:14px">📋 Datos Personales</h3>
-        <table style="width:100%">${[['Identificación',p.identificacion||'—'],['Fecha Nacimiento',formatFecha(p.fechaNac)],['Dirección',p.direccion||'—'],['Emergencia',p.emergencia||'—'],['Registro',formatFecha(p.fechaRegistro)]].map(([k,v])=>`<tr><td class="text-light" style="padding:6px 0;width:140px">${k}</td><td style="padding:6px 0;font-weight:600;font-size:13px">${v}</td></tr>`).join('')}</table>
+        <table style="width:100%">${[['N° Expediente',`<code style="background:var(--primary-light);color:var(--primary);padding:2px 8px;border-radius:6px;font-size:12px;font-weight:700">${getExpedienteNum(p.id)}</code>`],['Identificación',p.identificacion||'—'],['Fecha Nacimiento',formatFecha(p.fechaNac)],['Dirección',p.direccion||'—'],['Emergencia',p.emergencia||'—'],['Registro',formatFecha(p.fechaRegistro)]].map(([k,v])=>`<tr><td class="text-light" style="padding:6px 0;width:140px">${k}</td><td style="padding:6px 0;font-weight:600;font-size:13px">${v}</td></tr>`).join('')}</table>
       </div>
       <div class="card"><h3 style="margin-bottom:14px;font-size:14px">🏥 Datos Clínicos</h3>
         <p class="text-light" style="margin-bottom:8px">Alergias: <strong style="color:var(--text)">${p.alergias||'Ninguna conocida'}</strong></p>
@@ -1833,19 +1853,51 @@ function fillSelect(sid) {
   if(txtEl) txtEl.value = '';
 }
 
+let pendingCitaAfterPaciente = false;
+
+function nuevoPacienteParaCita(nombreHint) {
+  pendingCitaAfterPaciente = true;
+  closeModal('modal-cita');
+  hidePacSug('c');
+  openModalPaciente();
+  const btnCitar = document.getElementById('btn-guardar-y-citar');
+  if(btnCitar) btnCitar.style.display = 'inline-flex';
+  if(nombreHint) {
+    const parts = nombreHint.trim().split(/\s+/);
+    document.getElementById('p-nombre').value = parts[0] || '';
+    document.getElementById('p-apellidos').value = parts.slice(1).join(' ') || '';
+  }
+}
+
 function filterPacSug(q, prefix) {
   const sug = document.getElementById(prefix+'-pac-sug');
   if(!sug) return;
   const q2 = (q||'').toLowerCase().trim();
   const matches = q2.length < 1
     ? C.p.slice(0, 12)
-    : C.p.filter(p => (p.nombre+' '+p.apellidos).toLowerCase().includes(q2) || (p.identificacion||'').toLowerCase().includes(q2)).slice(0, 10);
-  if(!matches.length) { sug.style.display='none'; return; }
+    : C.p.filter(p => (p.nombre+' '+p.apellidos).toLowerCase().includes(q2)
+        || (p.identificacion||'').toLowerCase().includes(q2)
+        || getExpedienteNum(p.id).toLowerCase().includes(q2)).slice(0, 10);
+  if(!matches.length) {
+    if(prefix === 'c' && q2.length >= 1) {
+      sug.innerHTML =
+        '<div style="padding:8px 14px;font-size:12px;color:var(--text-light);border-bottom:1px solid var(--border)">Sin resultados para "'+q+'"</div>'
+        + '<div style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;background:var(--primary-light);border-radius:0 0 10px 10px" onmousedown="nuevoPacienteParaCita(\''+q.replace(/'/g,"\\'")+'\')">'
+        + '<span style="font-size:20px;flex-shrink:0">➕</span>'
+        + '<div><div style="font-size:13px;font-weight:700;color:var(--primary)">Registrar como nuevo paciente</div>'
+        + '<div style="font-size:11px;color:var(--primary);opacity:.8">Crea el expediente y abre la cita automáticamente</div></div>'
+        + '</div>';
+      sug.style.display = 'block';
+    } else {
+      sug.style.display = 'none';
+    }
+    return;
+  }
   sug.innerHTML = matches.map(p =>
     '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s" onmouseenter="this.style.background=\'var(--primary-light)\'" onmouseleave="this.style.background=\'\'" onmousedown="selectPac(\''+prefix+'\','+p.id+',\''+((p.nombre+' '+p.apellidos).replace(/'/g,'\\\''))+'\')">'
     + '<div style="width:32px;height:32px;border-radius:50%;background:'+colAvatar(p.id)+';display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;flex-shrink:0">'+ini(p.nombre,p.apellidos)+'</div>'
     + '<div><div style="font-size:13px;font-weight:600;color:var(--text)">'+p.nombre+' '+p.apellidos+'</div>'
-    + '<div style="font-size:11px;color:var(--text-light)">'+(p.identificacion||'')+(p.telefono?' · '+p.telefono:'')+'</div></div>'
+    + '<div style="font-size:11px;color:var(--text-light)"><span style="color:var(--primary);font-weight:600">'+getExpedienteNum(p.id)+'</span>'+(p.identificacion?' · '+p.identificacion:'')+(p.telefono?' · '+p.telefono:'')+'</div></div>'
     + '</div>'
   ).join('');
   sug.style.display = 'block';
