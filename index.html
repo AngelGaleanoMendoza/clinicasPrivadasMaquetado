@@ -1058,11 +1058,18 @@
     <div class="form-grid">
       <div class="form-group"><label>Nombre *</label><input type="text" id="p-nombre" placeholder="Juan"></div>
       <div class="form-group"><label>Apellidos *</label><input type="text" id="p-apellidos" placeholder="García López"></div>
-      <div class="form-group"><label>Identificación / DNI</label><input type="text" id="p-id" placeholder="12345678A"></div>
+      <div class="form-group"><label>Tipo de Identificación</label>
+        <select id="p-id-tipo">
+          <option value="Cédula">Cédula</option>
+          <option value="Pasaporte">Pasaporte</option>
+          <option value="Licencia de conducir">Licencia de conducir</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Número de Identificación</label><input type="text" id="p-id" placeholder="Ingresa el número..."></div>
       <div class="form-group"><label>Fecha de Nacimiento</label><input type="date" id="p-fechanac"></div>
       <div class="form-group"><label>Sexo</label><select id="p-sexo"><option value="">Seleccionar...</option><option value="M">Masculino</option><option value="F">Femenino</option><option value="O">Otro</option></select></div>
       <div class="form-group"><label>Tipo de Sangre</label><select id="p-sangre"><option value="">Desconocido</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select></div>
-      <div class="form-group"><label>Teléfono</label><input type="tel" id="p-telefono" placeholder="+503 7000-0000"></div>
+      <div class="form-group"><label>Teléfono</label><input type="tel" id="p-telefono" placeholder="+503 70000000" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9+\-\s()]/g,'')"></div>
       <div class="form-group"><label>Correo Electrónico</label><input type="email" id="p-email" placeholder="paciente@email.com"></div>
       <div class="form-group full"><label>Dirección</label><input type="text" id="p-direccion" placeholder="Calle, Ciudad, País"></div>
       <div class="form-group full"><label>Alergias</label><input type="text" id="p-alergias" placeholder="Penicilina, látex... (vacío si no hay)"></div>

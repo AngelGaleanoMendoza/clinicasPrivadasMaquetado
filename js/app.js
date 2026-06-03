@@ -769,6 +769,7 @@ function openModalPaciente(id){
   editingId=id||null;
   document.getElementById('modal-paciente-title').textContent=id?'✏️ Editar Paciente':'👤 Nuevo Paciente';
   ['nombre','apellidos','id','fechanac','sexo','sangre','telefono','email','direccion','alergias','estado','emergencia','observaciones'].forEach(f=>{ const e=document.getElementById('p-'+f); if(e) e.value=''; });
+  const idTipoEl = document.getElementById('p-id-tipo'); if(idTipoEl) idTipoEl.value = 'Cédula';
   pendingFotoFile=null; currentFotoUrl=null;
   document.getElementById('foto-img-preview').style.display='none';
   document.getElementById('foto-img-preview').src='';
@@ -780,7 +781,10 @@ function openModalPaciente(id){
     if(x){
       document.getElementById('p-nombre').value=x.nombre||'';
       document.getElementById('p-apellidos').value=x.apellidos||'';
-      document.getElementById('p-id').value=x.identificacion||'';
+      const idStr = x.identificacion||'';
+      const idMatch = idStr.match(/^(Cédula|Pasaporte|Licencia de conducir):\s*(.*)$/);
+      if(idMatch){ document.getElementById('p-id-tipo').value=idMatch[1]; document.getElementById('p-id').value=idMatch[2]; }
+      else { document.getElementById('p-id-tipo').value='Cédula'; document.getElementById('p-id').value=idStr; }
       document.getElementById('p-fechanac').value=x.fechaNac||'';
       document.getElementById('p-sexo').value=x.sexo||'';
       document.getElementById('p-sangre').value=x.sangre||'';
@@ -802,7 +806,10 @@ async function guardarPaciente(irExpediente=false, irCita=false){
   const nombre=document.getElementById('p-nombre').value.trim();
   const apellidos=document.getElementById('p-apellidos').value.trim();
   if(!nombre||!apellidos){ toast('Nombre y apellidos son obligatorios','error'); return; }
-  const obj={nombre,apellidos,identificacion:document.getElementById('p-id').value.trim(),fechaNac:document.getElementById('p-fechanac').value,sexo:document.getElementById('p-sexo').value,sangre:document.getElementById('p-sangre').value,telefono:document.getElementById('p-telefono').value.trim(),email:document.getElementById('p-email').value.trim(),direccion:document.getElementById('p-direccion').value.trim(),alergias:document.getElementById('p-alergias').value.trim(),estado:document.getElementById('p-estado').value,emergencia:document.getElementById('p-emergencia').value.trim(),observaciones:document.getElementById('p-observaciones').value.trim(),fechaRegistro:hoy(),fotoUrl:currentFotoUrl};
+  const idTipo  = document.getElementById('p-id-tipo')?.value || 'Cédula';
+  const idValor = document.getElementById('p-id').value.trim();
+  const identificacion = idValor ? idTipo + ': ' + idValor : '';
+  const obj={nombre,apellidos,identificacion,fechaNac:document.getElementById('p-fechanac').value,sexo:document.getElementById('p-sexo').value,sangre:document.getElementById('p-sangre').value,telefono:document.getElementById('p-telefono').value.trim(),email:document.getElementById('p-email').value.trim(),direccion:document.getElementById('p-direccion').value.trim(),alergias:document.getElementById('p-alergias').value.trim(),estado:document.getElementById('p-estado').value,emergencia:document.getElementById('p-emergencia').value.trim(),observaciones:document.getElementById('p-observaciones').value.trim(),fechaRegistro:hoy(),fotoUrl:currentFotoUrl};
   setLoading(true);
   let err, savedId=editingId;
   if(editingId){ const r=await sb.from('pacientes').update(toP(obj)).eq('id',editingId); err=r.error; }
