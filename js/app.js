@@ -900,6 +900,7 @@ function renderDetalleP(pid){
         </div>
       </div>
       <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" style="background:rgba(255,255,255,.15);color:#fff" onclick="imprimirExpedienteCompleto(${p.id})">🖨️ Imprimir</button>
         <button class="btn" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff" onclick="registrarAcudidoPaciente(${p.id})">✅ Paciente acudió</button>
         <button class="btn" style="background:rgba(255,255,255,.15);color:#fff" onclick="openModalPaciente(${p.id})">✏️ Editar</button>
       </div>
@@ -1009,6 +1010,179 @@ function renderDetalleP(pid){
       </div>
     </div>
   </div>`;
+}
+
+function imprimirExpedienteCompleto(pid) {
+  const p    = C.p.find(x=>x.id===pid);
+  if(!p) return;
+  const exp  = C.e.find(x=>x.pacienteId===pid) || {};
+  const citas = C.c.filter(x=>x.pacienteId===pid).sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  const meds  = C.m.filter(x=>x.pacienteId===pid);
+  const notas = C.n.filter(x=>x.pacienteId===pid);
+  const examenes = notas.filter(n=>n.tipo==='examen_visual').sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  const otrasNotas = notas.filter(n=>n.tipo!=='examen_visual').sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  const cl   = currentClinica;
+  const imc  = (exp.peso&&exp.talla) ? (exp.peso/((exp.talla/100)**2)).toFixed(1) : null;
+  const edad = p.fechaNac ? Math.floor((Date.now()-new Date(p.fechaNac))/(365.25*24*3600*1000)) : null;
+
+  const sec = (icon, title, color) =>
+    `<div style="background:${color};color:#fff;padding:10px 18px;border-radius:8px;margin:22px 0 14px;font-size:14px;font-weight:700;letter-spacing:.02em">${icon} ${title}</div>`;
+
+  const row = (label, val, full=false) => (!val && val!==0) ? '' :
+    `<tr>
+      <td style="padding:5px 10px;color:#64748b;width:${full?'0':'180px'};font-size:12px;border-bottom:1px solid #f1f5f9;white-space:nowrap">${label}</td>
+      <td style="padding:5px 10px;font-size:13px;font-weight:600;border-bottom:1px solid #f1f5f9${full?';width:100%':''}">${val}</td>
+    </tr>`;
+
+  const tbl = (rows) => rows.trim()
+    ? `<table style="width:100%;border-collapse:collapse">${rows}</table>` : '';
+
+  // ── CABECERA ──
+  const cabecera = `
+    <div style="text-align:center;margin-bottom:22px;padding-bottom:14px;border-bottom:2px solid #0f172a">
+      <h1 style="font-size:22px;font-weight:800;color:#0f172a;margin:0 0 2px">${cl?.nombre||'Clínica'}</h1>
+      <p style="color:#64748b;font-size:12px;margin:0">${cl?.direccion||''} ${cl?.telefono?'· Tel: '+cl.telefono:''}</p>
+      <p style="font-size:11px;color:#94a3b8;margin-top:4px">EXPEDIENTE CLÍNICO · Generado ${new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'})}</p>
+    </div>`;
+
+  // ── DATOS DEL PACIENTE ──
+  const secPaciente = sec('👤','Datos del Paciente','#1e40af') + tbl(
+    row('N° Expediente',`<strong>${p.expediente||getExpedienteNum(p.id)}</strong>`) +
+    row('Nombre completo',`<strong>${p.nombre} ${p.apellidos}</strong>`) +
+    row('Identificación', p.identificacion) +
+    row('Fecha de nacimiento', p.fechaNac ? formatFecha(p.fechaNac)+(edad?' ('+edad+' años)':'') : null) +
+    row('Sexo', p.sexo==='M'?'Masculino':p.sexo==='F'?'Femenino':p.sexo) +
+    row('Tipo de sangre', p.tipoSangre||p.sangre) +
+    row('Teléfono', p.telefono) +
+    row('Email', p.email) +
+    row('Dirección', p.direccion) +
+    row('Contacto de emergencia', p.emergencia||p.contactoEmergencia) +
+    row('Alergias', p.alergias ? '⚠️ '+p.alergias : 'Ninguna conocida')
+  ) + (p.observaciones ? `<div style="margin-top:8px;padding:10px 12px;background:#eff6ff;border-left:3px solid #1e40af;border-radius:4px;font-size:12px">${p.observaciones}</div>` : '');
+
+  // ── SIGNOS VITALES + ANTECEDENTES ──
+  const secExp = sec('🩺','Expediente Médico','#0f766e') +
+    (exp.peso||exp.talla||exp.presion||exp.temperatura ? `
+    <div style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+      ${exp.peso?`<div style="flex:1;min-width:80px;text-align:center;padding:10px;border:1.5px solid #e2e8f0;border-radius:8px"><div style="font-size:20px;font-weight:800;color:#0f172a">${exp.peso}</div><div style="font-size:10px;color:#64748b">kg · Peso</div></div>`:''}
+      ${exp.talla?`<div style="flex:1;min-width:80px;text-align:center;padding:10px;border:1.5px solid #e2e8f0;border-radius:8px"><div style="font-size:20px;font-weight:800;color:#0f172a">${exp.talla}</div><div style="font-size:10px;color:#64748b">cm · Talla</div></div>`:''}
+      ${exp.presion?`<div style="flex:1;min-width:80px;text-align:center;padding:10px;border:1.5px solid #e2e8f0;border-radius:8px"><div style="font-size:20px;font-weight:800;color:#0f172a">${exp.presion}</div><div style="font-size:10px;color:#64748b">Presión</div></div>`:''}
+      ${exp.temperatura?`<div style="flex:1;min-width:80px;text-align:center;padding:10px;border:1.5px solid #e2e8f0;border-radius:8px"><div style="font-size:20px;font-weight:800;color:#0f172a">${exp.temperatura}°</div><div style="font-size:10px;color:#64748b">Temperatura</div></div>`:''}
+      ${imc?`<div style="flex:1;min-width:80px;text-align:center;padding:10px;border:1.5px solid #e2e8f0;border-radius:8px"><div style="font-size:20px;font-weight:800;color:#0f172a">${imc}</div><div style="font-size:10px;color:#64748b">IMC</div></div>`:''}
+    </div>` : '') +
+    tbl(
+      row('Ocupación', exp.ocupacion) +
+      row('Estado civil', exp.estadoCivil) +
+      row('Tabaco', exp.tabaco) +
+      row('Alcohol', exp.alcohol) +
+      row('Actividad física', exp.actividadFisica) +
+      row('Enfermedades crónicas', exp.enfermedadesCronicas) +
+      row('Cirugías previas', exp.cirugias) +
+      row('Antecedentes familiares', exp.antecedentesFamiliares) +
+      row('Vacunas', exp.vacunas) +
+      row('Observaciones médicas', exp.observacionesMedicas||exp.observaciones)
+    );
+
+  // ── CITAS ──
+  const secCitas = citas.length ? sec('📅','Historial de Citas','#7c3aed') +
+    `<table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="background:#f8fafc">
+        <th style="padding:7px 10px;text-align:left;border-bottom:2px solid #e2e8f0">Fecha</th>
+        <th style="padding:7px 10px;text-align:left;border-bottom:2px solid #e2e8f0">Hora</th>
+        <th style="padding:7px 10px;text-align:left;border-bottom:2px solid #e2e8f0">Motivo</th>
+        <th style="padding:7px 10px;text-align:left;border-bottom:2px solid #e2e8f0">Tipo</th>
+        <th style="padding:7px 10px;text-align:left;border-bottom:2px solid #e2e8f0">Estado</th>
+      </tr></thead>
+      <tbody>${citas.map(c=>`<tr style="border-bottom:1px solid #f1f5f9">
+        <td style="padding:7px 10px">${formatFecha(c.fecha)}</td>
+        <td style="padding:7px 10px">${c.hora||'—'}</td>
+        <td style="padding:7px 10px">${c.motivo||'—'}</td>
+        <td style="padding:7px 10px">${c.tipo||'consulta'}</td>
+        <td style="padding:7px 10px">${c.estado||'—'}</td>
+      </tr>`).join('')}</tbody>
+    </table>` : '';
+
+  // ── MEDICACIONES ──
+  const secMeds = meds.length ? sec('💊','Medicaciones','#b45309') +
+    `<table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="background:#f8fafc">
+        <th style="padding:7px 10px;text-align:left;border-bottom:2px solid #e2e8f0">Medicamento</th>
+        <th style="padding:7px 10px;text-align:left;border-bottom:2px solid #e2e8f0">Dosis</th>
+        <th style="padding:7px 10px;text-align:left;border-bottom:2px solid #e2e8f0">Frecuencia</th>
+        <th style="padding:7px 10px;text-align:left;border-bottom:2px solid #e2e8f0">Vía</th>
+        <th style="padding:7px 10px;text-align:left;border-bottom:2px solid #e2e8f0">Estado</th>
+      </tr></thead>
+      <tbody>${meds.map(m=>`<tr style="border-bottom:1px solid #f1f5f9">
+        <td style="padding:7px 10px;font-weight:600">${m.nombre}</td>
+        <td style="padding:7px 10px">${m.dosis||'—'}</td>
+        <td style="padding:7px 10px">${m.frecuencia||'—'}</td>
+        <td style="padding:7px 10px">${m.via||'—'}</td>
+        <td style="padding:7px 10px">${m.estado||'—'}</td>
+      </tr>`).join('')}</tbody>
+    </table>` : '';
+
+  // ── NOTAS CLÍNICAS ──
+  const secNotas = otrasNotas.length ? sec('📝','Notas Clínicas','#0369a1') +
+    otrasNotas.map(n=>`
+      <div style="border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px;margin-bottom:10px;break-inside:avoid">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px;align-items:baseline">
+          <strong style="font-size:13px">${n.titulo||'—'}</strong>
+          <span style="font-size:11px;color:#64748b">${formatFecha(n.fecha)} · ${n.tipo||'nota'}</span>
+        </div>
+        <p style="font-size:12px;color:#374151;margin:0;white-space:pre-wrap;line-height:1.7">${n.contenido||''}</p>
+      </div>`).join('') : '';
+
+  // ── EXAMEN VISUAL ──
+  const secExamen = examenes.length ? sec('👁️','Exámenes Visuales','#6d28d9') +
+    examenes.map(ev => {
+      // Parsear el contenido de texto a bloques visuales
+      const lines = (ev.contenido||'').split('\n');
+      const bloques = {};
+      let bloque = '';
+      lines.forEach(l => {
+        const l2 = l.trim();
+        if(l2.startsWith('▸')) { bloque = l2.replace('▸','').trim().split('\n')[0]; bloques[bloque]=[]; }
+        else if(bloque && l2 && !l2.startsWith('╔') && !l2.startsWith('╚') && !l2.startsWith('║')) {
+          bloques[bloque] = bloques[bloque]||[];
+          bloques[bloque].push(l2);
+        }
+      });
+      const blk = (titulo) => bloques[titulo] ? `
+        <div style="margin-bottom:10px">
+          <div style="font-weight:700;font-size:11px;color:#6d28d9;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;border-bottom:1px solid #ede9fe;padding-bottom:3px">${titulo}</div>
+          <div style="font-size:12px;color:#374151;line-height:1.8;white-space:pre-wrap">${bloques[titulo].join('\n')}</div>
+        </div>` : '';
+      return `
+        <div style="border:1px solid #ede9fe;border-radius:10px;padding:16px;margin-bottom:14px;background:#faf5ff;break-inside:avoid">
+          <div style="font-weight:700;font-size:13px;color:#6d28d9;margin-bottom:12px;padding-bottom:8px;border-bottom:1.5px solid #ede9fe">
+            👁️ ${ev.titulo||'Examen Visual'} — ${formatFecha(ev.fecha)}
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 20px">
+            ${blk('LENSOMETRÍA (anteojos actuales)')}
+            ${blk('AGUDEZA VISUAL SIN CORRECCIÓN')}
+            ${blk('COVER TEST')}
+            ${blk('MOTILIDAD OCULAR EXTRÍNSECA')}
+            ${blk('EXAMINACIÓN DE ACOMODACIÓN')}
+            ${blk('REFRACCIÓN')}
+            ${blk('PARÁMETROS DE ADAPTACIÓN')}
+            ${blk('AGUDEZA VISUAL CON CORRECCIÓN')}
+            ${blk('REFLEJOS PUPILARES')}
+            ${blk('BIOMICROSCOPÍA')}
+            ${blk('FONDO DE OJO')}
+          </div>
+          ${bloques['DIAGNÓSTICO']?`<div style="margin-top:10px;padding:10px;background:#fff;border-radius:6px;border:1px solid #ede9fe"><strong style="font-size:12px;color:#6d28d9">DIAGNÓSTICO</strong><p style="margin:4px 0 0;font-size:13px">${bloques['DIAGNÓSTICO'].join(' ')}</p></div>`:''}
+          ${bloques['CORRECCIÓN RECOMENDADA']?`<div style="margin-top:8px;padding:10px;background:#fff;border-radius:6px;border:1px solid #ede9fe"><strong style="font-size:12px;color:#6d28d9">CORRECCIÓN RECOMENDADA</strong><p style="margin:4px 0 0;font-size:13px">${bloques['CORRECCIÓN RECOMENDADA'].join(' ')}</p></div>`:''}
+          ${bloques['OBSERVACIONES']?`<div style="margin-top:8px;padding:10px;background:#fff;border-radius:6px;border:1px solid #ede9fe"><strong style="font-size:12px;color:#6d28d9">OBSERVACIONES</strong><p style="margin:4px 0 0;font-size:13px">${bloques['OBSERVACIONES'].join(' ')}</p></div>`:''}
+        </div>`;
+    }).join('') : '';
+
+  const pie = `
+    <div style="text-align:center;margin-top:30px;padding-top:12px;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:11px">
+      Lumea Med — Sistema de Gestión Clínica | lumeamed.net · ${new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'})}
+    </div>`;
+
+  const body = cabecera + secPaciente + secExp + secExamen + secCitas + secMeds + secNotas + pie;
+  pdfAbrir(`Expediente — ${p.nombre} ${p.apellidos}`, body, {orientation:'portrait'});
 }
 
 function switchTab(tabId, btn){
