@@ -78,6 +78,7 @@
     <nav class="sidebar-menu">
       <div class="menu-section">Principal</div>
       <div class="menu-item active" onclick="navigate('dashboard')"><span class="icon">📊</span> Dashboard</div>
+      <div class="menu-item" id="menu-expedientes" onclick="navigate('expedientes')"><span class="icon">📋</span> Expedientes</div>
       <div class="menu-section" id="menu-clinica-section">Clínica</div>
       <div class="menu-item" id="menu-pacientes" onclick="navigate('pacientes')"><span class="icon">👥</span> Pacientes <span class="badge" id="badge-pacientes">0</span></div>
       <div class="menu-item" id="menu-citas" onclick="navigate('citas')"><span class="icon">📅</span> Citas <span class="badge" id="badge-citas">0</span></div>
@@ -86,6 +87,7 @@
       <div class="menu-item" id="menu-notas" onclick="navigate('notas')"><span class="icon">📝</span> Notas Clínicas</div>
       <div class="menu-item" id="menu-atendidos" onclick="navigate('atendidos')"><span class="icon">📊</span> Atendidos por Día</div>
       <div class="menu-item" id="menu-estadisticas" onclick="navigate('estadisticas')"><span class="icon">📈</span> Estadísticas</div>
+      <div class="menu-section" id="menu-inv-section">Inventario</div>
       <div class="menu-item" id="menu-inventario" onclick="navigate('inventario')"><span class="icon">📦</span> Inventario</div>
       <div class="menu-section" id="menu-fin-section" style="display:none">Finanzas</div>
       <div class="menu-item" id="menu-finanzas" onclick="navigate('finanzas')" style="display:none"><span class="icon">💰</span> Finanzas</div>
@@ -298,6 +300,19 @@
         <div id="tab-meds-p" style="display:none"></div>
         <div id="tab-notas-p" style="display:none"></div>
         <div id="tab-expediente" style="display:none"></div>
+      </div>
+
+      <!-- EXPEDIENTES -->
+      <div id="view-expedientes" class="view">
+        <div class="card">
+          <div class="card-header">
+            <h3>📋 Expedientes Clínicos</h3>
+            <input type="text" id="exp-search" placeholder="Buscar por nombre, apellido o N° expediente..."
+              oninput="filtrarExpedientes(this.value)"
+              style="padding:8px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;background:var(--bg);color:var(--text);outline:none;min-width:260px">
+          </div>
+          <div id="exp-list" style="margin-top:4px"></div>
+        </div>
       </div>
 
       <!-- ATENDIDOS POR DÍA -->
@@ -567,6 +582,7 @@
             <button class="tab active" id="tab-admin-clinicas"      onclick="switchAdminTab('clinicas')">🏥 Clínicas</button>
             <button class="tab"        id="tab-admin-usuarios"      onclick="switchAdminTab('usuarios')">👥 Usuarios</button>
             <button class="tab"        id="tab-admin-productividad" onclick="switchAdminTab('productividad')">📊 Productividad</button>
+            <button class="tab"        id="tab-admin-global"        onclick="switchAdminTab('global')">🌐 Global</button>
           </div>
         </div>
         <div id="admin-panel-clinicas">
@@ -574,6 +590,13 @@
         </div>
         <div id="admin-panel-usuarios" style="display:none">
           <div class="card"><div id="admin-usuarios-list"></div></div>
+        </div>
+        <div id="admin-panel-global" style="display:none">
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-header"><h3>🌐 Resumen Global del Sistema</h3><span id="global-updated" class="tag tag-gray" style="font-size:11px"></span></div>
+            <div id="global-stats-row" class="stats-grid" style="margin-bottom:18px"></div>
+            <div id="global-clinicas-table"></div>
+          </div>
         </div>
         <div id="admin-panel-productividad" style="display:none">
           <div class="card" style="margin-bottom:16px">

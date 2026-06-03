@@ -431,7 +431,7 @@ async function entrarConPerfil(profile) {
   currentClinica = clData || null;
   await loadAll();
   setLoading(false);
-  navigate(isFarmaceutico() ? 'inventario' : 'dashboard');
+  navigate(currentUser?.key === 'farmaceutico' ? 'inventario' : 'dashboard');
   toast(`Bienvenido, ${currentUser.name} 👋`, 'info');
   logActivity('login');
   iniciarInactividad();
@@ -526,25 +526,40 @@ async function navigate(view, patientId) {
   if(el) el.classList.add('active');
   const mi=document.querySelector(`.menu-item[onclick*="'${view}'"]`);
   if(mi) mi.classList.add('active');
-  const titles={dashboard:'Dashboard',pacientes:'Pacientes',citas:'Citas',agendas:'Agendas',medicaciones:'Medicaciones',notas:'Notas Clínicas',atendidos:'Atendidos por Día',estadisticas:'Estadísticas',configuracion:'Configuración Clínica',exportar:'Exportar / Enviar','paciente-detalle':'Expediente del Paciente',admin:'Administración',inventario:'Inventario',finanzas:'Finanzas'};
+  const titles={dashboard:'Dashboard',expedientes:'Expedientes Clínicos',pacientes:'Pacientes',citas:'Citas',agendas:'Agendas',medicaciones:'Medicaciones',notas:'Notas Clínicas',atendidos:'Atendidos por Día',estadisticas:'Estadísticas',configuracion:'Configuración Clínica',exportar:'Exportar / Enviar','paciente-detalle':'Expediente del Paciente',admin:'Administración',inventario:'Inventario',finanzas:'Finanzas'};
   document.getElementById('page-title').textContent = titles[view]||view;
   currentView=view;
   if(patientId) currentPatientId=patientId;
-  // Farmacéutico: solo puede acceder a inventario y finanzas
-  const CLINICA_VIEWS = ['pacientes','citas','agendas','medicaciones','notas','atendidos','estadisticas','exportar','configuracion'];
-  if(isFarmaceutico() && CLINICA_VIEWS.includes(view)) { navigate('inventario'); return; }
+  const sa   = isSuperAdmin();
+  const role = currentUser?.key;
+  // Accesos por rol
+  const finAccess  = sa || ['admin','farmaceutico'].includes(role);
+  const invAccess  = sa || ['admin','farmaceutico'].includes(role);
+  const sysAccess  = sa || role === 'admin';
+  const medAccess  = sa || ['admin','medico'].includes(role);
+  const recAccess  = sa || ['admin','medico','recepcion'].includes(role);
+  const enfAccess  = sa || ['admin','medico','enfermeria'].includes(role);
+  // Guards específicos
+  if(view==='finanzas'  && !finAccess)  { navigate('dashboard'); return; }
+  if(view==='inventario'&& !invAccess)  { navigate('dashboard'); return; }
+  if(view==='estadisticas' && !sysAccess){ navigate('dashboard'); return; }
+  if(view==='exportar'  && !sysAccess)  { navigate('dashboard'); return; }
+  if(view==='configuracion' && !sa)     { navigate('dashboard'); return; }
+  if(view==='admin'     && !sa)         { navigate('dashboard'); return; }
+  if(['citas','agendas'].includes(view) && !recAccess) { navigate('dashboard'); return; }
+  if(['medicaciones','notas'].includes(view) && !enfAccess) { navigate('dashboard'); return; }
+  if(view==='atendidos' && !medAccess)  { navigate('dashboard'); return; }
+  if(view==='pacientes' && role==='farmaceutico') { navigate('inventario'); return; }
+  // Rutas especiales sin loadAll
   if(view==='finanzas'){
-    if(!isSuperAdmin() && !['admin','farmaceutico'].includes(currentUser?.key)){ navigate('dashboard'); return; }
     renderFinanzas(); if(window.innerWidth<=768) closeSidebar(); return;
   }
   if(view==='admin'){
-    if(!isSuperAdmin()){navigate('dashboard');return;}
     await loadAdminData();
     switchAdminTab(adminTab||'clinicas');
     if(window.innerWidth<=768) closeSidebar();
     return;
   }
-  if(view==='configuracion' && !isSuperAdmin()){navigate('dashboard');return;}
   await loadAll();
   renderView(view);
   if(window.innerWidth<=768) closeSidebar();
@@ -553,6 +568,7 @@ async function navigate(view, patientId) {
 function renderView(v) {
   switch(v){
     case 'dashboard': renderDashboard(); break;
+    case 'expedientes': renderExpedientes(); break;
     case 'pacientes': renderPacientes(); break;
     case 'citas': renderCitas(); break;
     case 'agendas': renderAgendas(); break;
@@ -3488,29 +3504,51 @@ function toggleAdminMenu() { applyRoleMenu(); }
 function applyRoleMenu() {
   const sa   = isSuperAdmin();
   const role = currentUser?.key;
-  const isFarm = role === 'farmaceutico';
-  // ─ Menú clínica: oculto para farmacéutico
-  const clinicItems = ['menu-clinica-section','menu-pacientes','menu-citas','menu-agendas',
-    'menu-medicaciones','menu-notas','menu-atendidos','menu-estadisticas'];
-  clinicItems.forEach(id => { const el=document.getElementById(id); if(el) el.style.display = isFarm ? 'none' : ''; });
-  // ─ Finanzas: visible para admin, superadmin, farmacéutico
-  const hasFinAccess = sa || ['admin','farmaceutico'].includes(role);
-  const finEl  = document.getElementById('menu-finanzas');
-  const finSec = document.getElementById('menu-fin-section');
-  if(finEl)  finEl.style.display  = hasFinAccess ? 'flex'  : 'none';
-  if(finSec) finSec.style.display = hasFinAccess ? 'block' : 'none';
-  // ─ Sistema: oculto para farmacéutico
-  const expEl  = document.getElementById('menu-exportar');
-  const sisSec = document.getElementById('menu-sistema-section');
-  if(expEl)  expEl.style.display  = isFarm ? 'none' : '';
-  if(sisSec) sisSec.style.display = isFarm ? 'none' : '';
-  // ─ Super Admin: solo superadmin
-  const section = document.getElementById('menu-admin-section');
-  const item    = document.getElementById('menu-admin');
-  const cfg     = document.getElementById('menu-configuracion');
-  if(section) section.style.display = sa ? 'block' : 'none';
-  if(item)    item.style.display    = sa ? 'flex'  : 'none';
-  if(cfg)     cfg.style.display     = sa ? 'flex'  : 'none';
+  const isAdmin = role === 'admin';
+  const isMed   = role === 'medico';
+  const isRec   = role === 'recepcion';
+  const isEnf   = role === 'enfermeria';
+  const isFarm  = role === 'farmaceutico';
+
+  const vis = (id, show) => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.style.display = show ? (el.classList.contains('menu-section') ? 'block' : 'flex') : 'none';
+  };
+
+  // ─ Expedientes: todos los roles (siempre visible)
+  vis('menu-expedientes', true);
+
+  // ─ Sección Clínica y sus ítems
+  const hasClinica = !isFarm;
+  vis('menu-clinica-section', hasClinica);
+  vis('menu-pacientes',       hasClinica);
+  vis('menu-citas',           hasClinica && !isEnf);
+  vis('menu-agendas',         hasClinica && !isEnf);
+  vis('menu-medicaciones',    hasClinica && !isRec);
+  vis('menu-notas',           hasClinica && !isRec);
+  vis('menu-atendidos',       hasClinica && !isRec && !isEnf);
+  vis('menu-estadisticas',    sa || isAdmin);
+
+  // ─ Inventario: admin, farmacéutico, superadmin
+  const hasInv = sa || isAdmin || isFarm;
+  vis('menu-inv-section', hasInv);
+  vis('menu-inventario',  hasInv);
+
+  // ─ Finanzas: admin, farmacéutico, superadmin
+  const hasFin = sa || isAdmin || isFarm;
+  vis('menu-fin-section', hasFin);
+  vis('menu-finanzas',    hasFin);
+
+  // ─ Sistema: admin y superadmin
+  const hasSys = sa || isAdmin;
+  vis('menu-sistema-section', hasSys);
+  vis('menu-exportar',        hasSys);
+
+  // ─ Configuración y Admin: solo superadmin
+  vis('menu-configuracion',  sa);
+  vis('menu-admin-section',  sa);
+  vis('menu-admin',          sa);
 }
 
 async function loadAdminData() {
@@ -3528,16 +3566,20 @@ async function loadAdminData() {
 
 function switchAdminTab(tab) {
   adminTab = tab;
-  ['clinicas','usuarios','productividad'].forEach(t => {
-    document.getElementById('admin-panel-'+t).style.display = t===tab ? 'block' : 'none';
-    document.getElementById('tab-admin-'+t).classList.toggle('active', t===tab);
+  ['clinicas','usuarios','productividad','global'].forEach(t => {
+    const panel = document.getElementById('admin-panel-'+t);
+    const tabEl = document.getElementById('tab-admin-'+t);
+    if(panel) panel.style.display = t===tab ? 'block' : 'none';
+    if(tabEl) tabEl.classList.toggle('active', t===tab);
   });
   const btn = document.getElementById('btn-admin-add');
-  if(btn) btn.style.display = tab==='productividad' ? 'none' : 'inline-flex';
-  if(btn && tab!=='productividad') btn.textContent = tab==='clinicas' ? '+ Nueva Clínica' : '+ Nuevo Usuario';
-  if(tab==='clinicas') renderAdminClinicas();
-  if(tab==='usuarios') renderAdminUsuarios();
+  const noAdd = ['productividad','global'].includes(tab);
+  if(btn) btn.style.display = noAdd ? 'none' : 'inline-flex';
+  if(btn && !noAdd) btn.textContent = tab==='clinicas' ? '+ Nueva Clínica' : '+ Nuevo Usuario';
+  if(tab==='clinicas')     renderAdminClinicas();
+  if(tab==='usuarios')     renderAdminUsuarios();
   if(tab==='productividad') renderProductividad();
+  if(tab==='global')       renderAdminGlobal();
   renderAdminStats();
 }
 
@@ -4929,4 +4971,259 @@ function verFacturaPDF(id) {
       Lumea Med — Sistema de Gestión Clínica | lumeamed.net
     </div>`;
   pdfAbrir(`Factura ${fact.numero||'#'+id}`, body, {orientation:'portrait'});
+}
+
+// ═══════════════════════════════════════════════
+//  MÓDULO EXPEDIENTES
+// ═══════════════════════════════════════════════
+let expSearchTerm = '';
+
+function renderExpedientes() {
+  filtrarExpedientes(expSearchTerm);
+}
+
+function filtrarExpedientes(q) {
+  expSearchTerm = (q||'').toLowerCase().trim();
+  const el = document.getElementById('exp-list');
+  if(!el) return;
+  const list = expSearchTerm
+    ? C.p.filter(p => `${p.nombre} ${p.apellidos} ${p.expediente||''} ${p.identificacion||''}`.toLowerCase().includes(expSearchTerm))
+    : C.p;
+  if(!list.length) {
+    el.innerHTML = `<p style="color:var(--text-light);text-align:center;padding:32px 0;font-size:14px">${expSearchTerm ? 'Sin resultados para "'+expSearchTerm+'"' : 'No hay pacientes registrados en esta clínica'}</p>`;
+    return;
+  }
+  el.innerHTML = `
+    <table class="table" style="margin-top:0">
+      <thead><tr>
+        <th>N° Expediente</th><th>Paciente</th><th>Edad</th><th>Tipo Sangre</th><th>Última cita</th><th>Estado</th><th style="text-align:right">Acciones</th>
+      </tr></thead>
+      <tbody>${list.map(p => {
+        const lastCita = C.c.filter(c=>c.pacienteId===p.id).sort((a,b)=>b.fecha.localeCompare(a.fecha))[0];
+        const edad = p.fechaNac ? Math.floor((Date.now()-new Date(p.fechaNac))/(365.25*24*3600*1000)) : '—';
+        const estadoTag = p.estado==='activo'
+          ? '<span class="tag tag-green">Activo</span>'
+          : '<span class="tag tag-gray">Inactivo</span>';
+        return `<tr>
+          <td><strong>${p.expediente||'—'}</strong></td>
+          <td>
+            <div style="font-weight:600">${p.nombre} ${p.apellidos}</div>
+            <div style="font-size:12px;color:var(--text-light)">${p.telefono||'Sin teléfono'}</div>
+          </td>
+          <td>${edad !== '—' ? edad + ' años' : '—'}</td>
+          <td>${p.tipoSangre||'—'}</td>
+          <td>${lastCita ? formatFecha(lastCita.fecha) : '<span style="color:var(--text-light)">Sin citas</span>'}</td>
+          <td>${estadoTag}</td>
+          <td style="text-align:right">
+            <button class="btn btn-secondary btn-sm" onclick="navigate('paciente-detalle',${p.id})" style="margin-right:6px">👁 Ver</button>
+            <button class="btn btn-primary btn-sm" onclick="renderExpedienteHistorialPDF(${p.id})">📥 PDF</button>
+          </td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>
+    <p style="font-size:12px;color:var(--text-light);padding:8px 4px">${list.length} expediente${list.length!==1?'s':''} encontrado${list.length!==1?'s':''}</p>`;
+}
+
+function renderExpedienteHistorialPDF(pacienteId) {
+  const p   = C.p.find(x=>x.id===pacienteId);
+  if(!p) return;
+  const exp  = C.e.find(x=>x.pacienteId===pacienteId);
+  const citas = C.c.filter(x=>x.pacienteId===pacienteId).sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  const meds  = C.m.filter(x=>x.pacienteId===pacienteId);
+  const notas = C.n.filter(x=>x.pacienteId===pacienteId);
+  const movs  = (C.mov||[]).filter(x=>x.pacienteId===pacienteId||x.referencia?.includes(p.nombre));
+  const facts = (C.fact||[]).filter(x=>x.pacienteId===pacienteId);
+  const edad  = p.fechaNac ? Math.floor((Date.now()-new Date(p.fechaNac))/(365.25*24*3600*1000)) : null;
+  const cl    = currentClinica;
+
+  const sectionTitle = (icon, title, color='#0f172a') =>
+    `<div style="background:${color};color:white;padding:10px 16px;border-radius:8px;margin:20px 0 12px;font-weight:700;font-size:14px">${icon} ${title}</div>`;
+
+  const field = (label, val) => val
+    ? `<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid #f1f5f9;font-size:13px"><span style="color:#64748b;min-width:160px">${label}</span><strong>${val}</strong></div>`
+    : '';
+
+  // ── Sección 1: Datos del paciente
+  const secPaciente = `
+    ${sectionTitle('👤','Datos del Paciente','#1e40af')}
+    ${field('N° Expediente', p.expediente)}
+    ${field('Nombre completo', p.nombre+' '+p.apellidos)}
+    ${field('Identificación', p.identificacion)}
+    ${field('Fecha de nacimiento', p.fechaNac ? formatFecha(p.fechaNac)+(edad?' ('+edad+' años)':'') : null)}
+    ${field('Sexo', p.sexo)}
+    ${field('Tipo de sangre', p.tipoSangre)}
+    ${field('Teléfono', p.telefono)}
+    ${field('Email', p.email)}
+    ${field('Dirección', p.direccion)}
+    ${field('Alergias', p.alergias)}
+    ${field('Emergencia', p.contactoEmergencia)}
+    ${p.observaciones?`<div style="margin-top:8px;padding:10px;background:#f8fafc;border-radius:6px;font-size:13px"><strong>Observaciones:</strong> ${p.observaciones}</div>`:''}`;
+
+  // ── Sección 2: Antecedentes médicos
+  const secExp = exp ? `
+    ${sectionTitle('🩺','Antecedentes Médicos','#0f766e')}
+    ${field('Peso', exp.peso ? exp.peso+' kg' : null)}
+    ${field('Talla', exp.talla ? exp.talla+' cm' : null)}
+    ${field('Presión arterial', exp.presion)}
+    ${field('Temperatura', exp.temperatura ? exp.temperatura+' °C' : null)}
+    ${field('Enfermedades crónicas', exp.enfermedadesCronicas)}
+    ${field('Cirugías previas', exp.cirugias)}
+    ${field('Antecedentes familiares', exp.antecedentesFamiliares)}
+    ${field('Vacunas', exp.vacunas)}
+    ${field('Tabaco', exp.tabaco)}
+    ${field('Alcohol', exp.alcohol)}
+    ${field('Actividad física', exp.actividadFisica)}
+    ${field('Ocupación', exp.ocupacion)}
+    ${field('Estado civil', exp.estadoCivil)}
+    ${exp.observaciones?`<div style="margin-top:8px;padding:10px;background:#f0fdfa;border-radius:6px;font-size:13px"><strong>Observaciones:</strong> ${exp.observaciones}</div>`:''}` : '';
+
+  // ── Sección 3: Historial de citas
+  const secCitas = citas.length ? `
+    ${sectionTitle('📅','Historial de Citas','#7c3aed')}
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="background:#f8fafc">
+        <th style="padding:7px 10px;text-align:left;border-bottom:2px solid #e2e8f0">Fecha</th>
+        <th style="padding:7px 10px;text-align:left;border-bottom:2px solid #e2e8f0">Tipo</th>
+        <th style="padding:7px 10px;text-align:left;border-bottom:2px solid #e2e8f0">Motivo</th>
+        <th style="padding:7px 10px;text-align:left;border-bottom:2px solid #e2e8f0">Estado</th>
+      </tr></thead>
+      <tbody>${citas.map(c=>`<tr style="border-bottom:1px solid #f1f5f9">
+        <td style="padding:7px 10px">${formatFecha(c.fecha)} ${c.hora||''}</td>
+        <td style="padding:7px 10px">${c.tipo||'consulta'}</td>
+        <td style="padding:7px 10px">${c.motivo||'—'}</td>
+        <td style="padding:7px 10px">${c.estado||'—'}</td>
+      </tr>`).join('')}</tbody>
+    </table>` : '';
+
+  // ── Sección 4: Medicaciones
+  const secMeds = meds.length ? `
+    ${sectionTitle('💊','Medicaciones','#b45309')}
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="background:#f8fafc">
+        <th style="padding:7px 10px;text-align:left;border-bottom:2px solid #e2e8f0">Medicamento</th>
+        <th style="padding:7px 10px;text-align:left;border-bottom:2px solid #e2e8f0">Dosis</th>
+        <th style="padding:7px 10px;text-align:left;border-bottom:2px solid #e2e8f0">Frecuencia</th>
+        <th style="padding:7px 10px;text-align:left;border-bottom:2px solid #e2e8f0">Estado</th>
+      </tr></thead>
+      <tbody>${meds.map(m=>`<tr style="border-bottom:1px solid #f1f5f9">
+        <td style="padding:7px 10px"><strong>${m.nombre}</strong></td>
+        <td style="padding:7px 10px">${m.dosis||'—'}</td>
+        <td style="padding:7px 10px">${m.frecuencia||'—'}</td>
+        <td style="padding:7px 10px">${m.estado||'—'}</td>
+      </tr>`).join('')}</tbody>
+    </table>` : '';
+
+  // ── Sección 5: Notas clínicas
+  const secNotas = notas.length ? `
+    ${sectionTitle('📝','Notas Clínicas','#0369a1')}
+    ${notas.map(n=>`
+      <div style="border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <strong style="font-size:13px">${n.titulo||'Nota'}</strong>
+          <span style="font-size:11px;color:#64748b">${formatFecha(n.fecha||n.createdAt)} · ${n.tipo||'nota'}</span>
+        </div>
+        <p style="font-size:12px;color:#374151;margin:0;white-space:pre-wrap">${n.contenido||'—'}</p>
+      </div>`).join('')}` : '';
+
+  // ── Sección 6: Facturas
+  const secFacts = facts.length ? `
+    ${sectionTitle('🧾','Facturas','#166534')}
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="background:#f8fafc">
+        <th style="padding:7px 10px;text-align:left;border-bottom:2px solid #e2e8f0">N° Factura</th>
+        <th style="padding:7px 10px;text-align:left;border-bottom:2px solid #e2e8f0">Fecha</th>
+        <th style="padding:7px 10px;text-align:right;border-bottom:2px solid #e2e8f0">Total</th>
+        <th style="padding:7px 10px;text-align:left;border-bottom:2px solid #e2e8f0">Estado</th>
+      </tr></thead>
+      <tbody>${facts.map(f=>`<tr style="border-bottom:1px solid #f1f5f9">
+        <td style="padding:7px 10px">${f.numero||'—'}</td>
+        <td style="padding:7px 10px">${formatFecha(f.fecha)}</td>
+        <td style="padding:7px 10px;text-align:right">${fmtC(f.total)}</td>
+        <td style="padding:7px 10px">${f.estado||'—'}</td>
+      </tr>`).join('')}</tbody>
+    </table>` : '';
+
+  const body = `
+    <div style="text-align:center;margin-bottom:20px;padding-bottom:16px;border-bottom:2px solid #e2e8f0">
+      <h1 style="font-size:20px;font-weight:800;color:#0f172a;margin-bottom:2px">${cl?.nombre||'Clínica'}</h1>
+      <p style="color:#64748b;font-size:12px">${cl?.direccion||''} ${cl?.telefono?'· Tel: '+cl.telefono:''}</p>
+      <p style="font-size:11px;color:#94a3b8;margin-top:4px">HISTORIAL CLÍNICO COMPLETO · Generado ${new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'})}</p>
+    </div>
+    ${secPaciente}${secExp}${secCitas}${secMeds}${secNotas}${secFacts}
+    <div style="text-align:center;margin-top:30px;padding-top:12px;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:11px">
+      Lumea Med — Sistema de Gestión Clínica | lumeamed.net
+    </div>`;
+  pdfAbrir(`Historial — ${p.nombre} ${p.apellidos}`, body, {orientation:'portrait'});
+}
+
+// ═══════════════════════════════════════════════
+//  SUPER ADMIN — VISTA GLOBAL
+// ═══════════════════════════════════════════════
+async function renderAdminGlobal() {
+  const el = document.getElementById('global-clinicas-table');
+  const statsEl = document.getElementById('global-stats-row');
+  const updEl = document.getElementById('global-updated');
+  if(!el) return;
+  el.innerHTML = statsEl.innerHTML = '<p style="color:var(--text-light);font-size:13px">Cargando datos globales...</p>';
+
+  // Cargar conteos de todas las clínicas en paralelo
+  const [rPac, rCit, rFin, rFact] = await Promise.all([
+    sb.from('pacientes').select('clinica_id'),
+    sb.from('citas').select('clinica_id,estado'),
+    sb.from('finanzas').select('clinica_id,tipo,monto'),
+    sb.from('facturas').select('clinica_id,estado,total')
+  ]);
+  const allPac  = rPac.data  || [];
+  const allCit  = rCit.data  || [];
+  const allFin  = rFin.data  || [];
+  const allFact = rFact.data || [];
+
+  // Totales globales
+  const totalPac  = allPac.length;
+  const totalCit  = allCit.length;
+  const totalCitH = allCit.filter(c=>c.estado==='completada').length;
+  const totalIng  = allFin.filter(f=>f.tipo==='ingreso').reduce((s,f)=>s+Number(f.monto||0),0);
+  const totalEgr  = allFin.filter(f=>f.tipo==='egreso').reduce((s,f)=>s+Number(f.monto||0),0);
+  const totalFact = allFact.filter(f=>f.estado==='pagada').reduce((s,f)=>s+Number(f.total||0),0);
+
+  statsEl.innerHTML = `
+    <div class="admin-stat"><div class="admin-stat-icon">🏥</div><div><div class="admin-stat-val">${adminClinicas.length}</div><div class="admin-stat-label">Clínicas</div></div></div>
+    <div class="admin-stat"><div class="admin-stat-icon">👥</div><div><div class="admin-stat-val">${totalPac}</div><div class="admin-stat-label">Pacientes totales</div></div></div>
+    <div class="admin-stat"><div class="admin-stat-icon">📅</div><div><div class="admin-stat-val">${totalCit}</div><div class="admin-stat-label">Citas totales</div></div></div>
+    <div class="admin-stat"><div class="admin-stat-icon">✅</div><div><div class="admin-stat-val">${totalCitH}</div><div class="admin-stat-label">Citas completadas</div></div></div>
+    <div class="admin-stat"><div class="admin-stat-icon">💰</div><div><div class="admin-stat-val">${fmtC(totalIng)}</div><div class="admin-stat-label">Ingresos globales</div></div></div>
+    <div class="admin-stat"><div class="admin-stat-icon">📈</div><div><div class="admin-stat-val">${fmtC(totalIng-totalEgr)}</div><div class="admin-stat-label">Utilidad global</div></div></div>`;
+
+  // Tabla por clínica
+  el.innerHTML = `
+    <table class="table" style="margin-top:0">
+      <thead><tr>
+        <th>Clínica</th><th>Usuarios</th><th>Pacientes</th><th>Citas</th><th>Completadas</th><th>Ingresos</th><th>Facturas pag.</th><th>Estado</th>
+      </tr></thead>
+      <tbody>${adminClinicas.map(c => {
+        const users = adminUsuarios.filter(u=>u.clinica_id===c.id).length;
+        const pacs  = allPac.filter(x=>x.clinica_id===c.id).length;
+        const cits  = allCit.filter(x=>x.clinica_id===c.id).length;
+        const citsH = allCit.filter(x=>x.clinica_id===c.id&&x.estado==='completada').length;
+        const ing   = allFin.filter(x=>x.clinica_id===c.id&&x.tipo==='ingreso').reduce((s,x)=>s+Number(x.monto||0),0);
+        const fPag  = allFact.filter(x=>x.clinica_id===c.id&&x.estado==='pagada').length;
+        return `<tr>
+          <td>
+            <div style="font-weight:700">${c.nombre}</div>
+            <div style="font-size:11px;color:var(--text-light)">${c.codigo||''} ${c.produccion?'<span style="color:#7c3aed">★ Prod</span>':''}</div>
+          </td>
+          <td>${users}</td>
+          <td>${pacs}</td>
+          <td>${cits}</td>
+          <td>${citsH}</td>
+          <td>${fmtC(ing)}</td>
+          <td>${fPag}</td>
+          <td>${c.activa
+            ? '<span class="tag tag-green">Activa</span>'
+            : '<span class="tag tag-gray">Inactiva</span>'}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`;
+
+  if(updEl) updEl.textContent = 'Actualizado: ' + new Date().toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
 }
