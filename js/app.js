@@ -4739,7 +4739,6 @@ function openModalFactura(citaId=null, pacienteId=null) {
   document.getElementById('fact-numero').value = generarNumFactura();
   document.getElementById('fact-fecha').value = hoy();
   document.getElementById('fact-cita-id').value = citaId||'';
-  document.getElementById('fact-impuesto').value = '15';
   document.getElementById('fact-notas').value = '';
   const sel = document.getElementById('fact-paciente');
   sel.innerHTML = '<option value="">Consumidor Final</option>' +
@@ -4810,14 +4809,10 @@ function renderFacturaItemsUI() {
 }
 
 function calcFacturaTotals() {
-  const sub  = facturaItems.reduce((s,i)=>s+(i.cant||0)*(i.precio||0),0);
-  const pct  = parseFloat(document.getElementById('fact-impuesto')?.value||0);
-  const imp  = sub * pct / 100;
-  const tot  = sub + imp;
-  const s=document.getElementById('fact-subtotal'), i=document.getElementById('fact-imp-display'), t=document.getElementById('fact-total');
+  const sub = facturaItems.reduce((s,i)=>s+(i.cant||0)*(i.precio||0),0);
+  const s=document.getElementById('fact-subtotal'), t=document.getElementById('fact-total');
   if(s) s.textContent=fmtC(sub);
-  if(i) i.textContent=fmtC(imp);
-  if(t) t.textContent=fmtC(tot);
+  if(t) t.textContent=fmtC(sub);
 }
 
 async function guardarFactura() {
@@ -4827,17 +4822,15 @@ async function guardarFactura() {
   const fecha   = document.getElementById('fact-fecha').value||hoy();
   const pacId   = parseInt(document.getElementById('fact-paciente').value)||null;
   const citaId  = parseInt(document.getElementById('fact-cita-id').value)||null;
-  const impPct  = parseFloat(document.getElementById('fact-impuesto').value)||0;
   const notas   = document.getElementById('fact-notas').value.trim();
   const sub     = facturaItems.reduce((s,i)=>s+(i.cant||0)*(i.precio||0),0);
-  const imp     = sub * impPct / 100;
-  const tot     = sub + imp;
+  const tot     = sub;
   const pac     = pacId ? C.p.find(p=>p.id===pacId) : null;
   const pacNom  = pac ? `${pac.nombre} ${pac.apellidos}` : 'Consumidor Final';
   setLoading(true);
   const {data:factData, error:factErr} = await sb.from('facturas').insert({
     clinica_id:currentClinicaId, numero, paciente_id:pacId, paciente_nombre:pacNom,
-    fecha, estado:'pendiente', subtotal:sub, impuesto_pct:impPct, impuesto:imp,
+    fecha, estado:'pendiente', subtotal:sub, impuesto_pct:0, impuesto:0,
     total:tot, notas:notas||null, cita_id:citaId
   }).select().single();
   if(factErr){ toast('Error al generar factura','error'); setLoading(false); return; }
@@ -4925,9 +4918,6 @@ function verFacturaPDF(id) {
       <div style="min-width:240px;border-top:2px solid #0f172a;padding-top:12px">
         <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px">
           <span style="color:#64748b">Subtotal</span><strong>${fmtC(fact.subtotal)}</strong>
-        </div>
-        <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px">
-          <span style="color:#64748b">IVA (${fact.impuestoPct}%)</span><strong>${fmtC(fact.impuesto)}</strong>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:16px;font-weight:800;color:#0f172a;border-top:1px solid #e2e8f0;padding-top:8px;margin-top:8px">
           <span>TOTAL</span><span>${fmtC(fact.total)}</span>
