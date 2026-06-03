@@ -745,12 +745,72 @@ function switchTab(tabId, btn){
 }
 
 // ════════════════════ CITAS ════════════════════
+function citaBuscarPac(q) {
+  const sug = document.getElementById('cita-pac-sug');
+  if(!sug) return;
+  const q2 = (q||'').toLowerCase().trim();
+  const matches = q2.length < 1
+    ? C.p.slice(0, 12)
+    : C.p.filter(p =>
+        (p.nombre+' '+p.apellidos).toLowerCase().includes(q2) ||
+        (p.identificacion||'').toLowerCase().includes(q2) ||
+        getExpedienteNum(p.id).toLowerCase().includes(q2)
+      ).slice(0, 10);
+  if(!matches.length) {
+    sug.innerHTML =
+      '<div style="padding:8px 14px;font-size:12px;color:var(--text-light);border-bottom:1px solid var(--border)">Sin resultados para "'+q+'"</div>'
+      + '<div style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;background:var(--primary-light);border-radius:0 0 10px 10px" onmousedown="nuevoPacienteParaCita(\''+q.replace(/'/g,"\\'")+'\')">'
+      + '<span style="font-size:20px;flex-shrink:0">➕</span>'
+      + '<div><div style="font-size:13px;font-weight:700;color:var(--primary)">Registrar como nuevo paciente</div>'
+      + '<div style="font-size:11px;color:var(--primary);opacity:.8">Crea el expediente y abre la cita automáticamente</div></div></div>';
+    sug.style.display = 'block';
+    return;
+  }
+  sug.innerHTML = matches.map(p =>
+    '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s" onmouseenter="this.style.background=\'var(--primary-light)\'" onmouseleave="this.style.background=\'\'" onmousedown="abrirCitaDesdeVista('+p.id+',\''+((p.nombre+' '+p.apellidos).replace(/'/g,"\\'"))+'\')">'
+    + '<div style="width:32px;height:32px;border-radius:50%;background:'+colAvatar(p.id)+';display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;flex-shrink:0">'+ini(p.nombre,p.apellidos)+'</div>'
+    + '<div style="flex:1;min-width:0">'
+    +   '<div style="font-size:13px;font-weight:600;color:var(--text)">'+p.nombre+' '+p.apellidos+'</div>'
+    +   '<div style="font-size:11px;color:var(--text-light)"><span style="color:var(--primary);font-weight:600">'+getExpedienteNum(p.id)+'</span>'+(p.identificacion?' · '+p.identificacion:'')+(p.telefono?' · '+p.telefono:'')+'</div>'
+    + '</div>'
+    + '<span style="font-size:11px;font-weight:700;color:var(--primary);background:var(--primary-light);padding:2px 10px;border-radius:20px;flex-shrink:0;white-space:nowrap">+ Citar</span>'
+    + '</div>'
+  ).join('');
+  sug.style.display = 'block';
+}
+
+function abrirCitaDesdeVista(pid, nombre) {
+  const input = document.getElementById('cita-pac-buscar');
+  if(input) input.value = '';
+  const sug = document.getElementById('cita-pac-sug');
+  if(sug) sug.style.display = 'none';
+  openModalCita();
+  setTimeout(() => setPacienteSelect('c-paciente', pid), 50);
+}
+
+function filtrarTablaCitas(q) {
+  const q2 = (q||'').toLowerCase();
+  const rows = document.querySelectorAll('#tabla-citas tr');
+  rows.forEach(row => {
+    const txt = row.textContent.toLowerCase();
+    row.style.display = (!q2 || txt.includes(q2)) ? '' : 'none';
+  });
+}
+
 function renderCitas(){
   const h=hoy(), citasHoy=C.c.filter(c=>c.fecha===h).sort((a,b)=>a.hora.localeCompare(b.hora));
   document.getElementById('lista-citas-hoy').innerHTML=citasHoy.length?citasHoy.map(c=>{
     const p=C.p.find(x=>x.id===c.pacienteId);
-    return `<div class="cita-item ${c.estado}"><div class="cita-time">${c.hora}</div><div class="cita-info"><div class="cita-paciente">${p?p.nombre+' '+p.apellidos:'Desconocido'}</div><div class="cita-motivo">${c.motivo}</div></div>${estadoTag(c.estado)}<div class="actions-cell" style="margin-left:6px">${c.estado!=='completada'&&c.estado!=='cancelada'?`<button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;white-space:nowrap" onclick="marcarCitaCompletada(${c.id})">✅ Acudió</button>`:''}
-    <button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">✏️</button><button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">🗑️</button></div></div>`;
+    return `<div class="cita-item ${c.estado}">
+      <div class="cita-time">${c.hora}</div>
+      <div class="cita-info"><div class="cita-paciente">${p?p.nombre+' '+p.apellidos:'Desconocido'}</div><div class="cita-motivo">${c.motivo}</div></div>
+      ${estadoTag(c.estado)}
+      <div class="actions-cell" style="margin-left:6px">
+        <button class="btn btn-sm" style="background:var(--primary);color:#fff;font-size:16px;font-weight:700;padding:3px 10px;line-height:1" onclick="openModalCitaP(${c.pacienteId})" title="Nueva cita para este paciente">+</button>
+        ${c.estado!=='completada'&&c.estado!=='cancelada'?`<button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;white-space:nowrap" onclick="marcarCitaCompletada(${c.id})">✅</button>`:''}
+        <button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">🗑️</button>
+      </div></div>`;
   }).join(''):`<div class="empty-state" style="padding:20px"><div class="empty-icon" style="font-size:30px">📅</div><p>Sin citas hoy</p></div>`;
 
   renderCalendar('citas-cal',true);
@@ -764,8 +824,13 @@ function renderCitas(){
     return `<tr><td>${formatFecha(c.fecha)}</td><td>${c.hora}</td>
       <td><div class="patient-name-cell"><div class="patient-avatar" style="background:${colAvatar(c.pacienteId||0)};width:28px;height:28px;font-size:10px">${p?ini(p.nombre,p.apellidos):'?'}</div><div>${p?p.nombre+' '+p.apellidos:'Desconocido'}</div></div></td>
       <td>${c.motivo}</td><td><span class="tag tag-cyan">${c.tipo}</span></td><td>${estadoTag(c.estado)}</td>
-      <td><div class="actions-cell">${c.estado!=='completada'&&c.estado!=='cancelada'?`<button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;white-space:nowrap" onclick="marcarCitaCompletada(${c.id})">✅ Acudió</button>`:''}
-        <button class="btn btn-primary btn-sm" onclick="verResumenCita(${c.id})" title="Ver hoja">📄</button><button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">✏️</button><button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">🗑️</button></div></td></tr>`;
+      <td><div class="actions-cell">
+        <button class="btn btn-sm" style="background:var(--primary);color:#fff;font-size:16px;font-weight:700;padding:2px 9px;line-height:1" onclick="openModalCitaP(${c.pacienteId})" title="Nueva cita para este paciente">+</button>
+        ${c.estado!=='completada'&&c.estado!=='cancelada'?`<button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;white-space:nowrap" onclick="marcarCitaCompletada(${c.id})">✅ Acudió</button>`:''}
+        <button class="btn btn-primary btn-sm" onclick="verResumenCita(${c.id})" title="Ver hoja">📄</button>
+        <button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">🗑️</button>
+      </div></td></tr>`;
   }).join('');
 }
 
