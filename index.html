@@ -1061,7 +1061,14 @@
   <div class="modal">
     <h2 id="modal-cita-title">📅 Nueva Cita</h2>
     <div class="form-grid">
-      <div class="form-group full"><label>Paciente *</label><select id="c-paciente"><option value="">Seleccionar paciente...</option></select></div>
+      <div class="form-group full"><label>Paciente *</label>
+        <div style="position:relative">
+          <input type="text" id="c-pac-txt" placeholder="Buscar paciente por nombre..." autocomplete="off"
+            oninput="filterPacSug(this.value,'c')" onfocus="filterPacSug(this.value,'c')" onblur="setTimeout(()=>hidePacSug('c'),200)">
+          <input type="hidden" id="c-paciente">
+          <div id="c-pac-sug" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;z-index:300;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.15);margin-top:4px"></div>
+        </div>
+      </div>
       <div class="form-group full"><label>Médico</label><select id="c-medico"><option value="">Sin asignar</option></select></div>
       <div class="form-group"><label>Fecha *</label><input type="date" id="c-fecha"></div>
       <div class="form-group"><label>Hora *</label><select id="c-hora"><option value="">Seleccionar hora...</option></select></div>
@@ -1074,7 +1081,15 @@
         <label>Diagnósticos sugeridos seleccionados</label>
         <div id="dx-elegidos" style="display:flex;flex-wrap:wrap;gap:6px"></div>
       </div>
-      <div class="form-group"><label>Tipo</label><select id="c-tipo"><option value="consulta">Consulta general</option><option value="control">Control</option><option value="urgencia">Urgencia</option><option value="cirugia">Cirugía</option><option value="examen">Examen</option></select></div>
+      <div class="form-group"><label>Tipo</label><select id="c-tipo">
+        <option value="consulta">Consulta general</option>
+        <option value="control">Control</option>
+        <option value="urgencia">Urgencia</option>
+        <option value="cirugia">Cirugía</option>
+        <option value="examen">Examen</option>
+        <option value="optometria">Optometría / Examen visual</option>
+        <option value="odontologia">Odontología</option>
+      </select></div>
       <div class="form-group"><label>Estado</label><select id="c-estado"><option value="pendiente">Pendiente</option><option value="confirmada">Confirmada</option><option value="completada">Completada</option><option value="cancelada">Cancelada</option></select></div>
       <div class="form-group full"><label>Notas / Diagnóstico</label><textarea id="c-notas" placeholder="Observaciones, diagnóstico... (los diagnósticos sugeridos se agregan aquí)"></textarea></div>
     </div>
@@ -1090,7 +1105,14 @@
   <div class="modal modal-lg" style="max-width:680px">
     <h2 id="modal-med-title">💊 Nueva Receta</h2>
     <div class="form-grid" style="margin-bottom:16px">
-      <div class="form-group full"><label>Paciente *</label><select id="m-paciente"><option value="">Seleccionar paciente...</option></select></div>
+      <div class="form-group full"><label>Paciente *</label>
+        <div style="position:relative">
+          <input type="text" id="m-pac-txt" placeholder="Buscar paciente por nombre..." autocomplete="off"
+            oninput="filterPacSug(this.value,'m')" onfocus="filterPacSug(this.value,'m')" onblur="setTimeout(()=>hidePacSug('m'),200)">
+          <input type="hidden" id="m-paciente">
+          <div id="m-pac-sug" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;z-index:300;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.15);margin-top:4px"></div>
+        </div>
+      </div>
       <div class="form-group"><label>Fecha Inicio</label><input type="date" id="m-inicio"></div>
       <div class="form-group"><label>Fecha Fin</label><input type="date" id="m-fin"></div>
       <div class="form-group"><label>Estado</label><select id="m-estado"><option value="activa">Activa</option><option value="finalizada">Finalizada</option><option value="suspendida">Suspendida</option></select></div>
@@ -1109,7 +1131,14 @@
   <div class="modal">
     <h2 id="modal-nota-title">📝 Nueva Nota Clínica</h2>
     <div class="form-grid cols-1">
-      <div class="form-group"><label>Paciente *</label><select id="n-paciente"><option value="">Seleccionar paciente...</option></select></div>
+      <div class="form-group"><label>Paciente *</label>
+        <div style="position:relative">
+          <input type="text" id="n-pac-txt" placeholder="Buscar paciente por nombre..." autocomplete="off"
+            oninput="filterPacSug(this.value,'n')" onfocus="filterPacSug(this.value,'n')" onblur="setTimeout(()=>hidePacSug('n'),200)">
+          <input type="hidden" id="n-paciente">
+          <div id="n-pac-sug" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;z-index:300;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.15);margin-top:4px"></div>
+        </div>
+      </div>
       <div class="form-group"><label>Tipo de Nota</label><select id="n-tipo"><option value="evolucion">Evolución</option><option value="diagnostico">Diagnóstico</option><option value="tratamiento">Tratamiento</option><option value="laboratorio">Laboratorio</option><option value="imagen">Imagen / Radiología</option><option value="cirugia">Cirugía</option><option value="alta">Alta médica</option><option value="examen_visual">👁️ Examen Visual</option><option value="otro">Otro</option></select></div>
       <div class="form-group"><label>Fecha</label><input type="date" id="n-fecha"></div>
       <div class="form-group"><label>Título</label><input type="text" id="n-titulo" placeholder="Breve título de la nota"></div>

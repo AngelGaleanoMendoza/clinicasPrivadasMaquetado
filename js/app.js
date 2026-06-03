@@ -798,7 +798,7 @@ function openModalCita(id){
   if(id){
     const c=C.c.find(x=>x.id===id);
     if(c){
-      document.getElementById('c-paciente').value=c.pacienteId;
+      setPacienteSelect('c-paciente', c.pacienteId);
       document.getElementById('c-fecha').value=c.fecha;
       fillHoraSelect(c.hora);
       document.getElementById('c-motivo').value=c.motivo;
@@ -810,7 +810,7 @@ function openModalCita(id){
   }
   document.getElementById('modal-cita').classList.add('open');
 }
-function openModalCitaP(pid){ openModalCita(); document.getElementById('c-paciente').value=pid; }
+function openModalCitaP(pid){ openModalCita(); setPacienteSelect('c-paciente', pid); }
 
 async function guardarCita(){
   if(!currentClinicaId){ toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
@@ -888,7 +888,7 @@ function abrirNotaEvolucion(pacienteId, cita) {
   editingId = null;
   document.getElementById('modal-nota-title').textContent = '📝 Nota de Evolución';
   fillSelect('n-paciente');
-  document.getElementById('n-paciente').value = pacienteId;
+  setPacienteSelect('n-paciente', pacienteId);
   document.getElementById('n-tipo').value = 'evolucion';
   document.getElementById('n-fecha').value = hoy();
   document.getElementById('n-titulo').value = `Consulta ${formatFecha(hoy())}`;
@@ -921,20 +921,20 @@ function openModalMedicacion(id) {
   if(id) {
     const m = C.m.find(x => x.id === id);
     if(m) {
-      document.getElementById('m-paciente').value = m.pacienteId;
+      setPacienteSelect('m-paciente', m.pacienteId);
       document.getElementById('m-inicio').value = m.inicio || '';
       document.getElementById('m-fin').value = m.fin || '';
       document.getElementById('m-estado').value = m.estado;
       medItems = [{nombre:m.nombre, dosis:m.dosis, frecuencia:m.frecuencia, via:m.via||'oral', indicaciones:m.indicaciones||''}];
     }
   } else {
-    medItems = [{nombre:'', dosis:'', frecuencia:'', via:'oral', indicaciones:''}];
+    medItems = [{nombre:'', dosis:'', frecuencia:'Cada 8 horas', via:'oral', indicaciones:''}];
   }
   document.getElementById('btn-add-med-item').style.display = editingId ? 'none' : 'inline-flex';
   renderMedItems();
   document.getElementById('modal-medicacion').classList.add('open');
 }
-function openModalMedP(pid) { openModalMedicacion(); document.getElementById('m-paciente').value = pid; }
+function openModalMedP(pid) { openModalMedicacion(); setPacienteSelect('m-paciente', pid); }
 
 function renderMedItems() {
   const container = document.getElementById('med-items-list');
@@ -950,7 +950,9 @@ function renderMedItems() {
     +     '<div id="mi-sug-'+i+'" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:400;max-height:200px;overflow-y:auto;margin-top:4px"></div>'
     +   '</div>'
     +   '<div class="form-group"><label>Dosis *</label><input type="text" id="mi-dosis-'+i+'" value="'+item.dosis+'" placeholder="Ej: 1 tableta" oninput="medItems['+i+'].dosis=this.value"></div>'
-    +   '<div class="form-group"><label>Frecuencia *</label><input type="text" id="mi-freq-'+i+'" value="'+item.frecuencia+'" placeholder="Ej: Cada 8 horas" oninput="medItems['+i+'].frecuencia=this.value"></div>'
+    +   '<div class="form-group"><label>Frecuencia *</label><select id="mi-freq-'+i+'" onchange="medItems['+i+'].frecuencia=this.value">'
+    +     ['Cada 4 horas','Cada 8 horas','Cada 12 horas','Cada 24 horas','Cada 2 días','Cada 3 días','1 vez al día','Una vez con alimentos','En ayunas','Al almorzar','Al cenar','Antes de dormir'].map(f=>'<option value="'+f+'"'+(item.frecuencia===f?' selected':'')+'>'+f+'</option>').join('')
+    +     '</select></div>'
     +   '<div class="form-group"><label>Vía</label><select id="mi-via-'+i+'" onchange="medItems['+i+'].via=this.value">'+vias.map(([v,l])=>'<option value="'+v+'"'+(item.via===v?' selected':'')+'>'+l+'</option>').join('')+'</select></div>'
     +   '<div class="form-group full"><label>Indicaciones</label><input type="text" id="mi-ind-'+i+'" value="'+item.indicaciones+'" placeholder="Tomar con alimentos..." oninput="medItems['+i+'].indicaciones=this.value"></div>'
     + '</div></div>'
@@ -958,7 +960,7 @@ function renderMedItems() {
 }
 
 function addMedItem() {
-  medItems.push({nombre:'', dosis:'', frecuencia:'', via:'oral', indicaciones:''});
+  medItems.push({nombre:'', dosis:'', frecuencia:'Cada 8 horas', via:'oral', indicaciones:''});
   renderMedItems();
 }
 
@@ -1071,11 +1073,11 @@ function openModalNota(id){
   document.getElementById('n-tipo').value='evolucion'; document.getElementById('n-fecha').value=hoy(); document.getElementById('n-titulo').value=''; document.getElementById('n-contenido').value='';
   if(id){
     const n=C.n.find(x=>x.id===id);
-    if(n){ document.getElementById('n-paciente').value=n.pacienteId; document.getElementById('n-tipo').value=n.tipo; document.getElementById('n-fecha').value=n.fecha; document.getElementById('n-titulo').value=n.titulo||''; document.getElementById('n-contenido').value=n.contenido; }
+    if(n){ setPacienteSelect('n-paciente',n.pacienteId); document.getElementById('n-tipo').value=n.tipo; document.getElementById('n-fecha').value=n.fecha; document.getElementById('n-titulo').value=n.titulo||''; document.getElementById('n-contenido').value=n.contenido; }
   }
   document.getElementById('modal-nota').classList.add('open');
 }
-function openModalNotaP(pid){ openModalNota(); document.getElementById('n-paciente').value=pid; }
+function openModalNotaP(pid){ openModalNota(); setPacienteSelect('n-paciente', pid); }
 
 async function guardarNota(){
   if(!currentClinicaId){ toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
@@ -1787,8 +1789,52 @@ function globalSearch(q){
 function selectSearchResult(id){ document.getElementById('global-search').value=''; document.getElementById('search-dropdown').style.display='none'; navigate('paciente-detalle',id); }
 
 // ════════════════════ HELPERS ════════════════════
-function fillSelect(sid){
-  document.getElementById(sid).innerHTML='<option value="">Seleccionar paciente...</option>'+C.p.map(x=>`<option value="${x.id}">${x.nombre} ${x.apellidos}</option>`).join('');
+function fillSelect(sid) {
+  const prefix = sid.split('-')[0];
+  const hiddenEl = document.getElementById(sid);
+  const txtEl = document.getElementById(prefix+'-pac-txt');
+  if(hiddenEl) hiddenEl.value = '';
+  if(txtEl) txtEl.value = '';
+}
+
+function filterPacSug(q, prefix) {
+  const sug = document.getElementById(prefix+'-pac-sug');
+  if(!sug) return;
+  const q2 = (q||'').toLowerCase().trim();
+  const matches = q2.length < 1
+    ? C.p.slice(0, 12)
+    : C.p.filter(p => (p.nombre+' '+p.apellidos).toLowerCase().includes(q2) || (p.identificacion||'').toLowerCase().includes(q2)).slice(0, 10);
+  if(!matches.length) { sug.style.display='none'; return; }
+  sug.innerHTML = matches.map(p =>
+    '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s" onmouseenter="this.style.background=\'var(--primary-light)\'" onmouseleave="this.style.background=\'\'" onmousedown="selectPac(\''+prefix+'\','+p.id+',\''+((p.nombre+' '+p.apellidos).replace(/'/g,'\\\''))+'\')">'
+    + '<div style="width:32px;height:32px;border-radius:50%;background:'+colAvatar(p.id)+';display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;flex-shrink:0">'+ini(p.nombre,p.apellidos)+'</div>'
+    + '<div><div style="font-size:13px;font-weight:600;color:var(--text)">'+p.nombre+' '+p.apellidos+'</div>'
+    + '<div style="font-size:11px;color:var(--text-light)">'+(p.identificacion||'')+(p.telefono?' · '+p.telefono:'')+'</div></div>'
+    + '</div>'
+  ).join('');
+  sug.style.display = 'block';
+}
+
+function selectPac(prefix, pid, nombre) {
+  const hiddenEl = document.getElementById(prefix+'-paciente');
+  const txtEl = document.getElementById(prefix+'-pac-txt');
+  if(hiddenEl) hiddenEl.value = pid;
+  if(txtEl) txtEl.value = nombre;
+  hidePacSug(prefix);
+}
+
+function hidePacSug(prefix) {
+  const sug = document.getElementById(prefix+'-pac-sug');
+  if(sug) sug.style.display = 'none';
+}
+
+function setPacienteSelect(sid, pid) {
+  const prefix = sid.split('-')[0];
+  const p = C.p.find(x => x.id === pid);
+  const hiddenEl = document.getElementById(sid);
+  const txtEl = document.getElementById(prefix+'-pac-txt');
+  if(hiddenEl) hiddenEl.value = pid || '';
+  if(txtEl) txtEl.value = p ? p.nombre+' '+p.apellidos : '';
 }
 function closeModal(id){ document.getElementById(id).classList.remove('open'); editingId=null; }
 
