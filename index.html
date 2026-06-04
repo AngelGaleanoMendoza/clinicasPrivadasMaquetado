@@ -13,6 +13,13 @@
 <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
+<script>
+  // Mostrar spinner de carga inmediatamente para evitar flash de login al recargar
+  document.addEventListener('DOMContentLoaded', function() {
+    var lo = document.getElementById('loading-overlay');
+    if(lo) lo.classList.add('show');
+  });
+</script>
 
 <!-- RECOVERY PASSWORD -->
 <div id="recovery-overlay" style="display:none;position:fixed;inset:0;background:#0a0f1e;z-index:9999;align-items:center;justify-content:center">

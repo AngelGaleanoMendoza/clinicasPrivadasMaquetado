@@ -431,7 +431,10 @@ async function entrarConPerfil(profile) {
   currentClinica = clData || null;
   await loadAll();
   setLoading(false);
-  navigate(currentUser?.key === 'farmaceutico' ? 'inventario' : 'dashboard');
+  const lastView = localStorage.getItem('lm_last_view');
+  const defaultView = currentUser?.key === 'farmaceutico' ? 'inventario' : 'dashboard';
+  const targetView = lastView && lastView !== 'paciente-detalle' ? lastView : defaultView;
+  navigate(targetView);
   toast(`Bienvenido, ${currentUser.name} 👋`, 'info');
   logActivity('login');
   iniciarInactividad();
@@ -530,6 +533,8 @@ async function navigate(view, patientId) {
   document.getElementById('page-title').textContent = titles[view]||view;
   currentView=view;
   if(patientId) currentPatientId=patientId;
+  // Guardar vista actual para restaurarla al recargar
+  if(currentUser) localStorage.setItem('lm_last_view', view);
   const sa   = isSuperAdmin();
   const role = currentUser?.key;
   // Accesos por rol
@@ -2849,6 +2854,7 @@ async function doLogout() {
   if(!ok) return;
   await sb.auth.signOut();
   sessionStorage.removeItem('lm_user');
+  localStorage.removeItem('lm_last_view');
   currentUser = null; currentClinicaId = null;
   const app = document.getElementById('app');
   app.style.transition = 'opacity .3s'; app.style.opacity = '0';
