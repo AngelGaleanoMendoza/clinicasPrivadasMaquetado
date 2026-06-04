@@ -89,13 +89,14 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 .menu-item.active{background:rgba(37,99,235,.15);color:#fff;border-left-color:var(--primary)}
 .menu-item .icon{font-size:17px;width:22px;text-align:center;flex-shrink:0}
 .menu-item .badge{margin-left:auto;background:var(--primary);color:#fff;font-size:10px;padding:2px 7px;border-radius:10px;font-weight:700}
-.sidebar-footer{padding:14px 20px;border-top:1px solid rgba(255,255,255,.07)}
-.sf-user{display:flex;align-items:center;gap:10px}
-.sf-avatar{width:36px;height:36px;background:linear-gradient(135deg,#2563EB,#06B6D4);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;flex-shrink:0}
-.sf-info p{color:#fff;font-size:13px;font-weight:600}
+.sidebar-footer{padding:14px 20px 18px;border-top:1px solid rgba(255,255,255,.07);flex-shrink:0}
+.sf-user{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.sf-avatar{width:38px;height:38px;background:linear-gradient(135deg,#2563EB,#06B6D4);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;flex-shrink:0}
+.sf-info{flex:1;min-width:0}
+.sf-info p{color:#fff;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sf-info span{color:var(--sidebar-text);font-size:11px}
-.btn-logout{margin-left:auto;background:rgba(239,68,68,.15);border:none;color:#FCA5A5;border-radius:8px;padding:7px 10px;cursor:pointer;font-size:13px;transition:all .2s}
-.btn-logout:hover{background:rgba(239,68,68,.3);color:#fff}
+.btn-logout{width:100%;padding:10px 14px;background:rgba(239,68,68,.12);border:1.5px solid rgba(239,68,68,.2);color:#FCA5A5;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;letter-spacing:.02em;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn-logout:hover,.btn-logout:active{background:rgba(239,68,68,.28);border-color:rgba(239,68,68,.45);color:#fff}
 
 /* MAIN */
 .main{margin-left:260px;flex:1;display:flex;flex-direction:column;min-height:100vh}
