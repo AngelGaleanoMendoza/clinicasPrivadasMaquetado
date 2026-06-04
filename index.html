@@ -233,21 +233,48 @@
           </div>
         </div>
 
-        <div class="grid-2" style="margin-bottom:18px">
-          <div class="card">
-            <div class="card-header"><h3>📅 Citas del día</h3></div>
-            <div id="lista-citas-hoy"></div>
+        <div class="card">
+          <!-- TABS de fecha -->
+          <div class="citas-view-tabs" id="citas-view-tabs">
+            <button class="citas-view-tab active" id="ctab-hoy" onclick="switchCitasTab('hoy')">
+              📅 Hoy <span class="ctab-badge" id="ctab-badge-hoy">0</span>
+            </button>
+            <button class="citas-view-tab" id="ctab-manana" onclick="switchCitasTab('manana')">
+              🌅 Mañana <span class="ctab-badge" id="ctab-badge-manana">0</span>
+            </button>
+            <button class="citas-view-tab" id="ctab-fecha" onclick="switchCitasTab('fecha')">
+              🗓️ Buscar fecha
+            </button>
+            <button class="citas-view-tab" id="ctab-calendario" onclick="switchCitasTab('calendario')">
+              📆 Calendario
+            </button>
           </div>
-          <div class="card">
-            <div class="card-header"><h3>🗓️ Calendario de Citas</h3></div>
+
+          <!-- Picker de fecha (solo visible en tab "fecha") -->
+          <div class="citas-date-picker-row" id="citas-fecha-picker-row" style="display:none">
+            <label style="font-size:12px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:.5px">Seleccionar fecha:</label>
+            <input type="date" id="citas-fecha-personalizada" onchange="renderCitasFechaPersonalizada(this.value)">
+            <span id="citas-fecha-count" style="font-size:12px;color:var(--text-light)"></span>
+          </div>
+
+          <!-- Lista de citas (tabs hoy / mañana / fecha personalizada) -->
+          <div id="citas-tab-lista" style="display:block">
+            <div id="lista-citas-tab"></div>
+            <div id="citas-tab-empty" class="empty-state" style="display:none;padding:28px 0"><div class="empty-icon">📅</div><p id="citas-tab-empty-msg">Sin citas para esta fecha</p></div>
+          </div>
+
+          <!-- Calendario (tab calendario) -->
+          <div id="citas-tab-calendario" style="display:none">
             <div class="cal-wrap" id="citas-cal"></div>
             <div class="cal-legend"><div class="cal-legend-dot"></div><span>Tiene citas agendadas</span></div>
             <div style="margin-top:14px" id="cal-day-citas"></div>
           </div>
         </div>
-        <div class="card">
+
+        <!-- Tabla historial completo (siempre al fondo) -->
+        <div class="card" style="margin-top:18px">
           <div class="card-header">
-            <h3>📋 Todas las Citas</h3>
+            <h3>📋 Historial completo</h3>
             <input type="text" id="citas-filtro-paciente" placeholder="Filtrar por paciente o motivo..." style="max-width:240px;margin:0" oninput="filtrarTablaCitas(this.value)">
           </div>
           <div class="table-wrap">
@@ -274,6 +301,7 @@
       <div id="view-notas" class="view">
         <div class="card">
           <div class="card-header"><h3>📝 Notas Clínicas</h3><button class="btn btn-primary" onclick="openModalNota()">+ Nueva Nota</button></div>
+          <div id="notas-clinic-badge-container"></div>
           <div class="table-wrap">
             <table><thead><tr><th>Fecha</th><th>Paciente</th><th>Tipo</th><th>Nota</th><th>Acciones</th></tr></thead>
             <tbody id="tabla-notas"></tbody></table>
@@ -1269,6 +1297,7 @@
 <!-- MODAL PACIENTE -->
 <div class="modal-overlay" id="modal-paciente">
   <div class="modal modal-lg">
+    <button class="modal-close-btn" onclick="closeModal('modal-paciente')" title="Cerrar">✕</button>
     <h2 id="modal-paciente-title">👤 Nuevo Paciente</h2>
     <div style="display:flex;justify-content:center;margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid var(--border)">
       <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
@@ -1317,6 +1346,7 @@
 <!-- MODAL CITA -->
 <div class="modal-overlay" id="modal-cita">
   <div class="modal">
+    <button class="modal-close-btn" onclick="closeModal('modal-cita')" title="Cerrar">✕</button>
     <h2 id="modal-cita-title">📅 Nueva Cita</h2>
     <div class="form-grid">
       <div class="form-group full"><label>Paciente *</label>
@@ -1361,6 +1391,7 @@
 <!-- MODAL MEDICACION -->
 <div class="modal-overlay" id="modal-medicacion">
   <div class="modal modal-lg" style="max-width:680px">
+    <button class="modal-close-btn" onclick="closeModal('modal-medicacion')" title="Cerrar">✕</button>
     <h2 id="modal-med-title">💊 Nueva Receta</h2>
     <div class="form-grid" style="margin-bottom:16px">
       <div class="form-group full"><label>Paciente *</label>
@@ -1387,6 +1418,7 @@
 <!-- MODAL NOTA -->
 <div class="modal-overlay" id="modal-nota">
   <div class="modal">
+    <button class="modal-close-btn" onclick="closeModal('modal-nota')" title="Cerrar">✕</button>
     <h2 id="modal-nota-title">📝 Nueva Nota Clínica</h2>
     <div class="form-grid cols-1">
       <div class="form-group"><label>Paciente *</label>
@@ -1397,7 +1429,20 @@
           <div id="n-pac-sug" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;z-index:300;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.15);margin-top:4px"></div>
         </div>
       </div>
-      <div class="form-group"><label>Tipo de Nota</label><select id="n-tipo"><option value="evolucion">Evolución</option><option value="diagnostico">Diagnóstico</option><option value="tratamiento">Tratamiento</option><option value="laboratorio">Laboratorio</option><option value="imagen">Imagen / Radiología</option><option value="cirugia">Cirugía</option><option value="alta">Alta médica</option><option value="examen_visual">👁️ Examen Visual</option><option value="otro">Otro</option></select></div>
+      <div class="form-group"><label>Tipo de Nota</label><select id="n-tipo">
+        <option value="evolucion">📋 Evolución</option>
+        <option value="diagnostico">🔬 Diagnóstico</option>
+        <option value="tratamiento">💊 Tratamiento</option>
+        <option value="laboratorio">🧪 Laboratorio</option>
+        <option value="imagen">🩻 Imagen / Radiología</option>
+        <option value="cirugia">🔪 Cirugía</option>
+        <option value="alta">🏠 Alta médica</option>
+        <option value="examen_visual">👁️ Examen Visual</option>
+        <option value="odontologia">🦷 Odontología</option>
+        <option value="receta">📄 Receta</option>
+        <option value="interconsulta">🔄 Interconsulta</option>
+        <option value="otro">📌 Otro</option>
+      </select></div>
       <div class="form-group"><label>Fecha</label><input type="date" id="n-fecha"></div>
       <div class="form-group"><label>Título</label><input type="text" id="n-titulo" placeholder="Breve título de la nota"></div>
       <div class="form-group"><label>Nota Clínica *</label><textarea id="n-contenido" placeholder="Descripción detallada, hallazgos, diagnóstico..." style="min-height:130px"></textarea></div>

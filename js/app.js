@@ -657,19 +657,30 @@ function renderCalDayCitas(date){
 }
 
 // ════════════════════ ACCESOS RÁPIDOS MOBILE ════════════════════
-function renderNavQuickGrid(currentView) {
+function renderNavQuickGrid(cv) {
   const el = document.getElementById('nav-quick-grid');
   if(!el) return;
-  const items = [
-    { view:'pacientes',    icon:'👥', label:'Pacientes' },
-    { view:'citas',        icon:'📅', label:'Citas' },
-    { view:'agendas',      icon:'🗓️', label:'Agendas' },
-    { view:'medicaciones', icon:'💊', label:'Medicaciones' },
-    { view:'notas',        icon:'📝', label:'Notas' },
-    { view:'atendidos',    icon:'✅', label:'Atendidos' },
-  ];
-  el.innerHTML = items.map(x =>
-    `<div class="nav-quick-item${currentView===x.view?' nq-active':''}" onclick="navigate('${x.view}')">
+  const sa   = isSuperAdmin();
+  const role = currentUser?.key;
+  const invAccess = sa || ['admin','farmaceutico'].includes(role);
+  const finAccess = sa || ['admin','farmaceutico'].includes(role);
+  const sysAccess = sa || role==='admin';
+  const isMed = role==='medico';
+  const isRec = role==='recepcion';
+  const all = [
+    { view:'pacientes',    icon:'👥', label:'Pacientes',    show:true },
+    { view:'citas',        icon:'📅', label:'Citas',        show:true },
+    { view:'agendas',      icon:'🗓️', label:'Agendas',      show:true },
+    { view:'medicaciones', icon:'💊', label:'Medicaciones', show:!isRec },
+    { view:'notas',        icon:'📝', label:'Notas',        show:!isRec },
+    { view:'atendidos',    icon:'📊', label:'Atendidos',    show:!isRec },
+    { view:'estadisticas', icon:'📈', label:'Estadísticas', show:sysAccess },
+    { view:'inventario',   icon:'📦', label:'Inventario',   show:invAccess },
+    { view:'exportar',     icon:'📤', label:'Exportar',     show:sysAccess },
+    { view:'configuracion',icon:'⚙️', label:'Config.',      show:sa },
+  ].filter(x=>x.show);
+  el.innerHTML = all.map(x =>
+    `<div class="nav-quick-item${cv===x.view?' nq-active':''}" onclick="navigate('${x.view}')">
       <span class="nq-icon">${x.icon}</span>
       <span class="nq-label">${x.label}</span>
     </div>`
@@ -679,7 +690,7 @@ function renderNavQuickGrid(currentView) {
 // ════════════════════ DASHBOARD ════════════════════
 function renderDashboard(){
   renderPendientesSesion();
-  renderNavQuickGrid('dashboard');
+  renderNavQuickGrid(currentView);
   const h=hoy();
   const pendientes=C.c.filter(c=>c.estado==='pendiente');
   document.getElementById('stat-pacientes').textContent=C.p.length;
@@ -851,7 +862,7 @@ function openModalPaciente(id){
       if(x.fotoUrl){ currentFotoUrl=x.fotoUrl; document.getElementById('foto-placeholder').style.display='none'; document.getElementById('foto-img-preview').src=x.fotoUrl; document.getElementById('foto-img-preview').style.display='block'; document.getElementById('btn-quitar-foto').style.display='block'; }
     }
   }
-  document.getElementById('modal-paciente').classList.add('open');
+  openModalOverlay('modal-paciente');
 }
 
 async function guardarPaciente(irExpediente=false, irCita=false){
@@ -1266,36 +1277,102 @@ function filtrarTablaCitas(q) {
   });
 }
 
-function renderCitas(){
-  const h=hoy(), citasHoy=C.c.filter(c=>c.fecha===h).sort((a,b)=>a.hora.localeCompare(b.hora));
-  document.getElementById('lista-citas-hoy').innerHTML=citasHoy.length?citasHoy.map(c=>{
-    const p=C.p.find(x=>x.id===c.pacienteId);
-    return `<div class="cita-item ${c.estado}">
+// ── CITAS TABS ──
+let citasTab = 'hoy';
+let citasTabFecha = '';
+
+function switchCitasTab(tab) {
+  citasTab = tab;
+  ['hoy','manana','fecha','calendario'].forEach(t => {
+    const el = document.getElementById('ctab-'+t);
+    if(el) el.classList.toggle('active', t===tab);
+  });
+  const pickerRow = document.getElementById('citas-fecha-picker-row');
+  const tabLista  = document.getElementById('citas-tab-lista');
+  const tabCal    = document.getElementById('citas-tab-calendario');
+  if(pickerRow) pickerRow.style.display = tab==='fecha' ? 'flex' : 'none';
+  if(tabLista)  tabLista.style.display  = tab==='calendario' ? 'none' : 'block';
+  if(tabCal)    tabCal.style.display    = tab==='calendario' ? 'block' : 'none';
+
+  if(tab==='hoy')       renderCitasParaFecha(hoy());
+  else if(tab==='manana'){ const d=new Date(); d.setDate(d.getDate()+1); renderCitasParaFecha(d.toISOString().split('T')[0]); }
+  else if(tab==='fecha'){ if(citasTabFecha) renderCitasParaFecha(citasTabFecha); }
+  else if(tab==='calendario'){ renderCalendar('citas-cal',true); renderCalDayCitas(selCalDate); }
+}
+
+function renderCitasParaFecha(fecha) {
+  const citas = C.c.filter(c=>c.fecha===fecha).sort((a,b)=>a.hora.localeCompare(b.hora));
+  const listaEl = document.getElementById('lista-citas-tab');
+  const emptyEl = document.getElementById('citas-tab-empty');
+  const emptyMsg = document.getElementById('citas-tab-empty-msg');
+  if(!listaEl) return;
+  if(!citas.length) {
+    listaEl.innerHTML = '';
+    if(emptyEl) { emptyEl.style.display='block'; if(emptyMsg) emptyMsg.textContent=`Sin citas para ${formatFecha(fecha)}`; }
+    return;
+  }
+  if(emptyEl) emptyEl.style.display='none';
+  listaEl.innerHTML = citas.map(c => {
+    const p = C.p.find(x=>x.id===c.pacienteId);
+    const esCompletada = c.estado==='completada';
+    const esCancelada  = c.estado==='cancelada';
+    return `<div class="cita-item ${c.estado}" style="gap:10px;flex-wrap:wrap">
       <div class="cita-time">${c.hora}</div>
-      <div class="cita-info"><div class="cita-paciente">${p?p.nombre+' '+p.apellidos:'Desconocido'}</div><div class="cita-motivo">${c.motivo}</div></div>
-      ${estadoTag(c.estado)}
-      <div class="actions-cell" style="margin-left:6px">
-        <button class="btn btn-sm" style="background:var(--primary);color:#fff;font-size:16px;font-weight:700;padding:3px 10px;line-height:1" onclick="openModalCitaP(${c.pacienteId})" title="Nueva cita para este paciente">+</button>
-        ${c.estado!=='completada'&&c.estado!=='cancelada'?`<button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;white-space:nowrap" onclick="marcarCitaCompletada(${c.id})">✅</button>`:''}
+      <div style="flex:1;min-width:0">
+        <div class="cita-paciente">${p?p.nombre+' '+p.apellidos:'Desconocido'}</div>
+        <div class="cita-motivo">${c.motivo}${c.tipo?` · <span class="tag tag-cyan" style="font-size:10px">${c.tipo}</span>`:''}</div>
+      </div>
+      ${esCompletada ? '<span class="acudio-badge">✅ Atendido</span>' : estadoTag(c.estado)}
+      <div class="actions-cell" style="gap:6px;flex-wrap:wrap">
+        <button class="btn btn-sm" style="background:var(--primary);color:#fff;font-size:15px;font-weight:800;padding:4px 10px;line-height:1" onclick="openModalCitaP(${c.pacienteId})" title="Nueva cita">+</button>
+        ${!esCompletada&&!esCancelada?`<button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;font-size:11px;font-weight:700;white-space:nowrap" onclick="marcarCitaCompletada(${c.id})">✅ Atendido</button>`:''}
+        <button class="btn btn-primary btn-sm" onclick="verResumenCita(${c.id})" title="Ver hoja">📄</button>
         <button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">✏️</button>
         <button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">🗑️</button>
-      </div></div>`;
-  }).join(''):`<div class="empty-state" style="padding:20px"><div class="empty-icon" style="font-size:30px">📅</div><p>Sin citas hoy</p></div>`;
+      </div>
+    </div>`;
+  }).join('');
+}
 
-  renderCalendar('citas-cal',true);
-  renderCalDayCitas(selCalDate);
+function renderCitasFechaPersonalizada(fecha) {
+  citasTabFecha = fecha;
+  const cnt = document.getElementById('citas-fecha-count');
+  if(cnt) cnt.textContent = '';
+  renderCitasParaFecha(fecha);
+  const n = C.c.filter(c=>c.fecha===fecha).length;
+  if(cnt) cnt.textContent = n ? `${n} cita${n>1?'s':''}` : 'Sin citas';
+}
 
-  const tbody=document.getElementById('tabla-citas'), empty=document.getElementById('citas-empty');
-  if(!C.c.length){ tbody.innerHTML=''; empty.style.display='block'; return; }
-  empty.style.display='none';
-  tbody.innerHTML=[...C.c].sort((a,b)=>b.fecha.localeCompare(a.fecha)||a.hora.localeCompare(b.hora)).map(c=>{
+function renderCitas(){
+  const h = hoy();
+  const manana = new Date(); manana.setDate(manana.getDate()+1);
+  const mananaStr = manana.toISOString().split('T')[0];
+
+  // Actualizar badges de tabs
+  const cntH = C.c.filter(c=>c.fecha===h).length;
+  const cntM = C.c.filter(c=>c.fecha===mananaStr).length;
+  const bH = document.getElementById('ctab-badge-hoy');
+  const bM = document.getElementById('ctab-badge-manana');
+  if(bH) bH.textContent = cntH;
+  if(bM) bM.textContent = cntM;
+
+  // Renderizar tab activo
+  switchCitasTab(citasTab);
+
+  // Tabla historial completo
+  const tbody = document.getElementById('tabla-citas'), empty = document.getElementById('citas-empty');
+  if(!C.c.length){ if(tbody) tbody.innerHTML=''; if(empty) empty.style.display='block'; return; }
+  if(empty) empty.style.display='none';
+  if(tbody) tbody.innerHTML=[...C.c].sort((a,b)=>b.fecha.localeCompare(a.fecha)||a.hora.localeCompare(b.hora)).map(c=>{
     const p=C.p.find(x=>x.id===c.pacienteId);
-    return `<tr><td>${formatFecha(c.fecha)}</td><td>${c.hora}</td>
+    const esComp = c.estado==='completada';
+    return `<tr><td>${formatFecha(c.fecha)}</td><td>${formatHora12(c.hora)}</td>
       <td><div class="patient-name-cell"><div class="patient-avatar" style="background:${colAvatar(c.pacienteId||0)};width:28px;height:28px;font-size:10px">${p?ini(p.nombre,p.apellidos):'?'}</div><div>${p?p.nombre+' '+p.apellidos:'Desconocido'}</div></div></td>
-      <td>${c.motivo}</td><td><span class="tag tag-cyan">${c.tipo}</span></td><td>${estadoTag(c.estado)}</td>
+      <td>${c.motivo}</td><td><span class="tag tag-cyan">${c.tipo}</span></td>
+      <td>${esComp?'<span class="acudio-badge">✅ Atendido</span>':estadoTag(c.estado)}</td>
       <td><div class="actions-cell">
-        <button class="btn btn-sm" style="background:var(--primary);color:#fff;font-size:16px;font-weight:700;padding:2px 9px;line-height:1" onclick="openModalCitaP(${c.pacienteId})" title="Nueva cita para este paciente">+</button>
-        ${c.estado!=='completada'&&c.estado!=='cancelada'?`<button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;white-space:nowrap" onclick="marcarCitaCompletada(${c.id})">✅ Acudió</button>`:''}
+        <button class="btn btn-sm" style="background:var(--primary);color:#fff;font-size:16px;font-weight:700;padding:2px 9px;line-height:1" onclick="openModalCitaP(${c.pacienteId})" title="Nueva cita">+</button>
+        ${!esComp&&c.estado!=='cancelada'?`<button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;white-space:nowrap;font-size:11px" onclick="marcarCitaCompletada(${c.id})">✅ Atendido</button>`:''}
         <button class="btn btn-primary btn-sm" onclick="verResumenCita(${c.id})" title="Ver hoja">📄</button>
         <button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">✏️</button>
         <button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">🗑️</button>
@@ -1339,6 +1416,7 @@ function formatHora12(h24) {
 }
 
 function openModalCita(id){
+  const isMedico = currentUser?.key === 'medico';
   editingId=id||null;
   document.getElementById('modal-cita-title').textContent=id?'✏️ Editar Cita':'📅 Nueva Cita';
   fillSelect('c-paciente');
@@ -1349,9 +1427,26 @@ function openModalCita(id){
   dxElegidos=[]; renderDxElegidos(); ocultarSugerenciasDx();
   document.getElementById('c-estado').value='pendiente';
   document.getElementById('c-tipo').value='consulta';
+
+  // Restricción: médico solo puede crear citas en su propio nombre
+  const medicoSel = document.getElementById('c-medico');
+  if(isMedico && !isSuperAdmin()) {
+    medicoSel.value = currentUser.id;
+    medicoSel.disabled = true;
+    medicoSel.style.opacity = '0.6';
+  } else {
+    medicoSel.disabled = false;
+    medicoSel.style.opacity = '';
+  }
+
   if(id){
     const c=C.c.find(x=>x.id===id);
     if(c){
+      // Medico solo puede editar sus propias citas
+      if(isMedico && !isSuperAdmin() && c.medicoId && c.medicoId !== currentUser.id) {
+        toast('Solo puedes editar citas asignadas a ti','error');
+        return;
+      }
       setPacienteSelect('c-paciente', c.pacienteId);
       document.getElementById('c-fecha').value=c.fecha;
       fillHoraSelect(c.hora);
@@ -1359,10 +1454,10 @@ function openModalCita(id){
       document.getElementById('c-tipo').value=c.tipo;
       document.getElementById('c-estado').value=c.estado;
       document.getElementById('c-notas').value=c.notas||'';
-      if(c.medicoId) document.getElementById('c-medico').value=c.medicoId;
+      if(c.medicoId) medicoSel.value=c.medicoId;
     }
   }
-  document.getElementById('modal-cita').classList.add('open');
+  openModalOverlay('modal-cita');
 }
 function openModalCitaP(pid){ openModalCita(); setPacienteSelect('c-paciente', pid); }
 
@@ -1373,7 +1468,8 @@ async function guardarCita(){
   const hora=document.getElementById('c-hora').value;
   const motivo=document.getElementById('c-motivo').value.trim();
   if(!pid||!fecha||!hora||!motivo){ toast('Completa los campos obligatorios','error'); return; }
-  const medicoId=document.getElementById('c-medico').value||null;
+  const isMedico = currentUser?.key === 'medico';
+  const medicoId = (isMedico && !isSuperAdmin()) ? currentUser.id : (document.getElementById('c-medico').value||null);
   const obj={pacienteId:pid,medicoId,fecha,hora,motivo,tipo:document.getElementById('c-tipo').value,estado:document.getElementById('c-estado').value,notas:document.getElementById('c-notas').value.trim()};
   setLoading(true);
   let err;
@@ -1384,7 +1480,9 @@ async function guardarCita(){
   toast(editingId?'Cita actualizada':'Cita registrada ✅');
   if(!editingId) logActivity('cita');
   closeModal('modal-cita');
-  await loadAll(); renderCitas(); updateBadges();
+  await loadAll();
+  renderView(currentView);
+  updateBadges();
 }
 
 async function eliminarCita(id){
@@ -1448,7 +1546,7 @@ function abrirNotaEvolucion(pacienteId, cita) {
   document.getElementById('n-titulo').value = `Consulta ${formatFecha(hoy())}`;
   const motivo = cita?.motivo ? `Motivo de consulta: ${cita.motivo}\n\n` : '';
   document.getElementById('n-contenido').value = motivo;
-  document.getElementById('modal-nota').classList.add('open');
+  openModalOverlay('modal-nota');
   setTimeout(() => document.getElementById('n-contenido').focus(), 150);
 }
 
@@ -1516,7 +1614,7 @@ function openModalMedicacion(id) {
   }
   document.getElementById('btn-add-med-item').style.display = editingId ? 'none' : 'inline-flex';
   renderMedItems();
-  document.getElementById('modal-medicacion').classList.add('open');
+  openModalOverlay('modal-medicacion');
 }
 function openModalMedP(pid) { openModalMedicacion(); setPacienteSelect('m-paciente', pid); }
 
@@ -1636,16 +1734,29 @@ async function eliminarMedicacion(id){
 }
 
 // ════════════════════ NOTAS ════════════════════
+const NOTA_TIPO_ICON = {
+  evolucion:'📋', diagnostico:'🔬', tratamiento:'💊', laboratorio:'🧪',
+  imagen:'🩻', cirugia:'🔪', alta:'🏠', examen_visual:'👁️',
+  odontologia:'🦷', receta:'📄', interconsulta:'🔄', otro:'📌'
+};
+
 function renderNotas(){
+  // Badge de clínica
+  const badgeEl = document.getElementById('notas-clinic-badge-container');
+  if(badgeEl && currentClinica) {
+    badgeEl.innerHTML = `<span class="notas-clinic-badge">🏥 ${currentClinica.nombre}</span>`;
+  }
+
   const tbody=document.getElementById('tabla-notas'), empty=document.getElementById('notas-empty');
   if(!C.n.length){ tbody.innerHTML=''; empty.style.display='block'; return; }
   empty.style.display='none';
   tbody.innerHTML=[...C.n].sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(n=>{
     const p=C.p.find(x=>x.id===n.pacienteId);
     const prev=n.contenido.length>80?n.contenido.substring(0,80)+'…':n.contenido;
+    const tipoIcon = NOTA_TIPO_ICON[n.tipo] || '📝';
     return `<tr><td>${formatFecha(n.fecha)}</td>
       <td><div class="patient-name-cell"><div class="patient-avatar" style="background:${colAvatar(n.pacienteId||0)};width:28px;height:28px;font-size:10px">${p?ini(p.nombre,p.apellidos):'?'}</div><div>${p?p.nombre+' '+p.apellidos:'Desconocido'}</div></div></td>
-      <td><span class="tag tag-blue">${n.tipo}</span></td>
+      <td><span class="tag tag-blue">${tipoIcon} ${n.tipo}</span></td>
       <td style="max-width:280px">${n.titulo?`<strong>${n.titulo}</strong><br>`:''}${prev}</td>
       <td><div class="actions-cell">
         <button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})">🖨️</button>
@@ -1665,7 +1776,7 @@ function openModalNota(id){
     const n=C.n.find(x=>x.id===id);
     if(n){ setPacienteSelect('n-paciente',n.pacienteId); document.getElementById('n-tipo').value=n.tipo; document.getElementById('n-fecha').value=n.fecha; document.getElementById('n-titulo').value=n.titulo||''; document.getElementById('n-contenido').value=n.contenido; }
   }
-  document.getElementById('modal-nota').classList.add('open');
+  openModalOverlay('modal-nota');
 }
 function openModalNotaP(pid){ openModalNota(); setPacienteSelect('n-paciente', pid); }
 
@@ -2348,6 +2459,14 @@ function updateBottomNav(view){
   renderNavQuickGrid(view);
 }
 
+// Cerrar modal al hacer click fuera del contenido
+document.addEventListener('click', e => {
+  if(e.target.classList.contains('modal-overlay') && e.target.classList.contains('open')) {
+    const modalId = e.target.id;
+    if(modalId && !['modal-confirm'].includes(modalId)) closeModal(modalId);
+  }
+}, { capture: false });
+
 // ════════════════════ FILTRO PACIENTES ════════════════════
 let filtroEstado='todos';
 function setFiltroEstado(estado, chipEl){
@@ -2456,7 +2575,13 @@ function setPacienteSelect(sid, pid) {
   if(hiddenEl) hiddenEl.value = pid || '';
   if(txtEl) txtEl.value = p ? p.nombre+' '+p.apellidos : '';
 }
-function closeModal(id){ document.getElementById(id).classList.remove('open'); editingId=null; }
+function openModalOverlay(id){ document.getElementById(id).classList.add('open'); document.body.classList.add('modal-open'); }
+function closeModal(id){
+  document.getElementById(id).classList.remove('open');
+  editingId=null;
+  // solo quitar scroll-lock si no queda otro modal abierto
+  if(!document.querySelector('.modal-overlay.open')) document.body.classList.remove('modal-open');
+}
 
 document.addEventListener('click',e=>{
   if(!e.target.closest('#global-search')&&!e.target.closest('#search-dropdown')) document.getElementById('search-dropdown').style.display='none';
