@@ -5179,6 +5179,8 @@ function switchFinTab(tab) {
     if(p) p.style.display = t===tab ? 'block' : 'none';
     if(b) b.classList.toggle('active', t===tab);
   });
+  const btnPdf = document.getElementById('btn-pdf-resumen-fin');
+  if(btnPdf) btnPdf.style.display = tab === 'resumen' ? '' : 'none';
   if(tab==='resumen') renderResumenFinanzas();
   else if(tab==='transacciones') renderTransacciones();
   else if(tab==='facturas') renderFacturasList();
@@ -5232,6 +5234,104 @@ function renderResumenFinanzas() {
         </tr>`).join('')}</tbody></table></div>`;
     }
   }
+}
+
+function descargarPDFResumenFinanzas() {
+  const cfg = getClinicaConfig();
+  const {from, to} = getFinDateRange();
+  const periodoLabel = {
+    hoy: 'Hoy — ' + formatFecha(to),
+    semana: 'Últimos 7 días',
+    mes: new Date().toLocaleDateString('es-ES', {month:'long', year:'numeric'}),
+    anio: 'Año ' + new Date().getFullYear()
+  }[finPeriodo] || finPeriodo;
+
+  const finData  = (C.fin||[]).filter(f => f.fecha >= from && f.fecha <= to);
+  const factData = (C.fact||[]).filter(f => f.fecha >= from && f.fecha <= to);
+  const ingresos  = finData.filter(f => f.tipo === 'ingreso');
+  const egresos   = finData.filter(f => f.tipo === 'egreso');
+  const totalIng  = ingresos.reduce((s,f) => s + f.monto, 0);
+  const totalEgr  = egresos.reduce((s,f) => s + f.monto, 0);
+  const utilidad  = totalIng - totalEgr;
+  const fPag      = factData.filter(f => f.estado === 'pagada').length;
+
+  // Agrupar ingresos y egresos por categoría
+  const agrupar = arr => {
+    const m = {};
+    arr.forEach(f => { m[f.categoria] = (m[f.categoria]||0) + f.monto; });
+    return Object.entries(m).sort((a,b) => b[1]-a[1]);
+  };
+  const catIng = agrupar(ingresos);
+  const catEgr = agrupar(egresos);
+
+  // Agrupar por día
+  const porDia = {};
+  finData.forEach(f => { porDia[f.fecha] = (porDia[f.fecha]||{ing:0,egr:0}); if(f.tipo==='ingreso') porDia[f.fecha].ing+=f.monto; else porDia[f.fecha].egr+=f.monto; });
+  const diasOrdenados = Object.keys(porDia).sort((a,b) => b.localeCompare(a));
+
+  const catTag = c => `<span class="tag tag-gray" style="font-size:10px">${c||'general'}</span>`;
+  const estadoFact = e => ({pagada:'tag-green',pendiente:'tag-orange',cancelada:'tag-red',anulada:'tag-gray'})[e]||'tag-gray';
+
+  const body = `
+    <div style="font-size:22px;font-weight:900;color:#0F172A;margin-bottom:4px">Resumen Financiero</div>
+    <div style="font-size:13px;color:#64748B;font-weight:600;margin-bottom:20px">Período: ${periodoLabel} · Generado: ${new Date().toLocaleString('es-ES')}</div>
+
+    <div class="kpi-grid">
+      <div class="kpi green"><div class="kpi-val">${fmtC(totalIng)}</div><div class="kpi-lbl">Total Ingresos</div></div>
+      <div class="kpi red"><div class="kpi-val">${fmtC(totalEgr)}</div><div class="kpi-lbl">Total Egresos</div></div>
+      <div class="kpi ${utilidad>=0?'blue':'red'}"><div class="kpi-val">${fmtC(utilidad)}</div><div class="kpi-lbl">Utilidad Neta</div></div>
+      <div class="kpi orange"><div class="kpi-val">${factData.length}</div><div class="kpi-lbl">Facturas (${fPag} pagadas)</div></div>
+    </div>
+
+    <div style="display:flex;gap:20px;margin-bottom:20px">
+      ${catIng.length ? `<div style="flex:1">
+        <div class="section-title" style="margin-bottom:8px">💰 Ingresos por categoría</div>
+        <table><thead><tr><th>Categoría</th><th>Total</th></tr></thead>
+        <tbody>${catIng.map(([cat,tot])=>`<tr><td style="text-transform:capitalize">${cat}</td><td style="font-weight:700;color:#15803D">${fmtC(tot)}</td></tr>`).join('')}</tbody></table>
+      </div>` : ''}
+      ${catEgr.length ? `<div style="flex:1">
+        <div class="section-title" style="margin-bottom:8px">📤 Egresos por categoría</div>
+        <table><thead><tr><th>Categoría</th><th>Total</th></tr></thead>
+        <tbody>${catEgr.map(([cat,tot])=>`<tr><td style="text-transform:capitalize">${cat}</td><td style="font-weight:700;color:#B91C1C">${fmtC(tot)}</td></tr>`).join('')}</tbody></table>
+      </div>` : ''}
+    </div>
+
+    ${diasOrdenados.length ? `<div class="section-title">📅 Movimiento por Día</div>
+    <table style="margin-bottom:20px"><thead><tr><th>Fecha</th><th>Ingresos</th><th>Egresos</th><th>Neto del día</th></tr></thead>
+    <tbody>${diasOrdenados.map(fecha => {
+      const d = porDia[fecha];
+      const neto = d.ing - d.egr;
+      return `<tr>
+        <td>${formatFecha(fecha)}</td>
+        <td style="color:#15803D;font-weight:600">${fmtC(d.ing)}</td>
+        <td style="color:#B91C1C;font-weight:600">${fmtC(d.egr)}</td>
+        <td style="font-weight:700;color:${neto>=0?'#1D4ED8':'#B91C1C'}">${fmtC(neto)}</td>
+      </tr>`;
+    }).join('')}</tbody></table>` : ''}
+
+    <div class="section-title">📋 Todas las Transacciones del Período</div>
+    ${finData.length ? `<table><thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Método</th><th>Tipo</th><th>Monto</th></tr></thead>
+    <tbody>${[...finData].sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(f=>`<tr>
+      <td>${formatFecha(f.fecha)}</td>
+      <td>${f.descripcion}${f.referencia?`<div style="font-size:10px;color:#94A3B8">Ref: ${f.referencia}</div>`:''}</td>
+      <td>${catTag(f.categoria)}</td>
+      <td style="font-size:11px;color:#64748B">${f.metodoPago||'—'}</td>
+      <td><span class="tag ${f.tipo==='ingreso'?'tag-green':'tag-red'}">${f.tipo==='ingreso'?'💰 Ingreso':'📤 Egreso'}</span></td>
+      <td style="font-weight:700;color:${f.tipo==='ingreso'?'#15803D':'#B91C1C'}">${f.tipo==='ingreso'?'+':'−'}${fmtC(f.monto)}</td>
+    </tr>`).join('')}</tbody></table>`
+    : '<p style="color:#94A3B8;text-align:center;padding:16px">Sin transacciones en este período</p>'}
+
+    ${factData.length ? `<div class="section-title">🧾 Facturas del Período</div>
+    <table><thead><tr><th>N° Factura</th><th>Paciente</th><th>Fecha</th><th>Estado</th><th>Total</th></tr></thead>
+    <tbody>${[...factData].sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(f=>`<tr>
+      <td><code style="font-size:10px">${f.numero||'—'}</code></td>
+      <td>${f.pacienteNombre||'—'}</td>
+      <td>${formatFecha(f.fecha)}</td>
+      <td><span class="tag ${estadoFact(f.estado)}">${f.estado}</span></td>
+      <td style="font-weight:700">${fmtC(f.total)}</td>
+    </tr>`).join('')}</tbody></table>` : ''}`;
+
+  pdfAbrir('Resumen Financiero — ' + periodoLabel, body, cfg);
 }
 
 function renderTransacciones() {
