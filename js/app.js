@@ -5291,8 +5291,87 @@ function openModalTransaccion(tipo='ingreso') {
   document.getElementById('trans-categoria').value = 'consulta';
   document.getElementById('trans-metodo').value = 'efectivo';
   document.getElementById('trans-referencia').value = '';
+  const buscarEl = document.getElementById('trans-inv-buscar');
+  if(buscarEl) buscarEl.value = '';
+  const wrap = document.getElementById('trans-compra-inv-wrap');
+  if(wrap) wrap.style.display = 'none';
   document.getElementById('modal-transaccion').classList.add('open');
   setTimeout(initDatePickers, 50);
+}
+
+function toggleTransCompraInv() {
+  const tipo = document.getElementById('trans-tipo')?.value;
+  const cat  = document.getElementById('trans-categoria')?.value;
+  const wrap = document.getElementById('trans-compra-inv-wrap');
+  if(!wrap) return;
+  const mostrar = tipo === 'egreso' && ['medicamento','insumo','equipo'].includes(cat);
+  wrap.style.display = mostrar ? '' : 'none';
+  if(mostrar) renderTransInvLista('');
+}
+
+function filtrarTransInv() {
+  const q = document.getElementById('trans-inv-buscar')?.value || '';
+  renderTransInvLista(q);
+}
+
+function renderTransInvLista(q) {
+  const lista = document.getElementById('trans-inv-lista');
+  if(!lista) return;
+  const cat = document.getElementById('trans-categoria')?.value || '';
+  const query = q.toLowerCase();
+  const catMap = { medicamento: ['medicamento'], insumo: ['insumo','material'], equipo: ['equipo'] };
+  const cats = catMap[cat] || [];
+  const productos = C.inv.filter(p =>
+    (cats.length === 0 || cats.includes(p.categoria)) &&
+    (!query || p.nombre.toLowerCase().includes(query) || (p.descripcion||'').toLowerCase().includes(query))
+  );
+  if(!productos.length) {
+    lista.innerHTML = '<div style="color:var(--text-light);font-size:13px;text-align:center;padding:12px">No se encontraron productos</div>';
+    return;
+  }
+  const catIcon = { medicamento:'💊', material:'🩺', insumo:'🧹', equipo:'🔬', papeleria:'📄', general:'📦' };
+  lista.innerHTML = productos.map(p => `
+    <label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;cursor:pointer;border:1.5px solid var(--border);background:var(--card);transition:border-color .15s"
+      onmouseover="this.style.borderColor='var(--primary)'" onmouseout="if(!this.querySelector('input').checked)this.style.borderColor='var(--border)'"
+      id="trans-inv-row-${p.id}">
+      <input type="checkbox" data-id="${p.id}" style="width:16px;height:16px;accent-color:var(--primary);cursor:pointer;flex-shrink:0" onchange="onTransInvCheck(this)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600">${catIcon[p.categoria]||'📦'} ${p.nombre}</div>
+        <div style="font-size:11px;color:var(--text-light)">Stock actual: ${p.stock} ${p.unidad} · ${p.categoria}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <input type="number" id="trans-inv-cant-${p.id}" min="1" value="1" placeholder="Cant."
+          style="width:62px;padding:5px 8px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text);font-family:inherit;outline:none;text-align:center"
+          onclick="event.stopPropagation()" onchange="autoDescripcionTransInv()">
+        <span style="font-size:11px;color:var(--text-light);white-space:nowrap">${p.unidad}</span>
+      </div>
+    </label>`).join('');
+}
+
+function onTransInvCheck(cb) {
+  const row = document.getElementById('trans-inv-row-' + cb.dataset.id);
+  if(row) row.style.borderColor = cb.checked ? 'var(--primary)' : 'var(--border)';
+  autoDescripcionTransInv();
+}
+
+function autoDescripcionTransInv() {
+  const seleccionados = getTransInvSeleccionados();
+  if(!seleccionados.length) return;
+  const desc = document.getElementById('trans-descripcion');
+  if(!desc) return;
+  const texto = 'Compra: ' + seleccionados.map(s => `${s.nombre} ×${s.cantidad}`).join(', ');
+  desc.value = texto;
+}
+
+function getTransInvSeleccionados() {
+  const checkboxes = document.querySelectorAll('#trans-inv-lista input[type=checkbox]:checked');
+  return Array.from(checkboxes).map(cb => {
+    const id = parseInt(cb.dataset.id);
+    const prod = C.inv.find(p => p.id === id);
+    const cantEl = document.getElementById('trans-inv-cant-' + id);
+    const cantidad = parseInt(cantEl?.value || 1, 10) || 1;
+    return { id, nombre: prod?.nombre || '—', cantidad, unidad: prod?.unidad || 'uds' };
+  });
 }
 
 async function guardarTransaccion() {
@@ -5306,13 +5385,45 @@ async function guardarTransaccion() {
   const ref    = document.getElementById('trans-referencia').value.trim();
   if(!desc){ toast('Ingresa una descripción','error'); return; }
   if(!monto||monto<=0){ toast('Ingresa un monto válido','error'); return; }
+
+  // Productos de inventario seleccionados (solo en egreso con categoría física)
+  const esCompraInv = tipo === 'egreso' && ['medicamento','insumo','equipo'].includes(cat);
+  const productosSeleccionados = esCompraInv ? getTransInvSeleccionados() : [];
+
   setLoading(true);
+
+  // Guardar registro en finanzas
   const {error} = await sb.from('finanzas').insert({
     clinica_id:currentClinicaId, tipo, descripcion:desc, monto, fecha,
     categoria:cat, metodo_pago:metodo, referencia:ref||null, creado_por:currentUser?.name
   });
   if(error){ toast('Error al guardar transacción','error'); setLoading(false); return; }
-  toast(tipo==='ingreso'?'Ingreso registrado 💰':'Egreso registrado 📤');
+
+  // Si hay productos seleccionados, crear entradas en inventario
+  if(productosSeleccionados.length) {
+    const movimientos = productosSeleccionados.map(s => ({
+      inventario_id: s.id, tipo: 'entrada', cantidad: s.cantidad,
+      motivo: 'compra', fecha, clinica_id: currentClinicaId
+    }));
+    const { error: movErr } = await sb.from('inventario_movimientos').insert(movimientos);
+    if(movErr) {
+      toast('Egreso guardado pero error al actualizar inventario: ' + movErr.message, 'info');
+    } else {
+      // Actualizar stock local y en DB
+      for(const s of productosSeleccionados) {
+        const prod = C.inv.find(p => p.id === s.id);
+        if(prod) {
+          const nuevoStock = prod.stock + s.cantidad;
+          await sb.from('inventario').update({ stock_actual: nuevoStock }).eq('id', s.id);
+          prod.stock = nuevoStock;
+        }
+      }
+      toast(`Egreso registrado y ${productosSeleccionados.length} producto(s) agregado(s) al inventario 📦`);
+    }
+  } else {
+    toast(tipo==='ingreso'?'Ingreso registrado 💰':'Egreso registrado 📤');
+  }
+
   closeModal('modal-transaccion');
   await loadAll(); renderFinanzas(); setLoading(false);
 }
