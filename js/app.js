@@ -2339,13 +2339,13 @@ function renderExportar(){
     </div>
     <div class="divider"></div>
     <p class="text-light">Datos en: <strong>Supabase Cloud</strong> 🌐</p>
-    <p class="text-light" style="margin-top:4px">Lumea Med v4.0 · ${new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'})}</p>`;
+    <p class="text-light" style="margin-top:4px">Lumea Med v5.0 · ${new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'})}</p>`;
 }
 
 async function exportarEmail(){
   const h=hoy();
   const asunto=`Lumea Med — Reporte ${new Date().toLocaleDateString('es-ES')}`;
-  const body=`REPORTE GALESISTEM\n\nPacientes: ${C.p.length} | Citas: ${C.c.length} | Medicaciones activas: ${C.m.filter(x=>x.estado==='activa').length}\n\nPACIENTES:\n${C.p.map(x=>`• ${x.nombre} ${x.apellidos} | ${x.identificacion||'-'} | ${x.telefono||'-'}`).join('\n')||'Ninguno'}\n\nCITAS HOY:\n${C.c.filter(x=>x.fecha===h).map(x=>{const p=C.p.find(q=>q.id===x.pacienteId);return`• ${x.hora} - ${p?p.nombre+' '+p.apellidos:'N/A'} — ${x.motivo} [${x.estado}]`}).join('\n')||'Ninguna'}\n\nGenerado por Lumea Med v4.0`;
+  const body=`REPORTE GALESISTEM\n\nPacientes: ${C.p.length} | Citas: ${C.c.length} | Medicaciones activas: ${C.m.filter(x=>x.estado==='activa').length}\n\nPACIENTES:\n${C.p.map(x=>`• ${x.nombre} ${x.apellidos} | ${x.identificacion||'-'} | ${x.telefono||'-'}`).join('\n')||'Ninguno'}\n\nCITAS HOY:\n${C.c.filter(x=>x.fecha===h).map(x=>{const p=C.p.find(q=>q.id===x.pacienteId);return`• ${x.hora} - ${p?p.nombre+' '+p.apellidos:'N/A'} — ${x.motivo} [${x.estado}]`}).join('\n')||'Ninguna'}\n\nGenerado por Lumea Med v5.0`;
   window.location.href=`mailto:sebasgale65@gmail.com?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(body)}`;
   toast('Abriendo cliente de correo...','info');
 }
@@ -2414,7 +2414,7 @@ NOTAS CLÍNICAS (${C.n.length})
 ${lineasN}
 
 ${sep}
-Generado automáticamente por Lumea Med v4.0
+Generado automáticamente por Lumea Med v5.0
 ${fechaStr}`;
 
   const asunto = `Backup Lumea Med — ${h}`;
