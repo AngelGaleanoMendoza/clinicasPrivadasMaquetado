@@ -656,9 +656,34 @@ function renderCalDayCitas(date){
       ${estadoTag(c.estado)}</div>`; }).join('');
 }
 
+// ════════════════════ ACCESOS RÁPIDOS MOBILE ════════════════════
+function renderNavQuickGrid(currentView) {
+  const el = document.getElementById('nav-quick-grid');
+  if(!el) return;
+  const items = [
+    { view:'pacientes',    icon:'👥', label:'Pacientes' },
+    { view:'citas',        icon:'📅', label:'Citas' },
+    { view:'agendas',      icon:'🗓️', label:'Agendas' },
+    { view:'medicaciones', icon:'💊', label:'Medicaciones' },
+    { view:'notas',        icon:'📝', label:'Notas' },
+    { view:'atendidos',    icon:'✅', label:'Atendidos' },
+    { view:'estadisticas', icon:'📊', label:'Estadísticas' },
+    { view:'inventario',   icon:'📦', label:'Inventario' },
+    { view:'exportar',     icon:'📤', label:'Exportar' },
+    { view:'configuracion',icon:'⚙️', label:'Config.' },
+  ].filter(x => x.view !== 'configuracion' || isSuperAdmin());
+  el.innerHTML = items.map(x =>
+    `<div class="nav-quick-item${currentView===x.view?' nq-active':''}" onclick="navigate('${x.view}')">
+      <span class="nq-icon">${x.icon}</span>
+      <span class="nq-label">${x.label}</span>
+    </div>`
+  ).join('');
+}
+
 // ════════════════════ DASHBOARD ════════════════════
 function renderDashboard(){
   renderPendientesSesion();
+  renderNavQuickGrid('dashboard');
   const h=hoy();
   const pendientes=C.c.filter(c=>c.estado==='pendiente');
   document.getElementById('stat-pacientes').textContent=C.p.length;
@@ -2322,11 +2347,9 @@ function closeSidebar(){
   document.getElementById('sidebar-overlay').classList.remove('show');
 }
 
-// ════════════════════ BOTTOM NAV ════════════════════
+// ════════════════════ BOTTOM NAV (legacy) ════════════════════
 function updateBottomNav(view){
-  const map={dashboard:'bn-dashboard',pacientes:'bn-pacientes',citas:'bn-citas',agendas:'bn-agendas',medicaciones:'bn-medicaciones',notas:'bn-notas',atendidos:null,'paciente-detalle':'bn-pacientes',exportar:null};
-  document.querySelectorAll('.bn-item').forEach(b=>b.classList.remove('active'));
-  const id=map[view]; if(id) { const el=document.getElementById(id); if(el) el.classList.add('active'); }
+  renderNavQuickGrid(view);
 }
 
 // ════════════════════ FILTRO PACIENTES ════════════════════

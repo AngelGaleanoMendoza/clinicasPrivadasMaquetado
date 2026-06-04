@@ -390,7 +390,19 @@ body.dark .fact-item-row input,body.dark .fact-item-row select{background:#0F172
 .dia-name{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dia-sub{font-size:11px;color:var(--text-light);margin-top:2px}
 
-/* BOTTOM NAV */
+/* ACCESOS RÁPIDOS DASHBOARD */
+.nav-quick-grid{display:none}
+@media(max-width:768px){
+  .nav-quick-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}
+}
+.nav-quick-item{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 6px 12px;background:var(--card);border:1px solid var(--border);border-radius:14px;cursor:pointer;transition:all .18s;user-select:none;-webkit-tap-highlight-color:transparent}
+.nav-quick-item:active{transform:scale(.94);background:var(--primary-light)}
+.nav-quick-item .nq-icon{font-size:24px;line-height:1}
+.nav-quick-item .nq-label{font-size:10px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:.3px;text-align:center;line-height:1.2}
+.nav-quick-item.nq-active{background:var(--primary-light);border-color:var(--primary)}
+.nav-quick-item.nq-active .nq-label{color:var(--primary)}
+
+/* BOTTOM NAV (obsoleto — se mantiene por si acaso) */
 .bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--sidebar-bg);border-top:1px solid rgba(255,255,255,.1);z-index:100;padding:6px 0 env(safe-area-inset-bottom,6px)}
 .bottom-nav-items{display:flex;justify-content:space-around;align-items:center}
 .bn-item{display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 10px;cursor:pointer;color:var(--sidebar-text);transition:color .2s;border:none;background:none;font-family:inherit;flex:1;position:relative}
@@ -460,9 +472,9 @@ body.dark .fact-item-row input,body.dark .fact-item-row select{background:#0F172
   .sidebar.open{transform:none}
   .main{margin-left:0}
 
-  /* Bottom nav */
-  .bottom-nav{display:block}
-  .content{padding:12px 12px 90px}
+  /* Bottom nav eliminado — navegación desde dashboard */
+  .bottom-nav{display:none!important}
+  .content{padding:12px}
 
   /* Topbar */
   .topbar{padding:10px 14px;gap:10px}
