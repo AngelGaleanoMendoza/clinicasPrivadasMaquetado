@@ -5656,10 +5656,10 @@ let farmaTab = 'despacho';
 function switchFarmaTab(tab) {
   farmaTab = tab;
   ['despacho','ventas','recetas','alertas','estadisticas'].forEach(t => {
-    const btn = document.getElementById('ftab-' + t);
-    const content = document.getElementById('ftab-content-' + t);
+    const btn = document.getElementById('tab-farma-' + t);
+    const panel = document.getElementById('farma-panel-' + t);
     if(btn) btn.classList.toggle('active', t === tab);
-    if(content) content.style.display = t === tab ? '' : 'none';
+    if(panel) panel.style.display = t === tab ? '' : 'none';
   });
   if(tab === 'ventas')       renderFarmaVentas();
   if(tab === 'recetas')      renderFarmaRecetas();
@@ -5689,19 +5689,24 @@ function actualizarStatsFarma() {
   const totalHoy = ventasHoy.reduce((s, x) => s + Number(x.monto || 0), 0);
   const despachos = C.mov.filter(x => x.fecha === h && (x.motivo === 'venta_farmacia' || x.motivo === 'receta')).length;
   const alertas = C.inv.filter(x => x.stockMin > 0 && x.stock <= x.stockMin).length;
-  const elV = document.getElementById('farma-stat-ventas');
-  const elD = document.getElementById('farma-stat-despachos');
-  const elA = document.getElementById('farma-stat-alertas');
-  if(elV) elV.textContent = 'Ventas hoy: ' + fmtC(totalHoy);
-  if(elD) elD.textContent = 'Despachos: ' + despachos;
-  if(elA) elA.textContent = 'Alertas: ' + alertas;
+  const setEl = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
+  setEl('farma-stat-ventas',     fmtC(totalHoy));
+  setEl('farma-stat-despachos',  despachos);
+  setEl('farma-stat-alertas',    alertas);
 }
 
+let farmaCatActual = '';
+function setFarmaCat(cat, el) {
+  farmaCatActual = cat;
+  document.querySelectorAll('#farma-cat-chips .chip').forEach(c => c.classList.remove('active'));
+  if(el) el.classList.add('active');
+  renderFarmaDespacho();
+}
 function filtrarProductosFarma() { renderFarmaDespacho(); }
 
 function renderFarmaDespacho() {
   const buscar = (document.getElementById('farma-buscar')?.value || '').toLowerCase();
-  const cat = document.getElementById('farma-cat-filtro')?.value || '';
+  const cat = farmaCatActual || '';
   const productos = C.inv.filter(p =>
     p.nombre.toLowerCase().includes(buscar) && (!cat || p.categoria === cat)
   );

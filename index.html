@@ -417,153 +417,130 @@
       <!-- FARMACIA -->
       <div id="view-farmacia" class="view">
         <div class="card" style="margin-bottom:18px">
-          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
-            <div>
-              <h2 style="margin:0;font-size:1.3rem">💊 Farmacia</h2>
-              <p style="margin:4px 0 0;color:var(--text-light);font-size:13px" id="farma-clinica-nombre"></p>
-            </div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <div id="farma-stat-ventas" style="background:var(--accent-blue);color:#fff;padding:8px 16px;border-radius:10px;font-size:13px;font-weight:600">Ventas hoy: C$ 0</div>
-              <div id="farma-stat-despachos" style="background:var(--accent-purple);color:#fff;padding:8px 16px;border-radius:10px;font-size:13px;font-weight:600">Despachos: 0</div>
-              <div id="farma-stat-alertas" style="background:#e53e3e;color:#fff;padding:8px 16px;border-radius:10px;font-size:13px;font-weight:600">Alertas: 0</div>
-            </div>
+          <div class="card-header">
+            <h3>💊 Farmacia</h3>
+            <div style="display:flex;gap:8px;align-items:center" id="farma-action-btns"></div>
+          </div>
+          <div class="stats-grid" id="farma-stats-row" style="margin-bottom:14px">
+            <div class="stat-card"><div class="stat-icon si-blue">💰</div><div class="stat-info"><h3 id="farma-stat-ventas">C$ 0</h3><p>Ventas Hoy</p></div></div>
+            <div class="stat-card"><div class="stat-icon si-cyan">📦</div><div class="stat-info"><h3 id="farma-stat-despachos">0</h3><p>Despachos Hoy</p></div></div>
+            <div class="stat-card"><div class="stat-icon si-orange">⚠️</div><div class="stat-info"><h3 id="farma-stat-alertas">0</h3><p>Alertas de Stock</p></div></div>
+          </div>
+          <div class="tabs" style="margin-bottom:0">
+            <button class="tab active" id="tab-farma-despacho"     onclick="switchFarmaTab('despacho')">🛒 Despacho</button>
+            <button class="tab"        id="tab-farma-ventas"       onclick="switchFarmaTab('ventas')">📋 Ventas del Día</button>
+            <button class="tab"        id="tab-farma-recetas"      onclick="switchFarmaTab('recetas')">📄 Recetas</button>
+            <button class="tab"        id="tab-farma-alertas"      onclick="switchFarmaTab('alertas')">⚠️ Alertas</button>
+            <button class="tab"        id="tab-farma-estadisticas" onclick="switchFarmaTab('estadisticas')">📈 Estadísticas</button>
           </div>
         </div>
-        <!-- Tabs -->
-        <div class="tabs" style="margin-bottom:18px">
-          <button class="tab-btn active" onclick="switchFarmaTab('despacho')" id="ftab-despacho">🛒 Despacho</button>
-          <button class="tab-btn" onclick="switchFarmaTab('ventas')" id="ftab-ventas">📋 Ventas del Día</button>
-          <button class="tab-btn" onclick="switchFarmaTab('recetas')" id="ftab-recetas">📄 Recetas</button>
-          <button class="tab-btn" onclick="switchFarmaTab('alertas')" id="ftab-alertas">⚠️ Alertas</button>
-          <button class="tab-btn" onclick="switchFarmaTab('estadisticas')" id="ftab-estadisticas">📈 Estadísticas</button>
-        </div>
 
-        <!-- Tab: Despacho (POS) -->
-        <div id="ftab-content-despacho">
+        <!-- Panel: Despacho (POS) -->
+        <div id="farma-panel-despacho">
           <div style="display:grid;grid-template-columns:1fr 360px;gap:18px;align-items:start">
-            <!-- Búsqueda de productos -->
-            <div>
-              <div class="card" style="margin-bottom:14px">
-                <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
-                  <input type="text" id="farma-buscar" placeholder="Buscar medicamento o producto..." style="flex:1;min-width:200px" oninput="filtrarProductosFarma()" />
-                  <select id="farma-cat-filtro" onchange="filtrarProductosFarma()" style="min-width:150px">
-                    <option value="">Todas las categorías</option>
-                    <option value="medicamento">💊 Medicamento</option>
-                    <option value="material">🩺 Material</option>
-                    <option value="insumo">🧹 Insumo</option>
-                    <option value="general">📦 General</option>
-                  </select>
+            <div class="card">
+              <div class="search-bar" style="margin-bottom:14px">
+                <div class="search-bar-input">
+                  <span style="color:var(--text-light)">🔍</span>
+                  <input type="text" id="farma-buscar" placeholder="Buscar medicamento o producto..." oninput="filtrarProductosFarma()">
                 </div>
-                <div id="farma-productos-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;max-height:420px;overflow-y:auto"></div>
+                <div class="filter-chips" id="farma-cat-chips">
+                  <span class="chip active" onclick="setFarmaCat('',this)">Todos</span>
+                  <span class="chip" onclick="setFarmaCat('medicamento',this)">💊 Medicamentos</span>
+                  <span class="chip" onclick="setFarmaCat('material',this)">🩺 Material</span>
+                  <span class="chip" onclick="setFarmaCat('insumo',this)">🧹 Insumos</span>
+                  <span class="chip" onclick="setFarmaCat('general',this)">📦 General</span>
+                </div>
               </div>
+              <div id="farma-productos-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;max-height:440px;overflow-y:auto"></div>
             </div>
             <!-- Carrito -->
             <div class="card" style="position:sticky;top:80px">
-              <h3 style="margin:0 0 14px;font-size:1rem">🛒 Carrito</h3>
-              <div id="farma-carrito-items" style="min-height:80px;margin-bottom:12px"></div>
-              <div style="border-top:1px solid var(--border);padding-top:12px;margin-bottom:12px">
-                <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:6px">
+              <div class="card-header" style="margin-bottom:14px">
+                <h3>🛒 Carrito</h3>
+                <button class="btn btn-sm" style="background:var(--bg);border:1.5px solid var(--border);color:var(--danger);font-size:12px" onclick="limpiarCarrito()">🗑️ Vaciar</button>
+              </div>
+              <div id="farma-carrito-items" style="min-height:70px;max-height:280px;overflow-y:auto;margin-bottom:12px"></div>
+              <div style="border-top:1px solid var(--border);padding-top:12px;margin-bottom:14px">
+                <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-light);margin-bottom:6px">
                   <span>Subtotal</span><span id="farma-subtotal">C$ 0.00</span>
                 </div>
                 <div style="display:flex;justify-content:space-between;font-weight:700;font-size:1.05rem">
-                  <span>Total</span><span id="farma-total">C$ 0.00</span>
+                  <span>Total</span><span id="farma-total" style="color:var(--accent-blue)">C$ 0.00</span>
                 </div>
               </div>
               <div style="display:flex;flex-direction:column;gap:8px">
-                <input type="text" id="farma-cliente" placeholder="Cliente (opcional)" />
+                <input type="text" id="farma-cliente" placeholder="Cliente (opcional)">
                 <select id="farma-metodo-pago">
                   <option value="efectivo">💵 Efectivo</option>
                   <option value="tarjeta">💳 Tarjeta</option>
                   <option value="transferencia">🏦 Transferencia</option>
                   <option value="otro">Otro</option>
                 </select>
-                <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:4px 0">
                   <input type="checkbox" id="farma-es-receta"> Es despacho de receta médica
                 </label>
                 <div id="farma-receta-campos" style="display:none;flex-direction:column;gap:8px">
-                  <input type="text" id="farma-doctor" placeholder="Nombre del médico" />
-                  <input type="text" id="farma-paciente-receta" placeholder="Nombre del paciente" />
+                  <input type="text" id="farma-doctor" placeholder="Nombre del médico">
+                  <input type="text" id="farma-paciente-receta" placeholder="Nombre del paciente">
                 </div>
                 <button class="btn btn-primary" onclick="completarVentaFarma()" style="margin-top:4px">✅ Completar Venta</button>
-                <button class="btn btn-secondary" onclick="limpiarCarrito()" style="font-size:12px">🗑️ Vaciar carrito</button>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Tab: Ventas del Día -->
-        <div id="ftab-content-ventas" style="display:none">
+        <!-- Panel: Ventas del Día -->
+        <div id="farma-panel-ventas" style="display:none">
           <div class="card">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
-              <h3 style="margin:0;font-size:1rem">Ventas del Día</h3>
-              <div style="display:flex;gap:8px">
-                <input type="date" id="farma-ventas-fecha" onchange="renderFarmaVentas()" />
-              </div>
+            <div class="card-header">
+              <h3>📋 Ventas del Día</h3>
+              <input type="date" id="farma-ventas-fecha" onchange="renderFarmaVentas()" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit;outline:none;color:var(--text);background:var(--card)">
             </div>
-            <div style="overflow-x:auto">
-              <table class="data-table">
-                <thead><tr>
-                  <th>Hora</th><th>Producto(s)</th><th>Cliente</th><th>Método</th><th>Receta</th><th>Total</th>
-                </tr></thead>
-                <tbody id="farma-ventas-tbody"></tbody>
-              </table>
+            <div class="table-wrap">
+              <table><thead><tr><th>Fecha</th><th>Descripción</th><th>Referencia</th><th>Método</th><th>Tipo</th><th>Total</th></tr></thead>
+              <tbody id="farma-ventas-tbody"></tbody></table>
             </div>
-            <div style="margin-top:12px;font-weight:700;text-align:right" id="farma-ventas-total-dia"></div>
+            <div style="margin-top:12px;font-weight:700;text-align:right;font-size:15px;padding-top:10px;border-top:1px solid var(--border)" id="farma-ventas-total-dia"></div>
           </div>
         </div>
 
-        <!-- Tab: Recetas -->
-        <div id="ftab-content-recetas" style="display:none">
+        <!-- Panel: Recetas -->
+        <div id="farma-panel-recetas" style="display:none">
           <div class="card">
-            <h3 style="margin:0 0 14px;font-size:1rem">Recetas Despachadas</h3>
-            <div style="overflow-x:auto">
-              <table class="data-table">
-                <thead><tr>
-                  <th>Fecha</th><th>Paciente</th><th>Médico</th><th>Medicamentos</th><th>Total</th>
-                </tr></thead>
-                <tbody id="farma-recetas-tbody"></tbody>
-              </table>
+            <div class="card-header"><h3>📄 Recetas Despachadas</h3></div>
+            <div class="table-wrap">
+              <table><thead><tr><th>Fecha</th><th>Paciente</th><th>Médico</th><th>Medicamentos</th><th>Total</th></tr></thead>
+              <tbody id="farma-recetas-tbody"></tbody></table>
             </div>
           </div>
         </div>
 
-        <!-- Tab: Alertas -->
-        <div id="ftab-content-alertas" style="display:none">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+        <!-- Panel: Alertas -->
+        <div id="farma-panel-alertas" style="display:none">
+          <div class="grid-2">
             <div class="card">
-              <h3 style="margin:0 0 14px;font-size:1rem;color:#e53e3e">❌ Sin Stock</h3>
-              <div id="farma-alertas-cero"></div>
+              <div class="card-header"><h3 style="color:#e53e3e">❌ Sin Stock</h3></div>
+              <div id="farma-alertas-cero" style="padding-top:4px"></div>
             </div>
             <div class="card">
-              <h3 style="margin:0 0 14px;font-size:1rem;color:#d69e2e">⚠️ Stock Bajo</h3>
-              <div id="farma-alertas-bajo"></div>
+              <div class="card-header"><h3 style="color:#d69e2e">⚠️ Stock Bajo</h3></div>
+              <div id="farma-alertas-bajo" style="padding-top:4px"></div>
             </div>
           </div>
         </div>
 
-        <!-- Tab: Estadísticas -->
-        <div id="ftab-content-estadisticas" style="display:none">
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:18px">
-            <div class="card" style="text-align:center">
-              <div style="font-size:2rem;font-weight:700;color:var(--accent-blue)" id="farma-est-hoy">C$ 0</div>
-              <div style="color:var(--text-light);font-size:13px">Ventas Hoy</div>
-            </div>
-            <div class="card" style="text-align:center">
-              <div style="font-size:2rem;font-weight:700;color:var(--accent-purple)" id="farma-est-mes">C$ 0</div>
-              <div style="color:var(--text-light);font-size:13px">Ventas Este Mes</div>
-            </div>
-            <div class="card" style="text-align:center">
-              <div style="font-size:2rem;font-weight:700;color:#38a169" id="farma-est-despachos">0</div>
-              <div style="color:var(--text-light);font-size:13px">Despachos Este Mes</div>
-            </div>
-            <div class="card" style="text-align:center">
-              <div style="font-size:2rem;font-weight:700;color:#d69e2e" id="farma-est-recetas">0</div>
-              <div style="color:var(--text-light);font-size:13px">Recetas Este Mes</div>
-            </div>
+        <!-- Panel: Estadísticas -->
+        <div id="farma-panel-estadisticas" style="display:none">
+          <div class="stats-grid" style="margin-bottom:18px">
+            <div class="stat-card"><div class="stat-icon si-blue">💰</div><div class="stat-info"><h3 id="farma-est-hoy">C$ 0</h3><p>Ventas Hoy</p></div></div>
+            <div class="stat-card"><div class="stat-icon si-green">📅</div><div class="stat-info"><h3 id="farma-est-mes">C$ 0</h3><p>Ventas Este Mes</p></div></div>
+            <div class="stat-card"><div class="stat-icon si-cyan">📦</div><div class="stat-info"><h3 id="farma-est-despachos">0</h3><p>Despachos Este Mes</p></div></div>
+            <div class="stat-card"><div class="stat-icon si-orange">📄</div><div class="stat-info"><h3 id="farma-est-recetas">0</h3><p>Recetas Este Mes</p></div></div>
           </div>
           <div class="card">
-            <h3 style="margin:0 0 14px;font-size:1rem">Top 10 Productos Más Vendidos (mes)</h3>
-            <div id="farma-top-productos"></div>
+            <div class="card-header"><h3>🏆 Top 10 Productos Más Vendidos (mes)</h3></div>
+            <div id="farma-top-productos" style="padding-top:6px"></div>
           </div>
         </div>
       </div>
