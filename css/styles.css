@@ -551,15 +551,9 @@ body.dark .fact-item-row input,body.dark .fact-item-row select{background:#0F172
   /* Topbar search */
   .topbar-search input{font-size:13px}
 
-  /* ── FARMACIA módulo ── */
-  #farma-panel-despacho>div{grid-template-columns:1fr!important}
-  #farma-panel-despacho .card:last-child{position:static!important}
-  #farma-productos-grid{max-height:260px!important;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))!important}
-  #view-farmacia .tabs{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;padding-bottom:4px}
-  #view-farmacia .tab{white-space:nowrap;flex-shrink:0;padding:8px 12px;font-size:12px}
-  #farma-panel-alertas .grid-2,#farma-est-periodo-chips{flex-wrap:wrap}
+  /* ── FARMACIA módulo (layout via clases .farma-*) ── */
   #farma-panel-alertas .grid-2{grid-template-columns:1fr!important}
-  #farma-stats-row{grid-template-columns:1fr 1fr!important}
+  #farma-est-periodo-chips{flex-wrap:wrap}
   #modal-seleccion-inv .modal{padding:16px 12px}
   #sinv-lista{max-height:280px}
 
@@ -812,4 +806,32 @@ body.dark .acudio-badge{background:rgba(16,185,129,.15);color:#6EE7B7;border-col
   .clinica-detail-grid .full{grid-column:1}
   /* Forzar word-break en tarjetas de texto */
   #admin-panel-global *,#admin-panel-productividad *{word-break:break-word;overflow-wrap:break-word}
+}
+
+/* ══════════ FARMACIA — Clases propias ══════════ */
+.farma-pos-grid{display:grid;grid-template-columns:1fr 360px;gap:18px;align-items:start}
+.farma-carrito-card{position:sticky;top:80px}
+.farma-prod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;max-height:440px;overflow-y:auto}
+.farma-carrito-items{min-height:64px;max-height:260px;overflow-y:auto;margin-bottom:14px}
+.farma-totales{background:var(--bg);border-radius:12px;padding:12px 14px;margin-bottom:16px}
+.farma-total-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.farma-total-main{padding-top:8px;border-top:1px solid var(--border);margin-bottom:0;font-weight:800;font-size:1.05rem}
+.farma-receta-toggle{display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 14px;background:var(--bg);border-radius:12px;border:1.5px solid var(--border);transition:border-color .2s}
+.farma-receta-toggle:hover{border-color:var(--primary)}
+
+@media(max-width:1024px){
+  .farma-pos-grid{grid-template-columns:1fr 320px}
+}
+@media(max-width:768px){
+  .farma-pos-grid{grid-template-columns:1fr}
+  .farma-carrito-card{position:static}
+  .farma-prod-grid{max-height:220px;grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+  .farma-carrito-items{max-height:180px}
+  #view-farmacia .tabs{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch}
+  #view-farmacia .tab{white-space:nowrap;flex-shrink:0;padding:8px 10px;font-size:12px}
+  #farma-stats-row{grid-template-columns:1fr 1fr}
+}
+@media(max-width:480px){
+  .farma-pos-grid{gap:12px}
+  .farma-prod-grid{grid-template-columns:repeat(auto-fill,minmax(120px,1fr));max-height:180px}
 }

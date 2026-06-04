@@ -6141,10 +6141,12 @@ function actualizarStatsFarma() {
   const totalHoy = ventasHoy.reduce((s, x) => s + Number(x.monto || 0), 0);
   const despachos = C.mov.filter(x => x.fecha === h && (x.motivo === 'venta_farmacia' || x.motivo === 'receta')).length;
   const alertas = C.inv.filter(x => x.stockMin > 0 && x.stock <= x.stockMin).length;
+  const recetasHoy = C.mov.filter(x => x.fecha === h && x.motivo === 'receta').length;
   const setEl = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
   setEl('farma-stat-ventas',     fmtC(totalHoy));
   setEl('farma-stat-despachos',  despachos);
   setEl('farma-stat-alertas',    alertas);
+  setEl('farma-stat-recetas',    recetasHoy);
 }
 
 let farmaCatActual = '';

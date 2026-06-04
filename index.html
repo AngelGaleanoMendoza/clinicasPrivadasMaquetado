@@ -420,16 +420,17 @@
         <div class="card" style="margin-bottom:18px">
           <div class="card-header">
             <h3>💊 Farmacia</h3>
-            <div style="display:flex;gap:8px;align-items:center" id="farma-action-btns"></div>
+            <div id="farma-action-btns"></div>
           </div>
           <div class="stats-grid" id="farma-stats-row" style="margin-bottom:14px">
             <div class="stat-card"><div class="stat-icon si-blue">💰</div><div class="stat-info"><h3 id="farma-stat-ventas">C$ 0</h3><p>Ventas Hoy</p></div></div>
             <div class="stat-card"><div class="stat-icon si-cyan">📦</div><div class="stat-info"><h3 id="farma-stat-despachos">0</h3><p>Despachos Hoy</p></div></div>
-            <div class="stat-card"><div class="stat-icon si-orange">⚠️</div><div class="stat-info"><h3 id="farma-stat-alertas">0</h3><p>Alertas de Stock</p></div></div>
+            <div class="stat-card"><div class="stat-icon si-orange">⚠️</div><div class="stat-info"><h3 id="farma-stat-alertas">0</h3><p>Alertas Stock</p></div></div>
+            <div class="stat-card"><div class="stat-icon si-green">📄</div><div class="stat-info"><h3 id="farma-stat-recetas">0</h3><p>Recetas Hoy</p></div></div>
           </div>
           <div class="tabs" style="margin-bottom:0">
             <button class="tab active" id="tab-farma-despacho"     onclick="switchFarmaTab('despacho')">🛒 Despacho</button>
-            <button class="tab"        id="tab-farma-ventas"       onclick="switchFarmaTab('ventas')">📋 Ventas del Día</button>
+            <button class="tab"        id="tab-farma-ventas"       onclick="switchFarmaTab('ventas')">📋 Ventas</button>
             <button class="tab"        id="tab-farma-recetas"      onclick="switchFarmaTab('recetas')">📄 Recetas</button>
             <button class="tab"        id="tab-farma-alertas"      onclick="switchFarmaTab('alertas')">⚠️ Alertas</button>
             <button class="tab"        id="tab-farma-estadisticas" onclick="switchFarmaTab('estadisticas')">📈 Estadísticas</button>
@@ -438,7 +439,8 @@
 
         <!-- Panel: Despacho (POS) -->
         <div id="farma-panel-despacho">
-          <div style="display:grid;grid-template-columns:1fr 360px;gap:18px;align-items:start">
+          <div class="farma-pos-grid">
+            <!-- Productos -->
             <div class="card">
               <div class="search-bar" style="margin-bottom:14px">
                 <div class="search-bar-input">
@@ -453,31 +455,25 @@
                   <span class="chip" onclick="setFarmaCat('general',this)">📦 General</span>
                 </div>
               </div>
-              <div id="farma-productos-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;max-height:440px;overflow-y:auto"></div>
+              <div id="farma-productos-grid" class="farma-prod-grid"></div>
             </div>
             <!-- Carrito -->
-            <div class="card" style="position:sticky;top:80px">
+            <div class="card farma-carrito-card">
               <div class="card-header" style="margin-bottom:16px">
                 <h3>🛒 Carrito</h3>
                 <button class="btn btn-secondary btn-sm" onclick="limpiarCarrito()">🗑️ Vaciar</button>
               </div>
-
-              <!-- Items del carrito -->
-              <div id="farma-carrito-items" style="min-height:64px;max-height:260px;overflow-y:auto;margin-bottom:14px"></div>
-
-              <!-- Resumen de totales -->
-              <div style="background:var(--bg);border-radius:12px;padding:12px 14px;margin-bottom:16px">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-                  <span style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-light)">Subtotal</span>
-                  <span style="font-size:13px;color:var(--text)" id="farma-subtotal">C$ 0.00</span>
+              <div id="farma-carrito-items" class="farma-carrito-items"></div>
+              <div class="farma-totales">
+                <div class="farma-total-row">
+                  <span class="form-group label" style="margin:0;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-light)">Subtotal</span>
+                  <span id="farma-subtotal">C$ 0.00</span>
                 </div>
-                <div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;border-top:1px solid var(--border)">
+                <div class="farma-total-row farma-total-main">
                   <span style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-light)">Total</span>
-                  <span style="font-size:1.15rem;font-weight:800;color:var(--primary)" id="farma-total">C$ 0.00</span>
+                  <span id="farma-total" style="color:var(--primary)">C$ 0.00</span>
                 </div>
               </div>
-
-              <!-- Datos de la venta -->
               <div style="display:flex;flex-direction:column;gap:14px">
                 <div class="form-group">
                   <label>Cliente</label>
@@ -492,7 +488,7 @@
                     <option value="otro">Otro</option>
                   </select>
                 </div>
-                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 14px;background:var(--bg);border-radius:12px;border:1.5px solid var(--border);transition:border-color .2s" onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='var(--border)'">
+                <label class="farma-receta-toggle">
                   <input type="checkbox" id="farma-es-receta" style="width:16px;height:16px;accent-color:var(--primary);cursor:pointer">
                   <span style="font-size:13px;font-weight:600;color:var(--text)">Despacho de receta médica</span>
                 </label>
