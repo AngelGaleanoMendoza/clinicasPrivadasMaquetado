@@ -42,7 +42,7 @@ const fromN   = r => ({ id:r.id, pacienteId:r.paciente_id, tipo:r.tipo, fecha:r.
 const toN     = x => ({ paciente_id:x.pacienteId, tipo:x.tipo||'evolucion', fecha:x.fecha||hoy(), titulo:x.titulo||null, contenido:x.contenido, clinica_id:currentClinicaId });
 const fromInv = r => ({ id:r.id, nombre:r.nombre, categoria:r.categoria||'general', unidad:r.unidad||'unidad', stock:Number(r.stock_actual||0), stockMin:Number(r.stock_minimo||0), precio:r.precio_unitario!=null?Number(r.precio_unitario):null, descripcion:r.descripcion||null });
 const toInv   = x => ({ nombre:x.nombre, categoria:x.categoria||'general', unidad:x.unidad||'unidad', stock_actual:Number(x.stock||0), stock_minimo:Number(x.stockMin||0), precio_unitario:x.precio||null, descripcion:x.descripcion||null, clinica_id:currentClinicaId });
-const fromMov     = r => ({ id:r.id, invId:r.inventario_id, tipo:r.tipo, cantidad:Number(r.cantidad), motivo:r.motivo||null, fecha:r.fecha });
+const fromMov     = r => ({ id:r.id, invId:r.inventario_id, tipo:r.tipo, cantidad:Number(r.cantidad), motivo:r.motivo||null, fecha:r.fecha, referencia:r.referencia||null, notas:r.notas||null });
 const fromFin     = r => ({ id:r.id, tipo:r.tipo, categoria:r.categoria||'general', descripcion:r.descripcion, monto:Number(r.monto), fecha:r.fecha, metodoPago:r.metodo_pago||'efectivo', referencia:r.referencia||null, citaId:r.cita_id||null, pacienteId:r.paciente_id||null, invMovId:r.inventario_mov_id||null, creadoPor:r.creado_por||null });
 const fromFact    = r => ({ id:r.id, numero:r.numero, pacienteId:r.paciente_id, pacienteNombre:r.paciente_nombre||'Consumidor Final', fecha:r.fecha, estado:r.estado||'pendiente', subtotal:Number(r.subtotal||0), impuestoPct:Number(r.impuesto_pct||0), impuesto:Number(r.impuesto||0), total:Number(r.total||0), notas:r.notas||null, citaId:r.cita_id||null });
 const fromFactItem= r => ({ id:r.id, facturaId:r.factura_id, descripcion:r.descripcion, tipo:r.tipo||'servicio', cantidad:Number(r.cantidad||1), precioUnitario:Number(r.precio_unitario||0), subtotal:Number(r.subtotal||0), inventarioId:r.inventario_id||null });
@@ -438,7 +438,8 @@ async function entrarConPerfil(profile) {
   await loadAll();
   setLoading(false);
   const lastView = localStorage.getItem('lm_last_view');
-  const defaultView = currentUser?.key === 'farmaceutico' ? 'inventario' : 'dashboard';
+  const esFarmaClinica = currentClinica?.tipo === 'farmacia';
+  const defaultView = (currentUser?.key === 'farmaceutico' || esFarmaClinica) ? 'farmacia' : 'dashboard';
   const targetView = lastView && lastView !== 'paciente-detalle' ? lastView : defaultView;
   navigate(targetView);
   toast(`Bienvenido, ${currentUser.name} 👋`, 'info');
@@ -543,24 +544,28 @@ async function navigate(view, patientId) {
   if(currentUser) localStorage.setItem('lm_last_view', view);
   const sa   = isSuperAdmin();
   const role = currentUser?.key;
+  const esFarmacia = currentClinica?.tipo === 'farmacia';
   // Accesos por rol
-  const finAccess  = sa || ['admin','farmaceutico'].includes(role);
-  const invAccess  = sa || ['admin','farmaceutico'].includes(role);
-  const sysAccess  = sa || role === 'admin';
-  const medAccess  = sa || ['admin','medico'].includes(role);
-  const recAccess  = sa || ['admin','medico','recepcion'].includes(role);
-  const enfAccess  = sa || ['admin','medico','enfermeria'].includes(role);
+  const finAccess   = sa || ['admin','farmaceutico'].includes(role);
+  const invAccess   = sa || ['admin','farmaceutico'].includes(role);
+  const sysAccess   = sa || role === 'admin';
+  const medAccess   = sa || ['admin','medico'].includes(role);
+  const recAccess   = sa || ['admin','medico','recepcion'].includes(role);
+  const enfAccess   = sa || ['admin','medico','enfermeria'].includes(role);
+  const farmaAccess = sa || role === 'farmaceutico' || esFarmacia;
   // Guards específicos
-  if(view==='finanzas'  && !finAccess)  { navigate('dashboard'); return; }
-  if(view==='inventario'&& !invAccess)  { navigate('dashboard'); return; }
+  if(view==='finanzas'  && !finAccess)   { navigate('dashboard'); return; }
+  if(view==='inventario'&& !invAccess)   { navigate('dashboard'); return; }
   if(view==='estadisticas' && !sysAccess){ navigate('dashboard'); return; }
-  if(view==='exportar'  && !sysAccess)  { navigate('dashboard'); return; }
-  if(view==='configuracion' && !sa)     { navigate('dashboard'); return; }
-  if(view==='admin'     && !sa)         { navigate('dashboard'); return; }
+  if(view==='exportar'  && !sysAccess)   { navigate('dashboard'); return; }
+  if(view==='configuracion' && !sa)      { navigate('dashboard'); return; }
+  if(view==='admin'     && !sa)          { navigate('dashboard'); return; }
+  if(view==='farmacia'  && !farmaAccess) { navigate('dashboard'); return; }
   if(['citas','agendas'].includes(view) && !recAccess) { navigate('dashboard'); return; }
   if(['medicaciones','notas'].includes(view) && !enfAccess) { navigate('dashboard'); return; }
-  if(view==='atendidos' && !medAccess)  { navigate('dashboard'); return; }
-  if(view==='pacientes' && role==='farmaceutico') { navigate('inventario'); return; }
+  if(view==='atendidos' && !medAccess)   { navigate('dashboard'); return; }
+  if(view==='pacientes' && (role==='farmaceutico' || esFarmacia)) { navigate('farmacia'); return; }
+  if(view==='expedientes' && (role==='farmaceutico' || esFarmacia)) { navigate('farmacia'); return; }
   // Rutas especiales sin loadAll
   if(view==='finanzas'){
     renderFinanzas(); if(window.innerWidth<=768) closeSidebar(); return;
@@ -590,6 +595,7 @@ function renderView(v) {
     case 'configuracion': renderConfiguracion(); break;
     case 'exportar': renderExportar(); break;
     case 'inventario': renderInventario(); break;
+    case 'farmacia': renderFarmacia(); break;
     case 'paciente-detalle': renderDetalleP(currentPatientId); break;
   }
   updateBadges();
@@ -830,7 +836,7 @@ function renderPacientesList(lista){
     <td><div class="patient-name-cell">${x.fotoUrl?`<img src="${x.fotoUrl}" style="width:34px;height:34px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--border)" alt="foto">`:`<div class="patient-avatar" style="background:${colAvatar(x.id)}">${ini(x.nombre,x.apellidos)}</div>`}
     <div><div style="font-weight:600">${x.nombre} ${x.apellidos}</div><div class="text-light">${calcEdad(x.fechaNac)}</div></div></div></td>
     <td><code style="background:var(--primary-light);color:var(--primary);padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700">${getExpedienteNum(x.id)}</code></td>
-    <td>${x.identificacion||'—'}</td><td>${formatFecha(x.fechaNac)}</td><td>${x.telefono||'—'}</td>
+    <td>${x.identificacion||'—'}</td><td>${calcEdad(x.fechaNac)}</td><td>${x.telefono||'—'}</td>
     <td>${estadoTag(x.estado||'activo')}</td>
     <td><div class="actions-cell">
       <button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;white-space:nowrap" onclick="registrarAcudidoPaciente(${x.id})">✅ Acudió</button>
@@ -843,8 +849,29 @@ function renderPacientesList(lista){
 function openModalPaciente(id){
   editingId=id||null;
   document.getElementById('modal-paciente-title').textContent=id?'✏️ Editar Paciente':'👤 Nuevo Paciente';
-  ['nombre','apellidos','id','fechanac','sexo','sangre','telefono','email','direccion','alergias','estado','emergencia','observaciones'].forEach(f=>{ const e=document.getElementById('p-'+f); if(e) e.value=''; });
+  ['nombre','apellidos','id','sexo','sangre','telefono','email','direccion','alergias','estado','emergencia','observaciones'].forEach(f=>{ const e=document.getElementById('p-'+f); if(e) e.value=''; });
   const idTipoEl = document.getElementById('p-id-tipo'); if(idTipoEl) idTipoEl.value = 'Cédula';
+  // Poblar select de edad (0–120) si está vacío
+  const edadSel = document.getElementById('p-edad');
+  if(edadSel && edadSel.options.length <= 1) {
+    for(let i = 0; i <= 120; i++) {
+      const opt = document.createElement('option');
+      opt.value = i; opt.textContent = i === 0 ? '0 años (recién nacido)' : i + ' años';
+      edadSel.appendChild(opt);
+    }
+  }
+  if(edadSel) edadSel.value = '';
+  // Mostrar búsqueda y ajustar label solo al crear nuevo
+  const buscarWrap = document.getElementById('pac-buscar-id-wrap');
+  const buscarInput = document.getElementById('pac-buscar-id-input');
+  const buscarRes = document.getElementById('pac-buscar-id-resultados');
+  if(buscarWrap) buscarWrap.style.display = id ? 'none' : '';
+  if(buscarInput) buscarInput.value = '';
+  if(buscarRes) buscarRes.innerHTML = '';
+  // Label de identificación: requerido excepto en óptica
+  const esOptica = currentClinica?.tipo === 'optica';
+  const idLabel = document.getElementById('p-id-label');
+  if(idLabel) idLabel.textContent = esOptica ? 'Número de Identificación' : 'Número de Identificación *';
   pendingFotoFile=null; currentFotoUrl=null;
   document.getElementById('foto-img-preview').style.display='none';
   document.getElementById('foto-img-preview').src='';
@@ -860,7 +887,10 @@ function openModalPaciente(id){
       const idMatch = idStr.match(/^(Cédula|Pasaporte|Licencia de conducir):\s*(.*)$/);
       if(idMatch){ document.getElementById('p-id-tipo').value=idMatch[1]; document.getElementById('p-id').value=idMatch[2]; }
       else { document.getElementById('p-id-tipo').value='Cédula'; document.getElementById('p-id').value=idStr; }
-      document.getElementById('p-fechanac').value=x.fechaNac||'';
+      if(edadSel && x.fechaNac) {
+        const edadNum = Math.floor((Date.now() - new Date(x.fechaNac)) / (365.25*24*3600*1000));
+        edadSel.value = edadNum >= 0 ? edadNum : '';
+      }
       document.getElementById('p-sexo').value=x.sexo||'';
       document.getElementById('p-sangre').value=x.sangre||'';
       document.getElementById('p-telefono').value=x.telefono||'';
@@ -881,10 +911,22 @@ async function guardarPaciente(irExpediente=false, irCita=false){
   const nombre=document.getElementById('p-nombre').value.trim();
   const apellidos=document.getElementById('p-apellidos').value.trim();
   if(!nombre||!apellidos){ toast('Nombre y apellidos son obligatorios','error'); return; }
+  const edadVal = document.getElementById('p-edad')?.value;
+  if(edadVal === '' || edadVal === null || edadVal === undefined){ toast('La edad es obligatoria','error'); return; }
+  const edadNum = parseInt(edadVal, 10);
+  const currentYear = new Date().getFullYear();
+  const fechaNacDerived = (currentYear - edadNum) + '-01-01';
   const idTipo  = document.getElementById('p-id-tipo')?.value || 'Cédula';
   const idValor = document.getElementById('p-id').value.trim();
+  const esOptica = currentClinica?.tipo === 'optica';
+  if(!esOptica && !idValor){ toast('El número de identificación es obligatorio','error'); return; }
+  if(!editingId && idValor) {
+    const labelBusqueda = idTipo + ': ' + idValor;
+    const duplicado = C.p.find(p => p.identificacion && p.identificacion.toLowerCase() === labelBusqueda.toLowerCase());
+    if(duplicado){ toast(`Ya existe un paciente con esa identificación: ${duplicado.nombre} ${duplicado.apellidos}`,'error'); return; }
+  }
   const identificacion = idValor ? idTipo + ': ' + idValor : '';
-  const obj={nombre,apellidos,identificacion,fechaNac:document.getElementById('p-fechanac').value,sexo:document.getElementById('p-sexo').value,sangre:document.getElementById('p-sangre').value,telefono:document.getElementById('p-telefono').value.trim(),email:document.getElementById('p-email').value.trim(),direccion:document.getElementById('p-direccion').value.trim(),alergias:document.getElementById('p-alergias').value.trim(),estado:document.getElementById('p-estado').value,emergencia:document.getElementById('p-emergencia').value.trim(),observaciones:document.getElementById('p-observaciones').value.trim(),fechaRegistro:hoy(),fotoUrl:currentFotoUrl};
+  const obj={nombre,apellidos,identificacion,fechaNac:fechaNacDerived,sexo:document.getElementById('p-sexo').value,sangre:document.getElementById('p-sangre').value,telefono:document.getElementById('p-telefono').value.trim(),email:document.getElementById('p-email').value.trim(),direccion:document.getElementById('p-direccion').value.trim(),alergias:document.getElementById('p-alergias').value.trim(),estado:document.getElementById('p-estado').value,emergencia:document.getElementById('p-emergencia').value.trim(),observaciones:document.getElementById('p-observaciones').value.trim(),fechaRegistro:hoy(),fotoUrl:currentFotoUrl};
   setLoading(true);
   let err, savedId=editingId;
   if(editingId){ const r=await sb.from('pacientes').update(toP(obj)).eq('id',editingId); err=r.error; }
@@ -2496,6 +2538,26 @@ function filterPacientes(q){
   renderPacientesList(lista);
 }
 
+function buscarPacienteEnModal(q) {
+  const el = document.getElementById('pac-buscar-id-resultados');
+  if(!el) return;
+  const query = q.trim().toLowerCase();
+  if(query.length < 2) { el.innerHTML = ''; return; }
+  const matches = C.p.filter(p => p.identificacion?.toLowerCase().includes(query));
+  if(!matches.length) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--text-light);padding:4px 0">No se encontraron pacientes con esa identificación.</div>';
+    return;
+  }
+  el.innerHTML = matches.map(p => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--card);border-radius:8px;margin-bottom:6px;border:1.5px solid var(--accent-blue)">
+      <div>
+        <div style="font-weight:700;font-size:13px">${p.nombre} ${p.apellidos}</div>
+        <div style="font-size:11px;color:var(--text-light)">${p.identificacion||''} · ${calcEdad(p.fechaNac)}</div>
+      </div>
+      <button onclick="closeModal('modal-paciente');navigate('paciente-detalle',${p.id})" class="btn btn-secondary btn-sm">Ver expediente</button>
+    </div>`).join('');
+}
+
 // ════════════════════ SEARCH ════════════════════
 function globalSearch(q){
   const dd=document.getElementById('search-dropdown');
@@ -3855,6 +3917,8 @@ function applyRoleMenu() {
   const isRec   = role === 'recepcion';
   const isEnf   = role === 'enfermeria';
   const isFarm  = role === 'farmaceutico';
+  const esFarmacia = currentClinica?.tipo === 'farmacia';
+  const modoFarmacia = isFarm || esFarmacia;
 
   const vis = (id, show) => {
     const el = document.getElementById(id);
@@ -3862,11 +3926,14 @@ function applyRoleMenu() {
     el.style.display = show ? (el.classList.contains('menu-section') ? 'block' : 'flex') : 'none';
   };
 
-  // ─ Expedientes: todos los roles (siempre visible)
-  vis('menu-expedientes', true);
+  // ─ Expedientes: oculto en modo farmacia
+  vis('menu-expedientes', !modoFarmacia);
 
-  // ─ Sección Clínica y sus ítems
-  const hasClinica = !isFarm;
+  // ─ Módulo Farmacia: visible en modo farmacia
+  vis('menu-farmacia', modoFarmacia || sa);
+
+  // ─ Sección Clínica y sus ítems (oculta en modo farmacia)
+  const hasClinica = !modoFarmacia;
   vis('menu-clinica-section', hasClinica);
   vis('menu-pacientes',       hasClinica);
   vis('menu-citas',           hasClinica && !isEnf);
@@ -3875,9 +3942,9 @@ function applyRoleMenu() {
   vis('menu-notas',           hasClinica && !isRec);
   vis('menu-atendidos',       hasClinica && !isRec && !isEnf);
 
-  // ─ Sección Gestión (inventario, finanzas, estadísticas, exportar)
-  const invAccess  = sa || ['admin','farmaceutico'].includes(role);
-  const finAccess  = sa || ['admin','farmaceutico'].includes(role);
+  // ─ Sección Gestión
+  const invAccess  = sa || ['admin','farmaceutico'].includes(role) || esFarmacia;
+  const finAccess  = sa || ['admin','farmaceutico'].includes(role) || esFarmacia;
   const sysAccess  = sa || isAdmin;
   const hasGestion = invAccess || finAccess || sysAccess;
   vis('menu-gestion-section', hasGestion);
@@ -5577,4 +5644,313 @@ async function renderAdminGlobal() {
     </table>`;
 
   if(updEl) updEl.textContent = 'Actualizado: ' + new Date().toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+}
+
+// ═══════════════════════════════════════════════════════════
+// MÓDULO FARMACIA
+// ═══════════════════════════════════════════════════════════
+
+let carritoFarma = [];
+let farmaTab = 'despacho';
+
+function switchFarmaTab(tab) {
+  farmaTab = tab;
+  ['despacho','ventas','recetas','alertas','estadisticas'].forEach(t => {
+    const btn = document.getElementById('ftab-' + t);
+    const content = document.getElementById('ftab-content-' + t);
+    if(btn) btn.classList.toggle('active', t === tab);
+    if(content) content.style.display = t === tab ? '' : 'none';
+  });
+  if(tab === 'ventas')       renderFarmaVentas();
+  if(tab === 'recetas')      renderFarmaRecetas();
+  if(tab === 'alertas')      renderFarmaAlertas();
+  if(tab === 'estadisticas') renderFarmaEstadisticas();
+}
+
+function renderFarmacia() {
+  showView('farmacia');
+  const nombreEl = document.getElementById('farma-clinica-nombre');
+  if(nombreEl) nombreEl.textContent = currentClinica?.nombre || '';
+  actualizarStatsFarma();
+  const fechaEl = document.getElementById('farma-ventas-fecha');
+  if(fechaEl && !fechaEl.value) fechaEl.value = hoy();
+  const ckReceta = document.getElementById('farma-es-receta');
+  if(ckReceta) ckReceta.onchange = function() {
+    const campos = document.getElementById('farma-receta-campos');
+    if(campos) campos.style.display = this.checked ? 'flex' : 'none';
+  };
+  switchFarmaTab(farmaTab || 'despacho');
+  renderFarmaDespacho();
+}
+
+function actualizarStatsFarma() {
+  const h = hoy();
+  const ventasHoy = C.fin.filter(x => x.fecha === h && x.categoria === 'farmacia' && x.tipo === 'ingreso');
+  const totalHoy = ventasHoy.reduce((s, x) => s + Number(x.monto || 0), 0);
+  const despachos = C.mov.filter(x => x.fecha === h && (x.motivo === 'venta_farmacia' || x.motivo === 'receta')).length;
+  const alertas = C.inv.filter(x => x.stockMin > 0 && x.stock <= x.stockMin).length;
+  const elV = document.getElementById('farma-stat-ventas');
+  const elD = document.getElementById('farma-stat-despachos');
+  const elA = document.getElementById('farma-stat-alertas');
+  if(elV) elV.textContent = 'Ventas hoy: ' + fmtC(totalHoy);
+  if(elD) elD.textContent = 'Despachos: ' + despachos;
+  if(elA) elA.textContent = 'Alertas: ' + alertas;
+}
+
+function filtrarProductosFarma() { renderFarmaDespacho(); }
+
+function renderFarmaDespacho() {
+  const buscar = (document.getElementById('farma-buscar')?.value || '').toLowerCase();
+  const cat = document.getElementById('farma-cat-filtro')?.value || '';
+  const productos = C.inv.filter(p =>
+    p.nombre.toLowerCase().includes(buscar) && (!cat || p.categoria === cat)
+  );
+  const grid = document.getElementById('farma-productos-grid');
+  if(!grid) return;
+  const catIcon = { medicamento:'💊', material:'🩺', insumo:'🧹', equipo:'🔬', papeleria:'📄', general:'📦' };
+  grid.innerHTML = !productos.length
+    ? '<div style="color:var(--text-light);text-align:center;padding:30px;grid-column:1/-1">No se encontraron productos</div>'
+    : productos.map(p => {
+        const icon = catIcon[p.categoria] || '📦';
+        const sinStock = p.stock <= 0;
+        const stockBajo = !sinStock && p.stockMin > 0 && p.stock <= p.stockMin;
+        const stockColor = sinStock ? '#e53e3e' : stockBajo ? '#d69e2e' : '#38a169';
+        return `<div onclick="${sinStock ? '' : 'agregarAlCarrito(' + p.id + ')'}"
+          style="background:var(--card);border:1.5px solid ${sinStock ? '#e53e3e33' : 'var(--border)'};
+          border-radius:12px;padding:12px;cursor:${sinStock ? 'not-allowed' : 'pointer'};
+          opacity:${sinStock ? 0.5 : 1};transition:border-color .15s"
+          onmouseover="${sinStock ? '' : "this.style.borderColor='var(--accent-blue)'"}"
+          onmouseout="${sinStock ? '' : "this.style.borderColor='var(--border)'"}">
+          <div style="font-size:1.4rem;margin-bottom:6px">${icon}</div>
+          <div style="font-weight:600;font-size:13px;line-height:1.3;margin-bottom:4px">${p.nombre}</div>
+          <div style="font-size:11px;color:var(--text-light);margin-bottom:6px">${p.descripcion || p.unidad}</div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-weight:700;color:var(--accent-blue)">${p.precio ? fmtC(p.precio) : 'Sin precio'}</span>
+            <span style="font-size:11px;color:${stockColor};font-weight:600">Stock: ${p.stock}</span>
+          </div>
+        </div>`;
+      }).join('');
+  renderCarritoFarma();
+}
+
+function agregarAlCarrito(prodId) {
+  const prod = C.inv.find(p => p.id === prodId);
+  if(!prod) return;
+  if(prod.stock <= 0) { toast('Sin stock disponible', 'error'); return; }
+  const existing = carritoFarma.find(x => x.id === prodId);
+  if(existing) {
+    if(existing.cantidad >= prod.stock) { toast('No hay suficiente stock', 'error'); return; }
+    existing.cantidad++;
+  } else {
+    carritoFarma.push({ id: prodId, nombre: prod.nombre, precio: Number(prod.precio || 0), cantidad: 1, unidad: prod.unidad });
+  }
+  renderCarritoFarma();
+  toast(prod.nombre + ' agregado', 'success');
+}
+
+function renderCarritoFarma() {
+  const el = document.getElementById('farma-carrito-items');
+  if(!el) return;
+  if(!carritoFarma.length) {
+    el.innerHTML = '<div style="color:var(--text-light);font-size:13px;text-align:center;padding:12px">El carrito está vacío</div>';
+    ['farma-subtotal','farma-total'].forEach(id => { const e = document.getElementById(id); if(e) e.textContent = 'C$ 0.00'; });
+    return;
+  }
+  el.innerHTML = carritoFarma.map((item, i) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.nombre}</div>
+        <div style="font-size:11px;color:var(--text-light)">${fmtC(item.precio)} × ${item.cantidad}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px">
+        <button onclick="cambiarCantCarrito(${i},-1)" style="width:22px;height:22px;border:1px solid var(--border);background:var(--bg);border-radius:4px;cursor:pointer">−</button>
+        <span style="font-size:13px;font-weight:600;min-width:20px;text-align:center">${item.cantidad}</span>
+        <button onclick="cambiarCantCarrito(${i},1)" style="width:22px;height:22px;border:1px solid var(--border);background:var(--bg);border-radius:4px;cursor:pointer">+</button>
+        <button onclick="quitarDelCarrito(${i})" style="width:22px;height:22px;border:none;background:#e53e3e22;color:#e53e3e;border-radius:4px;cursor:pointer">✕</button>
+      </div>
+      <div style="font-size:13px;font-weight:700;min-width:58px;text-align:right">${fmtC(item.precio * item.cantidad)}</div>
+    </div>`).join('');
+  const total = carritoFarma.reduce((s, x) => s + x.precio * x.cantidad, 0);
+  ['farma-subtotal','farma-total'].forEach(id => { const e = document.getElementById(id); if(e) e.textContent = fmtC(total); });
+}
+
+function cambiarCantCarrito(i, delta) {
+  const item = carritoFarma[i]; if(!item) return;
+  const prod = C.inv.find(p => p.id === item.id);
+  const nueva = item.cantidad + delta;
+  if(nueva <= 0) { quitarDelCarrito(i); return; }
+  if(prod && nueva > prod.stock) { toast('No hay suficiente stock', 'error'); return; }
+  carritoFarma[i].cantidad = nueva;
+  renderCarritoFarma();
+}
+
+function quitarDelCarrito(i) { carritoFarma.splice(i, 1); renderCarritoFarma(); }
+function limpiarCarrito() { carritoFarma = []; renderCarritoFarma(); }
+
+async function completarVentaFarma() {
+  if(!carritoFarma.length) { toast('El carrito está vacío', 'error'); return; }
+  const metodoPago  = document.getElementById('farma-metodo-pago')?.value || 'efectivo';
+  const cliente     = document.getElementById('farma-cliente')?.value?.trim() || '';
+  const esReceta    = document.getElementById('farma-es-receta')?.checked || false;
+  const doctor      = document.getElementById('farma-doctor')?.value?.trim() || '';
+  const pacReceta   = document.getElementById('farma-paciente-receta')?.value?.trim() || '';
+  const total       = carritoFarma.reduce((s, x) => s + x.precio * x.cantidad, 0);
+  const motivo      = esReceta ? 'receta' : 'venta_farmacia';
+  const ventaId     = 'VF-' + Date.now();
+  const productos   = carritoFarma.map(x => x.nombre + ' ×' + x.cantidad).join(', ');
+  let descripcion   = 'Venta farmacia: ' + productos;
+  if(cliente)              descripcion += ' — Cliente: ' + cliente;
+  if(esReceta && doctor)   descripcion += ' — Receta Dr. ' + doctor;
+  if(esReceta && pacReceta) descripcion += ' — Paciente: ' + pacReceta;
+
+  const movimientos = carritoFarma.map(item => ({
+    inventario_id: item.id, tipo: 'salida', cantidad: item.cantidad,
+    motivo, referencia: ventaId, fecha: hoy(),
+    notas: esReceta ? ('Dr: ' + doctor + ' | Pac: ' + pacReceta) : cliente,
+    clinica_id: currentClinicaId
+  }));
+  const { error: movErr } = await sb.from('inventario_movimientos').insert(movimientos);
+  if(movErr) { toast('Error al registrar movimientos: ' + movErr.message, 'error'); return; }
+
+  for(const item of carritoFarma) {
+    const prod = C.inv.find(p => p.id === item.id);
+    if(prod) {
+      const nuevoStock = Math.max(0, prod.stock - item.cantidad);
+      await sb.from('inventario').update({ stock_actual: nuevoStock }).eq('id', item.id);
+      prod.stock = nuevoStock;
+    }
+  }
+
+  if(total > 0) {
+    const { error: finErr } = await sb.from('finanzas').insert({
+      tipo: 'ingreso', categoria: 'farmacia', descripcion, monto: total,
+      fecha: hoy(), metodo_pago: metodoPago, referencia: ventaId, clinica_id: currentClinicaId
+    });
+    if(finErr) console.error('Error finanzas farmacia:', finErr.message);
+  }
+
+  toast('Venta completada — ' + fmtC(total), 'success');
+  carritoFarma = [];
+  ['farma-cliente','farma-doctor','farma-paciente-receta'].forEach(id => { const e = document.getElementById(id); if(e) e.value = ''; });
+  const ckEl = document.getElementById('farma-es-receta'); if(ckEl) ckEl.checked = false;
+  const camposEl = document.getElementById('farma-receta-campos'); if(camposEl) camposEl.style.display = 'none';
+  await loadAll();
+  actualizarStatsFarma();
+  renderFarmaDespacho();
+}
+
+function renderFarmaVentas() {
+  const fecha = document.getElementById('farma-ventas-fecha')?.value || hoy();
+  const ventas = C.fin.filter(x => x.fecha === fecha && x.categoria === 'farmacia' && x.tipo === 'ingreso');
+  const tbody = document.getElementById('farma-ventas-tbody');
+  if(!tbody) return;
+  if(!ventas.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-light);padding:20px">No hay ventas para esta fecha</td></tr>';
+    const t = document.getElementById('farma-ventas-total-dia'); if(t) t.textContent = '';
+    return;
+  }
+  const metIcon = { efectivo:'💵', tarjeta:'💳', transferencia:'🏦' };
+  tbody.innerHTML = ventas.map(v => {
+    const esR = v.descripcion?.includes('Receta') || false;
+    const desc = (v.descripcion || '').replace('Venta farmacia: ','');
+    return `<tr>
+      <td>${v.fecha}</td>
+      <td style="font-size:12px;max-width:280px">${desc}</td>
+      <td style="font-size:12px">${v.referencia || '—'}</td>
+      <td>${metIcon[v.metodoPago]||''} ${v.metodoPago||'—'}</td>
+      <td>${esR ? '<span class="tag tag-blue">Receta</span>' : '<span class="tag tag-gray">Directa</span>'}</td>
+      <td style="font-weight:700;color:var(--accent-blue)">${fmtC(v.monto)}</td>
+    </tr>`;
+  }).join('');
+  const total = ventas.reduce((s, x) => s + Number(x.monto || 0), 0);
+  const t = document.getElementById('farma-ventas-total-dia'); if(t) t.textContent = 'Total del día: ' + fmtC(total);
+}
+
+function renderFarmaRecetas() {
+  const recetas = C.mov.filter(x => x.motivo === 'receta');
+  const tbody = document.getElementById('farma-recetas-tbody');
+  if(!tbody) return;
+  if(!recetas.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-light);padding:20px">No hay recetas despachadas</td></tr>';
+    return;
+  }
+  const grupos = {};
+  recetas.forEach(r => {
+    const ref = r.referencia || ('mov-' + r.id);
+    if(!grupos[ref]) grupos[ref] = { fecha: r.fecha, notas: r.notas || '', items: [], ref };
+    const prod = C.inv.find(p => p.id === r.invId);
+    grupos[ref].items.push((prod?.nombre || 'Producto') + ' ×' + r.cantidad);
+  });
+  tbody.innerHTML = Object.values(grupos).sort((a,b) => b.fecha.localeCompare(a.fecha)).map(g => {
+    const partes = g.notas.split('|');
+    const doctor = (partes[0] || '').replace('Dr:','').trim() || '—';
+    const paciente = (partes[1] || '').replace('Pac:','').trim() || '—';
+    const fin = C.fin.find(x => x.referencia === g.ref);
+    return `<tr>
+      <td>${g.fecha}</td>
+      <td>${paciente}</td>
+      <td>Dr. ${doctor}</td>
+      <td style="font-size:12px">${g.items.join(', ')}</td>
+      <td style="font-weight:700">${fin ? fmtC(fin.monto) : '—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderFarmaAlertas() {
+  const sinStock = C.inv.filter(x => x.stock <= 0);
+  const bajStock = C.inv.filter(x => x.stock > 0 && x.stockMin > 0 && x.stock <= x.stockMin);
+  const catIcon = { medicamento:'💊', material:'🩺', insumo:'🧹', equipo:'🔬', papeleria:'📄', general:'📦' };
+  const renderItem = p => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div>
+        <span style="margin-right:6px">${catIcon[p.categoria]||'📦'}</span>
+        <span style="font-weight:600;font-size:13px">${p.nombre}</span>
+        <span style="font-size:11px;color:var(--text-light);margin-left:6px">${p.unidad}</span>
+      </div>
+      <div style="text-align:right">
+        <div style="font-weight:700;font-size:13px">Stock: ${p.stock}</div>
+        <div style="font-size:11px;color:var(--text-light)">Mín: ${p.stockMin}</div>
+      </div>
+    </div>`;
+  const noAlert = '<div style="color:var(--text-light);font-size:13px;padding:12px 0">Sin alertas ✓</div>';
+  const elCero = document.getElementById('farma-alertas-cero'); if(elCero) elCero.innerHTML = sinStock.length ? sinStock.map(renderItem).join('') : noAlert;
+  const elBajo = document.getElementById('farma-alertas-bajo'); if(elBajo) elBajo.innerHTML = bajStock.length ? bajStock.map(renderItem).join('') : noAlert;
+}
+
+function renderFarmaEstadisticas() {
+  const h = hoy();
+  const mes = h.substring(0, 7);
+  const vHoy  = C.fin.filter(x => x.fecha === h   && x.categoria === 'farmacia' && x.tipo === 'ingreso');
+  const vMes  = C.fin.filter(x => x.fecha.startsWith(mes) && x.categoria === 'farmacia' && x.tipo === 'ingreso');
+  const dMes  = C.mov.filter(x => x.fecha.startsWith(mes) && (x.motivo === 'venta_farmacia' || x.motivo === 'receta'));
+  const rMes  = C.mov.filter(x => x.fecha.startsWith(mes) && x.motivo === 'receta');
+  const tHoy  = vHoy.reduce((s, x) => s + Number(x.monto || 0), 0);
+  const tMes  = vMes.reduce((s, x) => s + Number(x.monto || 0), 0);
+  const setEl = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
+  setEl('farma-est-hoy',       fmtC(tHoy));
+  setEl('farma-est-mes',       fmtC(tMes));
+  setEl('farma-est-despachos', dMes.length);
+  setEl('farma-est-recetas',   rMes.length);
+  const conteo = {};
+  dMes.forEach(m => {
+    const prod = C.inv.find(p => p.id === m.invId);
+    const nombre = prod?.nombre || ('Producto #' + m.invId);
+    conteo[nombre] = (conteo[nombre] || 0) + Number(m.cantidad || 1);
+  });
+  const top = Object.entries(conteo).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const elTop = document.getElementById('farma-top-productos');
+  if(!elTop) return;
+  if(!top.length) { elTop.innerHTML = '<div style="color:var(--text-light);font-size:13px;padding:12px 0">Sin datos este mes</div>'; return; }
+  const maxVal = top[0][1];
+  elTop.innerHTML = top.map(([nombre, cantidad], i) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:11px;color:var(--text-light);min-width:22px">#${i+1}</span>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600">${nombre}</div>
+        <div style="height:5px;background:var(--border);border-radius:3px;margin-top:4px">
+          <div style="height:100%;width:${Math.round(cantidad/maxVal*100)}%;background:var(--accent-blue);border-radius:3px"></div>
+        </div>
+      </div>
+      <span style="font-weight:700;font-size:13px;min-width:55px;text-align:right">${cantidad} uds</span>
+    </div>`).join('');
 }
