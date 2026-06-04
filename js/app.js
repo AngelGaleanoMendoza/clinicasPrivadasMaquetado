@@ -3865,9 +3865,21 @@ function applyRoleMenu() {
   vis('menu-notas',           hasClinica && !isRec);
   vis('menu-atendidos',       hasClinica && !isRec && !isEnf);
 
+  // ─ Sección Gestión (inventario, finanzas, estadísticas, exportar)
+  const invAccess  = sa || ['admin','farmaceutico'].includes(role);
+  const finAccess  = sa || ['admin','farmaceutico'].includes(role);
+  const sysAccess  = sa || isAdmin;
+  const hasGestion = invAccess || finAccess || sysAccess;
+  vis('menu-gestion-section', hasGestion);
+  vis('menu-inventario',      invAccess);
+  vis('menu-finanzas',        finAccess);
+  vis('menu-estadisticas',    sysAccess);
+  vis('menu-exportar',        sysAccess);
+
   // ─ Admin: solo superadmin
   vis('menu-admin-section',  sa);
   vis('menu-admin',          sa);
+  vis('menu-configuracion',  sa);
 }
 
 async function loadAdminData() {
