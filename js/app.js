@@ -5768,9 +5768,9 @@ function renderCarritoFarma() {
         <div style="font-size:11px;color:var(--text-light)">${fmtC(item.precio)} × ${item.cantidad}</div>
       </div>
       <div style="display:flex;align-items:center;gap:4px">
-        <button onclick="cambiarCantCarrito(${i},-1)" style="width:22px;height:22px;border:1px solid var(--border);background:var(--bg);border-radius:4px;cursor:pointer;color:var(--text);font-size:14px;line-height:1">−</button>
+        <button onclick="cambiarCantCarrito(${i},-1)" style="width:22px;height:22px;border:1px solid var(--border);background:#334155;border-radius:4px;cursor:pointer;color:#fff;font-size:14px;font-weight:700;line-height:1">−</button>
         <span style="font-size:13px;font-weight:600;min-width:20px;text-align:center">${item.cantidad}</span>
-        <button onclick="cambiarCantCarrito(${i},1)" style="width:22px;height:22px;border:1px solid var(--border);background:var(--bg);border-radius:4px;cursor:pointer;color:var(--text);font-size:14px;line-height:1">+</button>
+        <button onclick="cambiarCantCarrito(${i},1)" style="width:22px;height:22px;border:1px solid var(--border);background:#334155;border-radius:4px;cursor:pointer;color:#fff;font-size:14px;font-weight:700;line-height:1">+</button>
         <button onclick="quitarDelCarrito(${i})" style="width:22px;height:22px;border:none;background:#e53e3e22;color:#e53e3e;border-radius:4px;cursor:pointer;font-size:13px;line-height:1">✕</button>
       </div>
       <div style="font-size:13px;font-weight:700;min-width:58px;text-align:right">${fmtC(item.precio * item.cantidad)}</div>
