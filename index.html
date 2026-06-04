@@ -1,0 +1,1517 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lumea Med — Gestión Clínica</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="shortcut icon" href="favicon.svg">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<!-- RECOVERY PASSWORD -->
+<div id="recovery-overlay" style="display:none;position:fixed;inset:0;background:#0a0f1e;z-index:9999;align-items:center;justify-content:center">
+  <div style="background:#151c2e;border:1px solid rgba(139,92,246,.3);border-radius:20px;padding:40px 36px;width:100%;max-width:420px;text-align:center">
+    <div style="font-size:48px;margin-bottom:12px">🔐</div>
+    <h2 style="color:#fff;margin-bottom:6px">Nueva contraseña</h2>
+    <p style="color:rgba(255,255,255,.5);font-size:13px;margin-bottom:24px">Elige una contraseña segura para tu cuenta</p>
+    <input type="password" id="rec-pass1" placeholder="Nueva contraseña" style="width:100%;padding:12px 16px;border-radius:12px;border:1.5px solid rgba(139,92,246,.3);background:#1e2845;color:#fff;font-size:14px;outline:none;margin-bottom:12px;box-sizing:border-box">
+    <input type="password" id="rec-pass2" placeholder="Confirmar contraseña" style="width:100%;padding:12px 16px;border-radius:12px;border:1.5px solid rgba(139,92,246,.3);background:#1e2845;color:#fff;font-size:14px;outline:none;margin-bottom:20px;box-sizing:border-box">
+    <div id="rec-error" style="color:#EF4444;font-size:13px;margin-bottom:12px;display:none"></div>
+    <button onclick="setNewPassword()" style="width:100%;padding:13px;background:linear-gradient(135deg,#8b5cf6,#a78bfa);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer">Guardar contraseña</button>
+  </div>
+</div>
+
+<!-- LOADING -->
+<div class="loading-overlay" id="loading-overlay">
+  <div class="spinner"></div>
+  <p class="loading-text">Conectando con la base de datos...</p>
+</div>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-card">
+    <div>
+      <div class="lm-mark">
+        <div class="lm-ring"></div>
+        <div class="lm-inner"><div class="lm-cross"></div></div>
+      </div>
+      <div class="lm-wordmark">
+        <div class="lm-letters">LMD</div>
+        <div class="lm-sub">Lumea Med · Clínicas Privadas</div>
+      </div>
+    </div>
+    <div class="lm-divider"></div>
+    <div class="lm-form">
+      <div class="lm-field">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+        <input type="email" id="login-email" placeholder="Correo electrónico" autocomplete="email"
+          onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()">
+      </div>
+      <div class="lm-field">
+        <svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+        <input type="password" id="login-password" placeholder="Contraseña" autocomplete="current-password"
+          onkeydown="if(event.key==='Enter')verificarLogin()">
+      </div>
+      <p id="login-error" style="color:#f87171;font-size:12px;text-align:center;margin:-4px 0 0;display:none;font-family:'Outfit',sans-serif">Email o contraseña incorrectos</p>
+      <button class="btn-login" onclick="verificarLogin()">Iniciar sesión</button>
+    </div>
+    <div class="lm-footer">Solo personal autorizado de Lumea Med</div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="lm-mark" style="width:36px;height:36px;flex-shrink:0">
+        <div class="lm-ring"></div>
+        <div class="lm-inner" style="width:22px;height:22px"><div class="lm-cross" style="width:9px;height:9px"></div></div>
+      </div>
+      <div><h2 style="background:linear-gradient(90deg,#00d4ff,#7c4dff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-family:'Outfit',sans-serif;letter-spacing:.08em">LMD</h2><span>Clínicas Privadas</span></div>
+    </div>
+    <nav class="sidebar-menu">
+      <div class="menu-section">Principal</div>
+      <div class="menu-item active" onclick="navigate('dashboard')"><span class="icon">📊</span> Dashboard</div>
+      <div class="menu-item" id="menu-expedientes" onclick="navigate('expedientes')"><span class="icon">📋</span> Expedientes</div>
+      <div class="menu-section" id="menu-clinica-section">Clínica</div>
+      <div class="menu-item" id="menu-pacientes" onclick="navigate('pacientes')"><span class="icon">👥</span> Pacientes <span class="badge" id="badge-pacientes">0</span></div>
+      <div class="menu-item" id="menu-citas" onclick="navigate('citas')"><span class="icon">📅</span> Citas <span class="badge" id="badge-citas">0</span></div>
+      <div class="menu-item" id="menu-agendas" onclick="navigate('agendas')"><span class="icon">🗓️</span> Agendas</div>
+      <div class="menu-item" id="menu-medicaciones" onclick="navigate('medicaciones')"><span class="icon">💊</span> Medicaciones</div>
+      <div class="menu-item" id="menu-notas" onclick="navigate('notas')"><span class="icon">📝</span> Notas Clínicas</div>
+      <div class="menu-item" id="menu-atendidos" onclick="navigate('atendidos')"><span class="icon">📊</span> Atendidos por Día</div>
+      <div class="menu-section" id="menu-admin-section" style="display:none">Super Admin</div>
+      <div class="menu-item" id="menu-admin" onclick="navigate('admin')" style="display:none"><span class="icon">👑</span> Administración</div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="sf-user">
+        <div class="sf-avatar" id="sf-avatar">G</div>
+        <div class="sf-info">
+          <p id="sf-name">Dr. Galeano</p>
+          <span id="sf-role">Administrador</span>
+        </div>
+      </div>
+      <button class="btn-logout" onclick="doLogout()">
+        <span style="font-size:15px">⏻</span> Cerrar sesión
+      </button>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+      <h1 id="page-title">Dashboard</h1>
+      <div class="topbar-search">
+        <span style="color:var(--text-light);font-size:15px">🔍</span>
+        <input type="text" id="global-search" placeholder="Buscar paciente..." oninput="globalSearch(this.value)">
+      </div>
+      <div class="topbar-date" id="topbar-date"></div>
+      <div class="theme-toggle-wrap">
+        <span id="theme-icon">☀️</span>
+        <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Cambiar modo"></button>
+      </div>
+      <div class="db-status" id="db-status" style="display:none"><div class="db-dot" id="db-dot"></div><span id="db-label">Conectando...</span></div>
+    </div>
+
+    <div id="search-dropdown" style="display:none;position:fixed;top:62px;right:20px;width:320px;background:var(--card);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.15);z-index:150;padding:8px;max-height:340px;overflow-y:auto;border:1px solid var(--border)"></div>
+
+    <div class="content">
+
+      <!-- DASHBOARD -->
+      <div id="view-dashboard" class="view active">
+        <div id="panel-pendientes-sesion" style="display:none;margin-bottom:18px"></div>
+        <!-- Grid de accesos rápidos — solo visible en mobile -->
+        <div class="nav-quick-grid" id="nav-quick-grid"></div>
+        <div class="stats-grid">
+          <div class="stat-card"><div class="stat-icon si-blue">👥</div><div class="stat-info"><h3 id="stat-pacientes">—</h3><p>Pacientes registrados</p></div></div>
+          <div class="stat-card"><div class="stat-icon si-green">📅</div><div class="stat-info"><h3 id="stat-citas-hoy">—</h3><p>Citas hoy</p></div></div>
+          <div class="stat-card"><div class="stat-icon" style="background:linear-gradient(135deg,#FEF3C7,#FDE68A)">⏳</div><div class="stat-info"><h3 id="stat-pendientes">—</h3><p>Citas pendientes</p><div class="stat-trend warn" id="stat-pendientes-trend"></div></div></div>
+          <div class="stat-card"><div class="stat-icon si-orange">💊</div><div class="stat-info"><h3 id="stat-meds">—</h3><p>Medicaciones activas</p></div></div>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <h3>📅 Pacientes del día</h3>
+              <div style="display:flex;gap:6px">
+                <button class="btn btn-secondary btn-sm" onclick="openModalPaciente();document.querySelector('#modal-paciente .modal-footer .btn-primary').textContent='📋 Guardar y abrir expediente'" title="Registrar paciente nuevo y abrir su expediente">🚶 Nuevo paciente</button>
+                <button class="btn btn-primary btn-sm" onclick="navigate('citas')">Ver citas</button>
+              </div>
+            </div>
+            <div id="agenda-hoy"></div>
+          </div>
+          <div>
+            <div class="card" style="margin-bottom:18px">
+              <div class="card-header"><h3>🗓️ Calendario</h3></div>
+              <div class="cal-wrap" id="dashboard-cal"></div>
+              <div class="cal-legend"><div class="cal-legend-dot"></div><span>Tiene citas</span></div>
+            </div>
+            <div class="card">
+              <div class="card-header" style="margin-bottom:10px"><h3>🕐 Actividad Reciente</h3></div>
+              <div class="tabs" style="margin-bottom:12px">
+                <button class="tab active" id="tab-rec-pacientes"   onclick="switchRecTab('pacientes')">👥 Pacientes</button>
+                <button class="tab"        id="tab-rec-citas"       onclick="switchRecTab('citas')">📅 Citas</button>
+                <button class="tab"        id="tab-rec-meds"        onclick="switchRecTab('meds')">💊 Meds</button>
+              </div>
+              <div id="recientes-content"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AGENDAS -->
+      <div id="view-agendas" class="view">
+        <div style="display:grid;grid-template-columns:270px 1fr;gap:18px;align-items:start">
+          <!-- Panel izquierdo: lista de médicos -->
+          <div>
+            <div class="card">
+              <div class="card-header" style="margin-bottom:14px">
+                <h3>👨‍⚕️ Personal</h3>
+                <button class="btn btn-secondary btn-sm" onclick="navigate('configuracion')" title="Agregar médico">+ Agregar</button>
+              </div>
+              <div id="agendas-doctors-list"></div>
+            </div>
+          </div>
+          <!-- Panel derecho: agenda del médico seleccionado -->
+          <div id="agendas-right-panel">
+            <div class="empty-state" style="padding:72px 20px;background:var(--card);border-radius:var(--radius);border:1px solid var(--border)">
+              <div class="empty-icon">🗓️</div>
+              <p>Selecciona un médico o profesional<br>para ver su agenda</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PACIENTES -->
+      <div id="view-pacientes" class="view">
+        <div class="card">
+          <div class="card-header"><h3>👥 Registro de Pacientes</h3><button class="btn btn-primary" onclick="openModalPaciente()">+ Nuevo Paciente</button></div>
+          <div class="search-bar">
+            <div class="search-bar-input">
+              <span style="color:var(--text-light)">🔍</span>
+              <input type="text" id="pacientes-search" placeholder="Buscar por nombre, apellidos, DNI o teléfono..." oninput="filterPacientes(this.value)">
+            </div>
+            <div class="filter-chips">
+              <span class="chip active" onclick="setFiltroEstado('todos',this)">Todos</span>
+              <span class="chip" onclick="setFiltroEstado('activo',this)">Activos</span>
+              <span class="chip" onclick="setFiltroEstado('inactivo',this)">Inactivos</span>
+            </div>
+          </div>
+          <div id="pacientes-count" style="font-size:12px;color:var(--text-light);margin-bottom:10px"></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Paciente</th><th>N° Expediente</th><th>Identificación</th><th>Fecha Nac.</th><th>Teléfono</th><th>Estado</th><th>Acciones</th></tr></thead>
+              <tbody id="tabla-pacientes"></tbody>
+            </table>
+          </div>
+          <div id="pacientes-empty" class="empty-state" style="display:none"><div class="empty-icon">👥</div><p>No hay pacientes registrados.<br>Haz clic en <strong>+ Nuevo Paciente</strong> para comenzar.</p></div>
+        </div>
+      </div>
+
+      <!-- CITAS -->
+      <div id="view-citas" class="view">
+
+        <!-- Buscador rápido de paciente para citar -->
+        <div class="card" style="margin-bottom:18px;padding:14px 18px">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <span style="font-size:14px;font-weight:700;color:var(--text);white-space:nowrap">📅 Nueva cita para:</span>
+            <div style="position:relative;flex:1;min-width:220px">
+              <input type="text" id="cita-pac-buscar"
+                placeholder="Buscar paciente por nombre, expediente o ID..."
+                autocomplete="off" style="margin:0"
+                oninput="citaBuscarPac(this.value)"
+                onfocus="citaBuscarPac(this.value)"
+                onblur="setTimeout(()=>{ const s=document.getElementById('cita-pac-sug'); if(s) s.style.display='none'; },200)">
+              <div id="cita-pac-sug" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;z-index:300;max-height:240px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.15);margin-top:4px"></div>
+            </div>
+            <button class="btn btn-primary btn-sm" style="white-space:nowrap;flex-shrink:0" onclick="openModalCita()">+ Nueva Cita</button>
+          </div>
+        </div>
+
+        <div class="grid-2" style="margin-bottom:18px">
+          <div class="card">
+            <div class="card-header"><h3>📅 Citas del día</h3></div>
+            <div id="lista-citas-hoy"></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>🗓️ Calendario de Citas</h3></div>
+            <div class="cal-wrap" id="citas-cal"></div>
+            <div class="cal-legend"><div class="cal-legend-dot"></div><span>Tiene citas agendadas</span></div>
+            <div style="margin-top:14px" id="cal-day-citas"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h3>📋 Todas las Citas</h3>
+            <input type="text" id="citas-filtro-paciente" placeholder="Filtrar por paciente o motivo..." style="max-width:240px;margin:0" oninput="filtrarTablaCitas(this.value)">
+          </div>
+          <div class="table-wrap">
+            <table><thead><tr><th>Fecha</th><th>Hora</th><th>Paciente</th><th>Motivo</th><th>Tipo</th><th>Estado</th><th>Acciones</th></tr></thead>
+            <tbody id="tabla-citas"></tbody></table>
+          </div>
+          <div id="citas-empty" class="empty-state" style="display:none"><div class="empty-icon">📅</div><p>No hay citas registradas.</p></div>
+        </div>
+      </div>
+
+      <!-- MEDICACIONES -->
+      <div id="view-medicaciones" class="view">
+        <div class="card">
+          <div class="card-header"><h3>💊 Medicaciones</h3><button class="btn btn-primary" onclick="openModalMedicacion()">+ Nueva Medicación</button></div>
+          <div class="table-wrap">
+            <table><thead><tr><th>Paciente</th><th>Medicamento</th><th>Dosis</th><th>Frecuencia</th><th>Inicio</th><th>Fin</th><th>Estado</th><th>Acciones</th></tr></thead>
+            <tbody id="tabla-medicaciones"></tbody></table>
+          </div>
+          <div id="meds-empty" class="empty-state" style="display:none"><div class="empty-icon">💊</div><p>No hay medicaciones registradas.</p></div>
+        </div>
+      </div>
+
+      <!-- NOTAS -->
+      <div id="view-notas" class="view">
+        <div class="card">
+          <div class="card-header"><h3>📝 Notas Clínicas</h3><button class="btn btn-primary" onclick="openModalNota()">+ Nueva Nota</button></div>
+          <div class="table-wrap">
+            <table><thead><tr><th>Fecha</th><th>Paciente</th><th>Tipo</th><th>Nota</th><th>Acciones</th></tr></thead>
+            <tbody id="tabla-notas"></tbody></table>
+          </div>
+          <div id="notas-empty" class="empty-state" style="display:none"><div class="empty-icon">📝</div><p>No hay notas clínicas.</p></div>
+        </div>
+      </div>
+
+      <!-- DETALLE PACIENTE -->
+      <div id="view-paciente-detalle" class="view">
+        <div style="margin-bottom:14px"><button class="btn btn-secondary btn-sm" onclick="navigate('pacientes')">← Volver</button></div>
+        <div id="detalle-header"></div>
+        <div class="tabs">
+          <button class="tab active" onclick="switchTab('tab-info',this)">📋 Información</button>
+          <button class="tab" onclick="switchTab('tab-citas-p',this)">📅 Citas</button>
+          <button class="tab" onclick="switchTab('tab-meds-p',this)">💊 Medicaciones</button>
+          <button class="tab" onclick="switchTab('tab-notas-p',this)">📝 Notas</button>
+          <button class="tab" onclick="switchTab('tab-expediente',this)">📁 Expediente</button>
+        </div>
+        <div id="tab-info"></div>
+        <div id="tab-citas-p" style="display:none"></div>
+        <div id="tab-meds-p" style="display:none"></div>
+        <div id="tab-notas-p" style="display:none"></div>
+        <div id="tab-expediente" style="display:none"></div>
+      </div>
+
+      <!-- EXPEDIENTES -->
+      <div id="view-expedientes" class="view">
+        <div class="card">
+          <div class="card-header">
+            <h3>📋 Expedientes Clínicos</h3>
+            <input type="text" id="exp-search" placeholder="Buscar por nombre, apellido o N° expediente..."
+              oninput="filtrarExpedientes(this.value)"
+              style="padding:8px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;background:var(--bg);color:var(--text);outline:none;min-width:260px">
+          </div>
+          <div id="exp-list" style="margin-top:4px"></div>
+        </div>
+      </div>
+
+      <!-- ATENDIDOS POR DÍA -->
+      <div id="view-atendidos" class="view">
+        <div class="card">
+          <div class="card-header">
+            <h3>📊 Pacientes Atendidos por Día</h3>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <button class="btn btn-secondary btn-sm" onclick="openModalPaciente()" title="Registrar paciente que llegó sin cita previa">🚶 Nuevo paciente</button>
+              <input type="date" id="atendidos-fecha-picker" onchange="renderAtendidos(this.value)" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;outline:none;cursor:pointer;color:var(--text);background:var(--card)">
+              <button class="btn btn-secondary btn-sm" onclick="renderAtendidos(hoy())">Hoy</button>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px" id="atendidos-stats"></div>
+          <div id="atendidos-lista"></div>
+        </div>
+      </div>
+
+      <!-- CONFIGURACIÓN CLÍNICA -->
+      <div id="view-configuracion" class="view">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header"><h3>⚙️ Datos de la Clínica</h3></div>
+            <div style="display:flex;gap:18px;align-items:center;margin-bottom:22px">
+              <div id="config-logo-box" class="config-logo-box" onclick="document.getElementById('config-logo-file').click()" style="cursor:pointer;border:2px dashed transparent;transition:border-color .2s" onmouseenter="this.style.borderColor='var(--primary)'" onmouseleave="this.style.borderColor='transparent'" title="Haz clic para cambiar el logo">🏥</div>
+              <div style="flex:1">
+                <input type="hidden" id="config-logo-url">
+                <input type="file" id="config-logo-file" accept="image/*" style="display:none" onchange="onConfigLogoSelected(this)">
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                  <button class="btn btn-secondary btn-sm" onclick="document.getElementById('config-logo-file').click()">📁 Subir logo</button>
+                  <button class="btn btn-sm" id="config-logo-remove" onclick="removeConfigLogo()" style="display:none;background:#FEE2E2;color:#DC2626;border:1px solid #FECACA">✕ Quitar</button>
+                </div>
+                <p class="text-light" style="margin-top:6px;font-size:11px">PNG, JPG o SVG · Aparece en todos los PDFs e impresiones</p>
+              </div>
+            </div>
+            <div class="form-grid">
+              <div class="form-group full"><label>Nombre de la Clínica *</label><input type="text" id="config-nombre-clinica" placeholder="Clínica Lumea Med"></div>
+              <div class="form-group"><label>Médico Responsable</label><input type="text" id="config-nombre-doctor" placeholder="Dr. Ángel Galeano"></div>
+              <div class="form-group"><label>Especialidad</label><input type="text" id="config-especialidad" placeholder="Medicina General"></div>
+              <div class="form-group"><label>Registro Médico / Licencia</label><input type="text" id="config-registro" placeholder="CM-12345"></div>
+              <div class="form-group"><label>Teléfono</label><input type="tel" id="config-telefono" placeholder="+503 2200-0000"></div>
+              <div class="form-group"><label>Correo Clínica</label><input type="email" id="config-email" placeholder="info@clinica.com"></div>
+              <div class="form-group full"><label>Dirección</label><input type="text" id="config-direccion" placeholder="Calle, Ciudad, País"></div>
+              <div class="form-group full"><label>Nota al pie (en notas de consulta)</label><input type="text" id="config-nota-pie" placeholder="Horario: Lunes a Viernes 8am–5pm"></div>
+            </div>
+            <div style="margin-top:18px">
+              <button class="btn btn-primary" onclick="guardarConfigClinica()">💾 Guardar Configuración</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>👁️ Vista Previa Nota de Consulta</h3></div>
+            <div id="config-preview" style="border:1px solid var(--border);border-radius:10px;padding:18px;background:var(--bg)">
+              <p class="text-light" style="text-align:center;padding:20px">Llena los datos y guarda para ver la vista previa en las notas de consulta.</p>
+            </div>
+            <div style="margin-top:14px">
+              <p class="text-light" style="font-size:12px">💡 Para imprimir una nota de consulta completa: ve a <strong>Atendidos por Día</strong> → botón <strong>🖨️ Nota</strong></p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ESTADÍSTICAS -->
+      <div id="view-estadisticas" class="view">
+        <div class="card" style="margin-bottom:18px">
+          <div class="card-header">
+            <h3>📈 Estadísticas de Pacientes Atendidos</h3>
+            <button class="btn btn-primary btn-sm" onclick="descargarPDFEstadisticas()">⬇️ Descargar PDF</button>
+          </div>
+          <div class="tabs" style="margin-bottom:0">
+            <button class="tab active" id="tab-est-dia"    onclick="switchEstTab('dia')">📅 Diario</button>
+            <button class="tab"        id="tab-est-semana" onclick="switchEstTab('semana')">📆 Semanal</button>
+            <button class="tab"        id="tab-est-mes"    onclick="switchEstTab('mes')">🗓️ Mensual</button>
+          </div>
+        </div>
+
+        <!-- DIARIO -->
+        <div id="est-panel-dia">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap">
+            <label style="font-size:13px;font-weight:600;color:var(--text-light)">Fecha:</label>
+            <input type="date" id="est-dia-fecha" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;outline:none;color:var(--text);background:var(--card)" onchange="renderEstDia()">
+          </div>
+          <div id="est-dia-stats"></div>
+        </div>
+
+        <!-- SEMANAL -->
+        <div id="est-panel-semana" style="display:none">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap">
+            <label style="font-size:13px;font-weight:600;color:var(--text-light)">Semana del:</label>
+            <input type="week" id="est-semana-fecha" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;outline:none;color:var(--text);background:var(--card)" onchange="renderEstSemana()">
+          </div>
+          <div id="est-semana-stats"></div>
+        </div>
+
+        <!-- MENSUAL -->
+        <div id="est-panel-mes" style="display:none">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap">
+            <label style="font-size:13px;font-weight:600;color:var(--text-light)">Mes:</label>
+            <input type="month" id="est-mes-fecha" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;outline:none;color:var(--text);background:var(--card)" onchange="renderEstMes()">
+          </div>
+          <div id="est-mes-stats"></div>
+        </div>
+      </div>
+
+      <!-- INVENTARIO -->
+      <div id="view-inventario" class="view">
+        <div class="card" style="margin-bottom:18px">
+          <div class="card-header">
+            <h3>📦 Inventario de Clínica</h3>
+            <div style="display:flex;gap:8px" id="inv-action-btns">
+              <button class="btn btn-secondary btn-sm" onclick="openModalEntrada()">📥 Entrada</button>
+              <button class="btn btn-secondary btn-sm" onclick="openModalSalida()">📤 Salida</button>
+              <button class="btn btn-primary btn-sm" onclick="openModalProducto()">+ Producto</button>
+            </div>
+          </div>
+          <div id="inv-stats-row" class="stats-grid" style="margin-bottom:14px"></div>
+          <div class="tabs" style="margin-bottom:0">
+            <button class="tab active" id="tab-inv-productos"   onclick="switchInvTab('productos')">📦 Productos</button>
+            <button class="tab"        id="tab-inv-movimientos" onclick="switchInvTab('movimientos')">🔄 Movimientos</button>
+            <button class="tab"        id="tab-inv-reportes"    onclick="switchInvTab('reportes')">📈 Reportes</button>
+          </div>
+        </div>
+
+        <div id="inv-panel-productos">
+          <div class="card">
+            <div class="search-bar" style="margin-bottom:14px">
+              <div class="search-bar-input">
+                <span style="color:var(--text-light)">🔍</span>
+                <input type="text" id="inv-search" placeholder="Buscar producto..." oninput="filterInventario(this.value)">
+              </div>
+              <div class="filter-chips">
+                <span class="chip active" onclick="setInvCat('',this)">Todos</span>
+                <span class="chip" onclick="setInvCat('medicamento',this)">💊 Medicamentos</span>
+                <span class="chip" onclick="setInvCat('material',this)">🩺 Material médico</span>
+                <span class="chip" onclick="setInvCat('equipo',this)">🔬 Equipos</span>
+                <span class="chip" onclick="setInvCat('insumo',this)">🧹 Insumos</span>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table><thead><tr><th>Producto</th><th>Categoría</th><th>Unidad</th><th>Stock</th><th>Mín.</th><th>Precio Unit.</th><th>Estado</th><th>Acciones</th></tr></thead>
+              <tbody id="tabla-inventario"></tbody></table>
+            </div>
+            <div id="inv-empty" class="empty-state" style="display:none">
+              <div class="empty-icon">📦</div>
+              <p>No hay productos en inventario.<br>Agrega el primero con <strong>+ Producto</strong></p>
+            </div>
+          </div>
+        </div>
+
+        <div id="inv-panel-movimientos" style="display:none">
+          <div class="card">
+            <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+              <input type="date" id="inv-mov-fecha" onchange="renderMovimientos()" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit;outline:none;color:var(--text);background:var(--card)">
+              <button class="btn btn-secondary btn-sm" onclick="document.getElementById('inv-mov-fecha').value='';renderMovimientos()">Todos</button>
+              <div class="filter-chips">
+                <span class="chip active" id="chip-mov-todos"    onclick="setMovTipo('',this)">Todos</span>
+                <span class="chip"        id="chip-mov-entrada"  onclick="setMovTipo('entrada',this)">📥 Entradas</span>
+                <span class="chip"        id="chip-mov-salida"   onclick="setMovTipo('salida',this)">📤 Salidas</span>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table><thead><tr><th>Fecha</th><th>Producto</th><th>Tipo</th><th>Cantidad</th><th>Motivo</th></tr></thead>
+              <tbody id="tabla-movimientos"></tbody></table>
+            </div>
+            <div id="mov-empty" class="empty-state" style="display:none"><div class="empty-icon">🔄</div><p>Sin movimientos registrados</p></div>
+          </div>
+        </div>
+
+        <div id="inv-panel-reportes" style="display:none">
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-header"><h3>📈 Período</h3><button class="btn btn-primary btn-sm" onclick="descargarPDFInventario()">⬇️ Descargar PDF</button></div>
+            <div class="tabs" style="margin-bottom:16px">
+              <button class="tab active" id="tab-rep-dia"    onclick="switchRepTab('dia')">📅 Diario</button>
+              <button class="tab"        id="tab-rep-semana" onclick="switchRepTab('semana')">📆 Semanal</button>
+              <button class="tab"        id="tab-rep-mes"    onclick="switchRepTab('mes')">🗓️ Mensual</button>
+              <button class="tab"        id="tab-rep-anual"  onclick="switchRepTab('anual')">📊 Anual</button>
+            </div>
+            <div id="rep-inv-content"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FINANZAS -->
+      <div id="view-finanzas" class="view">
+        <div class="card" style="margin-bottom:18px">
+          <div class="card-header">
+            <h3>💰 Módulo de Finanzas</h3>
+            <div style="display:flex;gap:8px;align-items:center">
+              <div class="filter-chips" id="fin-periodo-chips">
+                <span class="chip" onclick="setFinPeriodo('hoy',this)">Hoy</span>
+                <span class="chip active" onclick="setFinPeriodo('mes',this)">Este mes</span>
+                <span class="chip" onclick="setFinPeriodo('semana',this)">Esta semana</span>
+                <span class="chip" onclick="setFinPeriodo('anio',this)">Este año</span>
+              </div>
+            </div>
+          </div>
+          <div class="tabs" style="margin-bottom:0">
+            <button class="tab active" id="tab-fin-resumen"       onclick="switchFinTab('resumen')">📊 Resumen</button>
+            <button class="tab"        id="tab-fin-transacciones" onclick="switchFinTab('transacciones')">🔄 Transacciones</button>
+            <button class="tab"        id="tab-fin-facturas"      onclick="switchFinTab('facturas')">🧾 Facturas</button>
+          </div>
+        </div>
+
+        <!-- Panel Resumen -->
+        <div id="fin-panel-resumen">
+          <div class="stats-grid" id="fin-stats" style="margin-bottom:18px"></div>
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-header">
+                <h3>🔄 Últimas transacciones</h3>
+                <div style="display:flex;gap:8px">
+                  <button class="btn btn-secondary btn-sm" onclick="openModalTransaccion('egreso')">📤 Egreso</button>
+                  <button class="btn btn-primary btn-sm" onclick="openModalTransaccion('ingreso')">💰 Ingreso</button>
+                </div>
+              </div>
+              <div id="fin-ultimas"></div>
+            </div>
+            <div class="card">
+              <div class="card-header">
+                <h3>🧾 Últimas facturas</h3>
+                <button class="btn btn-primary btn-sm" onclick="openModalFactura()">+ Nueva Factura</button>
+              </div>
+              <div id="fin-fact-resumen"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel Transacciones -->
+        <div id="fin-panel-transacciones" style="display:none">
+          <div class="card">
+            <div class="card-header">
+              <h3>🔄 Transacciones</h3>
+              <div style="display:flex;gap:8px;align-items:center">
+                <div class="filter-chips">
+                  <span class="chip active" onclick="setFinTipo('',this)">Todas</span>
+                  <span class="chip" onclick="setFinTipo('ingreso',this)">💰 Ingresos</span>
+                  <span class="chip" onclick="setFinTipo('egreso',this)">📤 Egresos</span>
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="openModalTransaccion('egreso')">📤 Egreso</button>
+                <button class="btn btn-primary btn-sm" onclick="openModalTransaccion('ingreso')">💰 Ingreso</button>
+              </div>
+            </div>
+            <div id="fin-trans-list"></div>
+          </div>
+        </div>
+
+        <!-- Panel Facturas -->
+        <div id="fin-panel-facturas" style="display:none">
+          <div class="card">
+            <div class="card-header">
+              <h3>🧾 Facturas Electrónicas</h3>
+              <button class="btn btn-primary btn-sm" onclick="openModalFactura()">+ Nueva Factura</button>
+            </div>
+            <div id="fin-fact-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ADMIN SUPER -->
+      <div id="view-admin" class="view">
+        <div class="card" style="margin-bottom:18px">
+          <div class="card-header">
+            <h3>👑 Panel de Administración <span class="admin-badge-sa">Super Admin</span></h3>
+            <button class="btn btn-primary btn-sm" id="btn-admin-add" onclick="adminAddNew()">+ Nueva Clínica</button>
+          </div>
+          <div id="admin-stats-row" class="admin-stat-row"></div>
+          <div class="tabs" style="margin-bottom:0">
+            <button class="tab active" id="tab-admin-clinicas"      onclick="switchAdminTab('clinicas')">🏥 Clínicas</button>
+            <button class="tab"        id="tab-admin-usuarios"      onclick="switchAdminTab('usuarios')">👥 Usuarios</button>
+            <button class="tab"        id="tab-admin-productividad" onclick="switchAdminTab('productividad')">📊 Productividad</button>
+            <button class="tab"        id="tab-admin-global"        onclick="switchAdminTab('global')">🌐 Global</button>
+          </div>
+        </div>
+        <div id="admin-panel-clinicas">
+          <div class="card"><div id="admin-clinicas-list"></div></div>
+        </div>
+        <div id="admin-panel-usuarios" style="display:none">
+          <div class="card"><div id="admin-usuarios-list"></div></div>
+        </div>
+        <div id="admin-panel-global" style="display:none">
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-header"><h3>🌐 Resumen Global del Sistema</h3><span id="global-updated" class="tag tag-gray" style="font-size:11px"></span></div>
+            <div id="global-stats-row" class="stats-grid" style="margin-bottom:18px"></div>
+            <div id="global-clinicas-table"></div>
+          </div>
+        </div>
+        <div id="admin-panel-productividad" style="display:none">
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-header">
+              <h3>📊 Actividad por usuario</h3>
+              <div class="filter-chips">
+                <span class="chip active" id="prod-chip-hoy"    onclick="setProdPeriodo('hoy',this)">Hoy</span>
+                <span class="chip"        id="prod-chip-semana" onclick="setProdPeriodo('semana',this)">Esta semana</span>
+                <span class="chip"        id="prod-chip-mes"    onclick="setProdPeriodo('mes',this)">Este mes</span>
+              </div>
+            </div>
+            <div id="prod-resumen-row" class="stats-grid" style="margin-bottom:18px"></div>
+            <div id="prod-usuarios-list"></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>📅 Línea de actividad — últimos 7 días</h3></div>
+            <div id="prod-timeline"></div>
+          </div>
+        </div>
+        <!-- MIGRACIÓN A SUPABASE AUTH -->
+        <div class="card" id="card-migracion" style="margin-top:18px;border:1.5px solid rgba(245,158,11,.3);background:rgba(245,158,11,.04)">
+          <div class="card-header">
+            <h3>🔐 Supabase Auth — Seguridad real</h3>
+            <span id="auth-status-badge" class="tag tag-orange">Pendiente</span>
+          </div>
+          <p style="font-size:13px;color:var(--text-light);margin-bottom:16px;line-height:1.6">
+            Migra todos los usuarios al sistema de autenticación seguro de Supabase.<br>
+            Las contraseñas se cifrarán con <strong>bcrypt</strong> y dejarán de guardarse en texto plano.<br>
+            <strong>Requisito previo:</strong> En Supabase → Authentication → Settings → Email → desactivar <em>"Confirm email"</em>.
+          </p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+            <button class="btn btn-primary" onclick="migrarUsuariosAAuth()">🚀 Migrar usuarios a Supabase Auth</button>
+            <button class="btn btn-secondary" onclick="verificarEstadoAuth()">🔍 Verificar estado</button>
+            <span id="migracion-progress" style="font-size:12px;color:var(--text-light)"></span>
+          </div>
+          <div id="migracion-log" style="margin-top:14px;font-size:12px;font-family:monospace;max-height:140px;overflow-y:auto;background:var(--bg);border-radius:8px;padding:10px;display:none"></div>
+        </div>
+      </div>
+
+      <!-- EXPORTAR -->
+      <div id="view-exportar" class="view">
+        <div class="grid-2">
+          <div class="card">
+            <h3 style="margin-bottom:18px">📤 Exportar Datos</h3>
+            <div class="export-box" style="margin-bottom:14px">
+              <div class="export-icon">📧</div><h3>Enviar a tu correo</h3>
+              <p>Reporte a <strong>sebasgale65@gmail.com</strong></p>
+              <button class="btn btn-primary" onclick="exportarEmail()">📧 Enviar</button>
+            </div>
+            <div class="export-box" style="margin-bottom:14px">
+              <div class="export-icon">📩</div><h3>Backup por Correo</h3>
+              <p>Envía un respaldo completo a <strong>sebasgale65@gmail.com</strong></p>
+              <button class="btn btn-secondary" onclick="exportarJSON()">📩 Enviar Backup</button>
+            </div>
+            <div class="export-box">
+              <div class="export-icon">📥</div><h3>Importar Backup</h3>
+              <p>Restaura desde un archivo anterior</p>
+              <input type="file" id="import-file" accept=".json" style="display:none" onchange="importarJSON(event)">
+              <button class="btn btn-secondary" onclick="document.getElementById('import-file').click()">📥 Importar</button>
+            </div>
+          </div>
+          <div class="card"><h3 style="margin-bottom:18px">📊 Resumen</h3><div id="resumen-exportar"></div></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PRODUCTO -->
+<div class="modal-overlay" id="modal-producto">
+  <div class="modal">
+    <h2 id="modal-producto-title">📦 Nuevo Producto</h2>
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>Nombre del producto *</label>
+        <div style="position:relative">
+          <input type="text" id="prod-nombre" placeholder="Escribe para buscar o agregar producto..." autocomplete="off"
+            oninput="buscarProductoInv(this.value)" onkeydown="navProdSug(event)" onblur="setTimeout(()=>{const b=document.getElementById('prod-sug');if(b)b.style.display='none'},180)">
+          <div id="prod-sug" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:400;max-height:240px;overflow-y:auto;margin-top:4px"></div>
+        </div>
+      </div>
+      <div class="form-group"><label>Categoría</label>
+        <select id="prod-categoria">
+          <option value="medicamento">💊 Medicamento</option>
+          <option value="material">🩺 Material médico</option>
+          <option value="equipo">🔬 Equipo</option>
+          <option value="insumo">🧹 Insumo de limpieza</option>
+          <option value="papeleria">📄 Papelería</option>
+          <option value="general">📦 General</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Unidad de medida</label>
+        <select id="prod-unidad">
+          <option value="unidad">Unidad</option>
+          <option value="caja">Caja</option>
+          <option value="frasco">Frasco</option>
+          <option value="ampolla">Ampolla</option>
+          <option value="tableta">Tableta</option>
+          <option value="rollo">Rollo</option>
+          <option value="litro">Litro</option>
+          <option value="ml">Mililitro</option>
+          <option value="par">Par</option>
+          <option value="paquete">Paquete</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Stock actual</label><input type="number" id="prod-stock" placeholder="0" min="0"></div>
+      <div class="form-group"><label>Stock mínimo (alerta)</label><input type="number" id="prod-stock-min" placeholder="0" min="0"></div>
+      <div class="form-group full"><label>Precio unitario (C$)</label><input type="number" id="prod-precio" placeholder="0.00" min="0" step="0.01"></div>
+      <div class="form-group full"><label>Descripción</label><textarea id="prod-descripcion" placeholder="Observaciones, proveedor, lote..." style="min-height:70px"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-producto')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarProducto()">💾 Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ENTRADA -->
+<div class="modal-overlay" id="modal-entrada">
+  <div class="modal" style="max-width:480px">
+    <h2>📥 Registrar Entrada</h2>
+    <div class="form-grid cols-1">
+      <div class="form-group"><label>Producto *</label><select id="ent-producto"><option value="">Seleccionar...</option></select></div>
+      <div class="form-group"><label>Cantidad *</label><input type="number" id="ent-cantidad" placeholder="0" min="1"></div>
+      <div class="form-group"><label>Fecha</label><input type="date" id="ent-fecha"></div>
+      <div class="form-group"><label>Motivo / Proveedor</label><input type="text" id="ent-motivo" placeholder="Ej: Compra mensual, donación, MINSA..."></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-entrada')">Cancelar</button>
+      <button class="btn btn-primary" style="background:linear-gradient(135deg,var(--success),#059669)" onclick="guardarMovimiento('entrada')">📥 Confirmar Entrada</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL SALIDA -->
+<div class="modal-overlay" id="modal-salida">
+  <div class="modal" style="max-width:480px">
+    <h2>📤 Registrar Salida</h2>
+    <div class="form-grid cols-1">
+      <div class="form-group"><label>Producto *</label><select id="sal-producto"><option value="">Seleccionar...</option></select></div>
+      <div class="form-group"><label>Cantidad *</label><input type="number" id="sal-cantidad" placeholder="0" min="1"></div>
+      <div class="form-group"><label>Fecha</label><input type="date" id="sal-fecha"></div>
+      <div class="form-group"><label>Motivo / Uso</label><input type="text" id="sal-motivo" placeholder="Ej: Usado en consulta, vencido, pérdida..."></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-salida')">Cancelar</button>
+      <button class="btn btn-danger" onclick="guardarMovimiento('salida')">📤 Confirmar Salida</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL TRANSACCIÓN FINANCIERA -->
+<div class="modal-overlay" id="modal-transaccion">
+  <div class="modal" style="max-width:500px">
+    <h2 id="modal-trans-title">💰 Nueva Transacción</h2>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Tipo *</label>
+        <select id="trans-tipo" onchange="document.getElementById('modal-trans-title').textContent = this.value==='ingreso' ? '💰 Nuevo Ingreso' : '📤 Nuevo Egreso'">
+          <option value="ingreso">💰 Ingreso</option>
+          <option value="egreso">📤 Egreso</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Categoría</label>
+        <select id="trans-categoria">
+          <option value="consulta">👨‍⚕️ Consulta</option>
+          <option value="procedimiento">🔬 Procedimiento</option>
+          <option value="medicamento">💊 Medicamento</option>
+          <option value="insumo">🧹 Insumo</option>
+          <option value="equipo">🔧 Equipo</option>
+          <option value="nomina">👥 Nómina</option>
+          <option value="alquiler">🏢 Alquiler</option>
+          <option value="servicios">⚡ Servicios públicos</option>
+          <option value="factura">🧾 Pago de factura</option>
+          <option value="general">📦 General</option>
+        </select>
+      </div>
+      <div class="form-group full">
+        <label>Descripción *</label>
+        <input type="text" id="trans-descripcion" placeholder="Ej: Consulta general, compra de insumos...">
+      </div>
+      <div class="form-group">
+        <label>Monto (C$) *</label>
+        <input type="number" id="trans-monto" placeholder="0.00" min="0" step="0.01">
+      </div>
+      <div class="form-group">
+        <label>Fecha</label>
+        <input type="date" id="trans-fecha">
+      </div>
+      <div class="form-group">
+        <label>Método de pago</label>
+        <select id="trans-metodo">
+          <option value="efectivo">💵 Efectivo</option>
+          <option value="tarjeta">💳 Tarjeta</option>
+          <option value="transferencia">🏦 Transferencia</option>
+          <option value="cheque">📝 Cheque</option>
+          <option value="otro">Otro</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Referencia / N° comprobante</label>
+        <input type="text" id="trans-referencia" placeholder="Opcional">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-transaccion')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarTransaccion()">💾 Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL FACTURA ELECTRÓNICA -->
+<div class="modal-overlay" id="modal-factura">
+  <div class="modal modal-xl">
+    <h2>🧾 Nueva Factura Electrónica</h2>
+    <input type="hidden" id="fact-cita-id">
+    <div class="form-grid" style="margin-bottom:18px">
+      <div class="form-group">
+        <label>N° Factura</label>
+        <input type="text" id="fact-numero" placeholder="FACT-202506-0001">
+      </div>
+      <div class="form-group">
+        <label>Fecha</label>
+        <input type="date" id="fact-fecha">
+      </div>
+      <div class="form-group full">
+        <label>Paciente / Cliente</label>
+        <select id="fact-paciente">
+          <option value="">Sin paciente específico</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Líneas de factura -->
+    <div style="margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <label style="font-weight:600;font-size:13px">Servicios / Productos</label>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-secondary btn-sm" onclick="addFacturaItemFromInv()">📦 Desde inventario</button>
+          <button class="btn btn-primary btn-sm" onclick="addFacturaItem()">+ Agregar línea</button>
+        </div>
+      </div>
+      <div class="fact-items-header">
+        <span style="width:110px">Tipo</span>
+        <span style="flex:1">Descripción</span>
+        <span style="width:70px;text-align:center">Cant.</span>
+        <span style="width:110px;text-align:right">Precio C$</span>
+        <span style="width:90px;text-align:right">Subtotal</span>
+        <span style="width:32px"></span>
+      </div>
+      <div id="fact-items-list"></div>
+    </div>
+
+    <!-- Totales -->
+    <div class="fact-totals-box">
+      <div class="fact-total-row">
+        <span>Subtotal</span>
+        <span id="fact-subtotal">C$ 0.00</span>
+      </div>
+
+      <div class="fact-total-row fact-total-final">
+        <span>TOTAL</span>
+        <span id="fact-total">C$ 0.00</span>
+      </div>
+    </div>
+
+    <div class="form-group" style="margin-top:14px">
+      <label>Notas / Observaciones</label>
+      <textarea id="fact-notas" placeholder="Condiciones de pago, notas adicionales..." style="min-height:60px"></textarea>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-factura')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarFactura()">🧾 Generar Factura</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EXAMEN VISUAL (Óptica) -->
+<div class="modal-overlay" id="modal-examen-visual">
+  <div class="modal modal-lg" style="max-width:720px">
+    <h2>👁️ Examen Visual Completo</h2>
+    <input type="hidden" id="ev-paciente-id">
+
+    <!-- Lensometría -->
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--primary);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--primary)">🔬 Lensometría (anteojos actuales)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="background:var(--bg);border-radius:10px;padding:12px;border:1px solid var(--border)">
+          <div style="font-size:11px;font-weight:700;color:var(--primary);margin-bottom:8px">OD — Ojo Derecho</div>
+          <div class="form-grid">
+            <div class="form-group"><label>Esfera</label><input type="text" id="lm-esf-od" placeholder="-0.00"></div>
+            <div class="form-group"><label>Cilindro</label><input type="text" id="lm-cil-od" placeholder="-0.00"></div>
+            <div class="form-group"><label>Eje °</label><input type="number" id="lm-eje-od" placeholder="0" min="0" max="180"></div>
+            <div class="form-group"><label>Adición</label><input type="text" id="lm-add-od" placeholder="+0.00"></div>
+          </div>
+        </div>
+        <div style="background:var(--bg);border-radius:10px;padding:12px;border:1px solid var(--border)">
+          <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:8px">OI — Ojo Izquierdo</div>
+          <div class="form-grid">
+            <div class="form-group"><label>Esfera</label><input type="text" id="lm-esf-oi" placeholder="-0.00"></div>
+            <div class="form-group"><label>Cilindro</label><input type="text" id="lm-cil-oi" placeholder="-0.00"></div>
+            <div class="form-group"><label>Eje °</label><input type="number" id="lm-eje-oi" placeholder="0" min="0" max="180"></div>
+            <div class="form-group"><label>Adición</label><input type="text" id="lm-add-oi" placeholder="+0.00"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AV sin corrección -->
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--primary);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--primary)">👁️ Agudeza Visual Sin Corrección</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+        <div class="form-group"><label>OD — Ojo Derecho</label><input type="text" id="av-sc-od" placeholder="20/200"></div>
+        <div class="form-group"><label>OI — Ojo Izquierdo</label><input type="text" id="av-sc-oi" placeholder="20/200"></div>
+        <div class="form-group"><label>AO — Ambos Ojos</label><input type="text" id="av-sc-ao" placeholder="20/200"></div>
+      </div>
+      <div style="background:var(--bg);border-radius:8px;padding:10px 12px;border:1px solid var(--border)">
+        <div style="font-size:10px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🔵 Agujero Estenopeico</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-group"><label>OD</label><input type="text" id="ae-od" placeholder="20/—"></div>
+          <div class="form-group"><label>OI</label><input type="text" id="ae-oi" placeholder="20/—"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cover test -->
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--primary);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--primary)">🎯 Cover Test</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group"><label>Resultado</label>
+          <select id="ev-cover">
+            <option value="">Seleccionar...</option>
+            <option>Ortoforia</option><option>Esoforia leve</option><option>Esoforia moderada</option>
+            <option>Exoforia leve</option><option>Exoforia moderada</option>
+            <option>Hiperforia OD</option><option>Hiperforia OI</option>
+            <option>Esotropia</option><option>Exotropia</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Observación</label><input type="text" id="ev-cover-obs" placeholder="Detalles adicionales..."></div>
+      </div>
+    </div>
+
+    <!-- Motilidad ocular extrínseca -->
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--primary);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--primary)">👁️ Motilidad Ocular Extrínseca</div>
+      <div class="form-group"><label>Observaciones</label><input type="text" id="ev-moe-obs" placeholder="Ej: Movimientos normales en todas las direcciones, restricción en..."></div>
+    </div>
+
+    <!-- Examinación de Acomodación -->
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--primary);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--primary)">🔬 Examinación de Acomodación</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px">
+        <div class="form-group"><label>PPC (Punto Próximo de Convergencia)</label><input type="text" id="ev-ppc" placeholder="Ej: 8 cm"></div>
+        <div class="form-group"><label>PPA (Punto Próximo de Acomodación)</label><input type="text" id="ev-ppa" placeholder="Ej: 10 cm"></div>
+      </div>
+      <div class="form-group"><label>Observaciones</label><input type="text" id="ev-acomo-obs" placeholder="Observaciones sobre la acomodación..."></div>
+    </div>
+
+    <!-- Refracción -->
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--primary);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--primary)">🔭 Refracción</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="background:var(--bg);border-radius:10px;padding:12px;border:1px solid var(--border)">
+          <div style="font-size:11px;font-weight:700;color:var(--primary);margin-bottom:8px">OD — Ojo Derecho</div>
+          <div class="form-grid">
+            <div class="form-group"><label>Esfera</label><input type="text" id="rx-esf-od" placeholder="-0.00"></div>
+            <div class="form-group"><label>Cilindro</label><input type="text" id="rx-cil-od" placeholder="-0.00"></div>
+            <div class="form-group"><label>Eje °</label><input type="number" id="rx-eje-od" placeholder="0" min="0" max="180"></div>
+            <div class="form-group"><label>Adición</label><input type="text" id="rx-add-od" placeholder="+0.00"></div>
+          </div>
+        </div>
+        <div style="background:var(--bg);border-radius:10px;padding:12px;border:1px solid var(--border)">
+          <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:8px">OI — Ojo Izquierdo</div>
+          <div class="form-grid">
+            <div class="form-group"><label>Esfera</label><input type="text" id="rx-esf-oi" placeholder="-0.00"></div>
+            <div class="form-group"><label>Cilindro</label><input type="text" id="rx-cil-oi" placeholder="-0.00"></div>
+            <div class="form-group"><label>Eje °</label><input type="number" id="rx-eje-oi" placeholder="0" min="0" max="180"></div>
+            <div class="form-group"><label>Adición</label><input type="text" id="rx-add-oi" placeholder="+0.00"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Parámetros de adaptación -->
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--primary);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--primary)">📐 Parámetros de Adaptación</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+        <div class="form-group"><label>DIP General (mm)</label><input type="text" id="pa-dip" placeholder="Ej: 62"></div>
+        <div class="form-group"><label>DIP OD (mm)</label><input type="text" id="pa-dip-od" placeholder="Ej: 31"></div>
+        <div class="form-group"><label>DIP OI (mm)</label><input type="text" id="pa-dip-oi" placeholder="Ej: 31"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+        <div class="form-group"><label>Altura Pupilar (mm)</label><input type="text" id="pa-altura" placeholder="Ej: 22"></div>
+        <div class="form-group"><label>Distancia al Vértice (mm)</label><input type="text" id="pa-vertice" placeholder="Ej: 12"></div>
+        <div class="form-group"><label>Ángulo Pantoscópico (°)</label><input type="text" id="pa-pantoscopico" placeholder="Ej: 8°"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+        <div class="form-group"><label>Ángulo Panorámico (°)</label><input type="text" id="pa-panoramico" placeholder="Ej: 5°"></div>
+        <div class="form-group"><label>Dist. Horizontal (mm)</label><input type="text" id="pa-horizontal" placeholder="—"></div>
+        <div class="form-group"><label>Dist. Vertical (mm)</label><input type="text" id="pa-vertical" placeholder="—"></div>
+        <div class="form-group"><label>Dist. Diagonal (mm)</label><input type="text" id="pa-diagonal" placeholder="—"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 3fr;gap:10px">
+        <div class="form-group"><label>Puente (mm)</label><input type="text" id="pa-puente" placeholder="Ej: 18"></div>
+        <div class="form-group"><label>Observaciones</label><input type="text" id="pa-obs" placeholder="Observaciones sobre los parámetros de adaptación..."></div>
+      </div>
+    </div>
+
+    <!-- AV con corrección -->
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--primary);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--primary)">✅ Agudeza Visual Con Corrección</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+        <div class="form-group"><label>OD — Ojo Derecho</label><input type="text" id="av-cc-od" placeholder="20/20"></div>
+        <div class="form-group"><label>OI — Ojo Izquierdo</label><input type="text" id="av-cc-oi" placeholder="20/20"></div>
+        <div class="form-group"><label>AO — Ambos Ojos</label><input type="text" id="av-cc-ao" placeholder="20/20"></div>
+      </div>
+      <div class="form-group"><label>Observaciones</label><input type="text" id="av-cc-obs" placeholder="Observaciones sobre la agudeza con corrección..."></div>
+    </div>
+
+    <!-- Reflejos pupilares -->
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--primary);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--primary)">💡 Reflejos Pupilares</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px">
+        <div class="form-group"><label>OD</label>
+          <select id="ev-rp-od">
+            <option value="">—</option>
+            <option value="PIRRLA">PIRRLA (normal)</option>
+            <option value="Alterado">Alterado</option>
+            <option value="No se tomó">No se tomó</option>
+          </select>
+        </div>
+        <div class="form-group"><label>OI</label>
+          <select id="ev-rp-oi">
+            <option value="">—</option>
+            <option value="PIRRLA">PIRRLA (normal)</option>
+            <option value="Alterado">Alterado</option>
+            <option value="No se tomó">No se tomó</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group"><label>Observaciones</label><input type="text" id="ev-rp-obs" placeholder="Observaciones sobre reflejos pupilares..."></div>
+    </div>
+
+    <!-- Biomicroscopía -->
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--primary);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--primary)">🔬 Biomicroscopía</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="background:var(--bg);border-radius:10px;padding:12px;border:1px solid var(--border)">
+          <div style="font-size:11px;font-weight:700;color:var(--primary);margin-bottom:8px">OD — Ojo Derecho</div>
+          <div class="form-group" style="margin-bottom:8px"><label>Resultado</label>
+            <select id="ev-bm-od">
+              <option value="">—</option>
+              <option value="Normal">Normal</option>
+              <option value="Alterado">Alterado</option>
+              <option value="No se tomó">No se tomó</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Observaciones OD</label><input type="text" id="ev-bm-obs-od" placeholder="Hallazgos biomicroscópicos OD..."></div>
+        </div>
+        <div style="background:var(--bg);border-radius:10px;padding:12px;border:1px solid var(--border)">
+          <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:8px">OI — Ojo Izquierdo</div>
+          <div class="form-group" style="margin-bottom:8px"><label>Resultado</label>
+            <select id="ev-bm-oi">
+              <option value="">—</option>
+              <option value="Normal">Normal</option>
+              <option value="Alterado">Alterado</option>
+              <option value="No se tomó">No se tomó</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Observaciones OI</label><input type="text" id="ev-bm-obs-oi" placeholder="Hallazgos biomicroscópicos OI..."></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fondo de ojo -->
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--primary);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--primary)">🔎 Fondo de Ojo</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px">
+        <div class="form-group"><label>OD</label>
+          <select id="ev-fo-od">
+            <option value="">—</option>
+            <option value="Normal">Normal</option>
+            <option value="Alterado">Alterado</option>
+            <option value="No se tomó">No se tomó</option>
+          </select>
+        </div>
+        <div class="form-group"><label>OI</label>
+          <select id="ev-fo-oi">
+            <option value="">—</option>
+            <option value="Normal">Normal</option>
+            <option value="Alterado">Alterado</option>
+            <option value="No se tomó">No se tomó</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group"><label>Observaciones</label><input type="text" id="ev-fo-obs" placeholder="Observaciones sobre fondo de ojo..."></div>
+    </div>
+
+    <!-- Diagnóstico y Prescripción -->
+    <div style="margin-bottom:4px">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--primary);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--primary)">📋 Diagnóstico y Prescripción</div>
+      <div class="form-grid cols-1">
+        <div class="form-group"><label>Diagnóstico</label><textarea id="ev-diagnostico" placeholder="Ej: Miopía bilateral, Astigmatismo OD, Presbicia..." style="min-height:65px"></textarea></div>
+
+        <!-- Corrección recomendada -->
+        <div class="form-group"><label>Tipo de corrección recomendada</label>
+          <select id="ev-correccion">
+            <option value="Ninguna por ahora">Ninguna por ahora</option>
+            <option value="Lentes de armazón (monofocales)">Lentes de armazón (monofocales)</option>
+            <option value="Lentes de armazón (bifocales)">Lentes de armazón (bifocales)</option>
+            <option value="Lentes progresivos">Lentes progresivos</option>
+            <option value="Lentes de contacto blandos">Lentes de contacto blandos</option>
+            <option value="Lentes de contacto rígidos">Lentes de contacto rígidos</option>
+            <option value="Cirugía refractiva (evaluación)">Cirugía refractiva (evaluación)</option>
+          </select>
+        </div>
+
+        <!-- Material -->
+        <div class="form-group"><label>Material del lente</label>
+          <select id="ev-material">
+            <option value="">— Sin especificar —</option>
+            <option value="CR-39">CR-39 (plástico estándar)</option>
+            <option value="Policarbonato">Policarbonato</option>
+            <option value="1.60">Índice 1.60</option>
+            <option value="1.67">Índice 1.67</option>
+            <option value="1.74">Índice 1.74</option>
+            <option value="Trivex">Trivex</option>
+          </select>
+        </div>
+
+        <!-- Tratamientos -->
+        <div class="form-group">
+          <label>Tratamientos de protección</label>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:6px;margin-top:6px;background:var(--bg);border-radius:8px;padding:10px;border:1px solid var(--border)">
+            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:500"><input type="checkbox" id="tr-blueray"> Blue Ray</label>
+            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:500"><input type="checkbox" id="tr-fotocrom"> Fotocromático</label>
+            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:500"><input type="checkbox" id="tr-antireflejo"> Filtro Antirreflejo</label>
+            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:500"><input type="checkbox" id="tr-amarillo"> Filtro Amarillo</label>
+            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:500"><input type="checkbox" id="tr-polarizado"> Polarizado</label>
+          </div>
+        </div>
+
+        <div class="form-group"><label>Observaciones adicionales</label><textarea id="ev-recomendaciones" placeholder="Próximo control, indicaciones especiales, referencias..." style="min-height:65px"></textarea></div>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-examen-visual')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarExamenVisual()">💾 Guardar Examen Visual</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CLÍNICA (Admin) -->
+<div class="modal-overlay" id="modal-clinica">
+  <div class="modal" style="max-width:600px">
+    <h2 id="modal-clinica-title">🏥 Nueva Clínica</h2>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-light);margin-bottom:10px">Datos del sistema</div>
+    <div class="form-grid">
+      <div class="form-group"><label>Nombre de la Clínica *</label><input type="text" id="cl-nombre" placeholder="Clínica Galeano"></div>
+      <div class="form-group"><label>Código único *</label><input type="text" id="cl-codigo" placeholder="clinica-galeano" oninput="this.value=this.value.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')">
+        <span style="font-size:11px;color:var(--text-light)">Solo letras minúsculas y guiones</span>
+      </div>
+      <div class="form-group"><label>Tipo de establecimiento</label>
+        <select id="cl-tipo">
+          <option value="clinica">🏥 Clínica General</option>
+          <option value="optica">👁️ Óptica / Optometría</option>
+          <option value="dental">🦷 Clínica Dental</option>
+          <option value="especialidad">🩺 Clínica de Especialidad</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Estado</label>
+        <select id="cl-activa"><option value="true">Activa</option><option value="false">Inactiva</option></select>
+      </div>
+      <div class="form-group"><label>Máx. agendas</label><input type="number" id="cl-max-agendas" placeholder="10" min="1" max="999"></div>
+      <div class="form-group"><label>Máx. pacientes</label><input type="number" id="cl-max-pacientes" placeholder="500" min="1" max="99999"></div>
+    </div>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-light);margin:14px 0 10px">Perfil para documentos e impresiones</div>
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>Logo de la clínica</label>
+        <input type="hidden" id="cl-logo-url">
+        <div style="display:flex;align-items:center;gap:14px">
+          <div id="cl-logo-preview" onclick="document.getElementById('cl-logo-file').click()" style="width:80px;height:80px;border-radius:14px;background:linear-gradient(135deg,var(--primary),var(--accent));display:flex;align-items:center;justify-content:center;font-size:28px;overflow:hidden;flex-shrink:0;cursor:pointer;border:2px dashed transparent;transition:border-color .2s" onmouseenter="this.style.borderColor='var(--primary)'" onmouseleave="this.style.borderColor='transparent'">🏥</div>
+          <div style="flex:1">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('cl-logo-file').click()">📁 Seleccionar imagen</button>
+            <button type="button" class="btn btn-sm" id="cl-logo-remove" onclick="removeAdminLogo()" style="display:none;background:#FEE2E2;color:#DC2626;border:1px solid #FECACA;margin-left:6px">✕ Quitar</button>
+            <input type="file" id="cl-logo-file" accept="image/*" style="display:none" onchange="onAdminLogoSelected(this)">
+            <p style="font-size:11px;color:var(--text-light);margin-top:6px">PNG, JPG o SVG · Cualquier tamaño</p>
+          </div>
+        </div>
+      </div>
+      <div class="form-group"><label>Nombre del Doctor / Profesional</label><input type="text" id="cl-nombre-doctor" placeholder="Dr. Juan Pérez"></div>
+      <div class="form-group"><label>Especialidad</label><input type="text" id="cl-especialidad" placeholder="Medicina General"></div>
+      <div class="form-group"><label>Registro médico / Licencia</label><input type="text" id="cl-registro" placeholder="RM-12345"></div>
+      <div class="form-group"><label>Teléfono</label><input type="text" id="cl-telefono" placeholder="+503 2200-0000"></div>
+      <div class="form-group full"><label>Dirección</label><input type="text" id="cl-direccion" placeholder="Calle Principal #123, Ciudad"></div>
+      <div class="form-group full"><label>Nota al pie de página (PDFs)</label><input type="text" id="cl-nota-pie" placeholder="Horario: Lun–Vie 8am–5pm · Emergencias 24h"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-clinica')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarClinica()">💾 Guardar Clínica</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL USUARIO (Admin) -->
+<div class="modal-overlay" id="modal-usuario">
+  <div class="modal" style="max-width:520px">
+    <h2 id="modal-usuario-title">👤 Nuevo Usuario</h2>
+    <div class="form-grid">
+      <div class="form-group"><label>Nombre completo *</label><input type="text" id="u-nombre" placeholder="Dr. Juan Pérez"></div>
+      <div class="form-group"><label>Correo electrónico</label><input type="email" id="u-email" placeholder="dr.perez@clinica.com"></div>
+      <div class="form-group"><label>Rol</label>
+        <select id="u-rol">
+          <option value="medico">Médico</option>
+          <option value="recepcion">Recepcionista</option>
+          <option value="admin">Administración</option>
+          <option value="farmaceutico">💊 Farmacéutico</option>
+          <option value="enfermeria">Enfermería</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Clínica asignada</label>
+        <select id="u-clinica"><option value="">Sin clínica</option></select>
+      </div>
+      <div class="form-group full"><label>Contraseña <span id="u-pass-req">*</span></label>
+        <input type="password" id="u-password" placeholder="Contraseña de acceso" autocomplete="new-password">
+        <span id="u-pass-hint" style="font-size:11px;color:var(--text-light);margin-top:2px;display:none">Dejar vacío para no cambiar</span>
+      </div>
+      <div class="form-group full"><label>Ícono del usuario</label>
+        <div class="icon-select" id="u-icono-grid">
+          <button type="button" class="icon-opt selected" data-icon="👨‍⚕️" onclick="selectIcon(this)">👨‍⚕️</button>
+          <button type="button" class="icon-opt" data-icon="👩‍⚕️" onclick="selectIcon(this)">👩‍⚕️</button>
+          <button type="button" class="icon-opt" data-icon="🩺" onclick="selectIcon(this)">🩺</button>
+          <button type="button" class="icon-opt" data-icon="💉" onclick="selectIcon(this)">💉</button>
+          <button type="button" class="icon-opt" data-icon="🏥" onclick="selectIcon(this)">🏥</button>
+          <button type="button" class="icon-opt" data-icon="👨‍💼" onclick="selectIcon(this)">👨‍💼</button>
+          <button type="button" class="icon-opt" data-icon="👩‍💼" onclick="selectIcon(this)">👩‍💼</button>
+          <button type="button" class="icon-opt" data-icon="🔬" onclick="selectIcon(this)">🔬</button>
+          <button type="button" class="icon-opt" data-icon="💊" onclick="selectIcon(this)">💊</button>
+          <button type="button" class="icon-opt" data-icon="🧬" onclick="selectIcon(this)">🧬</button>
+        </div>
+        <input type="hidden" id="u-icono" value="👨‍⚕️">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-usuario')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarUsuario()">💾 Guardar Usuario</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toasts"></div>
+
+<!-- SIDEBAR OVERLAY -->
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+<!-- BOTTOM NAV (móvil) -->
+<nav class="bottom-nav" id="bottom-nav">
+  <div class="bottom-nav-items">
+    <button class="bn-item active" id="bn-dashboard" onclick="navigate('dashboard')"><span class="bn-icon">📊</span><span class="bn-label">Inicio</span></button>
+    <button class="bn-item" id="bn-pacientes" onclick="navigate('pacientes')"><span class="bn-icon">👥</span><span class="bn-label">Pacientes</span></button>
+    <button class="bn-item" id="bn-citas" onclick="navigate('citas')"><span class="bn-icon">📅</span><span class="bn-label">Citas</span><span class="bn-badge" id="bn-badge-citas" style="display:none">0</span></button>
+    <button class="bn-item" id="bn-agendas" onclick="navigate('agendas')"><span class="bn-icon">🗓️</span><span class="bn-label">Agendas</span></button>
+    <button class="bn-item" id="bn-notas" onclick="navigate('notas')"><span class="bn-icon">📝</span><span class="bn-label">Notas</span></button>
+  </div>
+</nav>
+
+<!-- MODAL PACIENTE -->
+<div class="modal-overlay" id="modal-paciente">
+  <div class="modal modal-lg">
+    <h2 id="modal-paciente-title">👤 Nuevo Paciente</h2>
+    <div style="display:flex;justify-content:center;margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
+        <div class="foto-circle" id="foto-circle">
+          <span id="foto-placeholder" style="font-size:32px">👤</span>
+          <img id="foto-img-preview" src="" alt="foto" style="display:none;width:100%;height:100%;object-fit:cover">
+        </div>
+        <div style="display:flex;gap:6px">
+          <input type="file" id="p-foto" accept="image/*" onchange="previewFoto(event)" style="display:none">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('p-foto').click()">📷 Foto</button>
+          <button type="button" class="btn btn-sm" id="btn-quitar-foto" onclick="quitarFoto()" style="display:none;background:var(--bg);border:1.5px solid var(--border);color:var(--danger)">✕ Quitar</button>
+        </div>
+      </div>
+    </div>
+    <div class="form-grid">
+      <div class="form-group"><label>Nombre *</label><input type="text" id="p-nombre" placeholder="Juan"></div>
+      <div class="form-group"><label>Apellidos *</label><input type="text" id="p-apellidos" placeholder="García López"></div>
+      <div class="form-group"><label>Tipo de Identificación</label>
+        <select id="p-id-tipo">
+          <option value="Cédula">Cédula</option>
+          <option value="Pasaporte">Pasaporte</option>
+          <option value="Licencia de conducir">Licencia de conducir</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Número de Identificación</label><input type="text" id="p-id" placeholder="Ingresa el número..."></div>
+      <div class="form-group"><label>Fecha de Nacimiento</label><input type="date" id="p-fechanac"></div>
+      <div class="form-group"><label>Sexo</label><select id="p-sexo"><option value="">Seleccionar...</option><option value="M">Masculino</option><option value="F">Femenino</option><option value="O">Otro</option></select></div>
+      <div class="form-group"><label>Tipo de Sangre</label><select id="p-sangre"><option value="">Desconocido</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select></div>
+      <div class="form-group"><label>Teléfono</label><input type="tel" id="p-telefono" placeholder="+503 70000000" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9+\-\s()]/g,'')"></div>
+      <div class="form-group"><label>Correo Electrónico</label><input type="email" id="p-email" placeholder="paciente@email.com"></div>
+      <div class="form-group full"><label>Dirección</label><input type="text" id="p-direccion" placeholder="Calle, Ciudad, País"></div>
+      <div class="form-group full"><label>Alergias</label><input type="text" id="p-alergias" placeholder="Penicilina, látex... (vacío si no hay)"></div>
+      <div class="form-group"><label>Estado</label><select id="p-estado"><option value="activo">Activo</option><option value="inactivo">Inactivo</option></select></div>
+      <div class="form-group"><label>Contacto de Emergencia</label><input type="text" id="p-emergencia" placeholder="Nombre y teléfono"></div>
+      <div class="form-group full"><label>Observaciones Generales</label><textarea id="p-observaciones" placeholder="Antecedentes, condiciones crónicas..."></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-paciente')">Cancelar</button>
+      <button class="btn btn-secondary" onclick="guardarPaciente(false,false)">💾 Guardar</button>
+      <button class="btn btn-secondary" id="btn-guardar-y-citar" onclick="guardarPaciente(false,true)" style="display:none">📅 Guardar y citar</button>
+      <button class="btn btn-primary" onclick="guardarPaciente(true,false)">📋 Guardar y abrir expediente</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CITA -->
+<div class="modal-overlay" id="modal-cita">
+  <div class="modal">
+    <h2 id="modal-cita-title">📅 Nueva Cita</h2>
+    <div class="form-grid">
+      <div class="form-group full"><label>Paciente *</label>
+        <div style="position:relative">
+          <input type="text" id="c-pac-txt" placeholder="Buscar paciente por nombre..." autocomplete="off"
+            oninput="filterPacSug(this.value,'c')" onfocus="filterPacSug(this.value,'c')" onblur="setTimeout(()=>hidePacSug('c'),200)">
+          <input type="hidden" id="c-paciente">
+          <div id="c-pac-sug" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;z-index:300;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.15);margin-top:4px"></div>
+        </div>
+      </div>
+      <div class="form-group full"><label>Médico</label><select id="c-medico"><option value="">Sin asignar</option></select></div>
+      <div class="form-group"><label>Fecha *</label><input type="date" id="c-fecha"></div>
+      <div class="form-group"><label>Hora *</label><select id="c-hora"><option value="">Seleccionar hora...</option></select></div>
+      <div class="form-group full" style="position:relative">
+        <label>Motivo de Consulta *</label>
+        <input type="text" id="c-motivo" placeholder="Ej: dolor de cabeza, fiebre, control..." autocomplete="off" oninput="mostrarSugerenciasDx(this.value)" onblur="setTimeout(()=>ocultarSugerenciasDx(),180)">
+        <div id="dx-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;z-index:300;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.15);margin-top:4px"></div>
+      </div>
+      <div class="form-group full" id="dx-elegidos-wrap" style="display:none">
+        <label>Diagnósticos sugeridos seleccionados</label>
+        <div id="dx-elegidos" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+      </div>
+      <div class="form-group"><label>Tipo</label><select id="c-tipo">
+        <option value="consulta">Consulta general</option>
+        <option value="control">Control</option>
+        <option value="urgencia">Urgencia</option>
+        <option value="cirugia">Cirugía</option>
+        <option value="examen">Examen</option>
+        <option value="optometria">Optometría / Examen visual</option>
+        <option value="odontologia">Odontología</option>
+      </select></div>
+      <div class="form-group"><label>Estado</label><select id="c-estado"><option value="pendiente">Pendiente</option><option value="confirmada">Confirmada</option><option value="completada">Completada</option><option value="cancelada">Cancelada</option></select></div>
+      <div class="form-group full"><label>Notas / Diagnóstico</label><textarea id="c-notas" placeholder="Observaciones, diagnóstico... (los diagnósticos sugeridos se agregan aquí)"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-cita')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarCita()">💾 Guardar Cita</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL MEDICACION -->
+<div class="modal-overlay" id="modal-medicacion">
+  <div class="modal modal-lg" style="max-width:680px">
+    <h2 id="modal-med-title">💊 Nueva Receta</h2>
+    <div class="form-grid" style="margin-bottom:16px">
+      <div class="form-group full"><label>Paciente *</label>
+        <div style="position:relative">
+          <input type="text" id="m-pac-txt" placeholder="Buscar paciente por nombre..." autocomplete="off"
+            oninput="filterPacSug(this.value,'m')" onfocus="filterPacSug(this.value,'m')" onblur="setTimeout(()=>hidePacSug('m'),200)">
+          <input type="hidden" id="m-paciente">
+          <div id="m-pac-sug" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;z-index:300;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.15);margin-top:4px"></div>
+        </div>
+      </div>
+      <div class="form-group"><label>Fecha Inicio</label><input type="date" id="m-inicio"></div>
+      <div class="form-group"><label>Fecha Fin</label><input type="date" id="m-fin"></div>
+      <div class="form-group"><label>Estado</label><select id="m-estado"><option value="activa">Activa</option><option value="finalizada">Finalizada</option><option value="suspendida">Suspendida</option></select></div>
+    </div>
+    <div id="med-items-list"></div>
+    <button id="btn-add-med-item" class="btn btn-secondary btn-sm" onclick="addMedItem()" style="margin-bottom:16px">+ Agregar medicamento</button>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-medicacion')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarMedicacion()">💾 Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NOTA -->
+<div class="modal-overlay" id="modal-nota">
+  <div class="modal">
+    <h2 id="modal-nota-title">📝 Nueva Nota Clínica</h2>
+    <div class="form-grid cols-1">
+      <div class="form-group"><label>Paciente *</label>
+        <div style="position:relative">
+          <input type="text" id="n-pac-txt" placeholder="Buscar paciente por nombre..." autocomplete="off"
+            oninput="filterPacSug(this.value,'n')" onfocus="filterPacSug(this.value,'n')" onblur="setTimeout(()=>hidePacSug('n'),200)">
+          <input type="hidden" id="n-paciente">
+          <div id="n-pac-sug" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;z-index:300;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.15);margin-top:4px"></div>
+        </div>
+      </div>
+      <div class="form-group"><label>Tipo de Nota</label><select id="n-tipo"><option value="evolucion">Evolución</option><option value="diagnostico">Diagnóstico</option><option value="tratamiento">Tratamiento</option><option value="laboratorio">Laboratorio</option><option value="imagen">Imagen / Radiología</option><option value="cirugia">Cirugía</option><option value="alta">Alta médica</option><option value="examen_visual">👁️ Examen Visual</option><option value="otro">Otro</option></select></div>
+      <div class="form-group"><label>Fecha</label><input type="date" id="n-fecha"></div>
+      <div class="form-group"><label>Título</label><input type="text" id="n-titulo" placeholder="Breve título de la nota"></div>
+      <div class="form-group"><label>Nota Clínica *</label><textarea id="n-contenido" placeholder="Descripción detallada, hallazgos, diagnóstico..." style="min-height:130px"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-nota')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarNota()">💾 Guardar Nota</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL VER NOTA -->
+<div class="modal-overlay" id="modal-ver-nota">
+  <div class="modal">
+    <h2 id="ver-nota-title">📝 Nota Clínica</h2>
+    <div id="ver-nota-content"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-ver-nota')">Cerrar</button>
+      <button class="btn btn-primary" onclick="imprimirNota(currentNotaId)">🖨️ Imprimir Nota</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL SELECTOR DE CITA (varios turnos el mismo día) -->
+<div class="modal-overlay" id="modal-acudio-picker">
+  <div class="modal" style="max-width:440px">
+    <h2 id="acudio-picker-title">✅ ¿Qué cita marcar?</h2>
+    <p style="font-size:13px;color:var(--text-light);margin-bottom:16px">Este paciente tiene más de una cita hoy. Selecciona cuál marcar como completada:</p>
+    <div id="acudio-picker-lista"></div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-acudio-picker')">Cancelar</button></div>
+  </div>
+</div>
+
+<!-- MODAL RESUMEN / HOJA DE CONSULTA -->
+<div class="modal-overlay" id="modal-resumen-cita">
+  <div class="modal modal-lg">
+    <h2>📄 Hoja de Consulta</h2>
+    <div id="resumen-cita-content"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-resumen-cita')">Cerrar</button>
+      <button class="btn btn-primary" onclick="imprimirNotaConsulta(currentResumenCitaId)">🖨️ Imprimir Nota</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL INACTIVIDAD -->
+<div class="modal-overlay" id="modal-inactividad" style="z-index:9999">
+  <div class="modal mc-box" style="max-width:380px;text-align:center">
+    <div style="font-size:48px;margin-bottom:12px">⏱️</div>
+    <h2 style="margin-bottom:8px">Sesión por expirar</h2>
+    <p style="color:var(--text-light);font-size:14px;margin-bottom:18px">
+      Por inactividad tu sesión se cerrará en
+      <strong style="color:var(--danger);font-size:20px;display:block;margin:8px 0" id="inactividad-count">30</strong>
+      segundos. Los formularios abiertos se guardarán como <strong>pendientes de finalización</strong>.
+    </p>
+    <div style="display:flex;gap:10px;justify-content:center">
+      <button class="btn btn-primary" onclick="continuarSesion()" style="min-width:140px">✋ Seguir aquí</button>
+      <button class="btn btn-secondary" onclick="autoLogout()" style="min-width:120px">Salir ahora</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CONFIRMACIÓN GLOBAL -->
+<div class="modal-overlay" id="modal-confirm">
+  <div class="modal mc-box">
+    <div id="mc-icon"></div>
+    <h2 id="mc-title"></h2>
+    <p class="mc-msg" id="mc-msg"></p>
+    <div class="mc-actions">
+      <button class="btn btn-secondary" id="mc-cancel" onclick="_confirmCancel()">Cancelar</button>
+      <button class="btn btn-danger"    id="mc-ok"     onclick="_confirmOk()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DETALLE CLÍNICA (Super Admin) -->
+<div class="modal-overlay" id="modal-clinica-detalle">
+  <div class="modal modal-xl">
+    <div class="detalle-header">
+      <div class="detalle-logo" id="detalle-clinica-logo-box">🏥</div>
+      <div style="flex:1;min-width:180px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <h2 id="detalle-clinica-nombre" style="margin:0;font-size:20px"></h2>
+          <span id="detalle-clinica-prod-badge" class="tag-purple" style="display:none">★ En Producción</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
+          <code id="detalle-clinica-codigo" style="background:var(--bg);padding:3px 10px;border-radius:6px;font-size:12px;color:var(--text-light)"></code>
+          <span id="detalle-clinica-status-tag"></span>
+        </div>
+      </div>
+      <button class="modal-close" onclick="closeModal('modal-clinica-detalle')">✕</button>
+    </div>
+
+    <div id="detalle-stats-row" class="admin-stat-row" style="margin-bottom:18px">
+      <div class="admin-stat" style="opacity:.5"><div class="admin-stat-icon">⏳</div><div><div class="admin-stat-val">—</div><div class="admin-stat-label">Cargando...</div></div></div>
+    </div>
+
+    <div class="tabs" style="margin-bottom:14px">
+      <button class="tab active" id="detalle-tab-info"      onclick="switchDetalleTab('info')">ℹ️ Información</button>
+      <button class="tab"        id="detalle-tab-usuarios"  onclick="switchDetalleTab('usuarios')">👥 Usuarios</button>
+      <button class="tab"        id="detalle-tab-actividad" onclick="switchDetalleTab('actividad')">📊 Actividad</button>
+    </div>
+
+    <div id="detalle-panel-info"></div>
+    <div id="detalle-panel-usuarios"  style="display:none"></div>
+    <div id="detalle-panel-actividad" style="display:none"></div>
+
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;padding-top:14px;border-top:1px solid var(--border)">
+      <button class="btn btn-secondary" id="detalle-btn-prod" onclick="setClinicaProduccion(currentDetalleClinicaId)">★ Marcar en Producción</button>
+      <button class="btn btn-primary"   onclick="closeModal('modal-clinica-detalle')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/app.js"></script>
+</body>
+</html>
