@@ -1051,22 +1051,23 @@ function openModalPaciente(id){
 
 async function guardarPaciente(irExpediente=false, irCita=false){
   if(!currentClinicaId){ toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
+  if(!_lockSubmit('paciente', null)) return;
   const nombre=document.getElementById('p-nombre').value.trim();
   const apellidos=document.getElementById('p-apellidos').value.trim();
-  if(!nombre||!apellidos){ toast('Nombre y apellidos son obligatorios','error'); return; }
+  if(!nombre||!apellidos){ _unlockSubmit('paciente', null); toast('Nombre y apellidos son obligatorios','error'); return; }
   const edadVal = document.getElementById('p-edad')?.value;
-  if(edadVal === '' || edadVal === null || edadVal === undefined){ toast('La edad es obligatoria','error'); return; }
+  if(edadVal === '' || edadVal === null || edadVal === undefined){ _unlockSubmit('paciente',null); toast('La edad es obligatoria','error'); return; }
   const edadNum = parseInt(edadVal, 10);
   const currentYear = new Date().getFullYear();
   const fechaNacDerived = (currentYear - edadNum) + '-01-01';
   const idTipo  = document.getElementById('p-id-tipo')?.value || 'Cédula';
   const idValor = document.getElementById('p-id').value.trim();
   const esOptica = currentClinica?.tipo === 'optica';
-  if(!esOptica && !idValor){ toast('El número de identificación es obligatorio','error'); return; }
+  if(!esOptica && !idValor){ _unlockSubmit('paciente',null); toast('El número de identificación es obligatorio','error'); return; }
   if(!editingId && idValor) {
     const labelBusqueda = idTipo + ': ' + idValor;
     const duplicado = C.p.find(p => p.identificacion && p.identificacion.toLowerCase() === labelBusqueda.toLowerCase());
-    if(duplicado){ toast(`Ya existe un paciente con esa identificación: ${duplicado.nombre} ${duplicado.apellidos}`,'error'); return; }
+    if(duplicado){ _unlockSubmit('paciente',null); toast(`Ya existe un paciente con esa identificación: ${duplicado.nombre} ${duplicado.apellidos}`,'error'); return; }
   }
   const identificacion = idValor ? idTipo + ': ' + idValor : '';
   const obj={nombre,apellidos,identificacion,fechaNac:fechaNacDerived,sexo:document.getElementById('p-sexo').value,sangre:document.getElementById('p-sangre').value,telefono:document.getElementById('p-telefono').value.trim(),email:document.getElementById('p-email').value.trim(),direccion:document.getElementById('p-direccion').value.trim(),alergias:document.getElementById('p-alergias').value.trim(),estado:document.getElementById('p-estado').value,emergencia:document.getElementById('p-emergencia').value.trim(),observaciones:document.getElementById('p-observaciones').value.trim(),fechaRegistro:hoy(),fotoUrl:currentFotoUrl};
@@ -1074,12 +1075,13 @@ async function guardarPaciente(irExpediente=false, irCita=false){
   let err, savedId=editingId;
   if(editingId){ const r=await sb.from('pacientes').update(toP(obj)).eq('id',editingId); err=r.error; }
   else { const r=await sb.from('pacientes').insert([toP(obj)]).select('id').single(); err=r.error; if(!err) savedId=r.data.id; }
-  if(err){ setLoading(false); toast('Error: '+err.message,'error'); return; }
+  if(err){ setLoading(false); _unlockSubmit('paciente',null); toast('Error: '+err.message,'error'); return; }
   if(pendingFotoFile && savedId){
     try{ const url=await subirFotoPaciente(pendingFotoFile,savedId); await sb.from('pacientes').update({foto_url:url}).eq('id',savedId); pendingFotoFile=null; }
     catch(e){ toast('Paciente guardado, error con la foto: '+e.message,'info'); }
   }
   setLoading(false);
+  _unlockSubmit('paciente', null);
   toast(editingId?'Paciente actualizado':'Paciente registrado ✅');
   if(!editingId) logActivity('paciente');
   const btnCitar = document.getElementById('btn-guardar-y-citar');
@@ -5485,6 +5487,8 @@ async function guardarTransaccion() {
   const ref    = document.getElementById('trans-referencia').value.trim();
   if(!desc){ toast('Ingresa una descripción','error'); return; }
   if(!monto||monto<=0){ toast('Ingresa un monto válido','error'); return; }
+  const btn = document.querySelector('[onclick="guardarTransaccion()"]');
+  if(!_lockSubmit('trans', btn)) return;
 
   // Productos de inventario seleccionados (solo en egreso con categoría física)
   const esCompraInv = tipo === 'egreso' && ['medicamento','insumo','equipo'].includes(cat);
@@ -5497,7 +5501,7 @@ async function guardarTransaccion() {
     clinica_id:currentClinicaId, tipo, descripcion:desc, monto, fecha,
     categoria:cat, metodo_pago:metodo, referencia:ref||null, creado_por:currentUser?.name
   });
-  if(error){ toast('Error al guardar transacción','error'); setLoading(false); return; }
+  if(error){ toast('Error al guardar transacción','error'); setLoading(false); _unlockSubmit('trans', btn); return; }
 
   // Si hay productos seleccionados, crear entradas en inventario
   if(productosSeleccionados.length) {
@@ -5524,6 +5528,7 @@ async function guardarTransaccion() {
     toast(tipo==='ingreso'?'Ingreso registrado 💰':'Egreso registrado 📤');
   }
 
+  _unlockSubmit('trans', btn);
   closeModal('modal-transaccion');
   await loadAll(); renderFinanzas(); setLoading(false);
 }
@@ -6005,6 +6010,17 @@ async function renderAdminGlobal() {
 // ═══════════════════════════════════════════════════════════
 
 let carritoFarma = [];
+const _locks = new Set();
+function _lockSubmit(key, btn) {
+  if(_locks.has(key)) return false;
+  _locks.add(key);
+  if(btn) { btn.disabled = true; btn._origText = btn.innerHTML; btn.innerHTML = '⏳ Procesando...'; }
+  return true;
+}
+function _unlockSubmit(key, btn) {
+  _locks.delete(key);
+  if(btn) { btn.disabled = false; if(btn._origText) { btn.innerHTML = btn._origText; btn._origText = null; } }
+}
 let farmaTab = 'despacho';
 
 function switchFarmaTab(tab) {
@@ -6158,6 +6174,8 @@ function limpiarCarrito() { carritoFarma = []; renderCarritoFarma(); }
 
 async function completarVentaFarma() {
   if(!carritoFarma.length) { toast('El carrito está vacío', 'error'); return; }
+  const btn = document.querySelector('[onclick="completarVentaFarma()"]');
+  if(!_lockSubmit('venta', btn)) return;
   const metodoPago  = document.getElementById('farma-metodo-pago')?.value || 'efectivo';
   const cliente     = document.getElementById('farma-cliente')?.value?.trim() || '';
   const esReceta    = document.getElementById('farma-es-receta')?.checked || false;
@@ -6177,7 +6195,7 @@ async function completarVentaFarma() {
     motivo, fecha: hoy(), clinica_id: currentClinicaId
   }));
   const { error: movErr } = await sb.from('inventario_movimientos').insert(movimientos);
-  if(movErr) { toast('Error al registrar movimientos: ' + movErr.message, 'error'); return; }
+  if(movErr) { toast('Error al registrar movimientos: ' + movErr.message, 'error'); _unlockSubmit('venta', btn); return; }
 
   for(const item of carritoFarma) {
     const prod = C.inv.find(p => p.id === item.id);
@@ -6201,6 +6219,7 @@ async function completarVentaFarma() {
   ['farma-cliente','farma-doctor','farma-paciente-receta'].forEach(id => { const e = document.getElementById(id); if(e) e.value = ''; });
   const ckEl = document.getElementById('farma-es-receta'); if(ckEl) ckEl.checked = false;
   const camposEl = document.getElementById('farma-receta-campos'); if(camposEl) camposEl.style.display = 'none';
+  _unlockSubmit('venta', btn);
   await loadAll();
   actualizarStatsFarma();
   renderFarmaDespacho();
