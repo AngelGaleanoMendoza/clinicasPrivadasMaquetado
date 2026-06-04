@@ -999,11 +999,13 @@
       <div id="trans-compra-inv-wrap" class="form-group full" style="display:none">
         <label>Productos comprados — se agregarán al inventario automáticamente</label>
         <div style="background:var(--bg);border:1.5px solid var(--border);border-radius:12px;padding:12px">
-          <div style="display:flex;align-items:center;gap:8px;background:var(--card);border:1.5px solid var(--border);border-radius:10px;padding:8px 12px;margin-bottom:10px">
-            <span style="color:var(--text-light)">🔍</span>
-            <input type="text" id="trans-inv-buscar" placeholder="Buscar producto del inventario..." style="border:none;background:transparent;outline:none;font-size:13px;width:100%;font-family:inherit;color:var(--text)" oninput="filtrarTransInv()">
+          <div id="trans-inv-seleccionados-resumen" style="margin-bottom:10px;display:none">
+            <div style="font-size:12px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Productos seleccionados</div>
+            <div id="trans-inv-chips" style="display:flex;flex-wrap:wrap;gap:6px"></div>
           </div>
-          <div id="trans-inv-lista" style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:6px"></div>
+          <button type="button" class="btn btn-secondary" style="width:100%" onclick="abrirModalSeleccionInv()">
+            📦 Seleccionar productos del inventario
+          </button>
         </div>
       </div>
       <div class="form-group full">
@@ -1036,6 +1038,42 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-transaccion')">Cancelar</button>
       <button class="btn btn-primary" onclick="guardarTransaccion()">💾 Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL SELECCIÓN DE INVENTARIO PARA COMPRAS -->
+<div class="modal-overlay" id="modal-seleccion-inv">
+  <div class="modal modal-xl" style="max-width:860px;max-height:90vh;display:flex;flex-direction:column">
+    <button class="modal-close-btn" onclick="closeModal('modal-seleccion-inv')" title="Cerrar">✕</button>
+    <h2>📦 Seleccionar Productos a Comprar</h2>
+    <!-- Buscador y filtros -->
+    <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <div class="search-bar-input" style="flex:1;min-width:220px">
+        <span style="color:var(--text-light)">🔍</span>
+        <input type="text" id="sinv-buscar" placeholder="Buscar por nombre..." oninput="renderModalInvLista()" style="border:none;background:transparent;outline:none;font-size:14px;width:100%;font-family:inherit;color:var(--text)">
+      </div>
+    </div>
+    <div class="filter-chips" id="sinv-cat-chips" style="margin-bottom:14px">
+      <span class="chip active" onclick="setSinvCat('',this)">Todos</span>
+      <span class="chip" onclick="setSinvCat('medicamento',this)">💊 Medicamentos</span>
+      <span class="chip" onclick="setSinvCat('equipo',this)">🔬 Equipos</span>
+      <span class="chip" onclick="setSinvCat('insumo',this)">🧹 Insumos</span>
+      <span class="chip" onclick="setSinvCat('material',this)">🩺 Material</span>
+      <span class="chip" onclick="setSinvCat('general',this)">📦 General</span>
+    </div>
+    <!-- Lista de productos -->
+    <div id="sinv-lista" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;min-height:0;padding-right:4px"></div>
+    <!-- Resumen de selección -->
+    <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:14px">
+      <div style="font-size:12px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">
+        Seleccionados: <span id="sinv-count">0</span> productos
+      </div>
+      <div id="sinv-resumen" style="display:flex;flex-wrap:wrap;gap:6px;min-height:28px;margin-bottom:14px"></div>
+      <div class="modal-footer" style="padding:0">
+        <button class="btn btn-secondary" onclick="closeModal('modal-seleccion-inv')">Cancelar</button>
+        <button class="btn btn-primary" onclick="confirmarSeleccionInv()">✅ Confirmar selección</button>
+      </div>
     </div>
   </div>
 </div>

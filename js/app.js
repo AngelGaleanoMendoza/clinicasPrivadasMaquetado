@@ -5393,88 +5393,170 @@ function openModalTransaccion(tipo='ingreso') {
   document.getElementById('trans-categoria').value = 'consulta';
   document.getElementById('trans-metodo').value = 'efectivo';
   document.getElementById('trans-referencia').value = '';
-  const buscarEl = document.getElementById('trans-inv-buscar');
-  if(buscarEl) buscarEl.value = '';
+  _transInvSeleccion = [];
   const wrap = document.getElementById('trans-compra-inv-wrap');
   if(wrap) wrap.style.display = 'none';
+  const chips = document.getElementById('trans-inv-chips');
+  if(chips) chips.innerHTML = '';
+  const resumen = document.getElementById('trans-inv-seleccionados-resumen');
+  if(resumen) resumen.style.display = 'none';
   document.getElementById('modal-transaccion').classList.add('open');
   setTimeout(initDatePickers, 50);
 }
+
+// Almacena la selección del modal de inventario: { id, nombre, cantidad, unidad }
+let _transInvSeleccion = [];
+let _sinvCat = '';
 
 function toggleTransCompraInv() {
   const tipo = document.getElementById('trans-tipo')?.value;
   const cat  = document.getElementById('trans-categoria')?.value;
   const wrap = document.getElementById('trans-compra-inv-wrap');
   if(!wrap) return;
-  const mostrar = tipo === 'egreso' && ['medicamento','insumo','equipo'].includes(cat);
+  const mostrar = tipo === 'egreso' && ['medicamento','insumo','equipo','material','general'].includes(cat);
   wrap.style.display = mostrar ? '' : 'none';
-  if(mostrar) renderTransInvLista('');
 }
 
-function filtrarTransInv() {
-  const q = document.getElementById('trans-inv-buscar')?.value || '';
-  renderTransInvLista(q);
+function abrirModalSeleccionInv() {
+  _sinvCat = '';
+  document.querySelectorAll('#sinv-cat-chips .chip').forEach((c,i) => c.classList.toggle('active', i===0));
+  const buscar = document.getElementById('sinv-buscar'); if(buscar) buscar.value = '';
+  renderModalInvLista();
+  actualizarResumenSinv();
+  openModalOverlay('modal-seleccion-inv');
 }
 
-function renderTransInvLista(q) {
-  const lista = document.getElementById('trans-inv-lista');
+function setSinvCat(cat, el) {
+  _sinvCat = cat;
+  document.querySelectorAll('#sinv-cat-chips .chip').forEach(c => c.classList.remove('active'));
+  if(el) el.classList.add('active');
+  renderModalInvLista();
+}
+
+function renderModalInvLista() {
+  const lista = document.getElementById('sinv-lista');
   if(!lista) return;
-  const cat = document.getElementById('trans-categoria')?.value || '';
-  const query = q.toLowerCase();
-  const catMap = { medicamento: ['medicamento'], insumo: ['insumo','material'], equipo: ['equipo'] };
-  const cats = catMap[cat] || [];
+  const q = (document.getElementById('sinv-buscar')?.value || '').toLowerCase();
+  const catIcon = { medicamento:'💊', material:'🩺', insumo:'🧹', equipo:'🔬', papeleria:'📄', general:'📦' };
+  const catLabel = { medicamento:'Medicamento', material:'Material', insumo:'Insumo', equipo:'Equipo', papeleria:'Papelería', general:'General' };
+  const catColor = { medicamento:'#EFF6FF', material:'#F0FDF4', insumo:'#FFFBEB', equipo:'#F5F3FF', general:'#F1F5F9' };
+
   const productos = C.inv.filter(p =>
-    (cats.length === 0 || cats.includes(p.categoria)) &&
-    (!query || p.nombre.toLowerCase().includes(query) || (p.descripcion||'').toLowerCase().includes(query))
+    (!_sinvCat || p.categoria === _sinvCat) &&
+    (!q || p.nombre.toLowerCase().includes(q) || (p.descripcion||'').toLowerCase().includes(q))
   );
+
   if(!productos.length) {
-    lista.innerHTML = '<div style="color:var(--text-light);font-size:13px;text-align:center;padding:12px">No se encontraron productos</div>';
+    lista.innerHTML = '<div style="color:var(--text-light);font-size:13px;text-align:center;padding:32px">No se encontraron productos</div>';
     return;
   }
-  const catIcon = { medicamento:'💊', material:'🩺', insumo:'🧹', equipo:'🔬', papeleria:'📄', general:'📦' };
-  lista.innerHTML = productos.map(p => `
-    <label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;cursor:pointer;border:1.5px solid var(--border);background:var(--card);transition:border-color .15s"
-      onmouseover="this.style.borderColor='var(--primary)'" onmouseout="if(!this.querySelector('input').checked)this.style.borderColor='var(--border)'"
-      id="trans-inv-row-${p.id}">
-      <input type="checkbox" data-id="${p.id}" style="width:16px;height:16px;accent-color:var(--primary);cursor:pointer;flex-shrink:0" onchange="onTransInvCheck(this)">
+
+  lista.innerHTML = productos.map(p => {
+    const sel = _transInvSeleccion.find(s => s.id === p.id);
+    const checked = !!sel;
+    const cantVal = sel ? sel.cantidad : 1;
+    return `
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:12px;border:1.5px solid ${checked?'var(--primary)':'var(--border)'};background:${checked?'var(--primary-light)':'var(--card)'};transition:all .15s" id="sinv-row-${p.id}">
+      <input type="checkbox" data-id="${p.id}" ${checked?'checked':''} style="width:18px;height:18px;accent-color:var(--primary);cursor:pointer;flex-shrink:0" onchange="onSinvCheck(this)">
+      <div style="width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;background:${catColor[p.categoria]||'#F1F5F9'}">${catIcon[p.categoria]||'📦'}</div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:600">${catIcon[p.categoria]||'📦'} ${p.nombre}</div>
-        <div style="font-size:11px;color:var(--text-light)">Stock actual: ${p.stock} ${p.unidad} · ${p.categoria}</div>
+        <div style="font-size:14px;font-weight:700">${p.nombre}</div>
+        <div style="font-size:11px;color:var(--text-light);margin-top:2px">
+          <span class="tag tag-gray" style="font-size:10px">${catLabel[p.categoria]||p.categoria}</span>
+          &nbsp;Stock: <strong>${p.stock}</strong> ${p.unidad}
+          ${p.precio?`&nbsp;·&nbsp;${fmtC(p.precio)} / ${p.unidad}`:''}
+        </div>
       </div>
-      <div style="display:flex;align-items:center;gap:6px">
-        <input type="number" id="trans-inv-cant-${p.id}" min="1" value="1" placeholder="Cant."
-          style="width:62px;padding:5px 8px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text);font-family:inherit;outline:none;text-align:center"
-          onclick="event.stopPropagation()" onchange="autoDescripcionTransInv()">
-        <span style="font-size:11px;color:var(--text-light);white-space:nowrap">${p.unidad}</span>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        <label style="font-size:11px;color:var(--text-light)">Cantidad:</label>
+        <input type="number" id="sinv-cant-${p.id}" min="1" value="${cantVal}"
+          style="width:68px;padding:6px 8px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:600;background:var(--bg);color:var(--text);font-family:inherit;outline:none;text-align:center"
+          onclick="event.stopPropagation()" onchange="onSinvCantChange(${p.id},this.value)">
+        <span style="font-size:11px;color:var(--text-light)">${p.unidad}</span>
       </div>
-    </label>`).join('');
+    </div>`;
+  }).join('');
 }
 
-function onTransInvCheck(cb) {
-  const row = document.getElementById('trans-inv-row-' + cb.dataset.id);
-  if(row) row.style.borderColor = cb.checked ? 'var(--primary)' : 'var(--border)';
+function onSinvCheck(cb) {
+  const id = parseInt(cb.dataset.id);
+  const prod = C.inv.find(p => p.id === id);
+  const row = document.getElementById('sinv-row-' + id);
+  if(cb.checked) {
+    if(!_transInvSeleccion.find(s => s.id === id)) {
+      const cant = parseInt(document.getElementById('sinv-cant-'+id)?.value||1,10)||1;
+      _transInvSeleccion.push({ id, nombre: prod?.nombre||'—', cantidad: cant, unidad: prod?.unidad||'uds' });
+    }
+    if(row) { row.style.borderColor='var(--primary)'; row.style.background='var(--primary-light)'; }
+  } else {
+    _transInvSeleccion = _transInvSeleccion.filter(s => s.id !== id);
+    if(row) { row.style.borderColor='var(--border)'; row.style.background='var(--card)'; }
+  }
+  actualizarResumenSinv();
+}
+
+function onSinvCantChange(id, valor) {
+  const nueva = parseInt(valor, 10) || 1;
+  const idx = _transInvSeleccion.findIndex(s => s.id === id);
+  if(idx >= 0) _transInvSeleccion[idx].cantidad = nueva;
+  actualizarResumenSinv();
+}
+
+function actualizarResumenSinv() {
+  const countEl = document.getElementById('sinv-count');
+  const resEl = document.getElementById('sinv-resumen');
+  if(countEl) countEl.textContent = _transInvSeleccion.length;
+  if(resEl) {
+    resEl.innerHTML = !_transInvSeleccion.length
+      ? '<span style="font-size:12px;color:var(--text-light)">Ningún producto seleccionado aún</span>'
+      : _transInvSeleccion.map(s => `
+          <span style="display:inline-flex;align-items:center;gap:5px;background:var(--primary-light);color:var(--primary);border:1px solid var(--primary);border-radius:20px;padding:3px 10px;font-size:12px;font-weight:600">
+            💊 ${s.nombre} ×${s.cantidad}
+            <span onclick="quitarSinvItem(${s.id})" style="cursor:pointer;color:var(--danger);font-weight:700;margin-left:2px">✕</span>
+          </span>`).join('');
+  }
+}
+
+function quitarSinvItem(id) {
+  _transInvSeleccion = _transInvSeleccion.filter(s => s.id !== id);
+  renderModalInvLista();
+  actualizarResumenSinv();
+}
+
+function confirmarSeleccionInv() {
+  closeModal('modal-seleccion-inv');
+  actualizarChipsSinv();
+  if(_transInvSeleccion.length) autoDescripcionTransInv();
+}
+
+function actualizarChipsSinv() {
+  const chips = document.getElementById('trans-inv-chips');
+  const resumen = document.getElementById('trans-inv-seleccionados-resumen');
+  if(!chips || !resumen) return;
+  if(!_transInvSeleccion.length) { resumen.style.display='none'; return; }
+  resumen.style.display='';
+  chips.innerHTML = _transInvSeleccion.map(s => `
+    <span style="display:inline-flex;align-items:center;gap:5px;background:var(--primary-light);color:var(--primary);border:1px solid var(--primary);border-radius:20px;padding:3px 10px;font-size:12px;font-weight:600">
+      ${s.nombre} ×${s.cantidad}
+      <span onclick="quitarChipSinv(${s.id})" style="cursor:pointer;color:var(--danger);font-weight:700">✕</span>
+    </span>`).join('');
+}
+
+function quitarChipSinv(id) {
+  _transInvSeleccion = _transInvSeleccion.filter(s => s.id !== id);
+  actualizarChipsSinv();
   autoDescripcionTransInv();
 }
 
 function autoDescripcionTransInv() {
-  const seleccionados = getTransInvSeleccionados();
-  if(!seleccionados.length) return;
   const desc = document.getElementById('trans-descripcion');
-  if(!desc) return;
-  const texto = 'Compra: ' + seleccionados.map(s => `${s.nombre} ×${s.cantidad}`).join(', ');
-  desc.value = texto;
+  if(!desc || !_transInvSeleccion.length) return;
+  desc.value = 'Compra: ' + _transInvSeleccion.map(s => `${s.nombre} ×${s.cantidad}`).join(', ');
 }
 
-function getTransInvSeleccionados() {
-  const checkboxes = document.querySelectorAll('#trans-inv-lista input[type=checkbox]:checked');
-  return Array.from(checkboxes).map(cb => {
-    const id = parseInt(cb.dataset.id);
-    const prod = C.inv.find(p => p.id === id);
-    const cantEl = document.getElementById('trans-inv-cant-' + id);
-    const cantidad = parseInt(cantEl?.value || 1, 10) || 1;
-    return { id, nombre: prod?.nombre || '—', cantidad, unidad: prod?.unidad || 'uds' };
-  });
-}
+function getTransInvSeleccionados() { return [..._transInvSeleccion]; }
+
+function filtrarTransInv() {} // legacy, no-op
 
 async function guardarTransaccion() {
   if(!currentClinicaId){ toast('Sin clínica asignada','error'); return; }
