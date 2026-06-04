@@ -550,6 +550,61 @@ body.dark .fact-item-row input,body.dark .fact-item-row select{background:#0F172
 
   /* Topbar search */
   .topbar-search input{font-size:13px}
+
+  /* ── FARMACIA módulo ── */
+  #farma-panel-despacho>div{grid-template-columns:1fr!important}
+  #farma-panel-despacho .card:last-child{position:static!important}
+  #farma-productos-grid{max-height:260px!important;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))!important}
+  #view-farmacia .tabs{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;padding-bottom:4px}
+  #view-farmacia .tab{white-space:nowrap;flex-shrink:0;padding:8px 12px;font-size:12px}
+  #farma-panel-alertas .grid-2,#farma-est-periodo-chips{flex-wrap:wrap}
+  #farma-panel-alertas .grid-2{grid-template-columns:1fr!important}
+  #farma-stats-row{grid-template-columns:1fr 1fr!important}
+  #modal-seleccion-inv .modal{padding:16px 12px}
+  #sinv-lista{max-height:280px}
+
+  /* ── FARMACIA dashboard (renderDashboardFarmacia) ── */
+  #view-dashboard .stats-grid{grid-template-columns:1fr 1fr}
+  #view-dashboard .stat-info h3{font-size:15px!important;word-break:break-all}
+  #view-dashboard .grid-2{grid-template-columns:1fr!important}
+
+  /* ── FINANZAS ── */
+  #view-finanzas .tabs{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;padding-bottom:4px}
+  #view-finanzas .tab{white-space:nowrap;flex-shrink:0;font-size:12px}
+  #fin-periodo-chips{flex-wrap:wrap;gap:4px}
+  #fin-panel-resumen .grid-2{grid-template-columns:1fr!important}
+
+  /* ── INVENTARIO ── */
+  #view-inventario .tabs{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;padding-bottom:4px}
+  #view-inventario .tab{white-space:nowrap;flex-shrink:0;font-size:12px}
+  #inv-stats-row{grid-template-columns:1fr 1fr!important}
+
+  /* ── ESTADÍSTICAS ── */
+  #view-estadisticas .tabs{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;padding-bottom:4px}
+  #view-estadisticas .tab{white-space:nowrap;flex-shrink:0;font-size:12px}
+
+  /* ── PACIENTES / EXPEDIENTES ── */
+  #view-pacientes .search-bar{flex-direction:column;align-items:stretch}
+  .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+
+  /* ── CITAS / AGENDAS ── */
+  #view-citas .card-header{flex-wrap:wrap;gap:8px}
+
+  /* ── MODALES — botones footer ── */
+  .modal-footer{flex-wrap:wrap}
+  .modal-footer .btn{flex:1;min-width:120px;justify-content:center}
+
+  /* ── CARD HEADERS con acciones ── */
+  .card-header{gap:8px}
+  .card-header>div{flex-wrap:wrap;gap:6px}
+
+  /* ── TABS globales con scroll ── */
+  .tabs{overflow-x:auto;-webkit-overflow-scrolling:touch}
+
+  /* ── GENERAL: grids inline con columnas fijas → 1fr ── */
+  [style*="grid-template-columns:1fr 360px"]{grid-template-columns:1fr!important}
+  [style*="grid-template-columns:270px 1fr"]{grid-template-columns:1fr!important}
+  [style*="grid-template-columns:1fr 1fr;gap:18px"]{grid-template-columns:1fr!important}
 }
 
 /* ══════════ RESPONSIVE MÓVIL PEQUEÑO (max 480px) ══════════ */
