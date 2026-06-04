@@ -5930,20 +5930,84 @@ function renderFarmaAlertas() {
   const elBajo = document.getElementById('farma-alertas-bajo'); if(elBajo) elBajo.innerHTML = bajStock.length ? bajStock.map(renderItem).join('') : noAlert;
 }
 
+let farmaEstPeriodo = 'mes';
+
+function setFarmaEstPeriodo(p, el) {
+  farmaEstPeriodo = p;
+  document.querySelectorAll('#farma-est-periodo-chips .chip').forEach(c => c.classList.remove('active'));
+  if(el) el.classList.add('active');
+  renderFarmaEstadisticas();
+}
+
+function getFarmaPeriodoFiltro() {
+  const h = hoy();
+  const now = new Date();
+  if(farmaEstPeriodo === 'hoy')   return { label: 'Hoy — ' + formatFecha(h),    fn: x => x.fecha === h };
+  if(farmaEstPeriodo === 'semana') {
+    const lunes = new Date(now); lunes.setDate(now.getDate() - ((now.getDay()||7) - 1));
+    const dom   = new Date(lunes); dom.setDate(lunes.getDate() + 6);
+    const s = d => d.toISOString().split('T')[0];
+    return { label: formatFecha(s(lunes)) + ' al ' + formatFecha(s(dom)), fn: x => x.fecha >= s(lunes) && x.fecha <= s(dom) };
+  }
+  if(farmaEstPeriodo === 'anio') {
+    const yr = now.getFullYear().toString();
+    return { label: 'Año ' + yr, fn: x => x.fecha.startsWith(yr) };
+  }
+  const mes = h.substring(0, 7);
+  return { label: now.toLocaleDateString('es-ES', {month:'long', year:'numeric'}), fn: x => x.fecha.startsWith(mes) };
+}
+
 function renderFarmaEstadisticas() {
   const h = hoy();
   const mes = h.substring(0, 7);
-  const vHoy  = C.fin.filter(x => x.fecha === h   && x.categoria === 'farmacia' && x.tipo === 'ingreso');
-  const vMes  = C.fin.filter(x => x.fecha.startsWith(mes) && x.categoria === 'farmacia' && x.tipo === 'ingreso');
-  const dMes  = C.mov.filter(x => x.fecha.startsWith(mes) && (x.motivo === 'venta_farmacia' || x.motivo === 'receta'));
-  const rMes  = C.mov.filter(x => x.fecha.startsWith(mes) && x.motivo === 'receta');
-  const tHoy  = vHoy.reduce((s, x) => s + Number(x.monto || 0), 0);
-  const tMes  = vMes.reduce((s, x) => s + Number(x.monto || 0), 0);
+  const { fn } = getFarmaPeriodoFiltro();
+  const vPeriodo = C.fin.filter(x => fn(x) && x.categoria === 'farmacia' && x.tipo === 'ingreso');
+  const vMes     = C.fin.filter(x => x.fecha.startsWith(mes) && x.categoria === 'farmacia' && x.tipo === 'ingreso');
+  const dPeriodo = C.mov.filter(x => fn(x) && (x.motivo === 'venta_farmacia' || x.motivo === 'receta'));
+  const rPeriodo = C.mov.filter(x => fn(x) && x.motivo === 'receta');
+  const tPeriodo = vPeriodo.reduce((s, x) => s + Number(x.monto || 0), 0);
+  const tMes     = vMes.reduce((s, x) => s + Number(x.monto || 0), 0);
   const setEl = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
-  setEl('farma-est-hoy',       fmtC(tHoy));
+  setEl('farma-est-hoy',       fmtC(tPeriodo));
   setEl('farma-est-mes',       fmtC(tMes));
-  setEl('farma-est-despachos', dMes.length);
-  setEl('farma-est-recetas',   rMes.length);
+  setEl('farma-est-despachos', dPeriodo.length);
+  setEl('farma-est-recetas',   rPeriodo.length);
+
+  // Tabla detalle de ventas del período
+  const tbody = document.getElementById('farma-est-ventas-detalle');
+  if(tbody) {
+    const metIcon = { efectivo:'💵', tarjeta:'💳', transferencia:'🏦' };
+    tbody.innerHTML = !vPeriodo.length
+      ? '<tr><td colspan="5" style="text-align:center;color:var(--text-light);padding:20px">Sin ventas en este período</td></tr>'
+      : [...vPeriodo].sort((a,b) => b.fecha.localeCompare(a.fecha)).map(v => {
+          const esR = v.descripcion?.includes('Receta') || v.descripcion?.includes('receta');
+          return `<tr>
+            <td>${formatFecha(v.fecha)}</td>
+            <td style="font-size:12px;max-width:260px">${(v.descripcion||'').replace('Venta farmacia: ','')}</td>
+            <td>${metIcon[v.metodoPago]||''} ${v.metodoPago||'—'}</td>
+            <td>${esR ? '<span class="tag tag-blue">Receta</span>' : '<span class="tag tag-gray">Directa</span>'}</td>
+            <td style="font-weight:700;color:#15803D">${fmtC(v.monto)}</td>
+          </tr>`;
+        }).join('');
+  }
+
+  // Entradas de stock (compras) del período
+  const entradasEl = document.getElementById('farma-est-entradas');
+  if(entradasEl) {
+    const entradas = C.mov.filter(x => fn(x) && x.tipo === 'entrada');
+    entradasEl.innerHTML = !entradas.length
+      ? '<div style="color:var(--text-light);font-size:13px;padding:12px 0">Sin entradas en este período</div>'
+      : [...entradas].sort((a,b) => b.fecha.localeCompare(a.fecha)).map(m => {
+          const prod = C.inv.find(p => p.id === m.invId);
+          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
+            <div>
+              <div style="font-size:13px;font-weight:600">💊 ${prod?.nombre || '—'}</div>
+              <div style="font-size:11px;color:var(--text-light)">${formatFecha(m.fecha)} · ${m.motivo || 'entrada'}</div>
+            </div>
+            <span class="tag tag-green">+${m.cantidad} ${prod?.unidad||'uds'}</span>
+          </div>`;
+        }).join('');
+  }
   const conteo = {};
   dMes.forEach(m => {
     const prod = C.inv.find(p => p.id === m.invId);
@@ -5966,4 +6030,100 @@ function renderFarmaEstadisticas() {
       </div>
       <span style="font-weight:700;font-size:13px;min-width:55px;text-align:right">${cantidad} uds</span>
     </div>`).join('');
+}
+
+function descargarPDFFarmacia() {
+  const cfg = getClinicaConfig();
+  const { label, fn } = getFarmaPeriodoFiltro();
+  const ventas    = C.fin.filter(x => fn(x) && x.categoria === 'farmacia' && x.tipo === 'ingreso');
+  const despachos = C.mov.filter(x => fn(x) && (x.motivo === 'venta_farmacia' || x.motivo === 'receta'));
+  const recetas   = C.mov.filter(x => fn(x) && x.motivo === 'receta');
+  const entradas  = C.mov.filter(x => fn(x) && x.tipo === 'entrada');
+  const totalVentas = ventas.reduce((s, x) => s + Number(x.monto || 0), 0);
+  const catIcon = c => ({ medicamento:'💊', material:'🩺', equipo:'🔬', insumo:'🧹', papeleria:'📄', general:'📦' }[c] || '📦');
+  const metIcon = { efectivo:'Efectivo', tarjeta:'Tarjeta', transferencia:'Transferencia', otro:'Otro' };
+
+  // Agrupar ventas por día
+  const porDia = {};
+  ventas.forEach(v => { porDia[v.fecha] = (porDia[v.fecha] || []).concat(v); });
+  const diasOrdenados = Object.keys(porDia).sort((a, b) => b.localeCompare(a));
+
+  // Top 10 productos vendidos
+  const conteo = {};
+  despachos.forEach(m => {
+    const prod = C.inv.find(p => p.id === m.invId);
+    const nombre = prod?.nombre || ('Producto #' + m.invId);
+    conteo[nombre] = (conteo[nombre] || 0) + Number(m.cantidad || 1);
+  });
+  const top = Object.entries(conteo).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const maxTop = top.length ? top[0][1] : 1;
+
+  const body = `
+    <div style="font-size:22px;font-weight:900;color:#0F172A;margin-bottom:4px">Reporte de Farmacia</div>
+    <div style="font-size:13px;color:#64748B;font-weight:600;margin-bottom:20px">Período: ${label} · Generado: ${new Date().toLocaleString('es-ES')}</div>
+
+    <div class="kpi-grid">
+      <div class="kpi blue"><div class="kpi-val">${fmtC(totalVentas)}</div><div class="kpi-lbl">Total Ventas</div></div>
+      <div class="kpi green"><div class="kpi-val">${ventas.length}</div><div class="kpi-lbl">Transacciones</div></div>
+      <div class="kpi orange"><div class="kpi-val">${despachos.length}</div><div class="kpi-lbl">Despachos</div></div>
+      <div class="kpi red"><div class="kpi-val">${recetas.length}</div><div class="kpi-lbl">Recetas</div></div>
+    </div>
+
+    ${top.length ? `<div class="section-title">🏆 Top 10 Productos Más Vendidos</div>
+    <div style="margin-bottom:20px">${top.map(([nombre, cant]) => `
+      <div class="bar-row">
+        <div class="bar-lbl">${nombre}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${Math.round(cant/maxTop*100)}%"><span>${cant}</span></div></div>
+        <div class="bar-val">${cant} uds</div>
+      </div>`).join('')}</div>` : ''}
+
+    <div class="section-title">📅 Ventas Detalladas por Día</div>
+    ${diasOrdenados.length ? diasOrdenados.map(fecha => {
+      const vDia = porDia[fecha];
+      const totalDia = vDia.reduce((s, v) => s + Number(v.monto || 0), 0);
+      return `<div style="margin-bottom:18px">
+        <div style="font-weight:800;font-size:13px;color:#1D4ED8;background:#EFF6FF;padding:6px 12px;border-radius:6px;margin-bottom:6px">
+          📅 ${formatFecha(fecha)} — Total: ${fmtC(totalDia)}
+        </div>
+        <table><thead><tr><th>Descripción</th><th>Método de Pago</th><th>Tipo</th><th>Monto</th></tr></thead>
+        <tbody>${vDia.map(v => {
+          const esR = v.descripcion?.includes('Receta') || v.descripcion?.includes('receta');
+          return `<tr>
+            <td style="font-size:11px">${(v.descripcion||'').replace('Venta farmacia: ','')}</td>
+            <td>${metIcon[v.metodoPago] || v.metodoPago || '—'}</td>
+            <td><span class="tag ${esR ? 'tag-blue' : 'tag-gray'}">${esR ? 'Receta' : 'Directa'}</span></td>
+            <td style="font-weight:700;color:#15803D">${fmtC(v.monto)}</td>
+          </tr>`;
+        }).join('')}</tbody></table>
+      </div>`;
+    }).join('') : '<p style="color:#94A3B8;text-align:center;padding:16px">Sin ventas en este período</p>'}
+
+    ${entradas.length ? `<div class="section-title">📥 Entradas de Stock / Compras</div>
+    <table><thead><tr><th>Fecha</th><th>Producto</th><th>Categoría</th><th>Cantidad</th><th>Motivo</th></tr></thead>
+    <tbody>${[...entradas].sort((a,b) => b.fecha.localeCompare(a.fecha)).map(m => {
+      const prod = C.inv.find(p => p.id === m.invId);
+      return `<tr>
+        <td>${formatFecha(m.fecha)}</td>
+        <td><strong>${catIcon(prod?.categoria)} ${prod?.nombre || '—'}</strong></td>
+        <td style="text-transform:capitalize">${prod?.categoria || '—'}</td>
+        <td><span class="tag tag-green">+${m.cantidad} ${prod?.unidad||'uds'}</span></td>
+        <td style="color:#64748B">${m.motivo || 'entrada manual'}</td>
+      </tr>`;
+    }).join('')}</tbody></table>` : ''}
+
+    <div class="section-title">📦 Estado Actual del Inventario</div>
+    <table><thead><tr><th>Producto</th><th>Categoría</th><th>Stock Actual</th><th>Stock Mínimo</th><th>Precio Unit.</th><th>Estado</th></tr></thead>
+    <tbody>${C.inv.map(p => {
+      const st = p.stock === 0 ? ['tag-red','Sin stock'] : p.stockMin > 0 && p.stock <= p.stockMin ? ['tag-orange','Bajo stock'] : ['tag-green','OK'];
+      return `<tr>
+        <td><strong>${catIcon(p.categoria)} ${p.nombre}</strong></td>
+        <td style="text-transform:capitalize">${p.categoria}</td>
+        <td style="font-weight:700">${p.stock} ${p.unidad}</td>
+        <td>${p.stockMin || '—'}</td>
+        <td>${p.precio ? fmtC(p.precio) : '—'}</td>
+        <td><span class="tag ${st[0]}">${st[1]}</span></td>
+      </tr>`;
+    }).join('')}</tbody></table>`;
+
+  pdfAbrir('Reporte Farmacia — ' + label, body, cfg);
 }
