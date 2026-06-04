@@ -5769,7 +5769,7 @@ function renderCarritoFarma() {
       </div>
       <div style="display:flex;align-items:center;gap:4px">
         <button onclick="cambiarCantCarrito(${i},-1)" style="width:22px;height:22px;border:1px solid var(--border);background:#334155;border-radius:4px;cursor:pointer;color:#fff;font-size:14px;font-weight:700;line-height:1">−</button>
-        <span style="font-size:13px;font-weight:600;min-width:20px;text-align:center">${item.cantidad}</span>
+        <input type="number" min="1" value="${item.cantidad}" onchange="setCantCarrito(${i},this.value)" style="width:44px;text-align:center;padding:2px 4px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;font-weight:600;background:var(--card);color:var(--text);font-family:inherit;outline:none" onfocus="this.select()">
         <button onclick="cambiarCantCarrito(${i},1)" style="width:22px;height:22px;border:1px solid var(--border);background:#334155;border-radius:4px;cursor:pointer;color:#fff;font-size:14px;font-weight:700;line-height:1">+</button>
         <button onclick="quitarDelCarrito(${i})" style="width:22px;height:22px;border:none;background:#e53e3e22;color:#e53e3e;border-radius:4px;cursor:pointer;font-size:13px;line-height:1">✕</button>
       </div>
@@ -5785,6 +5785,16 @@ function cambiarCantCarrito(i, delta) {
   const nueva = item.cantidad + delta;
   if(nueva <= 0) { quitarDelCarrito(i); return; }
   if(prod && nueva > prod.stock) { toast('No hay suficiente stock', 'error'); return; }
+  carritoFarma[i].cantidad = nueva;
+  renderCarritoFarma();
+}
+
+function setCantCarrito(i, valor) {
+  const item = carritoFarma[i]; if(!item) return;
+  const nueva = parseInt(valor, 10);
+  if(isNaN(nueva) || nueva <= 0) { quitarDelCarrito(i); return; }
+  const prod = C.inv.find(p => p.id === item.id);
+  if(prod && nueva > prod.stock) { toast('Stock disponible: ' + prod.stock, 'error'); renderCarritoFarma(); return; }
   carritoFarma[i].cantidad = nueva;
   renderCarritoFarma();
 }
