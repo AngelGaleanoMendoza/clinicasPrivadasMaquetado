@@ -411,13 +411,19 @@ function limpiarPendientesSesion() {
 async function entrarConPerfil(profile) {
   const rolLabel = {admin:'Administración',medico:'Médico',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',farmaceutico:'Farmacéutico'}[profile.rol]||profile.rol;
   currentClinicaId = profile.clinica_id || null;
+  // Obtener email desde Supabase Auth si el profile no lo tiene
+  let emailFinal = profile.email || null;
+  if(!emailFinal) {
+    const { data: { user: authUser } } = await sb.auth.getUser();
+    emailFinal = authUser?.email || null;
+  }
   currentUser = {
     id:     profile.id,
     name:   profile.nombre,
     nombre: profile.nombre,
     role:   rolLabel,
     avatar: profile.icono || profile.nombre[0].toUpperCase(),
-    email:  profile.email,
+    email:  emailFinal,
     key:    profile.rol
   };
   document.getElementById('login-screen').style.display = 'none';
@@ -3831,7 +3837,11 @@ let currentDetalleClinicaId = null;
 let detalleTab = 'info';
 
 function isSuperAdmin() {
-  return currentUser && currentUser.email === SUPER_ADMIN_EMAIL;
+  if(!currentUser) return false;
+  // Comparación robusta: email case-insensitive + trim, o rol superadmin
+  const emailMatch = currentUser.email && currentUser.email.trim().toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
+  const rolMatch   = currentUser.key === 'superadmin';
+  return emailMatch || rolMatch;
 }
 function isFarmaceutico() { return currentUser?.key === 'farmaceutico'; }
 
