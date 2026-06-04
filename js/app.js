@@ -667,11 +667,7 @@ function renderNavQuickGrid(currentView) {
     { view:'medicaciones', icon:'💊', label:'Medicaciones' },
     { view:'notas',        icon:'📝', label:'Notas' },
     { view:'atendidos',    icon:'✅', label:'Atendidos' },
-    { view:'estadisticas', icon:'📊', label:'Estadísticas' },
-    { view:'inventario',   icon:'📦', label:'Inventario' },
-    { view:'exportar',     icon:'📤', label:'Exportar' },
-    { view:'configuracion',icon:'⚙️', label:'Config.' },
-  ].filter(x => x.view !== 'configuracion' || isSuperAdmin());
+  ];
   el.innerHTML = items.map(x =>
     `<div class="nav-quick-item${currentView===x.view?' nq-active':''}" onclick="navigate('${x.view}')">
       <span class="nq-icon">${x.icon}</span>
@@ -3725,25 +3721,8 @@ function applyRoleMenu() {
   vis('menu-medicaciones',    hasClinica && !isRec);
   vis('menu-notas',           hasClinica && !isRec);
   vis('menu-atendidos',       hasClinica && !isRec && !isEnf);
-  vis('menu-estadisticas',    sa || isAdmin);
 
-  // ─ Inventario: admin, farmacéutico, superadmin
-  const hasInv = sa || isAdmin || isFarm;
-  vis('menu-inv-section', hasInv);
-  vis('menu-inventario',  hasInv);
-
-  // ─ Finanzas: admin, farmacéutico, superadmin
-  const hasFin = sa || isAdmin || isFarm;
-  vis('menu-fin-section', hasFin);
-  vis('menu-finanzas',    hasFin);
-
-  // ─ Sistema: admin y superadmin
-  const hasSys = sa || isAdmin;
-  vis('menu-sistema-section', hasSys);
-  vis('menu-exportar',        hasSys);
-
-  // ─ Configuración y Admin: solo superadmin
-  vis('menu-configuracion',  sa);
+  // ─ Admin: solo superadmin
   vis('menu-admin-section',  sa);
   vis('menu-admin',          sa);
 }

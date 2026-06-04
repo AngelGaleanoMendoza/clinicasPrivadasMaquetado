@@ -4,13 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lumea Med — Gestión Clínica</title>
-<link rel="icon" type="image/svg+xml" href="favicon.svg">
-<link rel="shortcut icon" href="favicon.svg">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="shortcut icon" href="../favicon.svg">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
-<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="../css/styles.css">
 </head>
 <body>
 
@@ -86,14 +86,6 @@
       <div class="menu-item" id="menu-medicaciones" onclick="navigate('medicaciones')"><span class="icon">💊</span> Medicaciones</div>
       <div class="menu-item" id="menu-notas" onclick="navigate('notas')"><span class="icon">📝</span> Notas Clínicas</div>
       <div class="menu-item" id="menu-atendidos" onclick="navigate('atendidos')"><span class="icon">📊</span> Atendidos por Día</div>
-      <div class="menu-item" id="menu-estadisticas" onclick="navigate('estadisticas')"><span class="icon">📈</span> Estadísticas</div>
-      <div class="menu-section" id="menu-inv-section">Inventario</div>
-      <div class="menu-item" id="menu-inventario" onclick="navigate('inventario')"><span class="icon">📦</span> Inventario</div>
-      <div class="menu-section" id="menu-fin-section" style="display:none">Finanzas</div>
-      <div class="menu-item" id="menu-finanzas" onclick="navigate('finanzas')" style="display:none"><span class="icon">💰</span> Finanzas</div>
-      <div class="menu-section" id="menu-sistema-section">Sistema</div>
-      <div class="menu-item" id="menu-exportar" onclick="navigate('exportar')"><span class="icon">📤</span> Exportar / Enviar</div>
-      <div class="menu-item" id="menu-configuracion" onclick="navigate('configuracion')" style="display:none"><span class="icon">⚙️</span> Configuración Clínica</div>
       <div class="menu-section" id="menu-admin-section" style="display:none">Super Admin</div>
       <div class="menu-item" id="menu-admin" onclick="navigate('admin')" style="display:none"><span class="icon">👑</span> Administración</div>
     </nav>
@@ -165,7 +157,6 @@
                 <button class="tab active" id="tab-rec-pacientes"   onclick="switchRecTab('pacientes')">👥 Pacientes</button>
                 <button class="tab"        id="tab-rec-citas"       onclick="switchRecTab('citas')">📅 Citas</button>
                 <button class="tab"        id="tab-rec-meds"        onclick="switchRecTab('meds')">💊 Meds</button>
-                <button class="tab"        id="tab-rec-inv"         onclick="switchRecTab('inv')">📦 Inventario</button>
               </div>
               <div id="recientes-content"></div>
             </div>
@@ -1521,6 +1512,6 @@
   </div>
 </div>
 
-<script src="js/app.js"></script>
+<script src="../js/app.js"></script>
 </body>
 </html>
