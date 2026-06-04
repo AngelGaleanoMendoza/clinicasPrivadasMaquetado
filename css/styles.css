@@ -733,3 +733,28 @@ body.dark .acudio-badge{background:rgba(16,185,129,.15);color:#6EE7B7;border-col
 
 /* ══ CLINIC BADGE EN NOTAS ══ */
 .notas-clinic-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:var(--primary-light);border:1px solid rgba(37,99,235,.2);border-radius:20px;font-size:12px;font-weight:700;color:var(--primary);margin-bottom:14px}
+
+/* ══ ADMIN PANEL RESPONSIVE ══ */
+.admin-item-card{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:10px;display:flex;flex-direction:column;gap:10px}
+.admin-item-card-top{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.admin-item-card-name{font-weight:700;font-size:14px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.admin-item-card-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--text-light)}
+.admin-item-card-actions{display:flex;gap:8px;flex-wrap:wrap}
+.admin-item-card-actions .btn{flex:1;min-width:0;justify-content:center;font-size:12px}
+@media(max-width:768px){
+  #view-admin .card{overflow:hidden}
+  #view-admin .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  #view-admin .card-header{flex-wrap:wrap;gap:8px}
+  #view-admin .card-header h3{font-size:14px;flex:1}
+  #view-admin .tabs{overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none}
+  #view-admin .tabs::-webkit-scrollbar{display:none}
+  #view-admin .tab{white-space:nowrap;flex-shrink:0;padding:8px 12px;font-size:12px}
+  .admin-stat-row{grid-template-columns:1fr 1fr!important;gap:10px}
+  .admin-stat{padding:12px 10px}
+  .admin-stat-icon{font-size:20px}
+  .admin-stat-val{font-size:18px}
+  .clinica-detail-grid{grid-template-columns:1fr!important}
+  .clinica-detail-grid .full{grid-column:1}
+  /* Forzar word-break en tarjetas de texto */
+  #admin-panel-global *,#admin-panel-productividad *{word-break:break-word;overflow-wrap:break-word}
+}

@@ -3947,54 +3947,64 @@ function renderAdminClinicas() {
     el.innerHTML = `<div class="empty-state"><div class="empty-icon">🏥</div><p>No hay clínicas registradas.<br>Crea la primera con <strong>+ Nueva Clínica</strong></p></div>`;
     return;
   }
-  el.innerHTML = `<div class="table-wrap"><table>
-    <thead><tr><th>#</th><th>Nombre</th><th>Código</th><th>Estado</th><th>Usuarios</th><th>Acciones</th></tr></thead>
-    <tbody>${adminClinicas.map(c => {
-      const cnt = adminUsuarios.filter(u=>u.clinica_id===c.id).length;
-      const isProd = c.en_produccion === true;
-      return `<tr class="${isProd?'prod-row-highlight':''}">
-        <td><strong style="color:var(--text-light)">#${c.id}</strong></td>
-        <td>
-          <strong>${c.nombre}</strong>
-          ${isProd?'<span class="tag-purple" style="margin-left:8px">★ Producción</span>':''}
-        </td>
-        <td><code style="background:var(--bg);padding:2px 8px;border-radius:6px;font-size:11px;color:var(--text-light)">${c.codigo}</code></td>
-        <td>${c.activa?'<span class="tag tag-green">Activa</span>':'<span class="tag tag-red">Inactiva</span>'}</td>
-        <td><span class="tag tag-blue">${cnt} usuario${cnt!==1?'s':''}</span></td>
-        <td class="actions-cell">
-          <button class="btn btn-sm btn-primary" data-cid="${c.id}" onclick="verDetalleClinica(Number(this.dataset.cid))">🔍 Ver</button>
-          <button class="btn btn-sm btn-secondary" data-cid="${c.id}" onclick="openModalClinicaEdit(Number(this.dataset.cid))">✏️</button>
-          <button class="btn btn-sm btn-danger" data-cid="${c.id}" onclick="eliminarClinica(Number(this.dataset.cid))">🗑️</button>
-        </td></tr>`;
-    }).join('')}</tbody></table></div>`;
+  el.innerHTML = adminClinicas.map(c => {
+    const cnt    = adminUsuarios.filter(u=>u.clinica_id===c.id).length;
+    const isProd = c.en_produccion === true;
+    return `<div class="admin-item-card${isProd?' prod-row-highlight':''}">
+      <div class="admin-item-card-top">
+        <div class="admin-item-card-name">
+          ${isProd?'<span style="color:#7c3aed;margin-right:4px">★</span>':''}${c.nombre}
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;flex-wrap:wrap">
+          ${c.activa?'<span class="tag tag-green">Activa</span>':'<span class="tag tag-red">Inactiva</span>'}
+          ${isProd?'<span class="tag-purple">Producción</span>':''}
+        </div>
+      </div>
+      <div class="admin-item-card-meta">
+        <span>🔑 Código: <code style="background:var(--card);padding:1px 6px;border-radius:5px;font-size:11px">${c.codigo}</code></span>
+        <span>👥 ${cnt} usuario${cnt!==1?'s':''}</span>
+        <span style="color:var(--text-light);font-size:11px">#${c.id}</span>
+      </div>
+      <div class="admin-item-card-actions">
+        <button class="btn btn-sm btn-primary" data-cid="${c.id}" onclick="verDetalleClinica(Number(this.dataset.cid))">🔍 Ver detalle</button>
+        <button class="btn btn-sm btn-secondary" data-cid="${c.id}" onclick="openModalClinicaEdit(Number(this.dataset.cid))">✏️ Editar</button>
+        <button class="btn btn-sm btn-danger" data-cid="${c.id}" onclick="eliminarClinica(Number(this.dataset.cid))">🗑️</button>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function renderAdminUsuarios() {
   const el = document.getElementById('admin-usuarios-list');
   if(!el) return;
   const rolLabel = r => ({admin:'Administración',medico:'Médico',dr:'Dr.',dra:'Dra.',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',farmaceutico:'Farmacéutico'}[r]||r);
-  const rolTag = r => ({admin:'tag-blue',medico:'tag-cyan',dr:'tag-cyan',dra:'tag-cyan',recepcion:'tag-orange',enfermeria:'tag-green',farmaceutico:'tag-emerald'}[r]||'tag-gray');
+  const rolTag   = r => ({admin:'tag-blue',medico:'tag-cyan',dr:'tag-cyan',dra:'tag-cyan',recepcion:'tag-orange',enfermeria:'tag-green',farmaceutico:'tag-emerald'}[r]||'tag-gray');
   if(!adminUsuarios.length) {
     el.innerHTML = `<div class="empty-state"><div class="empty-icon">👥</div><p>No hay usuarios registrados.<br>Crea el primero con <strong>+ Nuevo Usuario</strong></p></div>`;
     return;
   }
-  el.innerHTML = `<div class="table-wrap"><table>
-    <thead><tr><th>Usuario</th><th>Email</th><th>Rol</th><th>Clínica</th><th>Acciones</th></tr></thead>
-    <tbody>${adminUsuarios.map(u => {
-      const clinica = adminClinicas.find(c=>c.id===u.clinica_id);
-      return `<tr>
-        <td><div class="patient-name-cell">
-          <div class="patient-avatar" style="background:linear-gradient(135deg,var(--primary),var(--accent));font-size:18px;width:34px;height:34px">${u.icono||'👤'}</div>
-          <strong>${u.nombre}</strong>
-        </div></td>
-        <td style="font-size:12px;color:var(--text-light)">${u.email||'—'}</td>
-        <td><span class="tag ${rolTag(u.rol)}">${rolLabel(u.rol)}</span></td>
-        <td>${clinica?clinica.nombre:'<span style="color:var(--text-light);font-size:12px">Sin clínica</span>'}</td>
-        <td class="actions-cell">
-          <button class="btn btn-sm btn-secondary" data-uid="${u.id}" onclick="openModalUsuarioEditById(this.dataset.uid)">✏️ Editar</button>
-          <button class="btn btn-sm btn-danger" data-uid="${u.id}" onclick="eliminarUsuario(this.dataset.uid)">🗑️</button>
-        </td></tr>`;
-    }).join('')}</tbody></table></div>`;
+  el.innerHTML = adminUsuarios.map(u => {
+    const clinica = adminClinicas.find(c=>c.id===u.clinica_id);
+    return `<div class="admin-item-card">
+      <div class="admin-item-card-top">
+        <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
+          <div class="patient-avatar" style="background:linear-gradient(135deg,var(--primary),var(--accent));font-size:18px;width:36px;height:36px;flex-shrink:0">${u.icono||'👤'}</div>
+          <div style="flex:1;min-width:0">
+            <div class="admin-item-card-name">${u.nombre}</div>
+            <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.email||'Sin email'}</div>
+          </div>
+        </div>
+        <span class="tag ${rolTag(u.rol)}" style="flex-shrink:0">${rolLabel(u.rol)}</span>
+      </div>
+      <div class="admin-item-card-meta">
+        <span>🏥 ${clinica?clinica.nombre:'Sin clínica asignada'}</span>
+      </div>
+      <div class="admin-item-card-actions">
+        <button class="btn btn-sm btn-secondary" data-uid="${u.id}" onclick="openModalUsuarioEditById(this.dataset.uid)">✏️ Editar</button>
+        <button class="btn btn-sm btn-danger" data-uid="${u.id}" onclick="eliminarUsuario(this.dataset.uid)">🗑️</button>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // ── Productividad ──
