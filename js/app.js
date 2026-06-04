@@ -708,6 +708,12 @@ function renderNavQuickGrid(cv) {
 function renderDashboard(){
   renderPendientesSesion();
   renderNavQuickGrid(currentView);
+  const modoFarmacia = currentUser?.key === 'farmaceutico' || currentClinica?.tipo === 'farmacia';
+  if(modoFarmacia) { renderDashboardFarmacia(); return; }
+  renderDashboardClinica();
+}
+
+function renderDashboardClinica(){
   const h=hoy();
   const pendientes=C.c.filter(c=>c.estado==='pendiente');
   document.getElementById('stat-pacientes').textContent=C.p.length;
@@ -735,8 +741,145 @@ function renderDashboard(){
   }).join(''):`<div class="empty-state" style="padding:28px 0"><div class="empty-icon" style="font-size:32px">📅</div><p>Sin citas para hoy</p></div>`;
 
   renderCalendar('dashboard-cal',false);
-
   switchRecTab('pacientes');
+
+  // Stats por usuario (médicos y admin)
+  renderDashboardPorUsuario();
+}
+
+function renderDashboardPorUsuario() {
+  const h = hoy();
+  const el = document.getElementById('dash-por-usuario');
+  if(!el) return;
+  const medicos = C.prof.filter(p => ['medico','admin','enfermeria','recepcion'].includes(p.rol));
+  if(!medicos.length) { el.style.display='none'; return; }
+  el.style.display='';
+  const citasHoy = C.c.filter(c => c.fecha === h);
+  el.innerHTML = `
+    <div class="card" style="margin-top:18px">
+      <div class="card-header"><h3>👤 Actividad del Personal — Hoy</h3></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;padding-top:4px">
+        ${medicos.map(u => {
+          const atendidas = citasHoy.filter(c => c.medicoId === u.id && c.estado === 'completada').length;
+          const pendientes = citasHoy.filter(c => c.medicoId === u.id && (c.estado === 'pendiente'||c.estado==='confirmada')).length;
+          const total = citasHoy.filter(c => c.medicoId === u.id).length;
+          const rolLabel = {admin:'Administración',medico:'Médico',recepcion:'Recepcionista',enfermeria:'Enfermería',farmaceutico:'Farmacéutico'}[u.rol]||u.rol;
+          const pct = total ? Math.round(atendidas/total*100) : 0;
+          return `<div style="background:var(--bg);border-radius:12px;padding:14px;border:1.5px solid var(--border)">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+              <div class="patient-avatar" style="background:${colAvatar(u.id)};width:38px;height:38px;font-size:13px;flex-shrink:0">${ini(u.nombre,'')}</div>
+              <div style="min-width:0">
+                <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.nombre}</div>
+                <div style="font-size:11px;color:var(--text-light)">${rolLabel}</div>
+              </div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px">
+              <span style="color:var(--text-light)">Atendidos</span>
+              <span style="font-weight:700;color:#15803D">${atendidas}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:8px">
+              <span style="color:var(--text-light)">Pendientes</span>
+              <span style="font-weight:700;color:#d69e2e">${pendientes}</span>
+            </div>
+            <div style="height:5px;background:var(--border);border-radius:3px">
+              <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--primary),var(--accent));border-radius:3px;transition:width .4s"></div>
+            </div>
+            <div style="font-size:10px;color:var(--text-light);text-align:right;margin-top:3px">${pct}% completado · ${total} total</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+}
+
+function renderDashboardFarmacia() {
+  const h = hoy();
+  const ingresosHoy  = C.fin.filter(x => x.fecha === h && x.tipo === 'ingreso');
+  const egresosHoy   = C.fin.filter(x => x.fecha === h && x.tipo === 'egreso');
+  const comprasHoy   = C.mov.filter(x => x.fecha === h && x.tipo === 'entrada');
+  const ventasHoy    = C.fin.filter(x => x.fecha === h && x.categoria === 'farmacia' && x.tipo === 'ingreso');
+  const totalIng     = ingresosHoy.reduce((s,x)  => s + Number(x.monto||0), 0);
+  const totalEgr     = egresosHoy.reduce((s,x)   => s + Number(x.monto||0), 0);
+  const despachos    = C.mov.filter(x => x.fecha === h && (x.motivo==='venta_farmacia'||x.motivo==='receta')).length;
+
+  const view = document.getElementById('view-dashboard');
+  view.innerHTML = `
+    <div id="panel-pendientes-sesion-farma" style="margin-bottom:18px"></div>
+    <div class="stats-grid" style="margin-bottom:18px">
+      <div class="stat-card"><div class="stat-icon si-green">💰</div><div class="stat-info"><h3>${fmtC(totalIng)}</h3><p>Ingresos de Hoy</p></div></div>
+      <div class="stat-card"><div class="stat-icon" style="background:#FEF2F2">📤</div><div class="stat-info"><h3 style="color:#e53e3e">${fmtC(totalEgr)}</h3><p>Egresos de Hoy</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-blue">🛒</div><div class="stat-info"><h3>${despachos}</h3><p>Despachos de Hoy</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-cyan">📥</div><div class="stat-info"><h3>${comprasHoy.length}</h3><p>Compras / Entradas</p></div></div>
+    </div>
+
+    <div class="grid-2" style="margin-bottom:18px">
+      <!-- Últimos productos vendidos -->
+      <div class="card">
+        <div class="card-header"><h3>🛒 Últimas Ventas del Día</h3><button class="btn btn-primary btn-sm" onclick="navigate('farmacia')">Ver Farmacia</button></div>
+        ${ventasHoy.length ? `<div>${[...ventasHoy].sort((a,b)=>b.fecha.localeCompare(a.fecha)).slice(0,8).map(v=>`
+          <div class="search-result-item" style="cursor:default">
+            <div style="font-size:20px;flex-shrink:0">💊</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${(v.descripcion||'').replace('Venta farmacia: ','')}</div>
+              <div class="text-light">${v.metodoPago||'—'} · ${formatFecha(v.fecha)}</div>
+            </div>
+            <span style="font-weight:700;color:#15803D;flex-shrink:0">${fmtC(v.monto)}</span>
+          </div>`).join('')}</div>`
+        : `<div class="empty-state" style="padding:28px 0"><div class="empty-icon" style="font-size:28px">🛒</div><p>Sin ventas hoy</p></div>`}
+      </div>
+
+      <!-- Compras / entradas de stock del día -->
+      <div class="card">
+        <div class="card-header"><h3>📥 Compras / Entradas de Stock Hoy</h3><button class="btn btn-secondary btn-sm" onclick="navigate('inventario')">Ver Inventario</button></div>
+        ${comprasHoy.length ? `<div>${comprasHoy.slice(0,8).map(m=>{
+          const prod = C.inv.find(p=>p.id===m.invId);
+          return `<div class="search-result-item" style="cursor:default">
+            <span class="tag tag-green" style="flex-shrink:0;font-size:13px">📥 +${m.cantidad}</span>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:600;font-size:13px">${prod?.nombre||'—'}</div>
+              <div class="text-light">${prod?.unidad||''} · ${m.motivo||'entrada'}</div>
+            </div>
+            <span style="font-size:11px;color:var(--text-light);flex-shrink:0">Stock: ${prod?.stock||0}</span>
+          </div>`;}).join('')}</div>`
+        : `<div class="empty-state" style="padding:28px 0"><div class="empty-icon" style="font-size:28px">📦</div><p>Sin compras registradas hoy</p></div>`}
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <!-- Transacciones del día -->
+      <div class="card">
+        <div class="card-header"><h3>🔄 Todas las Transacciones de Hoy</h3></div>
+        ${ingresosHoy.length||egresosHoy.length ? `<div>${[...ingresosHoy,...egresosHoy].sort((a,b)=>a.tipo.localeCompare(b.tipo)).slice(0,10).map(v=>`
+          <div class="search-result-item" style="cursor:default">
+            <div style="font-size:18px;flex-shrink:0">${v.tipo==='ingreso'?'💰':'📤'}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${v.descripcion||v.categoria}</div>
+              <div class="text-light">${v.metodoPago||'—'} · ${v.categoria}</div>
+            </div>
+            <span style="font-weight:700;color:${v.tipo==='ingreso'?'#15803D':'#e53e3e'};flex-shrink:0">${v.tipo==='ingreso'?'+':'−'}${fmtC(v.monto)}</span>
+          </div>`).join('')}</div>`
+        : `<div class="empty-state" style="padding:28px 0"><div class="empty-icon" style="font-size:28px">💳</div><p>Sin transacciones hoy</p></div>`}
+      </div>
+
+      <!-- Alertas de stock -->
+      <div class="card">
+        <div class="card-header"><h3>⚠️ Alertas de Inventario</h3><button class="btn btn-secondary btn-sm" onclick="navigate('farmacia');setTimeout(()=>switchFarmaTab('alertas'),200)">Ver alertas</button></div>
+        ${(()=>{
+          const sinStock = C.inv.filter(x=>x.stock<=0);
+          const bajStock = C.inv.filter(x=>x.stock>0&&x.stockMin>0&&x.stock<=x.stockMin);
+          const todos = [...sinStock,...bajStock];
+          if(!todos.length) return `<div class="empty-state" style="padding:28px 0"><div class="empty-icon" style="font-size:28px">✅</div><p>Todo el stock en orden</p></div>`;
+          return `<div>${todos.slice(0,8).map(p=>`
+            <div class="search-result-item" style="cursor:default">
+              <span class="tag ${p.stock<=0?'tag-red':'tag-orange'}" style="flex-shrink:0">${p.stock<=0?'Sin stock':'Stock bajo'}</span>
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:600;font-size:13px">${p.nombre}</div>
+                <div class="text-light">${p.unidad} · Mín: ${p.stockMin}</div>
+              </div>
+              <span style="font-weight:700;flex-shrink:0;color:${p.stock<=0?'#e53e3e':'#d69e2e'}">${p.stock}</span>
+            </div>`).join('')}</div>`;
+        })()}
+      </div>
+    </div>`;
 }
 
 let recTab = 'pacientes';
