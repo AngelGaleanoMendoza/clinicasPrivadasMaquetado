@@ -2793,7 +2793,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('theme-icon').textContent = '🌙';
   }
 
-  // Restaurar sesión — primero via Supabase Auth, luego legacy sessionStorage
+  // Ocultar login mientras verificamos sesión — evita flash de pantalla de login al recargar
+  const ls = document.getElementById('login-screen');
+  const lo = document.getElementById('loading-overlay');
+  if(ls) ls.style.display = 'none';
+  if(lo) lo.classList.add('show');
+
   try {
     const { data: { session } } = await sb.auth.getSession();
     if(session?.user) {
@@ -2803,8 +2808,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     // Legacy fallback
     const saved = sessionStorage.getItem('lm_user');
-    if(saved) await entrarConPerfil(JSON.parse(saved));
+    if(saved) { await entrarConPerfil(JSON.parse(saved)); return; }
   } catch(e) { sessionStorage.removeItem('lm_user'); }
+
+  // Sin sesión — mostrar login
+  if(lo) lo.classList.remove('show');
+  if(ls) {
+    ls.style.cssText = 'display:flex;opacity:0;transition:opacity .35s';
+    setTimeout(() => { ls.style.opacity = '1'; }, 20);
+  }
 });
 
 async function setNewPassword() {
