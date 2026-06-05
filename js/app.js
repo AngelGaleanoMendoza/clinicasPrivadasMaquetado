@@ -6819,8 +6819,33 @@ function renderFarmaEstadisticas() {
           </div>`;
         }).join('');
   }
+
+  // Salidas de stock agrupadas por producto
+  const salidasEl = document.getElementById('farma-est-salidas');
+  if(salidasEl) {
+    const cIcon = c => ({medicamento:'💊',material:'🩺',equipo:'🔬',insumo:'🧹',papeleria:'📄',general:'📦'}[c]||'📦');
+    const cntSalidas = {};
+    dPeriodo.forEach(m => { cntSalidas[m.invId] = (cntSalidas[m.invId]||0) + Number(m.cantidad||1); });
+    const entries = Object.entries(cntSalidas).sort((a,b) => b[1]-a[1]);
+    salidasEl.innerHTML = !entries.length
+      ? '<tr><td colspan="6" style="text-align:center;color:var(--text-light);padding:20px">Sin salidas en este período</td></tr>'
+      : entries.map(([invId, totalSal]) => {
+          const prod = C.inv.find(p => p.id === Number(invId));
+          if(!prod) return '';
+          const st = prod.stock<=0 ? ['tag-red','Sin stock'] : prod.stockMin>0&&prod.stock<=prod.stockMin ? ['tag-orange','Bajo stock'] : ['tag-green','OK'];
+          return `<tr>
+            <td><strong>${cIcon(prod.categoria)} ${prod.nombre}</strong></td>
+            <td style="text-transform:capitalize;font-size:12px;color:var(--text-light)">${prod.categoria}</td>
+            <td><span class="tag tag-red">-${totalSal} ${prod.unidad}</span></td>
+            <td style="font-weight:700">${prod.stock} ${prod.unidad}</td>
+            <td style="color:var(--text-light)">${prod.stockMin||'—'}</td>
+            <td><span class="tag ${st[0]}">${st[1]}</span></td>
+          </tr>`;
+        }).join('');
+  }
+
   const conteo = {};
-  dMes.forEach(m => {
+  dPeriodo.forEach(m => {
     const prod = C.inv.find(p => p.id === m.invId);
     const nombre = prod?.nombre || ('Producto #' + m.invId);
     conteo[nombre] = (conteo[nombre] || 0) + Number(m.cantidad || 1);
@@ -6921,6 +6946,27 @@ function descargarPDFFarmacia() {
         <td style="color:#64748B">${m.motivo || 'entrada manual'}</td>
       </tr>`;
     }).join('')}</tbody></table>` : ''}
+
+    ${despachos.length ? (() => {
+      const cntSal = {};
+      despachos.forEach(m => { cntSal[m.invId] = (cntSal[m.invId]||0) + Number(m.cantidad||1); });
+      const salEntries = Object.entries(cntSal).sort((a,b) => b[1]-a[1]);
+      return `<div class="section-title">📤 Salidas de Stock del Período</div>
+      <table><thead><tr><th>Producto</th><th>Categoría</th><th>Salidas</th><th>Stock Actual</th><th>Stock Mín</th><th>Estado</th></tr></thead>
+      <tbody>${salEntries.map(([invId, totalSal]) => {
+        const prod = C.inv.find(p => p.id === Number(invId));
+        if(!prod) return '';
+        const st = prod.stock<=0 ? ['tag-red','Sin stock'] : prod.stockMin>0&&prod.stock<=prod.stockMin ? ['tag-orange','Bajo stock'] : ['tag-green','OK'];
+        return `<tr>
+          <td><strong>${catIcon(prod.categoria)} ${prod.nombre}</strong></td>
+          <td style="text-transform:capitalize">${prod.categoria}</td>
+          <td style="color:#DC2626;font-weight:700">-${totalSal} ${prod.unidad}</td>
+          <td style="font-weight:700">${prod.stock} ${prod.unidad}</td>
+          <td>${prod.stockMin||'—'}</td>
+          <td><span class="tag ${st[0]}">${st[1]}</span></td>
+        </tr>`;
+      }).join('')}</tbody></table>`;
+    })() : ''}
 
     <div class="section-title">📦 Estado Actual del Inventario</div>
     <table><thead><tr><th>Producto</th><th>Categoría</th><th>Stock Actual</th><th>Stock Mínimo</th><th>Precio Unit.</th><th>Estado</th></tr></thead>
