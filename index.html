@@ -232,19 +232,19 @@
       <div id="view-citas" class="view">
 
         <!-- Buscador rápido de paciente para citar -->
-        <div class="card" style="margin-bottom:18px;padding:14px 18px">
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-            <span style="font-size:14px;font-weight:700;color:var(--text);white-space:nowrap">📅 Nueva cita para:</span>
-            <div style="position:relative;flex:1;min-width:220px">
+        <div class="card" style="margin-bottom:18px">
+          <div class="card-header"><h3>📅 Nueva cita para</h3><button class="btn btn-primary btn-sm" style="white-space:nowrap" onclick="openModalCita()">+ Nueva Cita</button></div>
+          <div class="search-bar" style="margin-bottom:0;margin-top:14px">
+            <div class="search-bar-input" style="position:relative">
+              <span style="color:var(--text-light)">🔍</span>
               <input type="text" id="cita-pac-buscar"
                 placeholder="Buscar paciente por nombre, expediente o ID..."
-                autocomplete="off" style="margin:0"
+                autocomplete="off"
                 oninput="citaBuscarPac(this.value)"
                 onfocus="citaBuscarPac(this.value)"
                 onblur="setTimeout(()=>{ const s=document.getElementById('cita-pac-sug'); if(s) s.style.display='none'; },200)">
               <div id="cita-pac-sug" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;z-index:300;max-height:240px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.15);margin-top:4px"></div>
             </div>
-            <button class="btn btn-primary btn-sm" style="white-space:nowrap;flex-shrink:0" onclick="openModalCita()">+ Nueva Cita</button>
           </div>
         </div>
 
@@ -1810,6 +1810,6 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260605k"></script>
+<script src="js/app.js?v=20260605l"></script>
 </body>
 </html>
