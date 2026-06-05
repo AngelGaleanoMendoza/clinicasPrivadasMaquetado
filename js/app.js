@@ -5585,8 +5585,12 @@ function toggleTransCompraInv() {
   const cat  = document.getElementById('trans-categoria')?.value;
   const wrap = document.getElementById('trans-compra-inv-wrap');
   if(!wrap) return;
-  const mostrar = tipo === 'egreso' && ['medicamento','insumo','equipo','material','general'].includes(cat);
+  const mostrar = ['medicamento','insumo','equipo','material','general'].includes(cat);
   wrap.style.display = mostrar ? '' : 'none';
+  const lbl = document.getElementById('trans-compra-inv-label');
+  if(lbl) lbl.textContent = tipo === 'egreso'
+    ? 'Productos comprados — se agregarán al inventario automáticamente'
+    : 'Productos vendidos/despachados — se descontarán del inventario automáticamente';
 }
 
 function abrirModalSeleccionInv() {
@@ -5723,7 +5727,9 @@ function quitarChipSinv(id) {
 function autoDescripcionTransInv() {
   const desc = document.getElementById('trans-descripcion');
   if(!desc || !_transInvSeleccion.length) return;
-  desc.value = 'Compra: ' + _transInvSeleccion.map(s => `${s.nombre} ×${s.cantidad}`).join(', ');
+  const tipo = document.getElementById('trans-tipo')?.value;
+  const prefijo = tipo === 'egreso' ? 'Compra' : 'Venta';
+  desc.value = prefijo + ': ' + _transInvSeleccion.map(s => `${s.nombre} ×${s.cantidad}`).join(', ');
 }
 
 function getTransInvSeleccionados() { return [..._transInvSeleccion]; }
@@ -5744,9 +5750,9 @@ async function guardarTransaccion() {
   const btn = document.querySelector('[onclick="guardarTransaccion()"]');
   if(!_lockSubmit('trans', btn)) return;
 
-  // Productos de inventario seleccionados (solo en egreso con categoría física)
-  const esCompraInv = tipo === 'egreso' && ['medicamento','insumo','equipo'].includes(cat);
-  const productosSeleccionados = esCompraInv ? getTransInvSeleccionados() : [];
+  // Productos de inventario seleccionados (ingreso o egreso con categoría física)
+  const tieneInv = ['medicamento','insumo','equipo','material','general'].includes(cat);
+  const productosSeleccionados = tieneInv ? getTransInvSeleccionados() : [];
 
   setLoading(true);
 
@@ -5757,26 +5763,30 @@ async function guardarTransaccion() {
   });
   if(error){ toast('Error al guardar transacción','error'); setLoading(false); _unlockSubmit('trans', btn); return; }
 
-  // Si hay productos seleccionados, crear entradas en inventario
+  // Si hay productos seleccionados, mover inventario
   if(productosSeleccionados.length) {
+    const tipoMov  = tipo === 'egreso' ? 'entrada' : 'salida';
+    const motivoMov = tipo === 'egreso' ? 'compra' : 'venta';
     const movimientos = productosSeleccionados.map(s => ({
-      inventario_id: s.id, tipo: 'entrada', cantidad: s.cantidad,
-      motivo: 'compra', fecha, clinica_id: currentClinicaId
+      inventario_id: s.id, tipo: tipoMov, cantidad: s.cantidad,
+      motivo: motivoMov, fecha, clinica_id: currentClinicaId
     }));
     const { error: movErr } = await sb.from('inventario_movimientos').insert(movimientos);
     if(movErr) {
-      toast('Egreso guardado pero error al actualizar inventario: ' + movErr.message, 'info');
+      toast('Transacción guardada pero error al actualizar inventario: ' + movErr.message, 'info');
     } else {
-      // Actualizar stock local y en DB
       for(const s of productosSeleccionados) {
         const prod = C.inv.find(p => p.id === s.id);
         if(prod) {
-          const nuevoStock = prod.stock + s.cantidad;
+          const nuevoStock = tipo === 'egreso'
+            ? prod.stock + s.cantidad
+            : Math.max(0, prod.stock - s.cantidad);
           await sb.from('inventario').update({ stock_actual: nuevoStock }).eq('id', s.id);
           prod.stock = nuevoStock;
         }
       }
-      toast(`Egreso registrado y ${productosSeleccionados.length} producto(s) agregado(s) al inventario 📦`);
+      const accion = tipo === 'egreso' ? 'agregados al' : 'descontados del';
+      toast(`${tipo==='ingreso'?'Ingreso 💰':'Egreso 📤'} registrado · ${productosSeleccionados.length} producto(s) ${accion} inventario 📦`);
     }
   } else {
     toast(tipo==='ingreso'?'Ingreso registrado 💰':'Egreso registrado 📤');
