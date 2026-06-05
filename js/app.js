@@ -5558,13 +5558,27 @@ function renderFacturasList() {
 // ── Modal Transacción ──
 function openModalTransaccion(tipo='ingreso') {
   document.getElementById('trans-tipo').value = tipo;
+  const disp = document.getElementById('trans-tipo-display');
+  if(disp) {
+    disp.textContent  = tipo==='ingreso' ? '💰 Ingreso' : '📤 Egreso';
+    disp.style.color  = tipo==='ingreso' ? 'var(--accent-green,#16a34a)' : 'var(--accent-red,#dc2626)';
+  }
   document.getElementById('modal-trans-title').textContent = tipo==='ingreso' ? '💰 Nuevo Ingreso' : '📤 Nuevo Egreso';
   document.getElementById('trans-descripcion').value = '';
   document.getElementById('trans-monto').value = '';
   document.getElementById('trans-fecha').value = hoy();
-  document.getElementById('trans-categoria').value = 'consulta';
   document.getElementById('trans-metodo').value = 'efectivo';
   document.getElementById('trans-referencia').value = '';
+  // Filtrar categorías según tipo
+  const catSel = document.getElementById('trans-categoria');
+  if(catSel) {
+    const ingrCats = ['consulta','procedimiento','medicamento','insumo','equipo','general'];
+    const egrCats  = ['nomina','alquiler','servicios','factura','medicamento','insumo','equipo','general'];
+    const allowed  = tipo === 'ingreso' ? ingrCats : egrCats;
+    Array.from(catSel.options).forEach(o => { o.hidden = !allowed.includes(o.value); });
+    const first = Array.from(catSel.options).find(o => !o.hidden);
+    if(first) catSel.value = first.value;
+  }
   _transInvSeleccion = [];
   const wrap = document.getElementById('trans-compra-inv-wrap');
   if(wrap) wrap.style.display = 'none';
@@ -5661,7 +5675,7 @@ function onSinvCheck(cb) {
   if(cb.checked) {
     if(!_transInvSeleccion.find(s => s.id === id)) {
       const cant = parseInt(document.getElementById('sinv-cant-'+id)?.value||1,10)||1;
-      _transInvSeleccion.push({ id, nombre: prod?.nombre||'—', cantidad: cant, unidad: prod?.unidad||'uds' });
+      _transInvSeleccion.push({ id, nombre: prod?.nombre||'—', cantidad: cant, unidad: prod?.unidad||'uds', precio: prod?.precio||0 });
     }
     if(row) { row.style.borderColor='var(--primary)'; row.style.background='var(--primary-light)'; }
   } else {
@@ -5676,6 +5690,15 @@ function onSinvCantChange(id, valor) {
   const idx = _transInvSeleccion.findIndex(s => s.id === id);
   if(idx >= 0) _transInvSeleccion[idx].cantidad = nueva;
   actualizarResumenSinv();
+}
+
+function autoMontoTransInv() {
+  if(!_transInvSeleccion.length) return;
+  const total = _transInvSeleccion.reduce((sum, s) => sum + ((s.precio||0) * s.cantidad), 0);
+  if(total > 0) {
+    const montoEl = document.getElementById('trans-monto');
+    if(montoEl) montoEl.value = total.toFixed(2);
+  }
 }
 
 function actualizarResumenSinv() {
@@ -5697,12 +5720,16 @@ function quitarSinvItem(id) {
   _transInvSeleccion = _transInvSeleccion.filter(s => s.id !== id);
   renderModalInvLista();
   actualizarResumenSinv();
+  autoMontoTransInv();
 }
 
 function confirmarSeleccionInv() {
   closeModal('modal-seleccion-inv');
   actualizarChipsSinv();
-  if(_transInvSeleccion.length) autoDescripcionTransInv();
+  if(_transInvSeleccion.length) {
+    autoDescripcionTransInv();
+    autoMontoTransInv();
+  }
 }
 
 function actualizarChipsSinv() {

@@ -970,11 +970,9 @@
     <h2 id="modal-trans-title">💰 Nueva Transacción</h2>
     <div class="form-grid">
       <div class="form-group">
-        <label>Tipo *</label>
-        <select id="trans-tipo" onchange="document.getElementById('modal-trans-title').textContent=this.value==='ingreso'?'💰 Nuevo Ingreso':'📤 Nuevo Egreso';toggleTransCompraInv()">
-          <option value="ingreso">💰 Ingreso</option>
-          <option value="egreso">📤 Egreso</option>
-        </select>
+        <label>Tipo</label>
+        <div id="trans-tipo-display" style="padding:10px 14px;border:1.5px solid var(--border);border-radius:10px;font-weight:700;background:var(--bg);color:var(--text);font-size:14px">💰 Ingreso</div>
+        <input type="hidden" id="trans-tipo" value="ingreso">
       </div>
       <div class="form-group">
         <label>Categoría</label>
@@ -1804,6 +1802,6 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260605"></script>
+<script src="js/app.js?v=20260605b"></script>
 </body>
 </html>
