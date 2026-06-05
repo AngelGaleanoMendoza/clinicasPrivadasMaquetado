@@ -1786,6 +1786,7 @@ function openModalCita(id){
   const fechaEl = document.getElementById('c-fecha');
   fechaEl.value = hoy();
   fechaEl.min   = hoy();
+  if(fechaEl._flatpickr) { fechaEl._flatpickr.set('minDate', 'today'); fechaEl._flatpickr.setDate(hoy(), false); }
   fillHoraSelect('');
   ['motivo','notas'].forEach(f=>document.getElementById('c-'+f).value='');
   dxElegidos=[]; renderDxElegidos(); ocultarSugerenciasDx();
@@ -1811,8 +1812,10 @@ function openModalCita(id){
         toast('Solo puedes editar citas asignadas a ti','error');
         return;
       }
+      if(fechaEl._flatpickr) fechaEl._flatpickr.set('minDate', null);
       setPacienteSelect('c-paciente', c.pacienteId);
-      document.getElementById('c-fecha').value=c.fecha;
+      fechaEl.value=c.fecha;
+      if(fechaEl._flatpickr) fechaEl._flatpickr.setDate(c.fecha, false);
       fillHoraSelect(c.hora);
       document.getElementById('c-motivo').value=c.motivo;
       document.getElementById('c-tipo').value=c.tipo;
@@ -5296,13 +5299,14 @@ function initDatePickers() {
   document.querySelectorAll('input[type="date"]').forEach(el => {
     if(el._flatpickr) return;
     const isBirthDate = el.id === 'p-fechanac';
+    const isCitaDate  = el.id === 'c-fecha';
     flatpickr(el, {
       locale:        fpEs,
       dateFormat:    'Y-m-d',
       allowInput:    true,
       disableMobile: true,
       maxDate:       isBirthDate ? 'today' : null,
-      minDate:       isBirthDate ? '1900-01-01' : null,
+      minDate:       isBirthDate ? '1900-01-01' : isCitaDate ? 'today' : null,
       defaultDate:   el.value || null,
       prevArrow:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>',
       nextArrow:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>',
