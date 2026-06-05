@@ -1783,7 +1783,9 @@ function openModalCita(id){
   document.getElementById('modal-cita-title').textContent=id?'✏️ Editar Cita':'📅 Nueva Cita';
   fillSelect('c-paciente');
   fillMedicoSelect('c-medico');
-  document.getElementById('c-fecha').value=hoy();
+  const fechaEl = document.getElementById('c-fecha');
+  fechaEl.value = hoy();
+  fechaEl.min   = hoy();
   fillHoraSelect('');
   ['motivo','notas'].forEach(f=>document.getElementById('c-'+f).value='');
   dxElegidos=[]; renderDxElegidos(); ocultarSugerenciasDx();
@@ -1830,6 +1832,7 @@ async function guardarCita(){
   const hora=document.getElementById('c-hora').value;
   const motivo=document.getElementById('c-motivo').value.trim();
   if(!pid||!fecha||!hora||!motivo){ toast('Completa los campos obligatorios','error'); return; }
+  if(!editingId && fecha < hoy()){ toast('No se pueden agendar citas en fechas pasadas','error'); return; }
   const isMedico = currentUser?.key === 'medico';
   const medicoId = (isMedico && !isSuperAdmin()) ? currentUser.id : (document.getElementById('c-medico').value||null);
   const obj={pacienteId:pid,medicoId,fecha,hora,motivo,tipo:document.getElementById('c-tipo').value,estado:document.getElementById('c-estado').value,notas:document.getElementById('c-notas').value.trim()};
