@@ -6477,6 +6477,10 @@ async function completarVentaFarma() {
   const total       = carritoFarma.reduce((s, x) => s + x.precio * x.cantidad, 0);
   const motivo      = esReceta ? 'receta' : 'venta_farmacia';
 
+  // Abrir ventana del ticket ANTES de cualquier await para evitar el bloqueador de popups
+  const ticketWin = window.open('', '_blank', 'width=680,height=860');
+  if(ticketWin) ticketWin.document.write('<html><body style="font-family:Arial;text-align:center;padding:40px;color:#64748B"><p style="font-size:18px">Procesando venta...</p></body></html>');
+
   // Número de factura consecutivo por clínica
   const { count: ventaCount } = await sb.from('finanzas')
     .select('*', { count: 'exact', head: true })
@@ -6530,15 +6534,15 @@ async function completarVentaFarma() {
   actualizarStatsFarma();
   renderFarmaDespacho();
 
-  // PDF automático al completar la venta
+  // PDF automático al completar la venta (ticketWin ya fue abierta antes del primer await)
   imprimirTicketVentaFarma({
     numero: ventaId, fecha: hoy(), hora: horaVenta,
     cliente, metodoPago, esReceta, doctor, pacReceta,
     items: itemsParaPDF, total
-  });
+  }, ticketWin);
 }
 
-function imprimirTicketVentaFarma(v) {
+function imprimirTicketVentaFarma(v, existingWin) {
   const cn  = currentClinica?.nombre || 'Farmacia';
   const dir = currentClinica?.direccion || '';
   const tel = currentClinica?.telefono || '';
@@ -6554,7 +6558,7 @@ function imprimirTicketVentaFarma(v) {
       <td class="r b">${fmtC(i.precio * i.cantidad)}</td>
     </tr>`).join('');
 
-  const w = window.open('', '_blank', 'width=680,height=860');
+  const w = existingWin || window.open('', '_blank', 'width=680,height=860');
   w.document.write(`<!DOCTYPE html><html lang="es"><head>
 <meta charset="UTF-8"><title>Ticket ${v.numero}</title>
 <style>
