@@ -411,7 +411,7 @@ function limpiarPendientesSesion() {
 }
 
 async function entrarConPerfil(profile) {
-  const rolLabel = {admin:'Administración',medico:'Médico',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',farmaceutico:'Farmacéutico'}[profile.rol]||profile.rol;
+  const rolLabel = {admin:'Administración',medico:'Médico',medico_admin:'Médico Adm.',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',farmaceutico:'Farmacéutico'}[profile.rol]||profile.rol;
   currentClinicaId = profile.clinica_id || null;
   // Obtener email desde todas las fuentes disponibles
   let emailFinal = (profile.email || '').trim().toLowerCase() || null;
@@ -552,12 +552,12 @@ async function navigate(view, patientId) {
   const role = currentUser?.key;
   const esFarmacia = currentClinica?.tipo === 'farmacia';
   // Accesos por rol
-  const finAccess   = sa || ['admin','farmaceutico'].includes(role);
-  const invAccess   = sa || ['admin','farmaceutico'].includes(role);
-  const sysAccess   = sa || role === 'admin';
-  const medAccess   = sa || ['admin','medico'].includes(role);
-  const recAccess   = sa || ['admin','medico','recepcion'].includes(role);
-  const enfAccess   = sa || ['admin','medico','enfermeria'].includes(role);
+  const finAccess   = sa || ['admin','farmaceutico','medico_admin'].includes(role);
+  const invAccess   = sa || ['admin','farmaceutico','medico_admin'].includes(role);
+  const sysAccess   = sa || ['admin','medico_admin'].includes(role);
+  const medAccess   = sa || ['admin','medico','medico_admin'].includes(role);
+  const recAccess   = sa || ['admin','medico','medico_admin','recepcion'].includes(role);
+  const enfAccess   = sa || ['admin','medico','medico_admin','enfermeria'].includes(role);
   const farmaAccess = sa || role === 'farmaceutico' || esFarmacia;
   // Guards específicos
   if(view==='finanzas'  && !finAccess)   { navigate('dashboard'); return; }
@@ -683,20 +683,19 @@ function renderCalDayCitas(date){
 function renderNavQuickGrid(cv) {
   const el = document.getElementById('nav-quick-grid');
   if(!el) return;
-  const sa   = isSuperAdmin();
-  const role = currentUser?.key;
-  const invAccess = sa || ['admin','farmaceutico'].includes(role);
-  const finAccess = sa || ['admin','farmaceutico'].includes(role);
-  const sysAccess = sa || role==='admin';
-  const isMed = role==='medico';
-  const isRec = role==='recepcion';
+  const sa       = isSuperAdmin();
+  const role     = currentUser?.key;
+  const isPureMed = role === 'medico';
+  const invAccess = sa || ['admin','farmaceutico','medico_admin'].includes(role);
+  const sysAccess = sa || ['admin','medico_admin'].includes(role);
+  const isRec    = role === 'recepcion';
   const all = [
     { view:'pacientes',    icon:'👥', label:'Pacientes',    show:true },
     { view:'citas',        icon:'📅', label:'Citas',        show:true },
-    { view:'agendas',      icon:'🗓️', label:'Agendas',      show:true },
-    { view:'medicaciones', icon:'💊', label:'Medicaciones', show:!isRec },
+    { view:'agendas',      icon:'🗓️', label:'Agendas',      show:!isPureMed },
+    { view:'medicaciones', icon:'💊', label:'Recetas',      show:!isRec },
     { view:'notas',        icon:'📝', label:'Notas',        show:!isRec },
-    { view:'atendidos',    icon:'📊', label:'Atendidos',    show:!isRec },
+    { view:'atendidos',    icon:'📊', label:'Atendidos',    show:!isRec && !isPureMed },
     { view:'estadisticas', icon:'📈', label:'Estadísticas', show:sysAccess },
     { view:'inventario',   icon:'📦', label:'Inventario',   show:invAccess },
     { view:'exportar',     icon:'📤', label:'Exportar',     show:sysAccess },
@@ -730,7 +729,7 @@ function renderDashboardSA() {
   const ingresosH     = C.fin.filter(f=>f.fecha===h&&f.tipo==='ingreso').reduce((s,f)=>s+Number(f.monto||0),0);
   const egresosH      = C.fin.filter(f=>f.fecha===h&&f.tipo==='egreso').reduce((s,f)=>s+Number(f.monto||0),0);
   const sinStock      = C.inv.filter(p=>p.stock<=0).length;
-  const medicos       = C.prof.filter(p=>['medico','admin','recepcion','enfermeria'].includes(p.rol));
+  const medicos       = C.prof.filter(p=>['medico','medico_admin','admin','recepcion','enfermeria'].includes(p.rol));
 
   const view = document.getElementById('view-dashboard');
   view.innerHTML = `
@@ -915,7 +914,8 @@ function renderDashboardPorUsuario() {
   const h = hoy();
   const el = document.getElementById('dash-por-usuario');
   if(!el) return;
-  const medicos = C.prof.filter(p => ['medico','admin','enfermeria','recepcion'].includes(p.rol));
+  if(currentUser?.key === 'medico') { el.style.display='none'; return; }
+  const medicos = C.prof.filter(p => ['medico','medico_admin','admin','enfermeria','recepcion'].includes(p.rol));
   if(!medicos.length) { el.style.display='none'; return; }
   el.style.display='';
   const citasHoy = C.c.filter(c => c.fecha === h);
@@ -927,7 +927,7 @@ function renderDashboardPorUsuario() {
           const atendidas = citasHoy.filter(c => c.medicoId === u.id && c.estado === 'completada').length;
           const pendientes = citasHoy.filter(c => c.medicoId === u.id && (c.estado === 'pendiente'||c.estado==='confirmada')).length;
           const total = citasHoy.filter(c => c.medicoId === u.id).length;
-          const rolLabel = {admin:'Administración',medico:'Médico',recepcion:'Recepcionista',enfermeria:'Enfermería',farmaceutico:'Farmacéutico'}[u.rol]||u.rol;
+          const rolLabel = {admin:'Administración',medico:'Médico',medico_admin:'Médico Adm.',recepcion:'Recepcionista',enfermeria:'Enfermería',farmaceutico:'Farmacéutico'}[u.rol]||u.rol;
           const pct = total ? Math.round(atendidas/total*100) : 0;
           return `<div style="background:var(--bg);border-radius:12px;padding:14px;border:1.5px solid var(--border)">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
@@ -1743,12 +1743,12 @@ function renderCitas(){
 }
 
 function fillMedicoSelect(selId, selectedId) {
-  const medicos = C.prof.filter(p => p.rol==='medico'||p.rol==='dr'||p.rol==='dra'||p.rol==='admin');
+  const medicos = C.prof.filter(p => ['medico','medico_admin','dr','dra','admin'].includes(p.rol));
   const sel = document.getElementById(selId);
   sel.innerHTML = '<option value="">Sin asignar</option>' +
     medicos.map(m=>`<option value="${m.id}">${m.icono||'👨‍⚕️'} ${m.nombre}</option>`).join('');
   if (selectedId) sel.value = selectedId;
-  else if (currentUser?.key==='medico'||currentUser?.key==='admin') sel.value = currentUser.id;
+  else if (['medico','medico_admin','admin'].includes(currentUser?.key)) sel.value = currentUser.id;
 }
 
 function fillHoraSelect(selectedValue) {
@@ -3257,7 +3257,7 @@ async function cargarUsuariosLogin() { /* reemplazado por login email+password *
 let selAgendasDoc = null;
 let selAgendasDate = hoy();
 
-const rolLabel2 = r => ({admin:'Administración',medico:'Médico',dr:'Dr.',dra:'Dra.',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',farmaceutico:'Farmacéutico'}[r]||r);
+const rolLabel2 = r => ({admin:'Administración',medico:'Médico',medico_admin:'Médico Adm.',dr:'Dr.',dra:'Dra.',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',farmaceutico:'Farmacéutico'}[r]||r);
 
 function renderAgendas() {
   selAgendasDate = hoy();
@@ -4227,14 +4227,15 @@ function isFarmaceutico() { return currentUser?.key === 'farmaceutico'; }
 function toggleAdminMenu() { applyRoleMenu(); }
 
 function applyRoleMenu() {
-  const sa   = isSuperAdmin();
-  const role = currentUser?.key;
-  const isAdmin = role === 'admin';
-  const isMed   = role === 'medico';
-  const isRec   = role === 'recepcion';
-  const isEnf   = role === 'enfermeria';
-  const isFarm  = role === 'farmaceutico';
-  const esFarmacia = currentClinica?.tipo === 'farmacia';
+  const sa       = isSuperAdmin();
+  const role     = currentUser?.key;
+  const isAdmin  = role === 'admin';
+  const isMed    = role === 'medico';
+  const isMedAdm = role === 'medico_admin';
+  const isRec    = role === 'recepcion';
+  const isEnf    = role === 'enfermeria';
+  const isFarm   = role === 'farmaceutico';
+  const esFarmacia  = currentClinica?.tipo === 'farmacia';
   const modoFarmacia = isFarm || esFarmacia;
 
   const vis = (id, show) => {
@@ -4254,15 +4255,16 @@ function applyRoleMenu() {
   vis('menu-clinica-section', hasClinica);
   vis('menu-pacientes',       hasClinica);
   vis('menu-citas',           hasClinica && !isEnf);
-  vis('menu-agendas',         hasClinica && !isEnf);
+  // Agendas y Atendidos: ocultos para médico puro (sí para médico administrativo)
+  vis('menu-agendas',         hasClinica && !isEnf && !isMed);
   vis('menu-medicaciones',    hasClinica && !isRec);
   vis('menu-notas',           hasClinica && !isRec);
-  vis('menu-atendidos',       hasClinica && !isRec && !isEnf);
+  vis('menu-atendidos',       hasClinica && !isRec && !isEnf && !isMed);
 
   // ─ Sección Gestión
-  const invAccess  = sa || ['admin','farmaceutico'].includes(role) || esFarmacia;
-  const finAccess  = sa || ['admin','farmaceutico'].includes(role) || esFarmacia;
-  const sysAccess  = sa || isAdmin;
+  const invAccess  = sa || ['admin','farmaceutico','medico_admin'].includes(role) || esFarmacia;
+  const finAccess  = sa || ['admin','farmaceutico','medico_admin'].includes(role) || esFarmacia;
+  const sysAccess  = sa || isAdmin || isMedAdm;
   const hasGestion = invAccess || finAccess || sysAccess;
   vis('menu-gestion-section', hasGestion);
   vis('menu-inventario',      invAccess);
@@ -4361,8 +4363,8 @@ function renderAdminClinicas() {
 function renderAdminUsuarios() {
   const el = document.getElementById('admin-usuarios-list');
   if(!el) return;
-  const rolLabel = r => ({admin:'Administración',medico:'Médico',dr:'Dr.',dra:'Dra.',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',farmaceutico:'Farmacéutico'}[r]||r);
-  const rolTag   = r => ({admin:'tag-blue',medico:'tag-cyan',dr:'tag-cyan',dra:'tag-cyan',recepcion:'tag-orange',enfermeria:'tag-green',farmaceutico:'tag-emerald'}[r]||'tag-gray');
+  const rolLabel = r => ({admin:'Administración',medico:'Médico',medico_admin:'Médico Adm.',dr:'Dr.',dra:'Dra.',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',farmaceutico:'Farmacéutico'}[r]||r);
+  const rolTag   = r => ({admin:'tag-blue',medico:'tag-cyan',medico_admin:'tag-cyan',dr:'tag-cyan',dra:'tag-cyan',recepcion:'tag-orange',enfermeria:'tag-green',farmaceutico:'tag-emerald'}[r]||'tag-gray');
   if(!adminUsuarios.length) {
     el.innerHTML = `<div class="empty-state"><div class="empty-icon">👥</div><p>No hay usuarios registrados.<br>Crea el primero con <strong>+ Nuevo Usuario</strong></p></div>`;
     return;
@@ -4851,8 +4853,8 @@ function renderDetallePanel(tab) {
 
   if(tab === 'usuarios') {
     const usuarios = adminUsuarios.filter(u=>u.clinica_id===id);
-    const rolLabel = r => ({admin:'Administrador',medico:'Médico',recepcion:'Recepcionista',enfermeria:'Enfermería',farmaceutico:'Farmacéutico',superadmin:'Super Admin'}[r]||r);
-    const rolTag   = r => ({admin:'tag-blue',medico:'tag-cyan',recepcion:'tag-orange',enfermeria:'tag-green',farmaceutico:'tag-emerald'}[r]||'tag-gray');
+    const rolLabel = r => ({admin:'Administrador',medico:'Médico',medico_admin:'Médico Adm.',recepcion:'Recepcionista',enfermeria:'Enfermería',farmaceutico:'Farmacéutico',superadmin:'Super Admin'}[r]||r);
+    const rolTag   = r => ({admin:'tag-blue',medico:'tag-cyan',medico_admin:'tag-cyan',recepcion:'tag-orange',enfermeria:'tag-green',farmaceutico:'tag-emerald'}[r]||'tag-gray');
     document.getElementById('detalle-panel-usuarios').innerHTML = usuarios.length
       ? `<div class="table-wrap"><table>
           <thead><tr><th>Usuario</th><th>Email</th><th>Rol</th></tr></thead>
