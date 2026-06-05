@@ -2028,14 +2028,17 @@ function buscarMedItem(q, idx) {
   if(!box) return;
   if(!q || q.length < 2) { box.style.display='none'; return; }
   const q2 = q.toLowerCase();
-  const matches = MEDICAMENTOS_NI.filter(m => m.n.toLowerCase().includes(q2) || m.p.toLowerCase().includes(q2)).slice(0, 8);
+  const base = MEDICAMENTOS_NI.filter(m => m.n.toLowerCase().includes(q2) || m.p.toLowerCase().includes(q2)).slice(0, 6);
+  const matches = _mergeConMinsa(base, q2);
   if(!matches.length) { box.style.display='none'; return; }
-  box.innerHTML = matches.map(m =>
-    '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s" onmouseenter="this.style.background=\'var(--primary-light)\'" onmouseleave="this.style.background=\'\'" onmousedown="seleccionarMedItem('+JSON.stringify(m).replace(/"/g,'&quot;')+','+idx+')">'
-    + '<div><div style="font-size:13px;font-weight:600;color:var(--text)">'+m.n+'</div><div style="font-size:11px;color:var(--text-light)">'+m.p+' &middot; '+m.d+'</div></div>'
-    + '<span class="tag tag-gray" style="font-size:10px;flex-shrink:0;margin-left:10px">'+m.v+'</span>'
-    + '</div>'
-  ).join('');
+  box.innerHTML = matches.map(m => {
+    const codBadge = m.cod ? `<span style="font-family:monospace;font-size:10px;background:var(--bg);padding:0 3px;border-radius:3px;border:1px solid var(--border);margin-right:4px">${m.cod}</span>` : '';
+    const sub = codBadge + m.p + (m.d ? ' · ' + m.d : '');
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s" onmouseenter="this.style.background=\'var(--primary-light)\'" onmouseleave="this.style.background=\'\'" onmousedown="seleccionarMedItem('+JSON.stringify(m).replace(/"/g,'&quot;')+','+idx+')">'
+      + '<div><div style="font-size:13px;font-weight:600;color:var(--text)">'+m.n+'</div><div style="font-size:11px;color:var(--text-light);margin-top:1px">'+sub+'</div></div>'
+      + '<span class="tag tag-gray" style="font-size:10px;flex-shrink:0;margin-left:10px">'+m.v+'</span>'
+      + '</div>';
+  }).join('');
   box.style.display = 'block';
 }
 
@@ -3122,13 +3125,23 @@ const MEDICAMENTOS_NI = [
 
 let medSugIdx = -1;
 
+function _minsaToMed(p) {
+  return { n:p.n, p:p.sub||p.grupo||'MINSA', d:'', v:'oral', cod:p.cod };
+}
+function _mergeConMinsa(base, q2) {
+  const seenNames = new Set(base.map(m=>m.n.toLowerCase()));
+  const fromMinsa = MINSA_CATALOG
+    .filter(p => (p.n.toLowerCase().includes(q2) || p.cod.includes(q2)) && !seenNames.has(p.n.toLowerCase()))
+    .slice(0, 5)
+    .map(_minsaToMed);
+  return [...base, ...fromMinsa].slice(0, 10);
+}
 function buscarMedicamento(q) {
   const box = document.getElementById('med-sugerencias');
   if(!q || q.length < 2) { box.style.display='none'; medSugIdx=-1; return; }
   const q2 = q.toLowerCase();
-  const matches = MEDICAMENTOS_NI.filter(m =>
-    m.n.toLowerCase().includes(q2) || m.p.toLowerCase().includes(q2)
-  ).slice(0, 8);
+  const base = MEDICAMENTOS_NI.filter(m => m.n.toLowerCase().includes(q2) || m.p.toLowerCase().includes(q2)).slice(0, 6);
+  const matches = _mergeConMinsa(base, q2);
   if(!matches.length) { box.style.display='none'; return; }
   box.innerHTML = matches.map((m, i) => `
     <div class="med-sug-item" data-idx="${i}"
@@ -3137,7 +3150,7 @@ function buscarMedicamento(q) {
       style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s">
       <div>
         <div style="font-size:13px;font-weight:600;color:var(--text)">${m.n}</div>
-        <div style="font-size:11px;color:var(--text-light);margin-top:1px">${m.p} · ${m.d}</div>
+        <div style="font-size:11px;color:var(--text-light);margin-top:1px">${m.cod?`<span style="font-family:monospace;background:var(--bg);padding:0 3px;border-radius:3px;border:1px solid var(--border)">${m.cod}</span> · `:''}<span style="text-transform:capitalize">${m.p}</span>${m.d?' · '+m.d:''}</div>
       </div>
       <span class="tag tag-gray" style="font-size:10px;flex-shrink:0;margin-left:10px">${m.v}</span>
     </div>`).join('');
