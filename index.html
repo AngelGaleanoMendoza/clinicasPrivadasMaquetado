@@ -642,9 +642,10 @@
         <div class="card" style="margin-bottom:18px">
           <div class="card-header">
             <h3>📦 Inventario de Clínica</h3>
-            <div style="display:flex;gap:8px" id="inv-action-btns">
+            <div style="display:flex;gap:8px;flex-wrap:wrap" id="inv-action-btns">
               <button class="btn btn-secondary btn-sm" onclick="openModalEntrada()">📥 Entrada</button>
               <button class="btn btn-secondary btn-sm" onclick="openModalSalida()">📤 Salida</button>
+              <button class="btn btn-secondary btn-sm" id="btn-importar-minsa" onclick="importarCatalogoMINSA()" style="display:none">📋 Catálogo MINSA</button>
               <button class="btn btn-primary btn-sm" onclick="openModalProducto()">+ Producto</button>
             </div>
           </div>
@@ -901,6 +902,7 @@
           <div id="prod-sug" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:400;max-height:240px;overflow-y:auto;margin-top:4px"></div>
         </div>
       </div>
+      <div class="form-group"><label>Código MINSA</label><input type="text" id="prod-codigo-minsa" placeholder="Ej: 01160210" style="font-family:monospace;letter-spacing:1px" maxlength="20"></div>
       <div class="form-group"><label>Categoría</label>
         <select id="prod-categoria">
           <option value="medicamento">💊 Medicamento</option>
@@ -1810,6 +1812,6 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260605l"></script>
+<script src="js/app.js?v=20260605m"></script>
 </body>
 </html>

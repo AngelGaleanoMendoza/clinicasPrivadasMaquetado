@@ -40,8 +40,8 @@ const fromM = r => ({ id:r.id, pacienteId:r.paciente_id, nombre:r.nombre, dosis:
 const toM   = x => ({ paciente_id:x.pacienteId, nombre:x.nombre, dosis:x.dosis, frecuencia:x.frecuencia, inicio:x.inicio||null, fin:x.fin||null, via:x.via||'oral', estado:x.estado||'activa', indicaciones:x.indicaciones||null, clinica_id:currentClinicaId });
 const fromN   = r => ({ id:r.id, pacienteId:r.paciente_id, tipo:r.tipo, fecha:r.fecha, titulo:r.titulo, contenido:r.contenido });
 const toN     = x => ({ paciente_id:x.pacienteId, tipo:x.tipo||'evolucion', fecha:x.fecha||hoy(), titulo:x.titulo||null, contenido:x.contenido, clinica_id:currentClinicaId });
-const fromInv = r => ({ id:r.id, nombre:r.nombre, categoria:r.categoria||'general', unidad:r.unidad||'unidad', stock:Number(r.stock_actual||0), stockMin:Number(r.stock_minimo||0), precio:r.precio_unitario!=null?Number(r.precio_unitario):null, descripcion:r.descripcion||null });
-const toInv   = x => ({ nombre:x.nombre, categoria:x.categoria||'general', unidad:x.unidad||'unidad', stock_actual:Number(x.stock||0), stock_minimo:Number(x.stockMin||0), precio_unitario:x.precio||null, descripcion:x.descripcion||null, clinica_id:currentClinicaId });
+const fromInv = r => ({ id:r.id, nombre:r.nombre, categoria:r.categoria||'general', unidad:r.unidad||'unidad', stock:Number(r.stock_actual||0), stockMin:Number(r.stock_minimo||0), precio:r.precio_unitario!=null?Number(r.precio_unitario):null, descripcion:r.descripcion||null, codigoMinsa:r.codigo_minsa||null });
+const toInv   = x => ({ nombre:x.nombre, categoria:x.categoria||'general', unidad:x.unidad||'unidad', stock_actual:Number(x.stock||0), stock_minimo:Number(x.stockMin||0), precio_unitario:x.precio||null, descripcion:x.descripcion||null, clinica_id:currentClinicaId, codigo_minsa:x.codigoMinsa||null });
 const fromMov     = r => ({ id:r.id, invId:r.inventario_id, tipo:r.tipo, cantidad:Number(r.cantidad), motivo:r.motivo||null, fecha:r.fecha, referencia:r.referencia||null, notas:r.notas||null });
 const fromFin     = r => ({ id:r.id, tipo:r.tipo, categoria:r.categoria||'general', descripcion:r.descripcion, monto:Number(r.monto), fecha:r.fecha, metodoPago:r.metodo_pago||'efectivo', referencia:r.referencia||null, citaId:r.cita_id||null, pacienteId:r.paciente_id||null, invMovId:r.inventario_mov_id||null, creadoPor:r.creado_por||null });
 const fromFact    = r => ({ id:r.id, numero:r.numero, pacienteId:r.paciente_id, pacienteNombre:r.paciente_nombre||'Consumidor Final', fecha:r.fecha, estado:r.estado||'pendiente', subtotal:Number(r.subtotal||0), impuestoPct:Number(r.impuesto_pct||0), impuesto:Number(r.impuesto||0), total:Number(r.total||0), notas:r.notas||null, citaId:r.cita_id||null });
@@ -3500,7 +3500,7 @@ function renderProductos(filtro) {
   const empty = document.getElementById('inv-empty');
   let items = C.inv;
   if(invCatFiltro) items = items.filter(p=>p.categoria===invCatFiltro);
-  if(search) { const q=search.toLowerCase(); items=items.filter(p=>p.nombre.toLowerCase().includes(q)||(p.descripcion||'').toLowerCase().includes(q)); }
+  if(search) { const q=search.toLowerCase(); items=items.filter(p=>p.nombre.toLowerCase().includes(q)||(p.descripcion||'').toLowerCase().includes(q)||(p.codigoMinsa||'').includes(q)); }
   if(!items.length){ tbody.innerHTML=''; empty.style.display='block'; return; }
   empty.style.display='none';
   const catIcon = c=>({medicamento:'💊',material:'🩺',equipo:'🔬',insumo:'🧹',papeleria:'📄',general:'📦'}[c]||'📦');
@@ -3508,7 +3508,7 @@ function renderProductos(filtro) {
     const stCls = p.stock===0?'inv-stock-out':p.stockMin>0&&p.stock<=p.stockMin?'inv-stock-low':'inv-stock-ok';
     const stLbl = p.stock===0?'Sin stock':p.stockMin>0&&p.stock<=p.stockMin?'Stock bajo':'OK';
     return `<tr>
-      <td><strong>${p.nombre}</strong>${p.descripcion?`<div style="font-size:11px;color:var(--text-light)">${p.descripcion}</div>`:''}</td>
+      <td><strong>${p.nombre}</strong>${p.codigoMinsa?`<span style="font-size:10px;color:var(--text-light);background:var(--bg);padding:1px 5px;border-radius:4px;margin-left:5px;font-family:monospace;border:1px solid var(--border)">${p.codigoMinsa}</span>`:''} ${p.descripcion?`<div style="font-size:11px;color:var(--text-light)">${p.descripcion}</div>`:''}</td>
       <td>${catIcon(p.categoria)} ${p.categoria}</td>
       <td>${p.unidad}</td>
       <td><span class="${stCls}">${p.stock}</span></td>
@@ -3628,6 +3628,7 @@ function openModalProducto(id){
   if(id){
     const p=C.inv.find(x=>x.id===id); if(!p) return;
     document.getElementById('prod-nombre').value=p.nombre;
+    document.getElementById('prod-codigo-minsa').value=p.codigoMinsa||'';
     document.getElementById('prod-categoria').value=p.categoria;
     document.getElementById('prod-unidad').value=p.unidad;
     document.getElementById('prod-stock').value=p.stock;
@@ -3635,7 +3636,7 @@ function openModalProducto(id){
     document.getElementById('prod-precio').value=p.precio!=null?p.precio:'';
     document.getElementById('prod-descripcion').value=p.descripcion||'';
   } else {
-    ['prod-nombre','prod-stock','prod-stock-min','prod-precio','prod-descripcion'].forEach(f=>document.getElementById(f).value='');
+    ['prod-nombre','prod-codigo-minsa','prod-stock','prod-stock-min','prod-precio','prod-descripcion'].forEach(f=>document.getElementById(f).value='');
     document.getElementById('prod-categoria').value='medicamento';
     document.getElementById('prod-unidad').value='unidad';
   }
@@ -3652,7 +3653,8 @@ async function guardarProducto(){
     stock:document.getElementById('prod-stock').value||0,
     stockMin:document.getElementById('prod-stock-min').value||0,
     precio:document.getElementById('prod-precio').value||null,
-    descripcion:document.getElementById('prod-descripcion').value||null
+    descripcion:document.getElementById('prod-descripcion').value||null,
+    codigoMinsa:document.getElementById('prod-codigo-minsa').value.trim()||null
   });
   setLoading(true);
   if(editingProdId){
@@ -3805,15 +3807,560 @@ const INV_CATALOG = [
   {n:'Formularios de laboratorio',cat:'papeleria',u:'paquete'},{n:'Expedientes clínicos',cat:'papeleria',u:'paquete'},
 ];
 
+// ── Catálogo MINSA Nicaragua — Listado de Medicamentos Esenciales ──
+const MINSA_CATALOG = (function(){
+  const M='medicamento',U='unidad';
+  return [
+    // ANTIMICROBIANOS
+    {cod:'01010106',n:'Linezolid RESERVA',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01010134',n:'Linezolid RESERVA',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01010234',n:'Tigeciclina RESERVA',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01010302',n:'Minociclina RESERVA',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01010716',n:'Voriconazol VIGILANCIA',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01010717',n:'Voriconazol VIGILANCIA',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01010720',n:'Amfotericina B VIGILANCIA',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01010723',n:'Fluconazol ACCESO',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01010724',n:'Fluconazol ACCESO',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01010725',n:'Caspofungina VIGILANCIA',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01010729',n:'Itraconazol VIGILANCIA',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01010740',n:'Fluconazol ACCESO',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01010787',n:'Anidulafungina VIGILANCIA',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01010810',n:'Cloroquina',sub:'Antipalúdicos',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01010820',n:'Primaquina',sub:'Antipalúdicos',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01010830',n:'Primaquina',sub:'Antipalúdicos',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01010835',n:'Mefloquina clorhidrato',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01010840',n:'Artemetero + Lumefantrina',sub:'Antipalúdicos',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01010861',n:'Quinina diclorhidrato',sub:'Antipalúdicos',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01010865',n:'Quinina sulfato',sub:'Antipalúdicos',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01010900',n:'Meglumina antimoniato',sub:'Antileishmaniásicos',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01011000',n:'Espiramicina VIGILANCIA',sub:'Antitoxoplasmosis',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01011100',n:'Vancomicina VIGILANCIA',sub:'Glicopéptidos',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01011210',n:'Ciprofloxacina VIGILANCIA',sub:'Quinolonas',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01011220',n:'Ciprofloxacina VIGILANCIA',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01011244',n:'Levofloxacina VIGILANCIA',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01011246',n:'Levofloxacina VIGILANCIA',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01011250',n:'Moxifloxacina VIGILANCIA',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01011290',n:'Aciclovir',sub:'Antivirales',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01011309',n:'Lamivudina (3TC)',sub:'Antirretrovirales',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01011310',n:'Aciclovir',sub:'Antivirales',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01011313',n:'Ritonavir (RTV)',sub:'Antirretrovirales',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01011331',n:'Zidovudina (AZT)',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01011334',n:'Lopinavir + Ritonavir (LPV/r)',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01011357',n:'Darunavir (DRV)',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01011358',n:'Etravirina (ETV)',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01011363',n:'Raltegravir (RAL)',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01011370',n:'Oseltamivir VIGILANCIA',sub:'Antivirales',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01011372',n:'Oseltamivir VIGILANCIA',sub:'Antivirales',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01011373',n:'Dolutegravir (DTG)',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01011376',n:'Dolutegravir (DTG)',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01011383',n:'Tenofovir alafenamida + Emtricitabina',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    // GASTROENTEROLOGÍA
+    {cod:'01020130',n:'Ranitidina',sub:'Antiácidos y antisecretorios',grupo:'GASTROENTEROLOGÍA',cat:M,u:U},
+    {cod:'01020140',n:'Ranitidina',sub:'Antiácidos y antisecretorios',grupo:'GASTROENTEROLOGÍA',cat:M,u:U},
+    {cod:'01020160',n:'Omeprazol',sub:'Antiácidos y antisecretorios',grupo:'GASTROENTEROLOGÍA',cat:M,u:U},
+    {cod:'01020170',n:'Omeprazol',sub:'Antiácidos y antisecretorios',grupo:'GASTROENTEROLOGÍA',cat:M,u:U},
+    {cod:'01020202',n:'Loperamida',sub:'Paliativos',grupo:'PALIATIVOS',cat:M,u:U},
+    {cod:'01020300',n:'Enema fosfato y bifosfato',sub:'Antidiarreico y laxante',grupo:'GASTROENTEROLOGÍA',cat:M,u:U},
+    {cod:'01020302',n:'Polietilenglicol',sub:'Paliativos',grupo:'PALIATIVOS',cat:M,u:U},
+    {cod:'01020312',n:'Picosulfato sódico',sub:'Paliativos',grupo:'PALIATIVOS',cat:M,u:U},
+    {cod:'01020360',n:'Aceite mineral',sub:'Paliativos',grupo:'PALIATIVOS',cat:M,u:U},
+    {cod:'01020400',n:'Dimenhidrinato',sub:'Antieméticos',grupo:'GASTROENTEROLOGÍA',cat:M,u:U},
+    {cod:'01020405',n:'Dimenhidrinato',sub:'Antieméticos',grupo:'GASTROENTEROLOGÍA',cat:M,u:U},
+    {cod:'01020410',n:'Metoclopramida',sub:'Antieméticos',grupo:'GASTROENTEROLOGÍA',cat:M,u:U},
+    {cod:'01020411',n:'Metoclopramida',sub:'Paliativos',grupo:'PALIATIVOS',cat:M,u:U},
+    {cod:'01020420',n:'Ondansetrón',sub:'Antieméticos',grupo:'GASTROENTEROLOGÍA',cat:M,u:U},
+    {cod:'01020423',n:'Ondansetrón',sub:'Antieméticos',grupo:'GASTROENTEROLOGÍA',cat:M,u:U},
+    {cod:'01020425',n:'Ondansetrón',sub:'Antieméticos',grupo:'GASTROENTEROLOGÍA',cat:M,u:U},
+    {cod:'01020500',n:'Tinidazol ACCESO',sub:'Antiamebianos',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01020510',n:'Metronidazol ACCESO',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01020511',n:'Metronidazol ACCESO',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01020513',n:'Metronidazol ACCESO',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01020540',n:'Benznidazol',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01020541',n:'Nifurtimox',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01020605',n:'Praziquantel',sub:'Antihelmínticos',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01020620',n:'Albendazol',sub:'Antihelmínticos',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01020630',n:'Albendazol',sub:'Antihelmínticos',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01020646',n:'Mebendazol',sub:'Antihelmínticos',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01020700',n:'Lactulosa',sub:'Paliativos',grupo:'PALIATIVOS',cat:M,u:U},
+    {cod:'01020710',n:'Sulfato de bario',sub:'Medios de contraste',grupo:'RADIOLOGÍA',cat:M,u:U},
+    // NEUMOLOGÍA
+    {cod:'01030101',n:'Budesonida',sub:'Corticosteroides inhalados',grupo:'NEUMOLOGÍA',cat:M,u:U},
+    {cod:'01030102',n:'Salbutamol sulfato',sub:'Broncodilatadores',grupo:'NEUMOLOGÍA',cat:M,u:U},
+    {cod:'01030108',n:'Salbutamol sulfato',sub:'Broncodilatadores',grupo:'NEUMOLOGÍA',cat:M,u:U},
+    {cod:'01030110',n:'Aminofilina',sub:'Derivados de las xantinas',grupo:'NEUMOLOGÍA',cat:M,u:U},
+    {cod:'01030125',n:'Teofilina',sub:'Derivados de las xantinas',grupo:'NEUMOLOGÍA',cat:M,u:U},
+    {cod:'01030145',n:'Cafeína',sub:'Derivados de las xantinas',grupo:'NEUMOLOGÍA',cat:M,u:U},
+    {cod:'01030150',n:'Teofilina',sub:'Derivados de las xantinas',grupo:'NEUMOLOGÍA',cat:M,u:U},
+    {cod:'01030200',n:'Codeína',sub:'Paliativos',grupo:'PALIATIVOS',cat:M,u:U},
+    {cod:'01030216',n:'Codeína',sub:'Paliativos',grupo:'PALIATIVOS',cat:M,u:U},
+    {cod:'01030300',n:'Isoniacida (INH)',sub:'Antituberculosos',grupo:'NEUMOLOGÍA',cat:M,u:U},
+    {cod:'01030301',n:'Isoniacida (INH)',sub:'',grupo:'NEUMOLOGÍA',cat:M,u:U},
+    {cod:'01030325',n:'Rifampicina + Isoniacida',sub:'',grupo:'NEUMOLOGÍA',cat:M,u:U},
+    {cod:'01030330',n:'Etambutol',sub:'',grupo:'NEUMOLOGÍA',cat:M,u:U},
+    {cod:'01030331',n:'Cicloserina VIGILANCIA TB-MDR',sub:'',grupo:'NEUMOLOGÍA',cat:M,u:U},
+    {cod:'01030340',n:'Pirazinamida',sub:'',grupo:'NEUMOLOGÍA',cat:M,u:U},
+    {cod:'01030342',n:'Etionamida VIGILANCIA TB-MDR',sub:'',grupo:'NEUMOLOGÍA',cat:M,u:U},
+    {cod:'01030375',n:'Rifampicina + Isoniacida',sub:'',grupo:'NEUMOLOGÍA',cat:M,u:U},
+    {cod:'01030376',n:'Bedaquilina VIGILANCIA TB-MDR',sub:'',grupo:'NEUMOLOGÍA',cat:M,u:U},
+    {cod:'01030377',n:'Delamanid VIGILANCIA TB-MDR',sub:'',grupo:'NEUMOLOGÍA',cat:M,u:U},
+    {cod:'01030379',n:'Etambutol',sub:'',grupo:'NEUMOLOGÍA',cat:M,u:U},
+    {cod:'01030400',n:'Beclometasona',sub:'Corticosteroides inhalados',grupo:'NEUMOLOGÍA',cat:M,u:U},
+    {cod:'01030405',n:'Beclometasona',sub:'Corticosteroides inhalados',grupo:'NEUMOLOGÍA',cat:M,u:U},
+    {cod:'01030408',n:'Beclometasona',sub:'Corticoide',grupo:'OTORRINOLARINGOLOGÍA',cat:M,u:U},
+    {cod:'01030421',n:'Formoterol fumarato dihidrato',sub:'Broncodilatadores',grupo:'NEUMOLOGÍA',cat:M,u:U},
+    {cod:'01030500',n:'Ipratropium bromuro',sub:'Antimuscarínico',grupo:'NEUMOLOGÍA',cat:M,u:U},
+    {cod:'01030505',n:'Ipratropium bromuro',sub:'Antimuscarínico',grupo:'NEUMOLOGÍA',cat:M,u:U},
+    {cod:'01030628',n:'Baricitinib',sub:'Modificadores de la enfermedad reumática',grupo:'ANALGÉSICOS',cat:M,u:U},
+    // CARDIOVASCULAR
+    {cod:'01040100',n:'Digoxina',sub:'Glucósido cardiotónicos',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040110',n:'Digoxina',sub:'Glucósido cardiotónicos',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040130',n:'Carvedilol',sub:'Betabloqueadores',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040135',n:'Carvedilol',sub:'Betabloqueadores',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040200',n:'Amiodarona',sub:'Antiarrítmicos',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040205',n:'Amiodarona',sub:'',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040210',n:'Verapamilo',sub:'',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040215',n:'Verapamilo',sub:'',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040220',n:'Adenosina',sub:'',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040301',n:'Efedrina',sub:'Aminas simpaticomiméticos',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040310',n:'Fenilefrina',sub:'Aminas simpaticomiméticos',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040320',n:'Dobutamina',sub:'Aminas simpaticomiméticos',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040330',n:'Dopamina',sub:'Aminas simpaticomiméticos',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040340',n:'Epinefrina (Adrenalina)',sub:'Aminas simpaticomiméticos',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040348',n:'Norepinefrina',sub:'Aminas simpaticomiméticos',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040410',n:'Isosorbide',sub:'Antianginosos',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040420',n:'Nitroglicerina',sub:'Antianginosos',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040435',n:'Amlodipina',sub:'',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040436',n:'Amlodipina besilato',sub:'',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040500',n:'Ácido Acetil Salicílico',sub:'Antitrombóticos',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040503',n:'Clopidogrel',sub:'Antitrombóticos',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040511',n:'Estreptoquinasa',sub:'Antitrombóticos',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040522',n:'Enoxaparina',sub:'Antitrombóticos',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040600',n:'Atenolol',sub:'Betabloqueadores',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040606',n:'Losartán',sub:'Antihipertensivos',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040610',n:'Enalapril',sub:'Antihipertensivos',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040615',n:'Captopril',sub:'Antihipertensivos',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040620',n:'Metildopa',sub:'Antihipertensivos',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040630',n:'Hidralazina',sub:'',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040634',n:'Metoprolol',sub:'Betabloqueadores',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040635',n:'Hidralazina',sub:'',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040640',n:'Nitroprusiato de sodio',sub:'',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040650',n:'Labetalol',sub:'Betabloqueadores',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040651',n:'Labetalol',sub:'Betabloqueadores',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040665',n:'Doxazocina',sub:'Antimuscarínicos',grupo:'NEFROLOGÍA Y UROLOGÍA',cat:M,u:U},
+    {cod:'01040676',n:'Nifedipina',sub:'',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040679',n:'Nifedipina',sub:'Inhibidores de la contractilidad uterina',grupo:'OBSTETRICIA',cat:M,u:U},
+    {cod:'01040688',n:'Bisoprolol',sub:'Betabloqueadores',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040700',n:'Gemfibrozil',sub:'Hipolipemiantes',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040711',n:'Simvastatina',sub:'Hipolipemiantes',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040717',n:'Rosuvastatina',sub:'Hipolipemiantes',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01040833',n:'Colistina RESERVA',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    // HEMATOLOGÍA
+    {cod:'01050100',n:'Ácido Fólico',sub:'Antianémicos',grupo:'HEMATOLOGÍA',cat:M,u:U},
+    {cod:'01050110',n:'Sulfato Ferroso + Ácido Fólico',sub:'Antianémicos',grupo:'HEMATOLOGÍA',cat:M,u:U},
+    {cod:'01050120',n:'Sulfato Ferroso',sub:'Antianémicos',grupo:'HEMATOLOGÍA',cat:M,u:U},
+    {cod:'01050133',n:'Eritropoyetina recombinante',sub:'Factores eritropoyéticos',grupo:'NEFROLOGÍA Y UROLOGÍA',cat:M,u:U},
+    {cod:'01050200',n:'Heparina sódica',sub:'Anticoagulantes',grupo:'HEMATOLOGÍA',cat:M,u:U},
+    {cod:'01050210',n:'Warfarina',sub:'Anticoagulantes',grupo:'HEMATOLOGÍA',cat:M,u:U},
+    {cod:'01050305',n:'Fitomenadiona (Vitamina K1)',sub:'Hemostáticos',grupo:'HEMATOLOGÍA',cat:M,u:U},
+    {cod:'01050309',n:'Protamina',sub:'Hemostáticos',grupo:'HEMATOLOGÍA',cat:M,u:U},
+    {cod:'01050314',n:'Ácido tranexámico',sub:'Hemostáticos',grupo:'HEMATOLOGÍA',cat:M,u:U},
+    {cod:'01050322',n:'Factor IX concentrado (HEMOFILIA)',sub:'Factores coagulación',grupo:'HEMATOLOGÍA',cat:M,u:U},
+    // SOLUCIONES ELECTROLÍTICAS
+    {cod:'01060100',n:'Dextrosa',sub:'Electrolitos parenterales',grupo:'SOLUCIONES',cat:M,u:'frasco'},
+    {cod:'01060106',n:'Dextrosa',sub:'Electrolitos parenterales',grupo:'SOLUCIONES',cat:M,u:'frasco'},
+    {cod:'01060108',n:'Dextrosa',sub:'Electrolitos parenterales',grupo:'SOLUCIONES',cat:M,u:'frasco'},
+    {cod:'01060215',n:'Albúmina humana',sub:'Proteínas y aminoácidos',grupo:'SOLUCIONES',cat:M,u:'frasco'},
+    {cod:'01060300',n:'Agua destilada',sub:'Solvente de medicamentos',grupo:'SOLUCIONES',cat:M,u:'frasco'},
+    {cod:'01060421',n:'Lípidos IV',sub:'Proteínas y aminoácidos',grupo:'SOLUCIONES',cat:M,u:'frasco'},
+    {cod:'01060423',n:'Aminoácidos IV',sub:'Proteínas y aminoácidos',grupo:'SOLUCIONES',cat:M,u:'frasco'},
+    {cod:'01060500',n:'Cloruro de potasio',sub:'Electrolitos',grupo:'SOLUCIONES',cat:M,u:U},
+    {cod:'01060533',n:'Bicarbonato sódico',sub:'',grupo:'SOLUCIONES',cat:M,u:U},
+    {cod:'01060560',n:'Calcio carbonato',sub:'Hipocalcemia',grupo:'SOLUCIONES',cat:M,u:U},
+    {cod:'01060580',n:'Calcitriol',sub:'Hipocalcemia',grupo:'SOLUCIONES',cat:M,u:U},
+    // NEFROLOGÍA Y UROLOGÍA
+    {cod:'01070105',n:'Furosemida',sub:'Diuréticos',grupo:'NEFROLOGÍA Y UROLOGÍA',cat:M,u:U},
+    {cod:'01070110',n:'Furosemida',sub:'Diuréticos',grupo:'NEFROLOGÍA Y UROLOGÍA',cat:M,u:U},
+    {cod:'01070120',n:'Hidroclorotiazida',sub:'Diuréticos',grupo:'NEFROLOGÍA Y UROLOGÍA',cat:M,u:U},
+    {cod:'01070131',n:'Hidroclorotiazida + Amilorida',sub:'Diuréticos',grupo:'NEFROLOGÍA Y UROLOGÍA',cat:M,u:U},
+    {cod:'01070140',n:'Manitol',sub:'Diuréticos',grupo:'NEFROLOGÍA Y UROLOGÍA',cat:M,u:U},
+    {cod:'01070151',n:'Espironolactona',sub:'Diuréticos',grupo:'NEFROLOGÍA Y UROLOGÍA',cat:M,u:U},
+    {cod:'01070215',n:'Alopurinol',sub:'Modificadores reumáticos',grupo:'ANALGÉSICOS',cat:M,u:U},
+    {cod:'01070400',n:'Sodio poliestireno sulfonato',sub:'Resinas catiónicas',grupo:'NEFROLOGÍA Y UROLOGÍA',cat:M,u:U},
+    {cod:'01070410',n:'Colchicina',sub:'Modificadores reumáticos',grupo:'ANALGÉSICOS',cat:M,u:U},
+    {cod:'01070415',n:'Silimarina',sub:'Antídotos',grupo:'ANTÍDOTOS',cat:M,u:U},
+    {cod:'01070500',n:'Oxibutinina',sub:'Antimuscarínicos',grupo:'NEFROLOGÍA Y UROLOGÍA',cat:M,u:U},
+    {cod:'01070506',n:'Doxazocina',sub:'Antimuscarínicos',grupo:'NEFROLOGÍA Y UROLOGÍA',cat:M,u:U},
+    {cod:'01070600',n:'Bicarbonato sódico (hemodiálisis)',sub:'Hemodiálisis',grupo:'NEFROLOGÍA Y UROLOGÍA',cat:M,u:U},
+    {cod:'01070605',n:'Bicarbonato sódico (hemodiálisis)',sub:'Hemodiálisis',grupo:'NEFROLOGÍA Y UROLOGÍA',cat:M,u:U},
+    {cod:'01070610',n:'Concentrado ácido (hemodiálisis)',sub:'Hemodiálisis',grupo:'NEFROLOGÍA Y UROLOGÍA',cat:M,u:U},
+    {cod:'01070614',n:'Sildenafil NEONATO',sub:'Antihipertensivos pulmonares',grupo:'CARDIOVASCULAR',cat:M,u:U},
+    {cod:'01070615',n:'Concentrado ácido',sub:'',grupo:'NEFROLOGÍA Y UROLOGÍA',cat:M,u:U},
+    // NEUROLOGÍA
+    {cod:'01080109',n:'Levetiracetam',sub:'Antiepilépticos orales',grupo:'NEUROLOGÍA',cat:M,u:U},
+    {cod:'01080110',n:'Valproato',sub:'Antiepilépticos orales',grupo:'NEUROLOGÍA',cat:M,u:U},
+    {cod:'01080112',n:'Levetiracetam',sub:'Antiepilépticos orales',grupo:'NEUROLOGÍA',cat:M,u:U},
+    {cod:'01080120',n:'Carbamacepina',sub:'Antiepilépticos orales',grupo:'NEUROLOGÍA',cat:M,u:U},
+    {cod:'01080126',n:'Gabapentina',sub:'Antiepilépticos orales',grupo:'NEUROLOGÍA',cat:M,u:U},
+    {cod:'01080131',n:'Ácido Valproico',sub:'Antiepilépticos orales',grupo:'NEUROLOGÍA',cat:M,u:U},
+    {cod:'01080135',n:'Clonazepam',sub:'Antiepilépticos orales',grupo:'NEUROLOGÍA',cat:M,u:U},
+    {cod:'01080150',n:'Fenitoína (Difenilhidantoína)',sub:'Antiepilépticos orales',grupo:'NEUROLOGÍA',cat:M,u:U},
+    {cod:'01080155',n:'Fenitoína (Difenilhidantoína)',sub:'Antiepilépticos orales',grupo:'NEUROLOGÍA',cat:M,u:U},
+    {cod:'01080160',n:'Fenobarbital',sub:'Antiepilépticos orales',grupo:'NEUROLOGÍA',cat:M,u:U},
+    {cod:'01080165',n:'Fenobarbital',sub:'Antiepilépticos orales',grupo:'NEUROLOGÍA',cat:M,u:U},
+    {cod:'01080200',n:'Sulfato de magnesio',sub:'Antiepilépticos parenterales',grupo:'NEUROLOGÍA',cat:M,u:U},
+    {cod:'01080202',n:'Fenobarbital',sub:'',grupo:'NEUROLOGÍA',cat:M,u:U},
+    {cod:'01080210',n:'Diazepam',sub:'',grupo:'NEUROLOGÍA',cat:M,u:U},
+    {cod:'01080220',n:'Fenitoína (Difenilhidantoína)',sub:'',grupo:'NEUROLOGÍA',cat:M,u:U},
+    {cod:'01080300',n:'Levodopa + Carbidopa',sub:'Antiparkinsonianos',grupo:'NEUROLOGÍA',cat:M,u:U},
+    {cod:'01080310',n:'Trihexifenidilo',sub:'Antiparkinsonianos',grupo:'NEUROLOGÍA',cat:M,u:U},
+    {cod:'01080320',n:'Biperideno',sub:'Antiparkinsonianos',grupo:'NEUROLOGÍA',cat:M,u:U},
+    {cod:'01080400',n:'Neostigmina',sub:'Antagonistas',grupo:'ANESTESIOLOGÍA',cat:M,u:U},
+    {cod:'01080520',n:'Propranolol',sub:'Migraña',grupo:'NEUROLOGÍA',cat:M,u:U},
+    {cod:'01080610',n:'Nimodipino',sub:'Vasodilatador cerebral',grupo:'NEUROLOGÍA',cat:M,u:U},
+    {cod:'01080615',n:'Nimodipino',sub:'Vasodilatador cerebral',grupo:'NEUROLOGÍA',cat:M,u:U},
+    {cod:'01080710',n:'Melatonina',sub:'Hipnóticos y ansiolíticos',grupo:'PSIQUIATRÍA',cat:M,u:U},
+    // PSIQUIATRÍA
+    {cod:'01090110',n:'Diazepam',sub:'Hipnóticos y ansiolíticos',grupo:'PSIQUIATRÍA',cat:M,u:U},
+    {cod:'01090120',n:'Lorazepam',sub:'Hipnóticos y ansiolíticos',grupo:'PSIQUIATRÍA',cat:M,u:U},
+    {cod:'01090210',n:'Clorpromazina',sub:'Neurolépticos',grupo:'PSIQUIATRÍA',cat:M,u:U},
+    {cod:'01090215',n:'Clorpromazina',sub:'Neurolépticos',grupo:'PSIQUIATRÍA',cat:M,u:U},
+    {cod:'01090220',n:'Tioridazina',sub:'Neurolépticos',grupo:'PSIQUIATRÍA',cat:M,u:U},
+    {cod:'01090230',n:'Flufenazina decanoato',sub:'Neurolépticos',grupo:'PSIQUIATRÍA',cat:M,u:U},
+    {cod:'01090238',n:'Risperidona',sub:'Neurolépticos',grupo:'PSIQUIATRÍA',cat:M,u:U},
+    {cod:'01090300',n:'Haloperidol',sub:'',grupo:'PSIQUIATRÍA',cat:M,u:U},
+    {cod:'01090305',n:'Haloperidol',sub:'',grupo:'PSIQUIATRÍA',cat:M,u:U},
+    {cod:'01090310',n:'Haloperidol',sub:'',grupo:'PSIQUIATRÍA',cat:M,u:U},
+    {cod:'01090320',n:'Litio',sub:'Estabilizador del ánimo',grupo:'PSIQUIATRÍA',cat:M,u:U},
+    {cod:'01090400',n:'Amitriptilina',sub:'Antidepresivos',grupo:'PSIQUIATRÍA',cat:M,u:U},
+    {cod:'01090420',n:'Fluoxetina',sub:'Antidepresivos',grupo:'PSIQUIATRÍA',cat:M,u:U},
+    {cod:'01090435',n:'Imipramina',sub:'Antidepresivos',grupo:'PSIQUIATRÍA',cat:M,u:U},
+    {cod:'01090703',n:'Lorazepam',sub:'Hipnóticos y ansiolíticos',grupo:'PSIQUIATRÍA',cat:M,u:U},
+    // OBSTETRICIA Y GINECOLOGÍA
+    {cod:'01100100',n:'Oxitocina',sub:'Oxitóxicos',grupo:'OBSTETRICIA',cat:M,u:U},
+    {cod:'01100101',n:'Oxitocina',sub:'Oxitóxicos',grupo:'OBSTETRICIA',cat:M,u:U},
+    {cod:'01100110',n:'Ergometrina (ergobasina)',sub:'Oxitóxicos',grupo:'OBSTETRICIA',cat:M,u:U},
+    {cod:'01100200',n:'Clotrimazol (vaginal)',sub:'Antifúngicos candidiasis',grupo:'OBSTETRICIA',cat:M,u:U},
+    {cod:'01100311',n:'Etonogestrel',sub:'Progestágenos implante',grupo:'OBSTETRICIA',cat:M,u:U},
+    {cod:'01100410',n:'Medroxiprogesterona',sub:'Progestágenos',grupo:'OBSTETRICIA',cat:M,u:U},
+    {cod:'01100425',n:'Levonorgestrel',sub:'Hormonales mixtos',grupo:'OBSTETRICIA',cat:M,u:U},
+    {cod:'01100510',n:'Levonorgestrel + Etinilestradiol',sub:'Hormonales mixtos',grupo:'OBSTETRICIA',cat:M,u:U},
+    {cod:'01100541',n:'Progesterona micronizada',sub:'Progestágenos',grupo:'OBSTETRICIA',cat:M,u:U},
+    {cod:'01100545',n:'Noretisterona + Estradiol',sub:'Hormonales mixtos',grupo:'OBSTETRICIA',cat:M,u:U},
+    {cod:'01100589',n:'Estrógenos Conjugados',sub:'Hormonales mixtos',grupo:'OBSTETRICIA',cat:M,u:U},
+    {cod:'01100705',n:'Inmunoglobulina humana',sub:'Derivados del plasma',grupo:'HEMATOLOGÍA',cat:M,u:U},
+    {cod:'01100815',n:'Misoprostol',sub:'Oxitóxicos',grupo:'OBSTETRICIA',cat:M,u:U},
+    {cod:'01102110',n:'Clomifeno citrato',sub:'Inductores ovulación',grupo:'ENDOCRINOLOGÍA',cat:M,u:U},
+    // OTORRINOLARINGOLOGÍA
+    {cod:'01110100',n:'Cloruro de sodio nasal',sub:'Descongestionantes',grupo:'OTORRINOLARINGOLOGÍA',cat:M,u:U},
+    {cod:'01110200',n:'Dexametasona ótica',sub:'Corticoide',grupo:'OTORRINOLARINGOLOGÍA',cat:M,u:U},
+    {cod:'01110210',n:'Clotrimazol ótico',sub:'Antimicótico',grupo:'OTORRINOLARINGOLOGÍA',cat:M,u:U},
+    {cod:'01110215',n:'Ciprofloxacina clorhidrato ótica',sub:'Antimicrobiano',grupo:'OTORRINOLARINGOLOGÍA',cat:M,u:U},
+    // OFTALMOLOGÍA
+    {cod:'01120105',n:'Tetraciclina oftálmica',sub:'Antimicrobianos',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120110',n:'Gentamicina oftálmica',sub:'Antimicrobianos',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120120',n:'Tobramicina + Dexametasona',sub:'Antimicrobianos',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120122',n:'Tobramicina + Dexametasona',sub:'Antimicrobianos',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120130',n:'Tobramicina oftálmica',sub:'Antimicrobianos',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120150',n:'Ciprofloxacina oftálmica',sub:'Antimicrobianos',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120155',n:'Moxifloxacina oftálmica',sub:'Antimicrobianos',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120170',n:'Cloranfenicol oftálmico',sub:'Antimicrobianos',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120200',n:'Atropina oftálmica',sub:'Midriáticos',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120210',n:'Tropicamida',sub:'Midriáticos',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120215',n:'Tropicamida + Fenilefrina',sub:'Midriáticos',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120300',n:'Dorzolamida',sub:'Antiglaucomatosos',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120305',n:'Dorzolamida + Timolol',sub:'Antiglaucomatosos',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120310',n:'Pilocarpina',sub:'Antiglaucomatosos',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120320',n:'Timolol oftálmico',sub:'Antiglaucomatosos',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120330',n:'Acetazolamida',sub:'',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120340',n:'Latanoprost',sub:'',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120345',n:'Brimonidina tartrato',sub:'',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120410',n:'Tetracaína oftálmica',sub:'Anestésico local',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120497',n:'Aceite de Silicón oftálmico',sub:'Auxiliares quirúrgicos',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120498',n:'Perfluoro-n-octano (C3F8)',sub:'Auxiliares quirúrgicos',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120505',n:'Fluoresceína',sub:'Auxiliares diagnóstico',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120510',n:'Fluoresceína sódica',sub:'Auxiliares diagnóstico',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120520',n:'Azul de tripano',sub:'',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120542',n:'Hialuronato de sodio',sub:'Lubricantes oftálmicos',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120543',n:'Hialuronato de sodio',sub:'',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120550',n:'Solución salina balanceada oftálmica',sub:'Auxiliares quirúrgicos',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120600',n:'Aciclovir oftálmico',sub:'Antiviral',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120700',n:'Diclofenac oftálmico',sub:'AINEs',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120710',n:'Dexametasona oftálmica',sub:'AINEs',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120720',n:'Prednisolona acetato oftálmico',sub:'',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120730',n:'Fluormetalona',sub:'',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120736',n:'Ácido Poliacrílico',sub:'Lubricantes oftálmicos',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120800',n:'Ketotifeno oftálmico',sub:'Antialérgico',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120901',n:'Cloruro de Sodio oftálmico',sub:'Adyuvantes',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120903',n:'Hipromelosa',sub:'',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01120905',n:'Hipromelosa oftálmica',sub:'Lubricantes',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01121000',n:'Nafazolina',sub:'',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01121120',n:'Bevacizumab',sub:'Anti-VEGF',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01121122',n:'Hexafluoruro de azufre (Gas SF6)',sub:'',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01121125',n:'Carbachol',sub:'',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    // DERMATOLOGÍA
+    {cod:'01130100',n:'Clotrimazol tópico',sub:'Antifúngicos',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130110',n:'Ketoconazol tópico',sub:'Antifúngicos',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130130',n:'Mupirocina',sub:'Antibióticos tópicos',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130140',n:'Terbinafina clorhidrato',sub:'Antifúngicos',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130145',n:'Eritromicina tópica',sub:'Antibióticos tópicos',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130155',n:'Metronidazol tópico',sub:'Antibióticos tópicos',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130160',n:'Aciclovir tópico',sub:'Antivirales tópicos',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130175',n:'Clindamicina fosfato tópica',sub:'Antibióticos tópicos',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130190',n:'Bifonazol',sub:'Antifúngicos',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130199',n:'Permetrina',sub:'Antiparasitarios',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130201',n:'Permetrina',sub:'Antiparasitarios',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130230',n:'Ivermectina tópica',sub:'Antiparasitarios',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130300',n:'Alquitrán de hulla',sub:'Antiseborreicos',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130310',n:'Cobre + Zinc',sub:'Antiseborreicos',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130320',n:'Piritionato de Zinc',sub:'Antiseborreicos',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130327',n:'Clostebol + Neomicina',sub:'Antibióticos tópicos',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130340',n:'Azufre + Ácido salicílico',sub:'Antiseborreicos',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130420',n:'Metoxaleno',sub:'Repigmentantes',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130460',n:'Ketanserina tópica',sub:'Antiulcerosos',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130500',n:'Ácido Salicílico + Vaselina',sub:'Queratolítico',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130505',n:'Ácido Salicílico + Vaselina',sub:'Queratolítico',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130605',n:'Podofilina en alcohol',sub:'Queratolítico',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130616',n:'Ácido Tricloroacético',sub:'Queratolítico',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130700',n:'Hidrocortisona tópica',sub:'Corticoesteroides tópicos',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130718',n:'Mometasona Furoato',sub:'Corticoesteroides tópicos',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130719',n:'Mometasona Furoato',sub:'Corticoesteroides tópicos',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130728',n:'Clobetasol',sub:'Corticoesteroides tópicos',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130730',n:'Polypodium Leucotomos',sub:'Repigmentantes',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130735',n:'Peróxido de hidrógeno',sub:'Desinfectantes',grupo:'ANTIMICROBIANOS',cat:M,u:U},
+    {cod:'01130750',n:'Tacrolimus tópico',sub:'Inmunomodulador',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130800',n:'Clofazimina VIGILANCIA TB-MDR',sub:'',grupo:'NEUMOLOGÍA',cat:M,u:U},
+    {cod:'01130802',n:'Clofazimina VIGILANCIA TB-MDR',sub:'',grupo:'NEUMOLOGÍA',cat:M,u:U},
+    {cod:'01130815',n:'Dapsona',sub:'Antileprosos',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130825',n:'Rifampicina',sub:'',grupo:'NEUMOLOGÍA',cat:M,u:U},
+    {cod:'01130850',n:'Talidomida',sub:'',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130855',n:'Talidomida',sub:'',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130900',n:'Ketotifeno fumarato',sub:'Antihistamínicos',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130905',n:'Ketotifeno',sub:'Antihistamínicos',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130920',n:'Difenhidramina',sub:'Antihistamínicos',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130925',n:'Difenhidramina',sub:'Antihistamínicos',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130930',n:'Loratadina',sub:'Antihistamínicos',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130935',n:'Loratadina',sub:'Antihistamínicos',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01130960',n:'Clorfeniramina',sub:'Antihistamínicos',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01131000',n:'Isotretinoína',sub:'Antiacné',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01131001',n:'Isotretinoína',sub:'Antiacné',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01131024',n:'Tretinoína (Ácido Retinoico)',sub:'Antiacné',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01131025',n:'Tretinoína (Ácido Retinoico)',sub:'Antiacné',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01131105',n:'Benzofenona 3 + Benzofenona 4',sub:'Protectores solares',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01131208',n:'Urea tópica',sub:'Queratolítico',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01131270',n:'Pasta al agua',sub:'Antiseborreicos',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'01131272',n:'Linimento oleocalcáreo',sub:'Humectantes',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    // ONCOLOGÍA
+    {cod:'01140100',n:'Azatioprina',sub:'Inmunosupresor',grupo:'ONCOLOGÍA',cat:M,u:U},
+    {cod:'01140110',n:'Ciclosporina',sub:'Inmunomoduladores',grupo:'ONCOLOGÍA',cat:M,u:U},
+    {cod:'01140112',n:'Ciclosporina',sub:'Inmunomoduladores',grupo:'ONCOLOGÍA',cat:M,u:U},
+    {cod:'01140115',n:'Ciclosporina oftálmica',sub:'Inmunomoduladores',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01140122',n:'Micofenolato de mofetilo',sub:'Inmunomoduladores',grupo:'ONCOLOGÍA',cat:M,u:U},
+    {cod:'01140123',n:'Micofenolato de mofetilo',sub:'Inmunomoduladores',grupo:'ONCOLOGÍA',cat:M,u:U},
+    {cod:'01140130',n:'Temozolamida Glioblastoma',sub:'Citotóxicos',grupo:'ONCOLOGÍA',cat:M,u:U},
+    {cod:'01140131',n:'Temozolamida Glioblastoma',sub:'Citotóxicos',grupo:'ONCOLOGÍA',cat:M,u:U},
+    {cod:'01140138',n:'Factor VIII concentrado (HEMOFILIA)',sub:'Factores coagulación',grupo:'HEMATOLOGÍA',cat:M,u:U},
+    {cod:'01140146',n:'Tacrolimus sistémico',sub:'Inmunomoduladores',grupo:'ONCOLOGÍA',cat:M,u:U},
+    {cod:'01140200',n:'Asparaginasa',sub:'Citotóxicos',grupo:'ONCOLOGÍA',cat:M,u:U},
+    {cod:'01140205',n:'Citarabina (citocina arabinosa)',sub:'Citotóxicos',grupo:'ONCOLOGÍA',cat:M,u:U},
+    {cod:'01140207',n:'Citarabina (citocina arabinosa)',sub:'Citotóxicos',grupo:'ONCOLOGÍA',cat:M,u:U},
+    {cod:'01140208',n:'Gemcitabina',sub:'Citotóxicos',grupo:'ONCOLOGÍA',cat:M,u:U},
+    {cod:'01140225',n:'Hidroxiurea',sub:'Citotóxicos',grupo:'ONCOLOGÍA',cat:M,u:U},
+    {cod:'01140230',n:'Ifosfamida',sub:'',grupo:'ONCOLOGÍA',cat:M,u:U},
+    {cod:'01140235',n:'Ciclofosfamida',sub:'',grupo:'ONCOLOGÍA',cat:M,u:U},
+    {cod:'01140236',n:'Ciclofosfamida',sub:'',grupo:'ONCOLOGÍA',cat:M,u:U},
+    {cod:'01140238',n:'Ciclofosfamida',sub:'',grupo:'ONCOLOGÍA',cat:M,u:U},
+    {cod:'01140240',n:'Cisplatino',sub:'',grupo:'ONCOLOGÍA',cat:M,u:U},
+    {cod:'01140242',n:'Cisplatino',sub:'',grupo:'ONCOLOGÍA',cat:M,u:U},
+    {cod:'01140244',n:'Dacarbazina (DTIC)',sub:'',grupo:'ONCOLOGÍA',cat:M,u:U},
+    {cod:'01140246',n:'Mitoxantrona',sub:'',grupo:'ONCOLOGÍA',cat:M,u:U},
+    {cod:'01140247',n:'Fludarabina fosfato',sub:'',grupo:'ONCOLOGÍA',cat:M,u:U},
+    {cod:'01140250',n:'Etopósido',sub:'',grupo:'ONCOLOGÍA',cat:M,u:U},
+    {cod:'01140254',n:'Metotrexato',sub:'',grupo:'ONCOLOGÍA',cat:M,u:U},
+    {cod:'01140290',n:'Daunorrubicina',sub:'',grupo:'ONCOLOGÍA',cat:M,u:U},
+    {cod:'01140292',n:'Irinotecán',sub:'',grupo:'ONCOLOGÍA',cat:M,u:U},
+    {cod:'01140293',n:'Carboplatino',sub:'',grupo:'ONCOLOGÍA',cat:M,u:U},
+    {cod:'01140294',n:'Carboplatino',sub:'',grupo:'ONCOLOGÍA',cat:M,u:U},
+    {cod:'01140298',n:'Oxaliplatino',sub:'',grupo:'ONCOLOGÍA',cat:M,u:U},
+    {cod:'01140431',n:'Factor estimulador de colonias (G-CSF)',sub:'Inmunomoduladores',grupo:'ONCOLOGÍA',cat:M,u:U},
+    {cod:'01140501',n:'Capecitabina',sub:'',grupo:'ONCOLOGÍA',cat:M,u:U},
+    {cod:'01140602',n:'Paclitaxel',sub:'',grupo:'ONCOLOGÍA',cat:M,u:U},
+    {cod:'01140612',n:'Yodo131 (I131)',sub:'Radioisótopos',grupo:'RADIOLOGÍA',cat:M,u:U},
+    {cod:'01140613',n:'Molibdeno-Tecnecio 99 (Mo-Tc99)',sub:'Radioisótopos',grupo:'RADIOLOGÍA',cat:M,u:U},
+    {cod:'01140615',n:'Macroagregado de albúmina',sub:'Radiofármacos',grupo:'RADIOLOGÍA',cat:M,u:U},
+    // NUTRICIÓN
+    {cod:'01150105',n:'Piridoxina (Vitamina B6)',sub:'Vitaminas y minerales',grupo:'NUTRICIÓN',cat:M,u:U},
+    {cod:'01150110',n:'Tiamina (Vitamina B1)',sub:'Vitaminas y minerales',grupo:'NUTRICIÓN',cat:M,u:U},
+    {cod:'01150116',n:'Vitamina C',sub:'Vitaminas y minerales',grupo:'NUTRICIÓN',cat:M,u:U},
+    {cod:'01150117',n:'Oligoelementos',sub:'Vitaminas y minerales',grupo:'NUTRICIÓN',cat:M,u:U},
+    {cod:'01150118',n:'Multivitamínico (MVI)',sub:'Vitaminas y minerales',grupo:'NUTRICIÓN',cat:M,u:U},
+    {cod:'01150120',n:'Retinol (Vitamina A)',sub:'Vitaminas y minerales',grupo:'NUTRICIÓN',cat:M,u:U},
+    {cod:'01150122',n:'Retinol (Vitamina A)',sub:'Vitaminas y minerales',grupo:'NUTRICIÓN',cat:M,u:U},
+    {cod:'01150123',n:'Retinol (Vitamina A)',sub:'Vitaminas y minerales',grupo:'NUTRICIÓN',cat:M,u:U},
+    {cod:'01150143',n:'Zinc',sub:'Antidiarreico',grupo:'GASTROENTEROLOGÍA',cat:M,u:U},
+    {cod:'01150144',n:'Gluconato de zinc',sub:'Vitaminas y minerales',grupo:'NUTRICIÓN',cat:M,u:U},
+    {cod:'01150145',n:'Multivitaminas y Minerales Prenatales',sub:'Vitaminas y minerales',grupo:'NUTRICIÓN',cat:M,u:U},
+    {cod:'01151100',n:'Leche Maternizada I semestre',sub:'Sucedáneos leche materna',grupo:'NUTRICIÓN',cat:M,u:U},
+    {cod:'01151105',n:'Leche Maternizada II semestre',sub:'Sucedáneos leche materna',grupo:'NUTRICIÓN',cat:M,u:U},
+    // ANALGÉSICOS
+    {cod:'01160101',n:'Morfina',sub:'Analgésicos opioides',grupo:'ANALGÉSICOS',cat:M,u:U},
+    {cod:'01160102',n:'Morfina Clorhidrato',sub:'Analgésicos opioides',grupo:'ANALGÉSICOS',cat:M,u:U},
+    {cod:'01160108',n:'Morfina',sub:'Analgésicos opioides',grupo:'ANALGÉSICOS',cat:M,u:U},
+    {cod:'01160109',n:'Morfina Clorhidrato',sub:'Analgésicos opioides',grupo:'ANALGÉSICOS',cat:M,u:U},
+    {cod:'01160126',n:'Morfina sulfato',sub:'Analgésicos opioides',grupo:'ANALGÉSICOS',cat:M,u:U},
+    {cod:'01160130',n:'Tramadol clorhidrato',sub:'Analgésicos opioides',grupo:'ANALGÉSICOS',cat:M,u:U},
+    {cod:'01160200',n:'Dipirona (metamizol)',sub:'Analgésicos antipiréticos',grupo:'ANALGÉSICOS',cat:M,u:U},
+    {cod:'01160210',n:'Paracetamol (Acetaminofén)',sub:'Analgésicos antipiréticos',grupo:'ANALGÉSICOS',cat:M,u:U},
+    {cod:'01160212',n:'Paracetamol (Acetaminofén)',sub:'',grupo:'ANALGÉSICOS',cat:M,u:U},
+    {cod:'01160216',n:'Paracetamol (Acetaminofén)',sub:'',grupo:'ANALGÉSICOS',cat:M,u:U},
+    {cod:'01160218',n:'Paracetamol (Acetaminofén)',sub:'',grupo:'ANALGÉSICOS',cat:M,u:U},
+    {cod:'01160330',n:'Ibuprofeno',sub:'Analgésicos antiinflamatorios',grupo:'ANALGÉSICOS',cat:M,u:U},
+    {cod:'01160340',n:'Diclofenac sódico',sub:'Analgésicos antiinflamatorios',grupo:'ANALGÉSICOS',cat:M,u:U},
+    {cod:'01160350',n:'Diclofenac sódico',sub:'Analgésicos antiinflamatorios',grupo:'ANALGÉSICOS',cat:M,u:U},
+    {cod:'01160362',n:'Ketorolaco',sub:'Analgésicos antiinflamatorios',grupo:'ANALGÉSICOS',cat:M,u:U},
+    {cod:'01160384',n:'Tramadol clorhidrato',sub:'Analgésicos opioides',grupo:'ANALGÉSICOS',cat:M,u:U},
+    {cod:'01160430',n:'Hidroxicloroquina',sub:'Modificadores reumáticos',grupo:'ANALGÉSICOS',cat:M,u:U},
+    {cod:'01160453',n:'Tocilizumab',sub:'Modificadores reumáticos',grupo:'ANALGÉSICOS',cat:M,u:U},
+    // ENDOCRINOLOGÍA
+    {cod:'01170100',n:'Dexametasona',sub:'Corticosteroides',grupo:'ENDOCRINOLOGÍA',cat:M,u:U},
+    {cod:'01170110',n:'Hidrocortisona succinato sódico',sub:'Corticosteroides',grupo:'ENDOCRINOLOGÍA',cat:M,u:U},
+    {cod:'01170120',n:'Prednisona',sub:'Corticosteroides',grupo:'ENDOCRINOLOGÍA',cat:M,u:U},
+    {cod:'01170124',n:'Triamcinolona',sub:'',grupo:'OFTALMOLOGÍA',cat:M,u:U},
+    {cod:'01170125',n:'Prednisona',sub:'Corticosteroides',grupo:'ENDOCRINOLOGÍA',cat:M,u:U},
+    {cod:'01170126',n:'Triamcinolona',sub:'Corticosteroides',grupo:'ENDOCRINOLOGÍA',cat:M,u:U},
+    {cod:'01170130',n:'Metilprednisolona acetato',sub:'Corticosteroides',grupo:'ENDOCRINOLOGÍA',cat:M,u:U},
+    {cod:'01170131',n:'Prednisolona',sub:'Corticosteroides',grupo:'ENDOCRINOLOGÍA',cat:M,u:U},
+    {cod:'01170135',n:'Metilprednisolona succinato sódico',sub:'Corticosteroides',grupo:'ENDOCRINOLOGÍA',cat:M,u:U},
+    {cod:'01170180',n:'Dexametasona',sub:'Corticosteroides',grupo:'ENDOCRINOLOGÍA',cat:M,u:U},
+    {cod:'01170200',n:'Insulina humana NPH',sub:'Insulinas',grupo:'ENDOCRINOLOGÍA',cat:M,u:'frasco'},
+    {cod:'01170205',n:'Insulina humana rápida',sub:'',grupo:'ENDOCRINOLOGÍA',cat:M,u:'frasco'},
+    {cod:'01170300',n:'Glibenclamida (Gliburida)',sub:'Hipoglicemiantes orales',grupo:'ENDOCRINOLOGÍA',cat:M,u:U},
+    {cod:'01170310',n:'Metformina',sub:'Hipoglicemiantes orales',grupo:'ENDOCRINOLOGÍA',cat:M,u:U},
+    {cod:'01170400',n:'Levotiroxina',sub:'Hormonas tiroideas',grupo:'ENDOCRINOLOGÍA',cat:M,u:U},
+    {cod:'01170401',n:'Levotiroxina',sub:'Hormonas tiroideas',grupo:'ENDOCRINOLOGÍA',cat:M,u:U},
+    {cod:'01170500',n:'Tiamazol (Metimazol)',sub:'Inhibidores tiroideos',grupo:'ENDOCRINOLOGÍA',cat:M,u:U},
+    {cod:'01170520',n:'Solución Lugol',sub:'Inhibidores tiroideos',grupo:'ENDOCRINOLOGÍA',cat:M,u:U},
+    {cod:'01170600',n:'Calcio gluconato',sub:'Hipocalcemia',grupo:'SOLUCIONES',cat:M,u:U},
+    // PRODUCTOS BIOLÓGICOS — VACUNAS
+    {cod:'01180110',n:'Vacuna BCG',sub:'Vacunas',grupo:'BIOLÓGICOS',cat:M,u:U},
+    {cod:'01180120',n:'Vacuna antirrábica canina',sub:'Vacunas',grupo:'BIOLÓGICOS',cat:M,u:U},
+    {cod:'01180125',n:'Vacuna antirrábica humana',sub:'Vacunas',grupo:'BIOLÓGICOS',cat:M,u:U},
+    {cod:'01180130',n:'Vacuna antipolio (OPV)',sub:'Vacunas',grupo:'BIOLÓGICOS',cat:M,u:U},
+    {cod:'01180145',n:'Vacuna antihepatitis B',sub:'Vacunas',grupo:'BIOLÓGICOS',cat:M,u:U},
+    {cod:'01180165',n:'Vacuna anti-Rotavirus (pentavalente)',sub:'Vacunas',grupo:'BIOLÓGICOS',cat:M,u:U},
+    {cod:'01180170',n:'Vacuna antiinfluenza pediátrica',sub:'',grupo:'BIOLÓGICOS',cat:M,u:U},
+    {cod:'01180175',n:'Vacuna antiinfluenza adultos',sub:'',grupo:'BIOLÓGICOS',cat:M,u:U},
+    {cod:'01180190',n:'Vacuna antineumococo 23 valente',sub:'',grupo:'BIOLÓGICOS',cat:M,u:U},
+    {cod:'01180208',n:'Vacuna dT',sub:'Toxoides',grupo:'BIOLÓGICOS',cat:M,u:U},
+    {cod:'01180215',n:'Vacuna DPT',sub:'Toxoides',grupo:'BIOLÓGICOS',cat:M,u:U},
+    {cod:'01180220',n:'DPT + Haemophilus influenzae B',sub:'Toxoides',grupo:'BIOLÓGICOS',cat:M,u:U},
+    {cod:'01180400',n:'Inmunoglobulina antitetánica humana',sub:'Inmunoglobulinas',grupo:'BIOLÓGICOS',cat:M,u:U},
+    {cod:'01180425',n:'Inmunoglobulina antirrábica humana',sub:'Inmunoglobulinas',grupo:'BIOLÓGICOS',cat:M,u:U},
+    {cod:'01180430',n:'Inmunoglobulina antirrábica humana',sub:'Inmunoglobulinas',grupo:'BIOLÓGICOS',cat:M,u:U},
+    {cod:'01180500',n:'Tuberculina (PPD)',sub:'Diagnóstico',grupo:'BIOLÓGICOS',cat:M,u:U},
+    {cod:'01180503',n:'Tuberculina (PPD)',sub:'Diagnóstico',grupo:'BIOLÓGICOS',cat:M,u:U},
+    // ANESTESIOLOGÍA
+    {cod:'01190110',n:'Atropina',sub:'Anticolinérgico',grupo:'ANESTESIOLOGÍA',cat:M,u:U},
+    {cod:'01190202',n:'Midazolam',sub:'Inductores anestésicos',grupo:'ANESTESIOLOGÍA',cat:M,u:U},
+    {cod:'01190210',n:'Tiopental',sub:'Inductores anestésicos',grupo:'ANESTESIOLOGÍA',cat:M,u:U},
+    {cod:'01190215',n:'Flumazenil',sub:'Antagonistas',grupo:'ANESTESIOLOGÍA',cat:M,u:U},
+    {cod:'01190300',n:'Propofol',sub:'Inductores anestésicos',grupo:'ANESTESIOLOGÍA',cat:M,u:U},
+    {cod:'01190310',n:'Ketamina',sub:'Inductores anestésicos',grupo:'ANESTESIOLOGÍA',cat:M,u:U},
+    {cod:'01190314',n:'Benzocaína',sub:'Paliativos',grupo:'PALIATIVOS',cat:M,u:U},
+    {cod:'01190330',n:'Sevoflurano',sub:'Inductores anestésicos',grupo:'ANESTESIOLOGÍA',cat:M,u:U},
+    {cod:'01190331',n:'Isoflurano',sub:'Inductores anestésicos',grupo:'ANESTESIOLOGÍA',cat:M,u:U},
+    {cod:'01190341',n:'Lidocaína con Epinefrina',sub:'Anestésicos locales',grupo:'ANESTESIOLOGÍA',cat:M,u:U},
+    {cod:'01190400',n:'Lidocaína (sin preservante)',sub:'Anestésicos locales',grupo:'ANESTESIOLOGÍA',cat:M,u:U},
+    {cod:'01190402',n:'Lidocaína al 10%',sub:'Anestésicos locales',grupo:'ANESTESIOLOGÍA',cat:M,u:U},
+    {cod:'01190405',n:'Lidocaína (con preservante)',sub:'Anestésicos locales',grupo:'ANESTESIOLOGÍA',cat:M,u:U},
+    {cod:'01190409',n:'Mepivacaína',sub:'Anestésicos locales',grupo:'ANESTESIOLOGÍA',cat:M,u:U},
+    {cod:'01190425',n:'Lidocaína (sin preservante)',sub:'',grupo:'ANESTESIOLOGÍA',cat:M,u:U},
+    {cod:'01190430',n:'Lidocaína con Epinefrina',sub:'',grupo:'ANESTESIOLOGÍA',cat:M,u:U},
+    {cod:'01190435',n:'Mepivacaína con Epinefrina',sub:'',grupo:'ANESTESIOLOGÍA',cat:M,u:U},
+    {cod:'01190445',n:'Bupivacaína con Epinefrina',sub:'',grupo:'ANESTESIOLOGÍA',cat:M,u:U},
+    {cod:'01190460',n:'Bupivacaína clorhidrato',sub:'',grupo:'ANESTESIOLOGÍA',cat:M,u:U},
+    {cod:'01190510',n:'Pancuronio',sub:'',grupo:'ANESTESIOLOGÍA',cat:M,u:U},
+    {cod:'01190520',n:'Vecuronio',sub:'',grupo:'ANESTESIOLOGÍA',cat:M,u:U},
+    {cod:'01190530',n:'Cisatracurio besilato',sub:'',grupo:'ANESTESIOLOGÍA',cat:M,u:U},
+    {cod:'01190600',n:'Droperidol',sub:'Neuroleptoanestesia',grupo:'ANESTESIOLOGÍA',cat:M,u:U},
+    {cod:'01190610',n:'Fentanilo',sub:'Analgésicos opioides',grupo:'ANALGÉSICOS',cat:M,u:U},
+    {cod:'01190700',n:'Naloxona',sub:'Antagonistas',grupo:'ANESTESIOLOGÍA',cat:M,u:U},
+    // RADIOLOGÍA Y MEDICINA NUCLEAR
+    {cod:'01200103',n:'Neurobac (ECD)',sub:'Radiofármacos',grupo:'RADIOLOGÍA',cat:M,u:U},
+    {cod:'01200104',n:'Pirofosfato de sodio',sub:'Radiofármacos',grupo:'RADIOLOGÍA',cat:M,u:U},
+    {cod:'01200106',n:'Ciprofloxacina marcada con tecnecio',sub:'Radiofármacos',grupo:'RADIOLOGÍA',cat:M,u:U},
+    {cod:'01200107',n:'Metoxy-isobutil-isonitrilo MIBI',sub:'Radiofármacos',grupo:'RADIOLOGÍA',cat:M,u:U},
+    {cod:'01200109',n:'Metilendifosfonico MDP',sub:'Radiofármacos',grupo:'RADIOLOGÍA',cat:M,u:U},
+    {cod:'01200111',n:'Ácido Dimercapto succínico (DMSA)',sub:'Radiofármacos',grupo:'RADIOLOGÍA',cat:M,u:U},
+    {cod:'01200115',n:'Enema Baritado',sub:'Medios de contraste',grupo:'RADIOLOGÍA',cat:M,u:U},
+    {cod:'01200120',n:'Enema sulfato de bario',sub:'Medios de contraste',grupo:'RADIOLOGÍA',cat:M,u:U},
+    {cod:'01200135',n:'Sales de Meglumina',sub:'Medios de contraste',grupo:'RADIOLOGÍA',cat:M,u:U},
+    // ANTÍDOTOS
+    {cod:'01210105',n:'N-Acetilcisteína',sub:'Antídotos',grupo:'ANTÍDOTOS',cat:M,u:U},
+    {cod:'01210111',n:'Carbón activado',sub:'Antídotos',grupo:'ANTÍDOTOS',cat:M,u:U},
+    {cod:'01210120',n:'Pralidoxima',sub:'Antídotos',grupo:'ANTÍDOTOS',cat:M,u:U},
+    {cod:'01210160',n:'Suero antiofídico polivalente',sub:'Antídotos',grupo:'ANTÍDOTOS',cat:M,u:U},
+    {cod:'01210170',n:'Suero anticoral',sub:'Antídotos',grupo:'ANTÍDOTOS',cat:M,u:U},
+    // MISCELÁNEOS
+    {cod:'01350188',n:'Troxerutina',sub:'Agente estabilizador capilar',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'04011600',n:'Vaselina simple',sub:'Humectantes',grupo:'DERMATOLOGÍA',cat:M,u:U},
+    {cod:'04080000',n:'Compuesto cuaternario amonio',sub:'Desinfectantes',grupo:'ANTIMICROBIANOS',cat:M,u:'frasco'},
+    {cod:'04080010',n:'Clorhexidina gluconato',sub:'Antisépticos',grupo:'ANTIMICROBIANOS',cat:M,u:'frasco'},
+    {cod:'04080030',n:'Glutaraldehído',sub:'Desinfectantes',grupo:'ANTIMICROBIANOS',cat:M,u:'frasco'},
+    {cod:'04080075',n:'Orto-ftaldehído',sub:'Desinfectantes',grupo:'ANTIMICROBIANOS',cat:M,u:'frasco'},
+    {cod:'04080090',n:'Alcohol etílico + Glicerina',sub:'',grupo:'ANTIMICROBIANOS',cat:M,u:'frasco'},
+    {cod:'04080111',n:'Compuesto cuaternario amonio',sub:'Desinfectantes',grupo:'ANTIMICROBIANOS',cat:M,u:'frasco'},
+    {cod:'04080523',n:'Hipoclorito de sodio',sub:'Desinfectantes',grupo:'ANTIMICROBIANOS',cat:M,u:'frasco'},
+    // GASES MEDICINALES
+    {cod:'05000104',n:'Óxido Nitroso Medicinal T-80',sub:'Gases medicinales',grupo:'ANESTESIOLOGÍA',cat:M,u:U},
+    {cod:'13500002',n:'Óxido Nitroso Medicinal T-220',sub:'Gases medicinales',grupo:'ANESTESIOLOGÍA',cat:M,u:U},
+    {cod:'15201125',n:'Oxígeno Medicinal T-220',sub:'Gases medicinales',grupo:'ANESTESIOLOGÍA',cat:M,u:U},
+    {cod:'80104101',n:'Ácido Salicílico + Vaselina (queratolítico)',sub:'Queratolítico',grupo:'DERMATOLOGÍA',cat:M,u:U},
+  ];
+})();
+
+async function importarCatalogoMINSA() {
+  if(!currentClinicaId){ toast('No tienes clínica asignada','error'); return; }
+  const role = currentUser?.key;
+  if(!isSuperAdmin() && !['admin','medico_admin'].includes(role)){ toast('Sin permiso','error'); return; }
+  const ok = await customConfirm({
+    icon:'📋', title:'Importar Catálogo MINSA',
+    msg:`Se agregarán hasta <strong>${MINSA_CATALOG.length} medicamentos</strong> del Listado Oficial de Medicamentos Esenciales de Nicaragua.<br><br>Los que ya tengan el mismo código MINSA en este inventario serán omitidos. El stock inicial será <strong>0</strong>.<br><br>¿Continuar?`,
+    okText:'Importar'
+  });
+  if(!ok) return;
+  setLoading(true);
+  const existingCodes = new Set(C.inv.filter(p=>p.codigoMinsa).map(p=>p.codigoMinsa));
+  const toInsert = MINSA_CATALOG.filter(p => !existingCodes.has(p.cod)).map(p => ({
+    clinica_id:currentClinicaId, nombre:p.n, categoria:'medicamento', unidad:p.u||'unidad',
+    stock_actual:0, stock_minimo:0, precio_unitario:null,
+    descripcion:[p.sub, p.grupo].filter(Boolean).join(' · ') || null,
+    codigo_minsa:p.cod
+  }));
+  if(!toInsert.length){ toast('Todos los medicamentos MINSA ya están en el inventario ✅','success'); setLoading(false); return; }
+  let inserted=0, errors=0;
+  for(let i=0; i<toInsert.length; i+=50){
+    const { error } = await sb.from('inventario').insert(toInsert.slice(i,i+50));
+    if(error){ errors+=Math.min(50,toInsert.length-i); console.error(error); }
+    else inserted+=Math.min(50,toInsert.length-i);
+  }
+  await loadAll(); renderInventario(); setLoading(false);
+  toast(`✅ ${inserted} medicamentos MINSA importados${errors?` (${errors} con error)`:''}`, inserted>0?'success':'error');
+}
+
 let prodSugIdx = -1;
 
 function buscarProductoInv(q) {
   const box = document.getElementById('prod-sug');
   if(!q || q.length < 2) { box.style.display='none'; prodSugIdx=-1; return; }
   const q2 = q.toLowerCase();
-  const matches = INV_CATALOG.filter(p => p.n.toLowerCase().includes(q2)).slice(0,9);
-  if(!matches.length) { box.style.display='none'; return; }
   const catIcon = c=>({medicamento:'💊',material:'🩺',equipo:'🔬',insumo:'🧹',papeleria:'📄',general:'📦'}[c]||'📦');
+  const gen = INV_CATALOG.filter(p => p.n.toLowerCase().includes(q2)).slice(0,5);
+  const seenNames = new Set(gen.map(p=>p.n.toLowerCase()));
+  const minsa = MINSA_CATALOG.filter(p =>
+    (p.n.toLowerCase().includes(q2) || p.cod.includes(q2)) && !seenNames.has(p.n.toLowerCase())
+  ).slice(0,5);
+  const matches = [...gen, ...minsa].slice(0,9);
+  if(!matches.length) { box.style.display='none'; return; }
   box.innerHTML = matches.map((p,i) => `
     <div class="prod-sug-item" data-idx="${i}"
       onmousedown="seleccionarProductoInv(${JSON.stringify(p).replace(/"/g,'&quot;')})"
@@ -3821,7 +4368,7 @@ function buscarProductoInv(q) {
       style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s">
       <div>
         <div style="font-size:13px;font-weight:600;color:var(--text)">${catIcon(p.cat)} ${p.n}</div>
-        <div style="font-size:11px;color:var(--text-light);margin-top:1px">${p.cat} · ${p.u}</div>
+        <div style="font-size:11px;color:var(--text-light);margin-top:2px">${p.cod?`<span style="font-family:monospace;background:var(--bg);padding:0 3px;border-radius:3px;border:1px solid var(--border)">${p.cod}</span> · `:''}<span style="text-transform:capitalize">${p.cat}</span> · ${p.u}</div>
       </div>
     </div>`).join('');
   box.querySelector('.prod-sug-item:last-child').style.borderBottom='none';
@@ -3845,9 +4392,11 @@ function navProdSug(e) {
 }
 
 function seleccionarProductoInv(p) {
-  document.getElementById('prod-nombre').value   = p.n;
+  document.getElementById('prod-nombre').value    = p.n;
   document.getElementById('prod-categoria').value = p.cat;
   document.getElementById('prod-unidad').value    = p.u;
+  const cEl = document.getElementById('prod-codigo-minsa');
+  if(cEl) cEl.value = p.cod||'';
   document.getElementById('prod-sug').style.display='none';
   prodSugIdx=-1;
   document.getElementById('prod-stock').focus();
@@ -4285,6 +4834,10 @@ function applyRoleMenu() {
   vis('menu-admin-section',  sa);
   vis('menu-admin',          sa);
   vis('menu-configuracion',  sa);
+
+  // ─ Botón importar catálogo MINSA: admin, medico_admin, SA
+  const btnMinsa = document.getElementById('btn-importar-minsa');
+  if(btnMinsa) btnMinsa.style.display = (sa || isAdmin || isMedAdm) ? '' : 'none';
 }
 
 async function loadAdminData() {
