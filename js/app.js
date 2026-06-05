@@ -710,7 +710,165 @@ function renderDashboard(){
   renderNavQuickGrid(currentView);
   const modoFarmacia = currentUser?.key === 'farmaceutico' || currentClinica?.tipo === 'farmacia';
   if(modoFarmacia) { renderDashboardFarmacia(); return; }
+  if(isSuperAdmin()) { renderDashboardSA(); return; }
   renderDashboardClinica();
+}
+
+function renderDashboardSA() {
+  const h = hoy();
+  const fmtC = v => '$' + Number(v||0).toLocaleString('es-NI',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const citasHoy      = C.c.filter(c=>c.fecha===h).sort((a,b)=>a.hora.localeCompare(b.hora));
+  const pendientes    = C.c.filter(c=>c.estado==='pendiente');
+  const completadasH  = citasHoy.filter(c=>c.estado==='completada').length;
+  const medsActivas   = C.m.filter(m=>m.estado==='activa').length;
+  const ingresosH     = C.fin.filter(f=>f.fecha===h&&f.tipo==='ingreso').reduce((s,f)=>s+Number(f.monto||0),0);
+  const egresosH      = C.fin.filter(f=>f.fecha===h&&f.tipo==='egreso').reduce((s,f)=>s+Number(f.monto||0),0);
+  const sinStock      = C.inv.filter(p=>p.stock<=0).length;
+  const medicos       = C.prof.filter(p=>['medico','admin','recepcion','enfermeria'].includes(p.rol));
+
+  const view = document.getElementById('view-dashboard');
+  view.innerHTML = `
+  <div id="panel-pendientes-sesion" style="display:none;margin-bottom:10px"></div>
+  <div class="sa-dash">
+
+    <!-- KPIs -->
+    <div class="sa-kpi-row">
+      <div class="sa-kpi" onclick="navigate('pacientes')">
+        <span class="sa-kpi-icon">👥</span>
+        <div><div class="sa-kpi-val">${C.p.length}</div><div class="sa-kpi-lbl">Pacientes</div></div>
+      </div>
+      <div class="sa-kpi" onclick="navigate('citas')">
+        <span class="sa-kpi-icon">📅</span>
+        <div><div class="sa-kpi-val">${citasHoy.length}</div><div class="sa-kpi-lbl">Citas hoy</div>
+        <div class="sa-kpi-trend ${completadasH>0?'up':'warn'}">${completadasH} atendidas · ${pendientes.length} pendientes</div></div>
+      </div>
+      <div class="sa-kpi" onclick="navigate('medicaciones')">
+        <span class="sa-kpi-icon">💊</span>
+        <div><div class="sa-kpi-val">${medsActivas}</div><div class="sa-kpi-lbl">Meds activas</div></div>
+      </div>
+      <div class="sa-kpi" onclick="navigate('finanzas')">
+        <span class="sa-kpi-icon">💰</span>
+        <div><div class="sa-kpi-val" style="font-size:14px">${fmtC(ingresosH)}</div><div class="sa-kpi-lbl">Ingresos hoy</div>
+        <div class="sa-kpi-trend ${egresosH>0?'down':'ok'}">${egresosH>0?'−'+fmtC(egresosH)+' egresos':'Sin egresos'}</div></div>
+      </div>
+      <div class="sa-kpi" onclick="navigate('inventario')">
+        <span class="sa-kpi-icon">📦</span>
+        <div><div class="sa-kpi-val">${C.inv.length}</div><div class="sa-kpi-lbl">Inventario</div>
+        ${sinStock>0?`<div class="sa-kpi-trend down">⚠️ ${sinStock} sin stock</div>`:'<div class="sa-kpi-trend up">✅ OK</div>'}</div>
+      </div>
+      <div class="sa-kpi" onclick="navigate('notas')">
+        <span class="sa-kpi-icon">📝</span>
+        <div><div class="sa-kpi-val">${C.n.length}</div><div class="sa-kpi-lbl">Notas clínicas</div></div>
+      </div>
+    </div>
+
+    <!-- 3 columnas -->
+    <div class="sa-cols">
+
+      <!-- COL 1: Agenda del día -->
+      <div class="sa-col">
+        <div class="sa-panel flex-1">
+          <div class="sa-panel-hdr">
+            <h4>📅 Agenda de hoy</h4>
+            <button class="btn btn-primary btn-sm" onclick="openModalCita()">+ Cita</button>
+          </div>
+          <div class="sa-panel-body">
+            ${citasHoy.length ? citasHoy.map(c=>{
+              const p=C.p.find(x=>x.id===c.pacienteId);
+              return `<div class="sa-agenda-item" onclick="navigate('paciente-detalle',${c.pacienteId})">
+                <div class="sa-agenda-time">${c.hora}</div>
+                <div class="patient-avatar" style="background:${colAvatar(c.pacienteId||0)};width:30px;height:30px;font-size:11px;flex-shrink:0">${p?ini(p.nombre,p.apellidos):'?'}</div>
+                <div style="flex:1;min-width:0">
+                  <div class="sa-agenda-name">${p?p.nombre+' '+p.apellidos:'Desconocido'}</div>
+                  <div class="sa-agenda-sub">${c.motivo} · <span style="color:${c.estado==='completada'?'#15803D':c.estado==='cancelada'?'#e53e3e':'#d69e2e'}">${c.estado}</span></div>
+                </div>
+                ${c.estado!=='completada'&&c.estado!=='cancelada'?`<button class="btn btn-sm" style="background:var(--success);color:#fff;padding:3px 8px;font-size:11px;flex-shrink:0" onclick="event.stopPropagation();marcarCitaCompletada(${c.id})">✅</button>`:''}
+              </div>`;
+            }).join('') : `<div class="empty-state" style="padding:32px 0"><div class="empty-icon">📅</div><p>Sin citas hoy</p></div>`}
+          </div>
+        </div>
+      </div>
+
+      <!-- COL 2: Personal + Finanzas -->
+      <div class="sa-col">
+        <div class="sa-panel flex-half">
+          <div class="sa-panel-hdr">
+            <h4>👤 Personal hoy</h4>
+          </div>
+          <div class="sa-panel-body">
+            ${medicos.length ? medicos.map(u=>{
+              const atend = citasHoy.filter(c=>c.medicoId===u.id&&c.estado==='completada').length;
+              const pend  = citasHoy.filter(c=>c.medicoId===u.id&&(c.estado==='pendiente'||c.estado==='confirmada')).length;
+              const total = citasHoy.filter(c=>c.medicoId===u.id).length;
+              const pct   = total ? Math.round(atend/total*100) : 0;
+              const rLabel= {admin:'Admin',medico:'Médico',recepcion:'Recepción',enfermeria:'Enfermería'}[u.rol]||u.rol;
+              return `<div class="sa-staff-card">
+                <div class="patient-avatar" style="background:${colAvatar(u.id)};width:32px;height:32px;font-size:12px;flex-shrink:0">${ini(u.nombre,'')}</div>
+                <div style="flex:1;min-width:0">
+                  <div class="sa-staff-name">${u.nombre}</div>
+                  <div class="sa-staff-sub">${rLabel} · ${atend} atend. · ${pend} pend.</div>
+                  <div class="sa-bar"><div class="sa-bar-fill" style="width:${pct}%"></div></div>
+                </div>
+                <span style="font-size:11px;font-weight:800;color:var(--primary);flex-shrink:0">${pct}%</span>
+              </div>`;
+            }).join('') : `<div class="empty-state" style="padding:20px 0"><p style="font-size:12px">Sin personal registrado</p></div>`}
+          </div>
+        </div>
+        <div class="sa-panel flex-half">
+          <div class="sa-panel-hdr">
+            <h4>💰 Finanzas hoy</h4>
+            <button class="btn btn-secondary btn-sm" onclick="navigate('finanzas')">Ver todo</button>
+          </div>
+          <div class="sa-panel-body">
+            <div class="sa-fin-row"><span class="sa-fin-lbl">💵 Ingresos</span><span class="sa-fin-val" style="color:#15803D">${fmtC(ingresosH)}</span></div>
+            <div class="sa-fin-row"><span class="sa-fin-lbl">📤 Egresos</span><span class="sa-fin-val" style="color:#e53e3e">${fmtC(egresosH)}</span></div>
+            <div class="sa-fin-row" style="background:var(--primary-light)"><span class="sa-fin-lbl" style="color:var(--primary)">📊 Balance</span><span class="sa-fin-val" style="color:var(--primary)">${fmtC(ingresosH-egresosH)}</span></div>
+            ${C.inv.filter(p=>p.stock<=0||p.stock<=p.stockMin).slice(0,3).map(p=>`
+            <div class="sa-fin-row" style="background:#FEF2F2">
+              <span class="sa-fin-lbl" style="color:#e53e3e">⚠️ ${p.nombre.slice(0,18)}</span>
+              <span class="sa-fin-val" style="color:#e53e3e">${p.stock<=0?'Sin stock':'Bajo'}</span>
+            </div>`).join('')}
+          </div>
+        </div>
+      </div>
+
+      <!-- COL 3: Accesos rápidos + Actividad reciente -->
+      <div class="sa-col">
+        <div class="sa-panel" style="flex-shrink:0">
+          <div class="sa-panel-hdr"><h4>⚡ Accesos rápidos</h4></div>
+          <div class="sa-quick-grid">
+            ${[
+              {icon:'👥',lbl:'Pacientes',v:'pacientes'},
+              {icon:'📅',lbl:'Citas',v:'citas'},
+              {icon:'💊',lbl:'Recetas',v:'medicaciones'},
+              {icon:'📝',lbl:'Notas',v:'notas'},
+              {icon:'📦',lbl:'Inventario',v:'inventario'},
+              {icon:'💰',lbl:'Finanzas',v:'finanzas'},
+              {icon:'📈',lbl:'Estadísticas',v:'estadisticas'},
+              {icon:'📤',lbl:'Exportar',v:'exportar'},
+              {icon:'👑',lbl:'Admin',v:'admin'},
+            ].map(x=>`<div class="sa-quick-btn" onclick="navigate('${x.v}')"><span>${x.icon}</span><span>${x.lbl}</span></div>`).join('')}
+          </div>
+        </div>
+        <div class="sa-panel flex-1">
+          <div class="sa-panel-hdr"><h4>🕐 Actividad reciente</h4></div>
+          <div class="sa-panel-body">
+            ${[...C.p].reverse().slice(0,8).map(p=>`
+            <div class="sa-rec-item" onclick="navigate('paciente-detalle',${p.id})">
+              <div class="patient-avatar" style="background:${colAvatar(p.id)};width:28px;height:28px;font-size:10px;flex-shrink:0">${ini(p.nombre,p.apellidos)}</div>
+              <div style="flex:1;min-width:0">
+                <div class="sa-rec-name">${p.nombre} ${p.apellidos}</div>
+                <div class="sa-rec-sub">${formatFecha(p.fechaRegistro)}</div>
+              </div>
+              <span class="tag ${p.estado==='activo'?'tag-green':'tag-gray'}" style="font-size:10px;flex-shrink:0">${p.estado}</span>
+            </div>`).join('')}
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>`;
+  renderPendientesSesion();
 }
 
 function renderDashboardClinica(){
