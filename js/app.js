@@ -6623,13 +6623,51 @@ td{padding:6px 8px;border-bottom:1px solid #F8FAFC}
   w.document.close();
 }
 
+function reimprimirVentaFarma(finId) {
+  const v = C.fin.find(x => x.id === finId);
+  if(!v) return;
+
+  // Parsear descripción: "Venta farmacia: ProdA x2, ProdB x1 — Cliente: Juan — Receta Dr. García — Paciente: María"
+  let resto = (v.descripcion || '').replace('Venta farmacia: ', '');
+  const partes = resto.split(' — ');
+  const productosStr = partes[0] || '';
+
+  let cliente = '', doctor = '', pacReceta = '', esReceta = false;
+  partes.slice(1).forEach(p => {
+    if(p.startsWith('Cliente: '))   cliente   = p.replace('Cliente: ', '');
+    if(p.startsWith('Receta Dr. ')) { esReceta = true; doctor = p.replace('Receta Dr. ', ''); }
+    if(p.startsWith('Paciente: '))  pacReceta = p.replace('Paciente: ', '');
+  });
+
+  // Parsear productos "Prod A x2" → { nombre, cantidad, precio }
+  const items = productosStr.split(', ').filter(Boolean).map(p => {
+    const match = p.match(/^(.+?) x(\d+)$/);
+    if(match) {
+      const nombre = match[1].trim();
+      const cantidad = parseInt(match[2], 10) || 1;
+      const prod = C.inv.find(x => x.nombre === nombre);
+      return { nombre, cantidad, precio: prod?.precio || 0, unidad: prod?.unidad || 'uds' };
+    }
+    return { nombre: p, cantidad: 1, precio: 0, unidad: 'uds' };
+  });
+
+  imprimirTicketVentaFarma({
+    numero: v.referencia || '—',
+    fecha: v.fecha, hora: '',
+    cliente, metodoPago: v.metodoPago || 'efectivo',
+    esReceta, doctor, pacReceta,
+    items,
+    total: Number(v.monto || 0)
+  });
+}
+
 function renderFarmaVentas() {
   const fecha = document.getElementById('farma-ventas-fecha')?.value || hoy();
   const ventas = C.fin.filter(x => x.fecha === fecha && x.categoria === 'farmacia' && x.tipo === 'ingreso');
   const tbody = document.getElementById('farma-ventas-tbody');
   if(!tbody) return;
   if(!ventas.length) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-light);padding:20px">No hay ventas para esta fecha</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-light);padding:20px">No hay ventas para esta fecha</td></tr>';
     const t = document.getElementById('farma-ventas-total-dia'); if(t) t.textContent = '';
     return;
   }
@@ -6644,6 +6682,7 @@ function renderFarmaVentas() {
       <td>${metIcon[v.metodoPago]||''} ${v.metodoPago||'—'}</td>
       <td>${esR ? '<span class="tag tag-blue">Receta</span>' : '<span class="tag tag-gray">Directa</span>'}</td>
       <td style="font-weight:700;color:var(--accent-blue)">${fmtC(v.monto)}</td>
+      <td><button class="btn btn-secondary btn-sm" onclick="reimprimirVentaFarma(${v.id})" title="Imprimir ticket">🖨️</button></td>
     </tr>`;
   }).join('');
   const total = ventas.reduce((s, x) => s + Number(x.monto || 0), 0);
@@ -6758,6 +6797,7 @@ function renderFarmaEstadisticas() {
             <td>${metIcon[v.metodoPago]||''} ${v.metodoPago||'—'}</td>
             <td>${esR ? '<span class="tag tag-blue">Receta</span>' : '<span class="tag tag-gray">Directa</span>'}</td>
             <td style="font-weight:700;color:#15803D">${fmtC(v.monto)}</td>
+            <td><button class="btn btn-secondary btn-sm" onclick="reimprimirVentaFarma(${v.id})" title="Imprimir ticket">🖨️</button></td>
           </tr>`;
         }).join('');
   }
