@@ -5588,9 +5588,9 @@ function toggleTransCompraInv() {
   const mostrar = ['medicamento','insumo','equipo','material','general'].includes(cat);
   wrap.style.display = mostrar ? '' : 'none';
   const lbl = document.getElementById('trans-compra-inv-label');
-  if(lbl) lbl.textContent = tipo === 'egreso'
-    ? 'Productos comprados — se agregarán al inventario automáticamente'
-    : 'Productos vendidos/despachados — se descontarán del inventario automáticamente';
+  if(lbl) lbl.textContent = tipo === 'ingreso'
+    ? 'Productos que ingresan — se agregarán al inventario automáticamente'
+    : 'Productos que egresan — se descontarán del inventario automáticamente';
 }
 
 function abrirModalSeleccionInv() {
@@ -5728,7 +5728,7 @@ function autoDescripcionTransInv() {
   const desc = document.getElementById('trans-descripcion');
   if(!desc || !_transInvSeleccion.length) return;
   const tipo = document.getElementById('trans-tipo')?.value;
-  const prefijo = tipo === 'egreso' ? 'Compra' : 'Venta';
+  const prefijo = tipo === 'ingreso' ? 'Ingreso' : 'Egreso';
   desc.value = prefijo + ': ' + _transInvSeleccion.map(s => `${s.nombre} ×${s.cantidad}`).join(', ');
 }
 
@@ -5765,8 +5765,8 @@ async function guardarTransaccion() {
 
   // Si hay productos seleccionados, mover inventario
   if(productosSeleccionados.length) {
-    const tipoMov  = tipo === 'egreso' ? 'entrada' : 'salida';
-    const motivoMov = tipo === 'egreso' ? 'compra' : 'venta';
+    const tipoMov  = tipo === 'ingreso' ? 'entrada' : 'salida';
+    const motivoMov = tipo === 'ingreso' ? 'compra' : 'despacho';
     const movimientos = productosSeleccionados.map(s => ({
       inventario_id: s.id, tipo: tipoMov, cantidad: s.cantidad,
       motivo: motivoMov, fecha, clinica_id: currentClinicaId
@@ -5778,14 +5778,14 @@ async function guardarTransaccion() {
       for(const s of productosSeleccionados) {
         const prod = C.inv.find(p => p.id === s.id);
         if(prod) {
-          const nuevoStock = tipo === 'egreso'
+          const nuevoStock = tipo === 'ingreso'
             ? prod.stock + s.cantidad
             : Math.max(0, prod.stock - s.cantidad);
           await sb.from('inventario').update({ stock_actual: nuevoStock }).eq('id', s.id);
           prod.stock = nuevoStock;
         }
       }
-      const accion = tipo === 'egreso' ? 'agregados al' : 'descontados del';
+      const accion = tipo === 'ingreso' ? 'agregados al' : 'descontados del';
       toast(`${tipo==='ingreso'?'Ingreso 💰':'Egreso 📤'} registrado · ${productosSeleccionados.length} producto(s) ${accion} inventario 📦`);
     }
   } else {
