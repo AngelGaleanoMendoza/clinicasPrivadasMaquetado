@@ -6476,8 +6476,20 @@ async function completarVentaFarma() {
   const pacReceta   = document.getElementById('farma-paciente-receta')?.value?.trim() || '';
   const total       = carritoFarma.reduce((s, x) => s + x.precio * x.cantidad, 0);
   const motivo      = esReceta ? 'receta' : 'venta_farmacia';
-  const ventaId     = 'VF-' + Date.now();
-  const productos   = carritoFarma.map(x => x.nombre + ' ×' + x.cantidad).join(', ');
+
+  // Número de factura consecutivo por clínica
+  const { count: ventaCount } = await sb.from('finanzas')
+    .select('*', { count: 'exact', head: true })
+    .eq('clinica_id', currentClinicaId)
+    .eq('categoria', 'farmacia')
+    .eq('tipo', 'ingreso');
+  const ventaId = 'VF-' + String((ventaCount || 0) + 1).padStart(5, '0');
+
+  // Guardar snapshot del carrito para el PDF antes de limpiar
+  const itemsParaPDF = carritoFarma.map(x => ({...x}));
+  const horaVenta = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+
+  const productos   = carritoFarma.map(x => x.nombre + ' x' + x.cantidad).join(', ');
   let descripcion   = 'Venta farmacia: ' + productos;
   if(cliente)              descripcion += ' — Cliente: ' + cliente;
   if(esReceta && doctor)   descripcion += ' — Receta Dr. ' + doctor;
@@ -6507,15 +6519,104 @@ async function completarVentaFarma() {
     if(finErr) console.error('Error finanzas farmacia:', finErr.message);
   }
 
-  toast('Venta completada — ' + fmtC(total), 'success');
+  toast('Venta ' + ventaId + ' completada — ' + fmtC(total), 'success');
   carritoFarma = [];
   ['farma-cliente','farma-doctor','farma-paciente-receta'].forEach(id => { const e = document.getElementById(id); if(e) e.value = ''; });
   const ckEl = document.getElementById('farma-es-receta'); if(ckEl) ckEl.checked = false;
   const camposEl = document.getElementById('farma-receta-campos'); if(camposEl) camposEl.style.display = 'none';
-  _unlockSubmit('venta', btn);
+
   await loadAll();
+  _unlockSubmit('venta', btn);
   actualizarStatsFarma();
   renderFarmaDespacho();
+
+  // PDF automático al completar la venta
+  imprimirTicketVentaFarma({
+    numero: ventaId, fecha: hoy(), hora: horaVenta,
+    cliente, metodoPago, esReceta, doctor, pacReceta,
+    items: itemsParaPDF, total
+  });
+}
+
+function imprimirTicketVentaFarma(v) {
+  const cn  = currentClinica?.nombre || 'Farmacia';
+  const dir = currentClinica?.direccion || '';
+  const tel = currentClinica?.telefono || '';
+  const metLabel = { efectivo: 'Efectivo', tarjeta: 'Tarjeta', transferencia: 'Transferencia' }[v.metodoPago] || v.metodoPago;
+  const metIcon  = { efectivo: '💵', tarjeta: '💳', transferencia: '🏦' }[v.metodoPago] || '';
+
+  const filas = v.items.map(i => `
+    <tr>
+      <td>${i.nombre}</td>
+      <td class="c">${i.unidad || 'uds'}</td>
+      <td class="c">${i.cantidad}</td>
+      <td class="r">${fmtC(i.precio)}</td>
+      <td class="r b">${fmtC(i.precio * i.cantidad)}</td>
+    </tr>`).join('');
+
+  const w = window.open('', '_blank', 'width=680,height=860');
+  w.document.write(`<!DOCTYPE html><html lang="es"><head>
+<meta charset="UTF-8"><title>Ticket ${v.numero}</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+@page{size:auto;margin:8mm}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',Arial,sans-serif;color:#0F172A;background:#fff;font-size:13px}
+.tk{max-width:560px;margin:0 auto;padding:24px}
+.ch{text-align:center;padding-bottom:14px;border-bottom:2px dashed #CBD5E1;margin-bottom:14px}
+.cn{font-size:20px;font-weight:800}.cs{font-size:11px;color:#64748B;margin-top:2px}
+.ti{font-size:12px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.8px;margin-top:8px}
+.nr{display:flex;justify-content:space-between;align-items:center;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:10px;padding:10px 14px;margin-bottom:14px}
+.nl{font-size:10px;color:#3B82F6;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.nv{font-size:20px;font-weight:800;color:#1D4ED8}
+.fv{font-size:13px;font-weight:700;text-align:right}.fh{font-size:11px;color:#64748B;text-align:right}
+table{width:100%;border-collapse:collapse;margin-bottom:14px;font-size:12px}
+thead tr{background:#F1F5F9}
+th{padding:7px 8px;font-size:10px;color:#475569;font-weight:700;text-transform:uppercase;letter-spacing:.4px;text-align:left}
+td{padding:6px 8px;border-bottom:1px solid #F8FAFC}
+.c{text-align:center}.r{text-align:right}.b{font-weight:700;color:#0F172A}
+.tb{background:#1D4ED8;color:#fff;border-radius:10px;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.tl{font-size:10px;opacity:.8;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.tv{font-size:28px;font-weight:800}.tm{font-size:12px;opacity:.8;margin-top:2px}
+.ir{display:flex;justify-content:space-between;font-size:12px;color:#334155;padding:3px 0;border-bottom:1px solid #F1F5F9}
+.rb{background:#EFF6FF;border-left:3px solid #3B82F6;border-radius:6px;padding:9px 12px;margin-top:10px;font-size:12px}
+.ft{text-align:center;color:#94A3B8;font-size:11px;border-top:1px dashed #CBD5E1;padding-top:10px;margin-top:18px}
+@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
+</style></head><body><div class="tk">
+  <div class="ch">
+    <div style="font-size:28px;margin-bottom:4px">💊</div>
+    <div class="cn">${cn}</div>
+    ${dir ? `<div class="cs">${dir}</div>` : ''}
+    ${tel ? `<div class="cs">Tel: ${tel}</div>` : ''}
+    <div class="ti">Ticket de Venta</div>
+  </div>
+  <div class="nr">
+    <div><div class="nl">N de Venta</div><div class="nv">${v.numero}</div></div>
+    <div><div class="fv">${v.fecha}</div><div class="fh">${v.hora}</div></div>
+  </div>
+  <table>
+    <thead><tr>
+      <th>Producto</th><th class="c">Unidad</th><th class="c">Cant.</th>
+      <th class="r">Precio</th><th class="r">Total</th>
+    </tr></thead>
+    <tbody>${filas}</tbody>
+  </table>
+  <div class="tb">
+    <div><div class="tl">Total a Pagar</div><div class="tm">${metIcon} ${metLabel}</div></div>
+    <div class="tv">${fmtC(v.total)}</div>
+  </div>
+  ${v.cliente ? `<div class="ir"><span>Cliente:</span><span><strong>${v.cliente}</strong></span></div>` : ''}
+  <div class="ir"><span>Metodo de pago:</span><span>${metIcon} ${metLabel}</span></div>
+  <div class="ir"><span>Atendido por:</span><span>${currentUser?.name || '--'}</span></div>
+  ${v.esReceta ? `<div class="rb"><strong>Receta medica</strong>
+    ${v.doctor ? `<div>Medico: ${v.doctor}</div>` : ''}
+    ${v.pacReceta ? `<div>Paciente: ${v.pacReceta}</div>` : ''}
+  </div>` : ''}
+  <div class="ft">Gracias por su compra! - ${cn} - ${new Date().toLocaleString('es-ES')}</div>
+</div>
+<script>window.onload=function(){window.print()}<\/script>
+</body></html>`);
+  w.document.close();
 }
 
 function renderFarmaVentas() {
