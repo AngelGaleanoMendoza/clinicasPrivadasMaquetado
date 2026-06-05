@@ -362,7 +362,7 @@ function recuperarDraft(idx) {
     openModalCita();
     setTimeout(() => {
       if(d.data.pacienteId) setPacienteSelect('c-paciente', d.data.pacienteId);
-      if(d.data.fecha)   document.getElementById('c-fecha').value   = d.data.fecha;
+      if(d.data.fecha && d.data.fecha >= hoy()) document.getElementById('c-fecha').value = d.data.fecha;
       if(d.data.hora)    fillHoraSelect(d.data.hora);
       if(d.data.motivo)  document.getElementById('c-motivo').value  = d.data.motivo;
       if(d.data.tipo)    document.getElementById('c-tipo').value    = d.data.tipo;
@@ -3438,9 +3438,12 @@ function nuevaCitaParaDoctor(profId) {
   setTimeout(()=>{
     const sel=document.getElementById('c-medico');
     if(sel) sel.value=profId;
-    document.getElementById('c-fecha').value=selAgendasDate;
+    const safeDate = selAgendasDate >= hoy() ? selAgendasDate : hoy();
+    const fechaEl = document.getElementById('c-fecha');
+    fechaEl.value = safeDate;
+    fechaEl.min   = hoy();
     // Marcar horas ya ocupadas por este médico ese día
-    marcarHorasOcupadas(profId, selAgendasDate);
+    marcarHorasOcupadas(profId, safeDate);
   },80);
 }
 
