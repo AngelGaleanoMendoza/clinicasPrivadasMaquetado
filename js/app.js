@@ -100,9 +100,11 @@ function setDbStatus(ok) {
 // ════════════════════ AUTH ════════════════════
 let currentUser = null;
 let selectedEmail = '';
+let _authEmail = ''; // email capturado en login o desde Supabase Auth
 
 async function verificarLogin() {
   const email = document.getElementById('login-email').value.trim();
+  _authEmail = email.toLowerCase(); // guardar email desde el formulario
   const password = document.getElementById('login-password').value;
   const errEl = document.getElementById('login-error');
   errEl.style.display = 'none';
@@ -411,12 +413,16 @@ function limpiarPendientesSesion() {
 async function entrarConPerfil(profile) {
   const rolLabel = {admin:'Administración',medico:'Médico',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',farmaceutico:'Farmacéutico'}[profile.rol]||profile.rol;
   currentClinicaId = profile.clinica_id || null;
-  // Obtener email desde Supabase Auth si el profile no lo tiene
-  let emailFinal = profile.email || null;
+  // Obtener email desde todas las fuentes disponibles
+  let emailFinal = (profile.email || '').trim().toLowerCase() || null;
   if(!emailFinal) {
-    const { data: { user: authUser } } = await sb.auth.getUser();
-    emailFinal = authUser?.email || null;
+    try {
+      const { data: { user: authUser } } = await sb.auth.getUser();
+      emailFinal = authUser?.email?.trim().toLowerCase() || null;
+    } catch(e) {}
   }
+  if(!emailFinal && _authEmail) emailFinal = _authEmail; // fallback: email del formulario
+  if(emailFinal) _authEmail = emailFinal; // sincronizar siempre
   currentUser = {
     id:     profile.id,
     name:   profile.nombre,
@@ -3178,8 +3184,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     const { data: { session } } = await sb.auth.getSession();
     if(session?.user) {
+      // Guardar email del auth para isSuperAdmin()
+      if(session.user.email) _authEmail = session.user.email.trim().toLowerCase();
       const { data: profile } = await sb.from('profiles').select('*').eq('id', session.user.id).single();
-      if(profile) { await entrarConPerfil(profile); return; }
+      if(profile) {
+        if(!profile.email && session.user.email) profile.email = session.user.email;
+        await entrarConPerfil(profile); return;
+      }
       await sb.auth.signOut();
     }
     // Legacy fallback
@@ -4203,9 +4214,12 @@ let detalleTab = 'info';
 
 function isSuperAdmin() {
   if(!currentUser) return false;
-  // Comparación robusta: email case-insensitive + trim, o rol superadmin
-  const emailMatch = currentUser.email && currentUser.email.trim().toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
-  const rolMatch   = currentUser.key === 'superadmin';
+  const SA = SUPER_ADMIN_EMAIL.toLowerCase();
+  // Chequea todas las fuentes de email disponibles
+  const fromProfile = (currentUser.email || '').trim().toLowerCase();
+  const fromAuth    = (_authEmail || '').trim().toLowerCase();
+  const emailMatch  = fromProfile === SA || fromAuth === SA;
+  const rolMatch    = currentUser.key === 'superadmin';
   return emailMatch || rolMatch;
 }
 function isFarmaceutico() { return currentUser?.key === 'farmaceutico'; }
