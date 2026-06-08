@@ -55,7 +55,7 @@ let currentClinicaId = null;
 let currentClinica   = null;
 
 // ════════════════════ MAPPERS DB ↔ JS ════════════════════
-const fromP = r => ({ id:r.id, nombre:r.nombre, apellidos:r.apellidos, identificacion:r.identificacion, fechaNac:r.fecha_nac, sexo:r.sexo, sangre:r.sangre, telefono:r.telefono, email:r.email, direccion:r.direccion, alergias:r.alergias, estado:r.estado||'activo', emergencia:r.emergencia, observaciones:r.observaciones, fechaRegistro:r.fecha_registro, fotoUrl:r.foto_url||null });
+const fromP = r => ({ id:r.id, nombre:r.nombre, apellidos:r.apellidos, identificacion:r.identificacion, fechaNac:r.fecha_nac, sexo:r.sexo, sangre:r.sangre, telefono:r.telefono, email:r.email, direccion:r.direccion, alergias:r.alergias, estado:r.estado||'activo', emergencia:r.emergencia, observaciones:r.observaciones, fechaRegistro:r.fecha_registro, fotoUrl:r.foto_url||null, expediente:r.expediente||null });
 const toP   = x => ({ nombre:x.nombre, apellidos:x.apellidos, identificacion:x.identificacion||null, fecha_nac:x.fechaNac||null, sexo:x.sexo||null, sangre:x.sangre||null, telefono:x.telefono||null, email:x.email||null, direccion:x.direccion||null, alergias:x.alergias||null, estado:x.estado||'activo', emergencia:x.emergencia||null, observaciones:x.observaciones||null, fecha_registro:x.fechaRegistro||hoy(), foto_url:x.fotoUrl||null, clinica_id:currentClinicaId });
 const fromE = r => ({ id:r.id, pacienteId:r.paciente_id, peso:r.peso, talla:r.talla, presion:r.presion, temperatura:r.temperatura, enfermedadesCronicas:r.enfermedades_cronicas, cirugias:r.cirugias_previas, antecedentesFamiliares:r.antecedentes_familiares, vacunas:r.vacunas, tabaco:r.habito_tabaco||'no', alcohol:r.habito_alcohol||'no', actividadFisica:r.actividad_fisica||'sedentario', ocupacion:r.ocupacion, estadoCivil:r.estado_civil, observacionesMedicas:r.observaciones_medicas });
 const toE   = x => ({ paciente_id:x.pacienteId, peso:x.peso?Number(x.peso):null, talla:x.talla?Number(x.talla):null, presion:x.presion||null, temperatura:x.temperatura?Number(x.temperatura):null, enfermedades_cronicas:x.enfermedadesCronicas||null, cirugias_previas:x.cirugias||null, antecedentes_familiares:x.antecedentesFamiliares||null, vacunas:x.vacunas||null, habito_tabaco:x.tabaco||'no', habito_alcohol:x.alcohol||'no', actividad_fisica:x.actividadFisica||'sedentario', ocupacion:x.ocupacion||null, estado_civil:x.estadoCivil||null, observaciones_medicas:x.observacionesMedicas||null, clinica_id:currentClinicaId });
@@ -1256,6 +1256,14 @@ async function guardarPaciente(irExpediente=false, irCita=false){
   if(editingId){ const r=await sb.from('pacientes').update(toP(obj)).eq('id',editingId); err=r.error; }
   else { const r=await sb.from('pacientes').insert([toP(obj)]).select('id').single(); err=r.error; if(!err) savedId=r.data.id; }
   if(err){ setLoading(false); _unlockSubmit('paciente',null); toast('Error: '+err.message,'error'); return; }
+  if(!editingId && savedId) {
+    const initials = (currentClinica?.codigo||currentClinica?.nombre||'EXP').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,4);
+    const year = new Date().getFullYear();
+    const seq = C.p.filter(p=>p.expediente).length + 1;
+    const numExp = `${initials}-${String(seq).padStart(3,'0')}`;
+    await sb.from('pacientes').update({expediente:numExp}).eq('id',savedId);
+    await sb.from('expediente').upsert([{ paciente_id:savedId, clinica_id:currentClinicaId }], {onConflict:'paciente_id,clinica_id', ignoreDuplicates:true });
+  }
   if(pendingFotoFile && savedId){
     try{ const url=await subirFotoPaciente(pendingFotoFile,savedId); await sb.from('pacientes').update({foto_url:url}).eq('id',savedId); pendingFotoFile=null; }
     catch(e){ toast('Paciente guardado, error con la foto: '+e.message,'info'); }
@@ -1767,18 +1775,30 @@ function fillMedicoSelect(selId, selectedId) {
   else if (['medico','medico_admin','admin'].includes(currentUser?.key)) sel.value = currentUser.id;
 }
 
-function fillHoraSelect(selectedValue) {
+function _getMinHoraHoy() {
+  const now = new Date();
+  let h = now.getHours(), m = now.getMinutes();
+  if(m === 0) { /* exact hour */ }
+  else if(m <= 30) { m = 30; }
+  else { m = 0; h += 1; }
+  if(h > 22) return null;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+}
+
+function fillHoraSelect(selectedValue, minHora = null) {
   const sel = document.getElementById('c-hora');
   sel.innerHTML = '<option value="">Seleccionar hora...</option>';
   for(let h = 6; h <= 22; h++) {
     for(let m = 0; m < 60; m += 30) {
       const h24 = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+      const isPast = minHora && h24 < minHora;
       const period = h < 12 ? 'AM' : 'PM';
       const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
       const opt = document.createElement('option');
       opt.value = h24;
-      opt.textContent = `${h12}:${String(m).padStart(2,'0')} ${period}`;
-      if(h24 === selectedValue) opt.selected = true;
+      opt.textContent = `${h12}:${String(m).padStart(2,'0')} ${period}${isPast?' ⛔':''}`;
+      if(h24 === selectedValue && !isPast) opt.selected = true;
+      if(isPast) opt.disabled = true;
       sel.appendChild(opt);
     }
   }
@@ -1803,7 +1823,7 @@ function openModalCita(id){
   fechaEl.value = hoy();
   fechaEl.min   = hoy();
   if(fechaEl._flatpickr) { fechaEl._flatpickr.set('minDate', 'today'); fechaEl._flatpickr.setDate(hoy(), false); }
-  fillHoraSelect('');
+  fillHoraSelect('', _getMinHoraHoy());
   ['motivo','notas'].forEach(f=>document.getElementById('c-'+f).value='');
   dxElegidos=[]; renderDxElegidos(); ocultarSugerenciasDx();
   document.getElementById('c-estado').value='pendiente';
@@ -1832,7 +1852,7 @@ function openModalCita(id){
       setPacienteSelect('c-paciente', c.pacienteId);
       fechaEl.value=c.fecha;
       if(fechaEl._flatpickr) fechaEl._flatpickr.setDate(c.fecha, false);
-      fillHoraSelect(c.hora);
+      fillHoraSelect(c.hora, null);
       document.getElementById('c-motivo').value=c.motivo;
       document.getElementById('c-tipo').value=c.tipo;
       document.getElementById('c-estado').value=c.estado;
@@ -1852,6 +1872,10 @@ async function guardarCita(){
   const motivo=document.getElementById('c-motivo').value.trim();
   if(!pid||!fecha||!hora||!motivo){ toast('Completa los campos obligatorios','error'); return; }
   if(!editingId && fecha < hoy()){ toast('No se pueden agendar citas en fechas pasadas','error'); return; }
+  if(!editingId && fecha === hoy()) {
+    const minH = _getMinHoraHoy();
+    if(minH && hora < minH){ toast('No se puede agendar en un horario ya pasado','error'); return; }
+  }
   const isMedico = currentUser?.key === 'medico';
   const medicoId = (isMedico && !isSuperAdmin()) ? currentUser.id : (document.getElementById('c-medico').value||null);
   const obj={pacienteId:pid,medicoId,fecha,hora,motivo,tipo:document.getElementById('c-tipo').value,estado:document.getElementById('c-estado').value,notas:document.getElementById('c-notas').value.trim()};
@@ -3362,7 +3386,9 @@ function renderAgendasRight() {
       <div class="card">
         <div class="card-header" style="margin-bottom:14px">
           <h3>📋 ${formatFecha(selAgendasDate)}</h3>
-          <button class="btn btn-primary btn-sm" onclick="nuevaCitaParaDoctor('${prof.id}')">+ Nueva Cita</button>
+          ${(isSuperAdmin() || currentUser?.key !== 'medico' || currentUser?.id == prof.id)
+            ? `<button class="btn btn-primary btn-sm" onclick="nuevaCitaParaDoctor('${prof.id}')">+ Nueva Cita</button>`
+            : ''}
         </div>
         <div id="agenda-day-${prof.id}"></div>
       </div>
@@ -3525,12 +3551,44 @@ function renderProductos(filtro) {
       <td>${p.precio!=null?'C$ '+p.precio.toFixed(2):'—'}</td>
       <td><span class="tag ${p.stock===0?'tag-red':p.stockMin>0&&p.stock<=p.stockMin?'tag-orange':'tag-green'}">${stLbl}</span></td>
       <td><div class="actions-cell">
-        <button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff" onclick="openModalEntrada(${p.id})">📥</button>
-        <button class="btn btn-sm btn-danger" onclick="openModalSalida(${p.id})">📤</button>
+        <button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff" onclick="openModalEntrada(${p.id})" title="Entrada">📥</button>
+        <button class="btn btn-sm btn-danger" onclick="openModalSalida(${p.id})" title="Salida">📤</button>
+        <button class="btn btn-secondary btn-sm" onclick="abrirKardex(${p.id})" title="Kardex">📋</button>
         <button class="btn btn-secondary btn-sm" onclick="openModalProducto(${p.id})">✏️</button>
         <button class="btn btn-danger btn-sm" onclick="eliminarProducto(${p.id})">🗑️</button>
       </div></td></tr>`;
   }).join('');
+}
+
+function abrirKardex(prodId) {
+  const prod = C.inv.find(p=>p.id===prodId);
+  if(!prod) return;
+  document.getElementById('kardex-title').textContent = `📋 Kardex — ${prod.nombre}`;
+  const stColor = prod.stock===0?'var(--danger)':prod.stockMin>0&&prod.stock<=prod.stockMin?'var(--warning)':'var(--success)';
+  document.getElementById('kardex-product-info').innerHTML = `
+    <div style="background:var(--bg);border-radius:10px;padding:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:14px">
+      <div><div style="font-size:11px;color:var(--text-light);font-weight:600;text-transform:uppercase;margin-bottom:4px">Stock actual</div><div style="font-size:22px;font-weight:800;color:${stColor}">${prod.stock} <span style="font-size:14px;font-weight:500">${prod.unidad}</span></div></div>
+      <div><div style="font-size:11px;color:var(--text-light);font-weight:600;text-transform:uppercase;margin-bottom:4px">Stock mínimo</div><div style="font-size:20px;font-weight:700">${prod.stockMin}</div></div>
+      <div><div style="font-size:11px;color:var(--text-light);font-weight:600;text-transform:uppercase;margin-bottom:4px">Precio unitario</div><div style="font-size:18px;font-weight:700">${prod.precio!=null?'C$ '+prod.precio.toFixed(2):'—'}</div></div>
+      <div><div style="font-size:11px;color:var(--text-light);font-weight:600;text-transform:uppercase;margin-bottom:4px">Categoría</div><div style="font-size:14px;font-weight:600">${prod.categoria}</div></div>
+      ${prod.codigoMinsa?`<div><div style="font-size:11px;color:var(--text-light);font-weight:600;text-transform:uppercase;margin-bottom:4px">Código MINSA</div><div style="font-family:monospace;font-size:13px;font-weight:700;color:var(--primary)">${prod.codigoMinsa}</div></div>`:''}
+    </div>`;
+  const movs = C.mov.filter(m=>m.invId===prodId).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  let balance = 0;
+  const rows = movs.map(m => { balance += m.tipo==='entrada'?m.cantidad:-m.cantidad; return {...m, saldo:balance}; }).reverse();
+  const tbody = document.getElementById('kardex-tbody');
+  if(!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:28px;color:var(--text-light)">Sin movimientos registrados</td></tr>`;
+  } else {
+    tbody.innerHTML = rows.map(r => `<tr>
+      <td>${formatFecha(r.fecha)}</td>
+      <td><span class="inv-badge-${r.tipo}">${r.tipo==='entrada'?'📥 Entrada':'📤 Salida'}</span></td>
+      <td style="font-weight:700;font-size:15px;color:${r.tipo==='entrada'?'var(--success)':'var(--danger)'}">${r.tipo==='entrada'?'+':'−'}${r.cantidad}</td>
+      <td style="font-size:12px;color:var(--text-light)">${r.motivo||'—'}</td>
+      <td style="font-weight:700">${r.saldo} <span style="font-size:11px;color:var(--text-light)">${prod.unidad}</span></td>
+    </tr>`).join('');
+  }
+  document.getElementById('modal-kardex').classList.add('open');
 }
 
 function filterInventario(v){ renderProductos(v); }
@@ -3695,6 +3753,76 @@ function fillProdSelect(selId, selectedId){
   const sel=document.getElementById(selId);
   sel.innerHTML='<option value="">Seleccionar producto...</option>'+
     C.inv.map(p=>`<option value="${p.id}" ${p.id===selectedId?'selected':''}>${p.nombre} (stock: ${p.stock} ${p.unidad})</option>`).join('');
+}
+
+let _compraItems = [];
+let _compraItemIdx = 0;
+
+function openModalCompra() {
+  if(!currentClinicaId){ toast('No tienes clínica asignada','error'); return; }
+  _compraItems = [];
+  _compraItemIdx = 0;
+  document.getElementById('compra-fecha').value = hoy();
+  document.getElementById('compra-motivo').value = '';
+  _renderCompraItems();
+  document.getElementById('modal-compra').classList.add('open');
+}
+
+function _renderCompraItems() {
+  const el = document.getElementById('compra-items');
+  if(!_compraItems.length) {
+    el.innerHTML = `<div style="text-align:center;padding:18px;color:var(--text-light);font-size:13px;border:1.5px dashed var(--border);border-radius:10px">Sin productos — agrega uno con el botón de abajo</div>`;
+  } else {
+    const opts = C.inv.map(p=>`<option value="${p.id}">${p.nombre} (${p.unidad})</option>`).join('');
+    el.innerHTML = _compraItems.map((item, i) => `
+      <div style="display:grid;grid-template-columns:1fr 90px auto;gap:8px;align-items:center;margin-bottom:8px">
+        <select onchange="_compraItemChange(${i},'prod',this.value)" style="border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;background:var(--bg);color:var(--text);font-size:13px">
+          <option value="">Seleccionar producto...</option>${C.inv.map(p=>`<option value="${p.id}" ${item.invId==p.id?'selected':''}>${p.nombre} (${p.unidad})</option>`).join('')}
+        </select>
+        <input type="number" min="1" placeholder="Cant." value="${item.cantidad||''}" onchange="_compraItemChange(${i},'qty',this.value)" style="border:1.5px solid var(--border);border-radius:8px;padding:8px;background:var(--bg);color:var(--text);font-size:13px;text-align:center">
+        <button onclick="_quitarItemCompra(${i})" style="background:none;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;color:var(--danger);font-size:15px;line-height:1">✕</button>
+      </div>`).join('');
+  }
+  const total = _compraItems.filter(x=>x.invId&&x.cantidad).length;
+  document.getElementById('compra-footer-info').textContent = total
+    ? `${total} producto${total!==1?'s':''} — ${_compraItems.reduce((s,x)=>s+Number(x.cantidad||0),0)} unidades totales`
+    : '';
+}
+
+function _compraItemChange(i, field, val) {
+  if(field==='prod') _compraItems[i].invId = val ? parseInt(val) : null;
+  if(field==='qty')  _compraItems[i].cantidad = val ? Number(val) : null;
+}
+
+function agregarItemCompra() {
+  _compraItems.push({ invId:null, cantidad:null });
+  _renderCompraItems();
+}
+
+function _quitarItemCompra(i) {
+  _compraItems.splice(i, 1);
+  _renderCompraItems();
+}
+
+async function guardarCompra() {
+  const fecha = document.getElementById('compra-fecha').value || hoy();
+  const motivo = document.getElementById('compra-motivo').value.trim() || 'Compra grupal';
+  const validos = _compraItems.filter(x=>x.invId&&x.cantidad>0);
+  if(!validos.length){ toast('Agrega al menos un producto con cantidad válida','error'); return; }
+  setLoading(true);
+  let ok=0, err=0;
+  for(const item of validos) {
+    const prod = C.inv.find(p=>p.id===item.invId);
+    const nuevoStock = (prod?.stock||0) + item.cantidad;
+    const [r1, r2] = await Promise.all([
+      sb.from('inventario_movimientos').insert({inventario_id:item.invId,clinica_id:currentClinicaId,tipo:'entrada',cantidad:item.cantidad,motivo,fecha}),
+      sb.from('inventario').update({stock_actual:nuevoStock}).eq('id',item.invId)
+    ]);
+    if(r1.error||r2.error) err++; else ok++;
+  }
+  closeModal('modal-compra');
+  await loadAll(); renderInventario(); setLoading(false);
+  toast(`✅ Compra registrada: ${ok} producto${ok!==1?'s':''}${err?` (${err} con error)`:''}`, ok>0?'success':'warning');
 }
 
 function openModalEntrada(prodId){
@@ -4327,34 +4455,85 @@ const MINSA_CATALOG = (function(){
   ];
 })();
 
-async function importarCatalogoMINSA() {
+let _minsaSelected = new Set();
+
+function abrirSelectorMINSA() {
   if(!currentClinicaId){ toast('No tienes clínica asignada','error'); return; }
-  const role = currentUser?.key;
-  if(!isSuperAdmin() && !['admin','medico_admin'].includes(role)){ toast('Sin permiso','error'); return; }
-  const ok = await customConfirm({
-    icon:'📋', title:'Importar Catálogo MINSA',
-    msg:`Se agregarán hasta <strong>${MINSA_CATALOG.length} medicamentos</strong> del Listado Oficial de Medicamentos Esenciales de Nicaragua.<br><br>Los que ya tengan el mismo código MINSA en este inventario serán omitidos. El stock inicial será <strong>0</strong>.<br><br>¿Continuar?`,
-    okText:'Importar'
-  });
-  if(!ok) return;
-  setLoading(true);
+  _minsaSelected.clear();
+  document.getElementById('minsa-search').value = '';
+  filtrarCatalogoMINSA('');
+  document.getElementById('modal-minsa-selector').classList.add('open');
+}
+
+function filtrarCatalogoMINSA(q) {
   const existingCodes = new Set(C.inv.filter(p=>p.codigoMinsa).map(p=>p.codigoMinsa));
-  const toInsert = MINSA_CATALOG.filter(p => !existingCodes.has(p.cod)).map(p => ({
+  const q2 = (q||'').toLowerCase();
+  let items = MINSA_CATALOG.filter(p=>!existingCodes.has(p.cod));
+  if(q2) items = items.filter(p=>p.n.toLowerCase().includes(q2)||p.cod.includes(q2)||(p.grupo||'').toLowerCase().includes(q2)||(p.sub||'').toLowerCase().includes(q2));
+  const grid = document.getElementById('minsa-catalog-grid');
+  if(!items.length){
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:32px;color:var(--text-light);font-size:14px">Sin resultados</div>`;
+    _actualizarConteoMINSA(); return;
+  }
+  grid.innerHTML = items.map(p => {
+    const on = _minsaSelected.has(p.cod);
+    return `<label id="minsa-lbl-${p.cod.replace(/[^a-z0-9]/gi,'_')}" style="display:flex;align-items:flex-start;gap:8px;padding:9px 11px;background:var(--bg);border:1.5px solid ${on?'var(--primary)':'var(--border)'};border-radius:9px;cursor:pointer;font-size:12px;transition:border .12s;user-select:none">
+      <input type="checkbox" ${on?'checked':''} onchange="toggleMinsaItem('${p.cod}',this.checked)" style="margin-top:3px;flex-shrink:0">
+      <div style="min-width:0">
+        <div style="font-weight:700;font-size:13px;color:var(--text);line-height:1.3">${p.n}</div>
+        <div style="color:var(--text-light);margin-top:2px;font-size:11px">${[p.grupo,p.sub].filter(Boolean).join(' · ')||'Sin grupo'} · <span style="color:var(--text)">${p.u||'unidad'}</span></div>
+        <div style="font-family:monospace;font-size:11px;color:var(--primary);margin-top:2px">${p.cod}</div>
+      </div>
+    </label>`;
+  }).join('');
+  _actualizarConteoMINSA();
+}
+
+function toggleMinsaItem(cod, checked) {
+  if(checked) _minsaSelected.add(cod);
+  else _minsaSelected.delete(cod);
+  const key = cod.replace(/[^a-z0-9]/gi,'_');
+  const lbl = document.getElementById('minsa-lbl-'+key);
+  if(lbl) lbl.style.borderColor = checked ? 'var(--primary)' : 'var(--border)';
+  _actualizarConteoMINSA();
+}
+
+function _actualizarConteoMINSA() {
+  const el = document.getElementById('minsa-selected-count');
+  if(el) el.textContent = `${_minsaSelected.size} medicamento${_minsaSelected.size!==1?'s':''} seleccionado${_minsaSelected.size!==1?'s':''}`;
+}
+
+function seleccionarTodoMINSA() {
+  const existingCodes = new Set(C.inv.filter(p=>p.codigoMinsa).map(p=>p.codigoMinsa));
+  const q = document.getElementById('minsa-search').value;
+  const q2 = (q||'').toLowerCase();
+  let items = MINSA_CATALOG.filter(p=>!existingCodes.has(p.cod));
+  if(q2) items = items.filter(p=>p.n.toLowerCase().includes(q2)||p.cod.includes(q2)||(p.grupo||'').toLowerCase().includes(q2));
+  items.forEach(p=>_minsaSelected.add(p.cod));
+  filtrarCatalogoMINSA(q);
+}
+
+async function confirmarImportMINSA() {
+  if(!_minsaSelected.size){ toast('Selecciona al menos un medicamento','error'); return; }
+  const toInsert = MINSA_CATALOG.filter(p=>_minsaSelected.has(p.cod)).map(p=>({
     clinica_id:currentClinicaId, nombre:p.n, categoria:'medicamento', unidad:p.u||'unidad',
     stock_actual:0, stock_minimo:0, precio_unitario:null,
-    descripcion:[p.sub, p.grupo].filter(Boolean).join(' · ') || null,
+    descripcion:[p.sub, p.grupo].filter(Boolean).join(' · ')||null,
     codigo_minsa:p.cod
   }));
-  if(!toInsert.length){ toast('Todos los medicamentos MINSA ya están en el inventario ✅','success'); setLoading(false); return; }
+  setLoading(true);
   let inserted=0, errors=0;
   for(let i=0; i<toInsert.length; i+=50){
-    const { error } = await sb.from('inventario').insert(toInsert.slice(i,i+50));
-    if(error){ errors+=Math.min(50,toInsert.length-i); console.error(error); }
+    const {error} = await sb.from('inventario').insert(toInsert.slice(i,i+50));
+    if(error){ errors+=Math.min(50,toInsert.length-i); }
     else inserted+=Math.min(50,toInsert.length-i);
   }
+  closeModal('modal-minsa-selector');
   await loadAll(); renderInventario(); setLoading(false);
-  toast(`✅ ${inserted} medicamentos MINSA importados${errors?` (${errors} con error)`:''}`, inserted>0?'success':'error');
+  toast(`✅ ${inserted} medicamentos agregados${errors?` (${errors} con error)`:''}`, inserted>0?'success':'error');
 }
+
+async function importarCatalogoMINSA() { abrirSelectorMINSA(); }
 
 let prodSugIdx = -1;
 
@@ -5915,7 +6094,13 @@ function initDatePickers() {
       nextArrow:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>',
       onReady(_, __, fp) {
         fp.calendarContainer.style.fontFamily = "'Inter', sans-serif";
-      }
+      },
+      onChange: isCitaDate ? function(_, dateStr) {
+        const minH = dateStr === hoy() ? _getMinHoraHoy() : null;
+        const curVal = document.getElementById('c-hora').value;
+        fillHoraSelect(minH && curVal < minH ? '' : curVal, minH);
+        marcarHorasOcupadas();
+      } : undefined
     });
   });
 }
@@ -6674,6 +6859,18 @@ function verFacturaPDF(id) {
 // ═══════════════════════════════════════════════
 let expSearchTerm = '';
 
+async function generarExpediente(pid) {
+  if(!currentClinicaId) return;
+  const initials = (currentClinica?.codigo||currentClinica?.nombre||'EXP').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,4);
+  const year = new Date().getFullYear();
+  const seq = C.p.filter(p=>p.expediente).length + 1;
+  const numExp = `${initials}-${String(seq).padStart(3,'0')}`;
+  const { error } = await sb.from('pacientes').update({expediente:numExp}).eq('id',pid);
+  if(error){ toast('Error al asignar: '+error.message,'error'); return; }
+  await loadAll(); renderExpedientes();
+  toast(`Expediente ${numExp} asignado ✅`,'success');
+}
+
 function renderExpedientes() {
   filtrarExpedientes(expSearchTerm);
 }
@@ -6701,7 +6898,10 @@ function filtrarExpedientes(q) {
           ? '<span class="tag tag-green">Activo</span>'
           : '<span class="tag tag-gray">Inactivo</span>';
         return `<tr>
-          <td><strong>${p.expediente||'—'}</strong></td>
+          <td>${p.expediente
+            ? `<strong style="font-family:monospace;letter-spacing:.5px">${p.expediente}</strong>`
+            : `<button class="btn btn-sm btn-secondary" onclick="generarExpediente(${p.id})" style="padding:3px 10px;font-size:11px">Asignar N°</button>`
+          }</td>
           <td>
             <div style="font-weight:600">${p.nombre} ${p.apellidos}</div>
             <div style="font-size:12px;color:var(--text-light)">${p.telefono||'Sin teléfono'}</div>

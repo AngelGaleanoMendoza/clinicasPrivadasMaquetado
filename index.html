@@ -645,7 +645,8 @@
             <div style="display:flex;gap:8px;flex-wrap:wrap" id="inv-action-btns">
               <button class="btn btn-secondary btn-sm" onclick="openModalEntrada()">📥 Entrada</button>
               <button class="btn btn-secondary btn-sm" onclick="openModalSalida()">📤 Salida</button>
-              <button class="btn btn-secondary btn-sm" id="btn-importar-minsa" onclick="importarCatalogoMINSA()" style="display:none">📋 Catálogo MINSA</button>
+              <button class="btn btn-secondary btn-sm" onclick="openModalCompra()" title="Registrar compra de varios productos a la vez">🛒 Compra</button>
+              <button class="btn btn-secondary btn-sm" id="btn-importar-minsa" onclick="abrirSelectorMINSA()" style="display:none">📋 Catálogo MINSA</button>
               <button class="btn btn-primary btn-sm" onclick="openModalProducto()">+ Producto</button>
             </div>
           </div>
@@ -982,6 +983,58 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-salida')">Cancelar</button>
       <button class="btn btn-danger" onclick="guardarMovimiento('salida')">📤 Confirmar Salida</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL KARDEX -->
+<div class="modal-overlay" id="modal-kardex">
+  <div class="modal" style="max-width:660px;max-height:82vh;overflow-y:auto">
+    <h2 id="kardex-title">📋 Kardex</h2>
+    <div id="kardex-product-info"></div>
+    <table class="table" style="margin-top:0">
+      <thead><tr><th>Fecha</th><th>Tipo</th><th>Cantidad</th><th>Motivo</th><th>Saldo</th></tr></thead>
+      <tbody id="kardex-tbody"></tbody>
+    </table>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-kardex')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL SELECTOR MINSA -->
+<div class="modal-overlay" id="modal-minsa-selector">
+  <div class="modal" style="max-width:700px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden">
+    <h2>📋 Catálogo MINSA — Seleccionar Medicamentos</h2>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <input type="search" id="minsa-search" placeholder="Buscar por nombre, código o grupo..." oninput="filtrarCatalogoMINSA(this.value)" style="flex:1;padding:9px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;background:var(--bg);color:var(--text)">
+      <button class="btn btn-secondary btn-sm" onclick="seleccionarTodoMINSA()">Seleccionar visibles</button>
+    </div>
+    <div style="flex:1;overflow-y:auto;min-height:0">
+      <div id="minsa-catalog-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;padding-bottom:4px"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;padding-top:10px;border-top:1px solid var(--border);margin-top:8px;flex-shrink:0">
+      <span id="minsa-selected-count" style="font-size:13px;color:var(--text-light);flex:1">0 seleccionados</span>
+      <button class="btn btn-secondary" onclick="closeModal('modal-minsa-selector')">Cancelar</button>
+      <button class="btn btn-primary" style="background:linear-gradient(135deg,var(--success),#059669)" onclick="confirmarImportMINSA()">📥 Agregar seleccionados</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL COMPRA GRUPAL -->
+<div class="modal-overlay" id="modal-compra">
+  <div class="modal" style="max-width:620px">
+    <h2>🛒 Compra Grupal</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <div class="form-group" style="margin:0"><label>Fecha</label><input type="date" id="compra-fecha"></div>
+      <div class="form-group" style="margin:0"><label>Proveedor / Motivo</label><input type="text" id="compra-motivo" placeholder="Ej: Farmacéutica López, MINSA..."></div>
+    </div>
+    <div id="compra-items" style="margin-bottom:10px"></div>
+    <button class="btn btn-secondary btn-sm" onclick="agregarItemCompra()" style="margin-bottom:12px">+ Agregar producto</button>
+    <div id="compra-footer-info" style="font-size:12px;color:var(--text-light);padding:6px 0;border-top:1px solid var(--border)"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-compra')">Cancelar</button>
+      <button class="btn btn-primary" style="background:linear-gradient(135deg,var(--success),#059669)" onclick="guardarCompra()">📥 Confirmar Compra</button>
     </div>
   </div>
 </div>
@@ -1829,6 +1882,6 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260608c"></script>
+<script src="js/app.js?v=20260608d"></script>
 </body>
 </html>
