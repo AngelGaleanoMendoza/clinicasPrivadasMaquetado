@@ -3754,74 +3754,20 @@ function fillProdSelect(selId, selectedId){
     C.inv.map(p=>`<option value="${p.id}" ${p.id===selectedId?'selected':''}>${p.nombre} (stock: ${p.stock} ${p.unidad})</option>`).join('');
 }
 
-let _compraItems = [];
-let _compraItemIdx = 0;
-
 function openModalCompra() {
   if(!currentClinicaId){ toast('No tienes clínica asignada','error'); return; }
-  _compraItems = [];
-  _compraItemIdx = 0;
-  document.getElementById('compra-fecha').value = hoy();
-  document.getElementById('compra-motivo').value = '';
-  _renderCompraItems();
-  document.getElementById('modal-compra').classList.add('open');
-}
-
-function _renderCompraItems() {
-  const el = document.getElementById('compra-items');
-  if(!_compraItems.length) {
-    el.innerHTML = `<div style="text-align:center;padding:18px;color:var(--text-light);font-size:13px;border:1.5px dashed var(--border);border-radius:10px">Sin productos — agrega uno con el botón de abajo</div>`;
-  } else {
-    const opts = C.inv.map(p=>`<option value="${p.id}">${p.nombre} (${p.unidad})</option>`).join('');
-    el.innerHTML = _compraItems.map((item, i) => `
-      <div style="display:grid;grid-template-columns:1fr 90px auto;gap:8px;align-items:center;margin-bottom:8px">
-        <select onchange="_compraItemChange(${i},'prod',this.value)" style="border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;background:var(--bg);color:var(--text);font-size:13px">
-          <option value="">Seleccionar producto...</option>${C.inv.map(p=>`<option value="${p.id}" ${item.invId==p.id?'selected':''}>${p.nombre} (${p.unidad})</option>`).join('')}
-        </select>
-        <input type="number" min="1" placeholder="Cant." value="${item.cantidad||''}" onchange="_compraItemChange(${i},'qty',this.value)" style="border:1.5px solid var(--border);border-radius:8px;padding:8px;background:var(--bg);color:var(--text);font-size:13px;text-align:center">
-        <button onclick="_quitarItemCompra(${i})" style="background:none;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;color:var(--danger);font-size:15px;line-height:1">✕</button>
-      </div>`).join('');
-  }
-  const total = _compraItems.filter(x=>x.invId&&x.cantidad).length;
-  document.getElementById('compra-footer-info').textContent = total
-    ? `${total} producto${total!==1?'s':''} — ${_compraItems.reduce((s,x)=>s+Number(x.cantidad||0),0)} unidades totales`
-    : '';
-}
-
-function _compraItemChange(i, field, val) {
-  if(field==='prod') _compraItems[i].invId = val ? parseInt(val) : null;
-  if(field==='qty')  _compraItems[i].cantidad = val ? Number(val) : null;
-}
-
-function agregarItemCompra() {
-  _compraItems.push({ invId:null, cantidad:null });
-  _renderCompraItems();
-}
-
-function _quitarItemCompra(i) {
-  _compraItems.splice(i, 1);
-  _renderCompraItems();
-}
-
-async function guardarCompra() {
-  const fecha = document.getElementById('compra-fecha').value || hoy();
-  const motivo = document.getElementById('compra-motivo').value.trim() || 'Compra grupal';
-  const validos = _compraItems.filter(x=>x.invId&&x.cantidad>0);
-  if(!validos.length){ toast('Agrega al menos un producto con cantidad válida','error'); return; }
-  setLoading(true);
-  let ok=0, err=0;
-  for(const item of validos) {
-    const prod = C.inv.find(p=>p.id===item.invId);
-    const nuevoStock = (prod?.stock||0) + item.cantidad;
-    const [r1, r2] = await Promise.all([
-      sb.from('inventario_movimientos').insert({inventario_id:item.invId,clinica_id:currentClinicaId,tipo:'entrada',cantidad:item.cantidad,motivo,fecha}),
-      sb.from('inventario').update({stock_actual:nuevoStock}).eq('id',item.invId)
-    ]);
-    if(r1.error||r2.error) err++; else ok++;
-  }
-  closeModal('modal-compra');
-  await loadAll(); renderInventario(); setLoading(false);
-  toast(`✅ Compra registrada: ${ok} producto${ok!==1?'s':''}${err?` (${err} con error)`:''}`, ok>0?'success':'warning');
+  _movItems = {};
+  _movTipo = 'entrada';
+  document.getElementById('mov-fecha').value = hoy();
+  document.getElementById('mov-motivo').value = '';
+  document.getElementById('mov-search').value = '';
+  document.getElementById('mov-masivo-title').textContent = '🛒 Compra Grupal';
+  document.getElementById('mov-tabs-row').style.display = 'none';
+  document.getElementById('mov-motivo').placeholder = 'Ej: Farmacéutica López, MINSA, proveedor...';
+  document.getElementById('mov-confirm-btn').textContent = '🛒 Confirmar Compra';
+  document.getElementById('mov-confirm-btn').style.background = 'linear-gradient(135deg,var(--success),#059669)';
+  filtrarInventarioMov('');
+  document.getElementById('modal-mov-masivo').classList.add('open');
 }
 
 // ── Modal Movimiento Masivo (Entrada / Salida) ──
@@ -3837,7 +3783,9 @@ function abrirModalMov(tipo, prodId) {
   if(prodId) _movItems[prodId] = 1;
   document.getElementById('mov-fecha').value = hoy();
   document.getElementById('mov-motivo').value = '';
+  document.getElementById('mov-motivo').placeholder = 'Ej: Compra, donación, uso en consulta...';
   document.getElementById('mov-search').value = '';
+  document.getElementById('mov-tabs-row').style.display = 'flex';
   switchMovTab(tipo);
   filtrarInventarioMov('');
   document.getElementById('modal-mov-masivo').classList.add('open');

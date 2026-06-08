@@ -956,7 +956,7 @@
 <div class="modal-overlay" id="modal-mov-masivo">
   <div class="modal" style="max-width:720px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden">
     <h2 id="mov-masivo-title">📥 Registrar Entrada</h2>
-    <div style="display:flex;gap:6px;margin-bottom:10px">
+    <div id="mov-tabs-row" style="display:flex;gap:6px;margin-bottom:10px">
       <button id="mov-tab-entrada" class="btn btn-primary btn-sm" onclick="switchMovTab('entrada')">📥 Entrada</button>
       <button id="mov-tab-salida"  class="btn btn-secondary btn-sm" onclick="switchMovTab('salida')">📤 Salida</button>
     </div>
@@ -1013,23 +1013,6 @@
   </div>
 </div>
 
-<!-- MODAL COMPRA GRUPAL -->
-<div class="modal-overlay" id="modal-compra">
-  <div class="modal" style="max-width:620px">
-    <h2>🛒 Compra Grupal</h2>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
-      <div class="form-group" style="margin:0"><label>Fecha</label><input type="date" id="compra-fecha"></div>
-      <div class="form-group" style="margin:0"><label>Proveedor / Motivo</label><input type="text" id="compra-motivo" placeholder="Ej: Farmacéutica López, MINSA..."></div>
-    </div>
-    <div id="compra-items" style="margin-bottom:10px"></div>
-    <button class="btn btn-secondary btn-sm" onclick="agregarItemCompra()" style="margin-bottom:12px">+ Agregar producto</button>
-    <div id="compra-footer-info" style="font-size:12px;color:var(--text-light);padding:6px 0;border-top:1px solid var(--border)"></div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('modal-compra')">Cancelar</button>
-      <button class="btn btn-primary" style="background:linear-gradient(135deg,var(--success),#059669)" onclick="guardarCompra()">📥 Confirmar Compra</button>
-    </div>
-  </div>
-</div>
 
 <!-- MODAL TRANSACCIÓN FINANCIERA -->
 <div class="modal-overlay" id="modal-transaccion">
@@ -1874,6 +1857,6 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260608f"></script>
+<script src="js/app.js?v=20260608g"></script>
 </body>
 </html>
