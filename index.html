@@ -1493,13 +1493,13 @@
 
 <!-- MODAL USUARIO (Admin) -->
 <div class="modal-overlay" id="modal-usuario">
-  <div class="modal" style="max-width:520px">
+  <div class="modal" style="max-width:580px">
     <h2 id="modal-usuario-title">👤 Nuevo Usuario</h2>
     <div class="form-grid">
       <div class="form-group"><label>Nombre completo *</label><input type="text" id="u-nombre" placeholder="Dr. Juan Pérez"></div>
       <div class="form-group"><label>Correo electrónico</label><input type="email" id="u-email" placeholder="dr.perez@clinica.com"></div>
       <div class="form-group"><label>Rol</label>
-        <select id="u-rol">
+        <select id="u-rol" onchange="onRolChange()">
           <option value="medico">Médico</option>
           <option value="medico_admin">👨‍⚕️ Médico Administrativo</option>
           <option value="recepcion">Recepcionista</option>
@@ -1529,6 +1529,10 @@
           <button type="button" class="icon-opt" data-icon="🧬" onclick="selectIcon(this)">🧬</button>
         </div>
         <input type="hidden" id="u-icono" value="👨‍⚕️">
+      </div>
+      <div class="form-group full">
+        <label>Módulos accesibles <span style="font-size:11px;color:var(--text-light);font-weight:400">— marca lo que puede ver este usuario</span></label>
+        <div id="u-permisos-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:7px;margin-top:6px"></div>
       </div>
     </div>
     <div class="modal-footer">

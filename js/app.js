@@ -5,6 +5,29 @@ const sb = supabase.createClient(SURL, SKEY, {
   auth: { storage: sessionStorage, persistSession: true }
 });
 
+// ════════════════════ PERMISOS ════════════════════
+const ALL_PERMISOS = [
+  { id:'pacientes',    label:'Pacientes',          icon:'👥' },
+  { id:'citas',        label:'Citas',               icon:'📅' },
+  { id:'agendas',      label:'Agendas',             icon:'🗓️' },
+  { id:'medicaciones', label:'Recetas / Medicac.',  icon:'💊' },
+  { id:'notas',        label:'Notas Clínicas',      icon:'📝' },
+  { id:'atendidos',    label:'Atendidos por Día',   icon:'📊' },
+  { id:'inventario',   label:'Inventario',          icon:'📦' },
+  { id:'finanzas',     label:'Finanzas',            icon:'💰' },
+  { id:'estadisticas', label:'Estadísticas',        icon:'📈' },
+  { id:'exportar',     label:'Exportar / Enviar',   icon:'📤' },
+  { id:'farmacia',     label:'Módulo Farmacia',     icon:'🏪' },
+];
+const PERMISOS_DEFECTO = {
+  medico:       ['pacientes','citas','agendas','medicaciones','notas'],
+  medico_admin: ['pacientes','citas','agendas','medicaciones','notas','atendidos','inventario','finanzas','estadisticas','exportar'],
+  admin:        ['pacientes','citas','agendas','medicaciones','notas','atendidos','inventario','finanzas','estadisticas','exportar'],
+  recepcion:    ['pacientes','citas'],
+  enfermeria:   ['pacientes','medicaciones','notas'],
+  farmaceutico: ['inventario','finanzas','farmacia'],
+};
+
 // Detectar recovery token lo antes posible
 sb.auth.onAuthStateChange((event) => {
   if(event === 'PASSWORD_RECOVERY') {
@@ -426,13 +449,14 @@ async function entrarConPerfil(profile) {
   if(!emailFinal && _authEmail) emailFinal = _authEmail; // fallback: email del formulario
   if(emailFinal) _authEmail = emailFinal; // sincronizar siempre
   currentUser = {
-    id:     profile.id,
-    name:   profile.nombre,
-    nombre: profile.nombre,
-    role:   rolLabel,
-    avatar: profile.icono || profile.nombre[0].toUpperCase(),
-    email:  emailFinal,
-    key:    profile.rol
+    id:       profile.id,
+    name:     profile.nombre,
+    nombre:   profile.nombre,
+    role:     rolLabel,
+    avatar:   profile.icono || profile.nombre[0].toUpperCase(),
+    email:    emailFinal,
+    key:      profile.rol,
+    permisos: profile.permisos || []
   };
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').classList.add('visible');
@@ -553,25 +577,20 @@ async function navigate(view, patientId) {
   const sa   = isSuperAdmin();
   const role = currentUser?.key;
   const esFarmacia = currentClinica?.tipo === 'farmacia';
-  // Accesos por rol
-  const finAccess   = sa || ['admin','farmaceutico','medico_admin'].includes(role);
-  const invAccess   = sa || ['admin','farmaceutico','medico_admin'].includes(role);
-  const sysAccess   = sa || ['admin','medico_admin'].includes(role);
-  const medAccess   = sa || ['admin','medico','medico_admin'].includes(role);
-  const recAccess   = sa || ['admin','medico','medico_admin','recepcion'].includes(role);
-  const enfAccess   = sa || ['admin','medico','medico_admin','enfermeria'].includes(role);
   const farmaAccess = sa || role === 'farmaceutico' || esFarmacia;
-  // Guards específicos
-  if(view==='finanzas'  && !finAccess)   { navigate('dashboard'); return; }
-  if(view==='inventario'&& !invAccess)   { navigate('dashboard'); return; }
-  if(view==='estadisticas' && !sysAccess){ navigate('dashboard'); return; }
-  if(view==='exportar'  && !sysAccess)   { navigate('dashboard'); return; }
-  if(view==='configuracion' && !sa)      { navigate('dashboard'); return; }
-  if(view==='admin'     && !sa)          { navigate('dashboard'); return; }
-  if(view==='farmacia'  && !farmaAccess) { navigate('dashboard'); return; }
-  if(['citas','agendas'].includes(view) && !recAccess) { navigate('dashboard'); return; }
-  if(['medicaciones','notas'].includes(view) && !enfAccess) { navigate('dashboard'); return; }
-  if(view==='atendidos' && !medAccess)   { navigate('dashboard'); return; }
+  // Guards por permiso
+  if(view==='finanzas'     && !hasPermiso('finanzas'))     { navigate('dashboard'); return; }
+  if(view==='inventario'   && !hasPermiso('inventario'))   { navigate('dashboard'); return; }
+  if(view==='estadisticas' && !hasPermiso('estadisticas')) { navigate('dashboard'); return; }
+  if(view==='exportar'     && !hasPermiso('exportar'))     { navigate('dashboard'); return; }
+  if(view==='configuracion' && !sa)                        { navigate('dashboard'); return; }
+  if(view==='admin'        && !sa)                         { navigate('dashboard'); return; }
+  if(view==='farmacia'     && !farmaAccess)                { navigate('dashboard'); return; }
+  if(view==='citas'        && !hasPermiso('citas'))        { navigate('dashboard'); return; }
+  if(view==='agendas'      && !hasPermiso('agendas'))      { navigate('dashboard'); return; }
+  if(view==='medicaciones' && !hasPermiso('medicaciones')) { navigate('dashboard'); return; }
+  if(view==='notas'        && !hasPermiso('notas'))        { navigate('dashboard'); return; }
+  if(view==='atendidos'    && !hasPermiso('atendidos'))    { navigate('dashboard'); return; }
   if(view==='pacientes' && (role==='farmaceutico' || esFarmacia)) { navigate('farmacia'); return; }
   if(view==='expedientes' && (role==='farmaceutico' || esFarmacia)) { navigate('farmacia'); return; }
   // Rutas especiales sin loadAll
@@ -685,23 +704,18 @@ function renderCalDayCitas(date){
 function renderNavQuickGrid(cv) {
   const el = document.getElementById('nav-quick-grid');
   if(!el) return;
-  const sa       = isSuperAdmin();
-  const role     = currentUser?.key;
-  const isPureMed = role === 'medico';
-  const invAccess = sa || ['admin','farmaceutico','medico_admin'].includes(role);
-  const sysAccess = sa || ['admin','medico_admin'].includes(role);
-  const isRec    = role === 'recepcion';
+  const sa = isSuperAdmin();
   const all = [
-    { view:'pacientes',    icon:'👥', label:'Pacientes',    show:true },
-    { view:'citas',        icon:'📅', label:'Citas',        show:true },
-    { view:'agendas',      icon:'🗓️', label:'Agendas',      show:!isRec },
-    { view:'medicaciones', icon:'💊', label:'Recetas',      show:!isRec },
-    { view:'notas',        icon:'📝', label:'Notas',        show:!isRec },
-    { view:'atendidos',    icon:'📊', label:'Atendidos',    show:!isRec && !isPureMed },
-    { view:'estadisticas', icon:'📈', label:'Estadísticas', show:sysAccess },
-    { view:'inventario',   icon:'📦', label:'Inventario',   show:invAccess },
-    { view:'exportar',     icon:'📤', label:'Exportar',     show:sysAccess },
-    { view:'configuracion',icon:'⚙️', label:'Config.',      show:sa },
+    { view:'pacientes',    icon:'👥', label:'Pacientes',    show: hasPermiso('pacientes') },
+    { view:'citas',        icon:'📅', label:'Citas',        show: hasPermiso('citas') },
+    { view:'agendas',      icon:'🗓️', label:'Agendas',      show: hasPermiso('agendas') },
+    { view:'medicaciones', icon:'💊', label:'Recetas',      show: hasPermiso('medicaciones') },
+    { view:'notas',        icon:'📝', label:'Notas',        show: hasPermiso('notas') },
+    { view:'atendidos',    icon:'📊', label:'Atendidos',    show: hasPermiso('atendidos') },
+    { view:'estadisticas', icon:'📈', label:'Estadísticas', show: hasPermiso('estadisticas') },
+    { view:'inventario',   icon:'📦', label:'Inventario',   show: hasPermiso('inventario') },
+    { view:'exportar',     icon:'📤', label:'Exportar',     show: hasPermiso('exportar') },
+    { view:'configuracion',icon:'⚙️', label:'Config.',      show: sa },
   ].filter(x=>x.show);
   el.innerHTML = all.map(x =>
     `<div class="nav-quick-item${cv===x.view?' nq-active':''}" onclick="navigate('${x.view}')">
@@ -4776,6 +4790,12 @@ function isSuperAdmin() {
   return emailMatch || rolMatch;
 }
 function isFarmaceutico() { return currentUser?.key === 'farmaceutico'; }
+function hasPermiso(perm) {
+  if(isSuperAdmin()) return true;
+  const p = currentUser?.permisos;
+  const base = (p && p.length) ? p : (PERMISOS_DEFECTO[currentUser?.key] || []);
+  return base.includes(perm);
+}
 
 function toggleAdminMenu() { applyRoleMenu(); }
 
@@ -4800,39 +4820,39 @@ function applyRoleMenu() {
   // ─ Expedientes: oculto en modo farmacia
   vis('menu-expedientes', !modoFarmacia);
 
-  // ─ Módulo Farmacia: visible en modo farmacia
-  vis('menu-farmacia', modoFarmacia || sa);
+  // ─ Módulo Farmacia
+  vis('menu-farmacia', modoFarmacia || sa || hasPermiso('farmacia'));
 
   // ─ Sección Clínica y sus ítems (oculta en modo farmacia)
   const hasClinica = !modoFarmacia;
   vis('menu-clinica-section', hasClinica);
-  vis('menu-pacientes',       hasClinica);
-  vis('menu-citas',           hasClinica && !isEnf);
-  // Agendas y Atendidos: ocultos para médico puro (sí para médico administrativo)
-  vis('menu-agendas',         hasClinica && !isEnf);
-  vis('menu-medicaciones',    hasClinica && !isRec);
-  vis('menu-notas',           hasClinica && !isRec);
-  vis('menu-atendidos',       hasClinica && !isRec && !isEnf && !isMed);
+  vis('menu-pacientes',       hasClinica && hasPermiso('pacientes'));
+  vis('menu-citas',           hasClinica && hasPermiso('citas'));
+  vis('menu-agendas',         hasClinica && hasPermiso('agendas'));
+  vis('menu-medicaciones',    hasClinica && hasPermiso('medicaciones'));
+  vis('menu-notas',           hasClinica && hasPermiso('notas'));
+  vis('menu-atendidos',       hasClinica && hasPermiso('atendidos'));
 
   // ─ Sección Gestión
-  const invAccess  = sa || ['admin','farmaceutico','medico_admin'].includes(role) || esFarmacia;
-  const finAccess  = sa || ['admin','farmaceutico','medico_admin'].includes(role) || esFarmacia;
-  const sysAccess  = sa || isAdmin || isMedAdm;
-  const hasGestion = invAccess || finAccess || sysAccess;
+  const invAccess  = hasPermiso('inventario') || esFarmacia;
+  const finAccess  = hasPermiso('finanzas')   || esFarmacia;
+  const expAccess  = hasPermiso('exportar');
+  const statAccess = hasPermiso('estadisticas');
+  const hasGestion = invAccess || finAccess || expAccess || statAccess;
   vis('menu-gestion-section', hasGestion);
   vis('menu-inventario',      invAccess);
   vis('menu-finanzas',        finAccess);
-  vis('menu-estadisticas',    sysAccess);
-  vis('menu-exportar',        sysAccess);
+  vis('menu-estadisticas',    statAccess);
+  vis('menu-exportar',        expAccess);
 
   // ─ Admin: solo superadmin
   vis('menu-admin-section',  sa);
   vis('menu-admin',          sa);
   vis('menu-configuracion',  sa);
 
-  // ─ Botón importar catálogo MINSA: admin, medico_admin, SA
+  // ─ Botón importar catálogo MINSA: quien tenga acceso a inventario o estadísticas
   const btnMinsa = document.getElementById('btn-importar-minsa');
-  if(btnMinsa) btnMinsa.style.display = (sa || isAdmin || isMedAdm) ? '' : 'none';
+  if(btnMinsa) btnMinsa.style.display = (sa || invAccess || statAccess) ? '' : 'none';
 }
 
 async function loadAdminData() {
@@ -4928,6 +4948,12 @@ function renderAdminUsuarios() {
   }
   el.innerHTML = adminUsuarios.map(u => {
     const clinica = adminClinicas.find(c=>c.id===u.clinica_id);
+    const perms = (u.permisos && u.permisos.length) ? u.permisos : (PERMISOS_DEFECTO[u.rol] || []);
+    const permIcons = perms.map(id => {
+      const p = ALL_PERMISOS.find(x=>x.id===id);
+      return p ? `<span title="${p.label}" style="font-size:15px">${p.icon}</span>` : '';
+    }).join('');
+    const permSrc = (u.permisos && u.permisos.length) ? '' : '<span style="font-size:10px;color:var(--text-light);margin-left:4px">(por rol)</span>';
     return `<div class="admin-item-card">
       <div class="admin-item-card-top">
         <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
@@ -4941,6 +4967,9 @@ function renderAdminUsuarios() {
       </div>
       <div class="admin-item-card-meta">
         <span>🏥 ${clinica?clinica.nombre:'Sin clínica asignada'}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;padding:6px 0 2px;border-top:1px solid var(--border);margin-top:6px">
+        ${permIcons}${permSrc}
       </div>
       <div class="admin-item-card-actions">
         <button class="btn btn-sm btn-secondary" data-uid="${u.id}" onclick="openModalUsuarioEditById(this.dataset.uid)">✏️ Editar</button>
@@ -5515,6 +5544,28 @@ function selectIcon(btn) {
   document.getElementById('u-icono').value = btn.dataset.icon;
 }
 
+function renderPermisosModal(checked = []) {
+  const grid = document.getElementById('u-permisos-grid');
+  if(!grid) return;
+  grid.innerHTML = ALL_PERMISOS.map(p => {
+    const on = checked.includes(p.id);
+    return `<label id="perm-label-${p.id}" style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg);border:1.5px solid ${on?'var(--primary)':'var(--border)'};border-radius:8px;cursor:pointer;font-size:13px;transition:border .15s;user-select:none">
+      <input type="checkbox" id="perm-${p.id}" value="${p.id}" ${on?'checked':''} onchange="togglePermLabel('${p.id}')">
+      <span>${p.icon}</span>
+      <span>${p.label}</span>
+    </label>`;
+  }).join('');
+}
+function togglePermLabel(id) {
+  const cb = document.getElementById('perm-'+id);
+  const lbl = document.getElementById('perm-label-'+id);
+  if(lbl) lbl.style.borderColor = cb?.checked ? 'var(--primary)' : 'var(--border)';
+}
+function onRolChange() {
+  const rol = document.getElementById('u-rol').value;
+  renderPermisosModal(PERMISOS_DEFECTO[rol] || []);
+}
+
 function openModalUsuario() {
   document.getElementById('modal-usuario-title').textContent = '👤 Nuevo Usuario';
   document.getElementById('u-nombre').value = '';
@@ -5527,6 +5578,7 @@ function openModalUsuario() {
   document.querySelectorAll('#u-icono-grid .icon-opt').forEach((b,i)=>b.classList.toggle('selected',i===0));
   fillClinicaSelect(null);
   editingUsuarioId = null;
+  renderPermisosModal(PERMISOS_DEFECTO['medico'] || []);
   document.getElementById('modal-usuario').classList.add('open');
 }
 
@@ -5549,6 +5601,8 @@ function openModalUsuarioEditById(id) {
   });
   fillClinicaSelect(u.clinica_id);
   editingUsuarioId = u.id;
+  const permsActuales = (u.permisos && u.permisos.length) ? u.permisos : (PERMISOS_DEFECTO[u.rol] || []);
+  renderPermisosModal(permsActuales);
   document.getElementById('modal-usuario').classList.add('open');
 }
 
@@ -5560,11 +5614,12 @@ async function guardarUsuario() {
   const password = document.getElementById('u-password').value;
   const clinicaVal = document.getElementById('u-clinica').value;
   const clinica_id = clinicaVal ? Number(clinicaVal) : null;
+  const permisos = ALL_PERMISOS.map(p => p.id).filter(id => document.getElementById('perm-'+id)?.checked);
   if(!nombre){ toast('El nombre es obligatorio','error'); return; }
   if(!editingUsuarioId && !password){ toast('La contraseña es obligatoria','error'); return; }
   setLoading(true);
   if(editingUsuarioId) {
-    const upd = {nombre,email:email||null,rol,icono,clinica_id};
+    const upd = {nombre,email:email||null,rol,icono,clinica_id,permisos};
     // Solo el Super Admin puede cambiar contraseñas de otros usuarios
     if(password && isSuperAdmin()) {
       const { data: { session: adminSess } } = await sb.auth.getSession();
@@ -5586,7 +5641,7 @@ async function guardarUsuario() {
     if(adminSess) await sb.auth.setSession(adminSess);
     if(authErr){ toast('Error Auth: '+authErr.message,'error'); setLoading(false); return; }
     const newId = newAuth?.user?.id || crypto.randomUUID();
-    const {error} = await sb.from('profiles').insert({id:newId,nombre,email:email||null,rol,icono,clinica_id,password});
+    const {error} = await sb.from('profiles').insert({id:newId,nombre,email:email||null,rol,icono,clinica_id,password,permisos});
     if(error){ toast('Error al crear: '+error.message,'error'); setLoading(false); return; }
     toast('Usuario creado exitosamente','success');
   }
