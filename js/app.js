@@ -3250,26 +3250,6 @@ async function verificarPin() {
   }
 }
 
-async function doLogout() {
-  const ok=await customConfirm({icon:'👋',title:'¿Cerrar sesión?',msg:`Vas a salir de la sesión de <strong>${currentUser?.nombre||'usuario'}</strong>`,okText:'Cerrar sesión',cancelText:'Quedarse',danger:false});
-  if(!ok) return;
-  await sb.auth.signOut();
-  sessionStorage.removeItem('lm_user');
-  localStorage.removeItem('lm_last_view');
-  currentUser = null; currentClinicaId = null;
-  const app = document.getElementById('app');
-  app.style.transition = 'opacity .3s'; app.style.opacity = '0';
-  setTimeout(() => {
-    app.classList.remove('visible'); app.style.opacity = '';
-    const ls = document.getElementById('login-screen');
-    ls.style.cssText = 'display:flex;opacity:0;transform:scale(.95);transition:opacity .4s,transform .4s';
-    document.getElementById('login-email').value = '';
-    document.getElementById('login-password').value = '';
-    document.getElementById('login-error').style.display = 'none';
-    setTimeout(() => { ls.style.opacity='1'; ls.style.transform='none'; }, 10);
-  }, 300);
-}
-
 async function cargarUsuariosLogin() { /* reemplazado por login email+password */ }
 
 // ════════════════════ AGENDAS ════════════════════
