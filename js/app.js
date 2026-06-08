@@ -1,7 +1,9 @@
 // ════════════════════ SUPABASE ════════════════════
 const SURL = 'https://ckpskotpdkmojgaqxyht.supabase.co';
 const SKEY = 'sb_publishable_2W-uJNSJSFLMYn5NJShPKw_sRCynIka';
-const sb = supabase.createClient(SURL, SKEY);
+const sb = supabase.createClient(SURL, SKEY, {
+  auth: { storage: sessionStorage, persistSession: true }
+});
 
 // Detectar recovery token lo antes posible
 sb.auth.onAuthStateChange((event) => {
@@ -692,7 +694,7 @@ function renderNavQuickGrid(cv) {
   const all = [
     { view:'pacientes',    icon:'👥', label:'Pacientes',    show:true },
     { view:'citas',        icon:'📅', label:'Citas',        show:true },
-    { view:'agendas',      icon:'🗓️', label:'Agendas',      show:!isPureMed },
+    { view:'agendas',      icon:'🗓️', label:'Agendas',      show:!isRec },
     { view:'medicaciones', icon:'💊', label:'Recetas',      show:!isRec },
     { view:'notas',        icon:'📝', label:'Notas',        show:!isRec },
     { view:'atendidos',    icon:'📊', label:'Atendidos',    show:!isRec && !isPureMed },
@@ -4807,7 +4809,7 @@ function applyRoleMenu() {
   vis('menu-pacientes',       hasClinica);
   vis('menu-citas',           hasClinica && !isEnf);
   // Agendas y Atendidos: ocultos para médico puro (sí para médico administrativo)
-  vis('menu-agendas',         hasClinica && !isEnf && !isMed);
+  vis('menu-agendas',         hasClinica && !isEnf);
   vis('menu-medicaciones',    hasClinica && !isRec);
   vis('menu-notas',           hasClinica && !isRec);
   vis('menu-atendidos',       hasClinica && !isRec && !isEnf && !isMed);
