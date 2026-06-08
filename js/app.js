@@ -4468,7 +4468,7 @@ function abrirSelectorMINSA() {
 function filtrarCatalogoMINSA(q) {
   const existingCodes = new Set(C.inv.filter(p=>p.codigoMinsa).map(p=>p.codigoMinsa));
   const q2 = (q||'').toLowerCase();
-  let items = MINSA_CATALOG.filter(p=>!existingCodes.has(p.cod));
+  let items = MINSA_CATALOG;
   if(q2) items = items.filter(p=>p.n.toLowerCase().includes(q2)||p.cod.includes(q2)||(p.grupo||'').toLowerCase().includes(q2)||(p.sub||'').toLowerCase().includes(q2));
   const grid = document.getElementById('minsa-catalog-grid');
   if(!items.length){
@@ -4476,11 +4476,13 @@ function filtrarCatalogoMINSA(q) {
     _actualizarConteoMINSA(); return;
   }
   grid.innerHTML = items.map(p => {
-    const on = _minsaSelected.has(p.cod);
-    return `<label id="minsa-lbl-${p.cod.replace(/[^a-z0-9]/gi,'_')}" style="display:flex;align-items:flex-start;gap:8px;padding:9px 11px;background:var(--bg);border:1.5px solid ${on?'var(--primary)':'var(--border)'};border-radius:9px;cursor:pointer;font-size:12px;transition:border .12s;user-select:none">
-      <input type="checkbox" ${on?'checked':''} onchange="toggleMinsaItem('${p.cod}',this.checked)" style="margin-top:3px;flex-shrink:0">
+    const ya = existingCodes.has(p.cod);
+    const on = !ya && _minsaSelected.has(p.cod);
+    const borderColor = ya ? 'var(--success)' : on ? 'var(--primary)' : 'var(--border)';
+    return `<label id="minsa-lbl-${p.cod.replace(/[^a-z0-9]/gi,'_')}" style="display:flex;align-items:flex-start;gap:8px;padding:9px 11px;background:var(--bg);border:1.5px solid ${borderColor};border-radius:9px;cursor:${ya?'default':'pointer'};font-size:12px;transition:border .12s;user-select:none;opacity:${ya?'.6':'1'}">
+      <input type="checkbox" ${ya||on?'checked':''} ${ya?'disabled':''} ${ya?'':` onchange="toggleMinsaItem('${p.cod}',this.checked)"`} style="margin-top:3px;flex-shrink:0">
       <div style="min-width:0">
-        <div style="font-weight:700;font-size:13px;color:var(--text);line-height:1.3">${p.n}</div>
+        <div style="font-weight:700;font-size:13px;color:var(--text);line-height:1.3">${p.n}${ya?'<span style="font-size:10px;color:var(--success);margin-left:6px;font-weight:600">✓ en inventario</span>':''}</div>
         <div style="color:var(--text-light);margin-top:2px;font-size:11px">${[p.grupo,p.sub].filter(Boolean).join(' · ')||'Sin grupo'} · <span style="color:var(--text)">${p.u||'unidad'}</span></div>
         <div style="font-family:monospace;font-size:11px;color:var(--primary);margin-top:2px">${p.cod}</div>
       </div>
@@ -4490,6 +4492,8 @@ function filtrarCatalogoMINSA(q) {
 }
 
 function toggleMinsaItem(cod, checked) {
+  const ya = C.inv.some(p=>p.codigoMinsa===cod);
+  if(ya) return;
   if(checked) _minsaSelected.add(cod);
   else _minsaSelected.delete(cod);
   const key = cod.replace(/[^a-z0-9]/gi,'_');
@@ -4508,7 +4512,7 @@ function seleccionarTodoMINSA() {
   const q = document.getElementById('minsa-search').value;
   const q2 = (q||'').toLowerCase();
   let items = MINSA_CATALOG.filter(p=>!existingCodes.has(p.cod));
-  if(q2) items = items.filter(p=>p.n.toLowerCase().includes(q2)||p.cod.includes(q2)||(p.grupo||'').toLowerCase().includes(q2));
+  if(q2) items = items.filter(p=>p.n.toLowerCase().includes(q2)||p.cod.includes(q2)||(p.grupo||'').toLowerCase().includes(q2)||(p.sub||'').toLowerCase().includes(q2));
   items.forEach(p=>_minsaSelected.add(p.cod));
   filtrarCatalogoMINSA(q);
 }
