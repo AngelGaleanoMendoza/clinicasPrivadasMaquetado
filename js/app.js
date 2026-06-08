@@ -6110,9 +6110,22 @@ function renderTransacciones() {
     </tr>`).join('')}</tbody></table></div>`;
 }
 
+function setFactEstadoChip(el, estado) {
+  document.querySelectorAll('#fact-estado-chips .chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  renderFacturasList();
+}
+
 function renderFacturasList() {
   const {from,to} = getFinDateRange();
-  let data = (C.fact||[]).filter(f=>f.fecha>=from && f.fecha<=to).sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  const q = (document.getElementById('fact-search')?.value||'').toLowerCase().trim();
+  const estadoChip = document.querySelector('#fact-estado-chips .chip.active')?.dataset?.estado||'';
+  let data = (C.fact||[]).filter(f=>{
+    if(f.fecha<from || f.fecha>to) return false;
+    if(estadoChip && f.estado!==estadoChip) return false;
+    if(q && !((f.numero||'').toLowerCase().includes(q)) && !(f.pacienteNombre||'').toLowerCase().includes(q) && !(f.estado||'').toLowerCase().includes(q)) return false;
+    return true;
+  }).sort((a,b)=>b.fecha.localeCompare(a.fecha));
   const estadoTag = e => ({pagada:'tag-green',pendiente:'tag-orange',cancelada:'tag-red',anulada:'tag-gray'})[e]||'tag-gray';
   const el = document.getElementById('fin-fact-list');
   if(!el) return;

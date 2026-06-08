@@ -788,6 +788,19 @@
               <h3>🧾 Facturas Electrónicas</h3>
               <button class="btn btn-primary btn-sm" onclick="openModalFactura()">+ Nueva Factura</button>
             </div>
+            <div class="search-bar" style="margin-bottom:14px">
+              <div class="search-bar-input">
+                <span style="color:var(--text-light)">🔍</span>
+                <input type="text" id="fact-search" placeholder="Buscar por número, paciente o estado..." oninput="renderFacturasList()">
+              </div>
+              <div class="filter-chips" id="fact-estado-chips">
+                <span class="chip active" data-estado="" onclick="setFactEstadoChip(this,'')">Todas</span>
+                <span class="chip" data-estado="pendiente" onclick="setFactEstadoChip(this,'pendiente')">Pendiente</span>
+                <span class="chip" data-estado="pagada" onclick="setFactEstadoChip(this,'pagada')">Pagada</span>
+                <span class="chip" data-estado="cancelada" onclick="setFactEstadoChip(this,'cancelada')">Cancelada</span>
+                <span class="chip" data-estado="anulada" onclick="setFactEstadoChip(this,'anulada')">Anulada</span>
+              </div>
+            </div>
             <div id="fin-fact-list"></div>
           </div>
         </div>
