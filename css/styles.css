@@ -466,6 +466,15 @@ body.dark .fact-item-row input,body.dark .fact-item-row select{background:#0F172
   .sidebar{width:220px}
   .main{margin-left:220px}
   .topbar-search{min-width:180px}
+  .content{padding:18px}
+  /* Stats grid: 3 columnas en tablet */
+  .stats-grid{grid-template-columns:repeat(3,1fr)}
+  /* Super admin KPIs: 3 columnas */
+  .sa-kpi-row{grid-template-columns:repeat(3,1fr)}
+  .sa-cols{grid-template-columns:1fr 1fr}
+  /* Admin stats */
+  .admin-stat-row{grid-template-columns:repeat(3,1fr)}
+  /* Farmacia ya cubierto en clases propias */
 }
 
 /* ══════════ RESPONSIVE MÓVIL / TABLET PEQUEÑA (max 768px) ══════════ */
@@ -599,6 +608,18 @@ body.dark .fact-item-row input,body.dark .fact-item-row select{background:#0F172
   [style*="grid-template-columns:1fr 360px"]{grid-template-columns:1fr!important}
   [style*="grid-template-columns:270px 1fr"]{grid-template-columns:1fr!important}
   [style*="grid-template-columns:1fr 1fr;gap:18px"]{grid-template-columns:1fr!important}
+  [style*="grid-template-columns:1fr 3fr"]{grid-template-columns:1fr!important}
+  [style*="grid-template-columns:repeat(4,1fr)"]{grid-template-columns:repeat(2,1fr)!important}
+  [style*="grid-template-columns:1fr 1fr 1fr 1fr"]{grid-template-columns:repeat(2,1fr)!important}
+
+  /* ── Overflow seguro en texto de card-header ── */
+  .card-header h3,.card-header h4{min-width:0;flex:1}
+  .card-header .btn,.card-header button{flex-shrink:0}
+
+  /* ── Finanzas: período chips y buscador facturas ── */
+  #fin-panel-facturas .search-bar{flex-direction:column;align-items:stretch}
+  #fin-panel-facturas .search-bar-input{min-width:0}
+  #view-finanzas .card-header{flex-wrap:wrap;gap:8px}
 }
 
 /* ══════════ RESPONSIVE MÓVIL PEQUEÑO (max 480px) ══════════ */
@@ -655,14 +676,104 @@ body.dark .fact-item-row input,body.dark .fact-item-row select{background:#0F172
   /* Vitales */
   .vitales-grid{grid-template-columns:repeat(2,1fr)}
   .vital-card .v-val{font-size:18px}
+
+  /* Buscadores — columna en 480px */
+  .search-bar{flex-direction:column;align-items:stretch;gap:8px}
+  .search-bar-input{min-width:0}
+
+  /* Grids inline de 2 o 3 columnas → 1 columna */
+  [style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr!important}
+  [style*="grid-template-columns:1fr 1fr 1fr"]{grid-template-columns:1fr!important}
+  [style*="grid-template-columns:repeat(3,1fr)"]{grid-template-columns:1fr!important}
+
+  /* Card headers: alinear arriba para no romper al wrappear */
+  .card-header{align-items:flex-start}
+
+  /* Modal footer más compacto */
+  .modal-footer{gap:6px}
+  .modal-footer .btn{min-width:0}
+
+  /* Finanzas: buscador de facturas */
+  #fin-panel-facturas .filter-chips{gap:4px}
+  #fin-panel-facturas .chip{font-size:11px;padding:4px 10px}
 }
 
 /* ══════════ RESPONSIVE MUY PEQUEÑO (max 360px) ══════════ */
 @media(max-width:360px){
-  .stats-grid{grid-template-columns:1fr}
+  /* Layout general */
+  .content{padding:8px}
+  .card{padding:12px 10px}
+  .card-header{gap:6px}
+  .card-header h3{font-size:12px!important}
+  .card-header h4{font-size:11px!important}
+
+  /* Topbar: ocultar search bar, el título ya se oculta */
   .topbar h1{display:none}
+  .topbar-search{display:none}
+
+  /* Botones más pequeños */
+  .btn{font-size:11px;padding:6px 9px}
+  .btn-sm{font-size:10px;padding:4px 7px}
+
+  /* Tabs muy compactos */
+  .tab{padding:5px 9px;font-size:11px}
+  .citas-view-tab{padding:7px 12px;font-size:12px}
+
+  /* Chips más pequeños */
+  .chip{font-size:10px;padding:3px 9px}
+  .filter-chips{gap:4px}
+
+  /* Buscadores en columna */
+  .search-bar{flex-direction:column;align-items:stretch;gap:6px}
+  .search-bar-input{min-width:0}
+
+  /* Stats: 1 columna */
+  .stats-grid{grid-template-columns:1fr}
+  .stat-card{padding:10px}
+
+  /* Admin: 1 columna */
+  .admin-stat-row{grid-template-columns:1fr!important}
+
+  /* Super Admin KPIs: 2 columnas */
+  .sa-kpi-row{grid-template-columns:repeat(2,1fr)!important}
+
+  /* Vitales: 2 columnas mínimo */
+  .vitales-grid{grid-template-columns:repeat(2,1fr)}
+  .vital-card .v-val{font-size:16px}
+
+  /* Calendarios */
   .cal-day{min-height:26px;font-size:10px}
-  .modal{padding:12px 10px}
+  .cal-nav h4{font-size:11px}
+
+  /* Modales */
+  .modal{padding:14px 12px}
+  .modal h2{font-size:15px}
+  .modal-footer .btn{min-width:0;font-size:11px}
+
+  /* Tablas: mostrar solo 2 cols + acciones */
+  thead th:nth-child(n+3){display:none}
+  tbody td:nth-child(n+3){display:none}
+  thead th:last-child{display:table-cell}
+  tbody td:last-child{display:table-cell}
+
+  /* Grids inline 2+ columnas → 1 columna */
+  [style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr!important}
+  [style*="grid-template-columns:1fr 1fr 1fr"]{grid-template-columns:1fr!important}
+  [style*="grid-template-columns:repeat(3,1fr)"]{grid-template-columns:1fr!important}
+  [style*="grid-template-columns:repeat(4,1fr)"]{grid-template-columns:1fr 1fr!important}
+
+  /* Ítems de lista: compactar */
+  .dia-time{min-width:40px;font-size:12px}
+  .atendido-time{min-width:44px;font-size:12px}
+  .sa-agenda-time{min-width:36px;font-size:11px}
+  .patient-detail-header{gap:8px}
+
+  /* Login */
+  .login-card{width:92vw;padding:0 4px}
+  .lm-letters{font-size:22px}
+
+  /* Clinica detail en admin */
+  .clinica-detail-grid{grid-template-columns:1fr!important}
 }
 
 /* AGENDAS */

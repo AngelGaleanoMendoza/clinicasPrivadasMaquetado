@@ -754,7 +754,7 @@ function renderDashboardSA() {
       <div class="sa-kpi" onclick="navigate('finanzas')">
         <span class="sa-kpi-icon">💰</span>
         <div><div class="sa-kpi-val" style="font-size:14px">${fmtC(ingresosH)}</div><div class="sa-kpi-lbl">Ingresos hoy</div>
-        <div class="sa-kpi-trend ${egresosH>0?'down':'ok'}">${egresosH>0?'−'+fmtC(egresosH)+' egresos':'Sin egresos'}</div></div>
+        <div class="sa-kpi-trend ${egresosH>0?'down':'ok'}">${egresosH>0?'−'+fmtC(egresosH)+' gastos':'Sin gastos'}</div></div>
       </div>
       <div class="sa-kpi" onclick="navigate('inventario')">
         <span class="sa-kpi-icon">📦</span>
@@ -826,7 +826,7 @@ function renderDashboardSA() {
           </div>
           <div class="sa-panel-body">
             <div class="sa-fin-row"><span class="sa-fin-lbl">💵 Ingresos</span><span class="sa-fin-val" style="color:#15803D">${fmtC(ingresosH)}</span></div>
-            <div class="sa-fin-row"><span class="sa-fin-lbl">📤 Egresos</span><span class="sa-fin-val" style="color:#e53e3e">${fmtC(egresosH)}</span></div>
+            <div class="sa-fin-row"><span class="sa-fin-lbl">📤 Gastos</span><span class="sa-fin-val" style="color:#e53e3e">${fmtC(egresosH)}</span></div>
             <div class="sa-fin-row" style="background:var(--primary-light)"><span class="sa-fin-lbl" style="color:var(--primary)">📊 Balance</span><span class="sa-fin-val" style="color:var(--primary)">${fmtC(ingresosH-egresosH)}</span></div>
             ${C.inv.filter(p=>p.stock<=0||p.stock<=p.stockMin).slice(0,3).map(p=>`
             <div class="sa-fin-row" style="background:#FEF2F2">
@@ -970,7 +970,7 @@ function renderDashboardFarmacia() {
     <div id="panel-pendientes-sesion-farma" style="margin-bottom:18px"></div>
     <div class="stats-grid" style="margin-bottom:18px">
       <div class="stat-card"><div class="stat-icon si-green">💰</div><div class="stat-info"><h3>${fmtC(totalIng)}</h3><p>Ingresos de Hoy</p></div></div>
-      <div class="stat-card"><div class="stat-icon" style="background:#FEF2F2">📤</div><div class="stat-info"><h3 style="color:#e53e3e">${fmtC(totalEgr)}</h3><p>Egresos de Hoy</p></div></div>
+      <div class="stat-card"><div class="stat-icon" style="background:#FEF2F2">📤</div><div class="stat-info"><h3 style="color:#e53e3e">${fmtC(totalEgr)}</h3><p>Gastos de Hoy</p></div></div>
       <div class="stat-card"><div class="stat-icon si-blue">🛒</div><div class="stat-info"><h3>${despachos}</h3><p>Despachos de Hoy</p></div></div>
       <div class="stat-card"><div class="stat-icon si-cyan">📥</div><div class="stat-info"><h3>${comprasHoy.length}</h3><p>Compras / Entradas</p></div></div>
     </div>
@@ -5952,7 +5952,7 @@ function renderResumenFinanzas() {
     <div class="stat-card"><div class="stat-icon si-green">💰</div>
       <div class="stat-info"><h3 style="color:var(--success);font-size:20px">${fmtC(ingresos)}</h3><p>Ingresos del período</p></div></div>
     <div class="stat-card"><div class="stat-icon" style="background:#FEF2F2">📤</div>
-      <div class="stat-info"><h3 style="color:var(--danger);font-size:20px">${fmtC(egresos)}</h3><p>Egresos del período</p></div></div>
+      <div class="stat-info"><h3 style="color:var(--danger);font-size:20px">${fmtC(egresos)}</h3><p>Gastos del período</p></div></div>
     <div class="stat-card"><div class="stat-icon" style="background:${utilidad>=0?'#EFF6FF':'#FEF2F2'}">📊</div>
       <div class="stat-info"><h3 style="color:${utilidad>=0?'var(--primary)':'var(--danger)'};font-size:20px">${fmtC(utilidad)}</h3><p>Utilidad neta</p></div></div>
     <div class="stat-card"><div class="stat-icon" style="background:#FFFBEB">🧾</div>
@@ -6030,7 +6030,7 @@ function descargarPDFResumenFinanzas() {
 
     <div class="kpi-grid">
       <div class="kpi green"><div class="kpi-val">${fmtC(totalIng)}</div><div class="kpi-lbl">Total Ingresos</div></div>
-      <div class="kpi red"><div class="kpi-val">${fmtC(totalEgr)}</div><div class="kpi-lbl">Total Egresos</div></div>
+      <div class="kpi red"><div class="kpi-val">${fmtC(totalEgr)}</div><div class="kpi-lbl">Total Gastos</div></div>
       <div class="kpi ${utilidad>=0?'blue':'red'}"><div class="kpi-val">${fmtC(utilidad)}</div><div class="kpi-lbl">Utilidad Neta</div></div>
       <div class="kpi orange"><div class="kpi-val">${factData.length}</div><div class="kpi-lbl">Facturas (${fPag} pagadas)</div></div>
     </div>
@@ -6042,14 +6042,14 @@ function descargarPDFResumenFinanzas() {
         <tbody>${catIng.map(([cat,tot])=>`<tr><td style="text-transform:capitalize">${cat}</td><td style="font-weight:700;color:#15803D">${fmtC(tot)}</td></tr>`).join('')}</tbody></table>
       </div>` : ''}
       ${catEgr.length ? `<div style="flex:1">
-        <div class="section-title" style="margin-bottom:8px">📤 Egresos por categoría</div>
+        <div class="section-title" style="margin-bottom:8px">📤 Gastos por categoría</div>
         <table><thead><tr><th>Categoría</th><th>Total</th></tr></thead>
         <tbody>${catEgr.map(([cat,tot])=>`<tr><td style="text-transform:capitalize">${cat}</td><td style="font-weight:700;color:#B91C1C">${fmtC(tot)}</td></tr>`).join('')}</tbody></table>
       </div>` : ''}
     </div>
 
     ${diasOrdenados.length ? `<div class="section-title">📅 Movimiento por Día</div>
-    <table style="margin-bottom:20px"><thead><tr><th>Fecha</th><th>Ingresos</th><th>Egresos</th><th>Neto del día</th></tr></thead>
+    <table style="margin-bottom:20px"><thead><tr><th>Fecha</th><th>Ingresos</th><th>Gastos</th><th>Neto del día</th></tr></thead>
     <tbody>${diasOrdenados.map(fecha => {
       const d = porDia[fecha];
       const neto = d.ing - d.egr;
@@ -6068,7 +6068,7 @@ function descargarPDFResumenFinanzas() {
       <td>${f.descripcion}${f.referencia?`<div style="font-size:10px;color:#94A3B8">Ref: ${f.referencia}</div>`:''}</td>
       <td>${catTag(f.categoria)}</td>
       <td style="font-size:11px;color:#64748B">${f.metodoPago||'—'}</td>
-      <td><span class="tag ${f.tipo==='ingreso'?'tag-green':'tag-red'}">${f.tipo==='ingreso'?'💰 Ingreso':'📤 Egreso'}</span></td>
+      <td><span class="tag ${f.tipo==='ingreso'?'tag-green':'tag-red'}">${f.tipo==='ingreso'?'💰 Ingreso':'📤 Gasto'}</span></td>
       <td style="font-weight:700;color:${f.tipo==='ingreso'?'#15803D':'#B91C1C'}">${f.tipo==='ingreso'?'+':'−'}${fmtC(f.monto)}</td>
     </tr>`).join('')}</tbody></table>`
     : '<p style="color:#94A3B8;text-align:center;padding:16px">Sin transacciones en este período</p>'}
@@ -6101,7 +6101,7 @@ function renderTransacciones() {
       <td><strong>${f.descripcion}</strong>${f.referencia?`<div style="font-size:10px;color:var(--text-light)">Ref: ${f.referencia}</div>`:''}</td>
       <td><span class="tag tag-gray" style="font-size:10px">${f.categoria||'general'}</span></td>
       <td style="font-size:11px;color:var(--text-light)">${f.metodoPago}</td>
-      <td>${f.tipo==='ingreso'?'<span class="tag tag-green">💰 Ingreso</span>':'<span class="tag tag-red">📤 Egreso</span>'}</td>
+      <td>${f.tipo==='ingreso'?'<span class="tag tag-green">💰 Ingreso</span>':'<span class="tag tag-red">📤 Gasto</span>'}</td>
       <td style="font-weight:700;color:${f.tipo==='ingreso'?'var(--success)':'var(--danger)'}">
         ${f.tipo==='ingreso'?'+':'−'} ${fmtC(f.monto)}</td>
       <td class="actions-cell">
@@ -6151,10 +6151,10 @@ function openModalTransaccion(tipo='ingreso') {
   document.getElementById('trans-tipo').value = tipo;
   const disp = document.getElementById('trans-tipo-display');
   if(disp) {
-    disp.textContent  = tipo==='ingreso' ? '💰 Ingreso' : '📤 Egreso';
+    disp.textContent  = tipo==='ingreso' ? '💰 Ingreso' : '📤 Gasto';
     disp.style.color  = tipo==='ingreso' ? 'var(--accent-green,#16a34a)' : 'var(--accent-red,#dc2626)';
   }
-  document.getElementById('modal-trans-title').textContent = tipo==='ingreso' ? '💰 Nuevo Ingreso' : '📤 Nuevo Egreso';
+  document.getElementById('modal-trans-title').textContent = tipo==='ingreso' ? '💰 Nuevo Ingreso' : '📤 Nuevo Gasto';
   document.getElementById('trans-descripcion').value = '';
   document.getElementById('trans-monto').value = '';
   document.getElementById('trans-fecha').value = hoy();
@@ -6346,7 +6346,7 @@ function autoDescripcionTransInv() {
   const desc = document.getElementById('trans-descripcion');
   if(!desc || !_transInvSeleccion.length) return;
   const tipo = document.getElementById('trans-tipo')?.value;
-  const prefijo = tipo === 'ingreso' ? 'Ingreso' : 'Egreso';
+  const prefijo = tipo === 'ingreso' ? 'Ingreso' : 'Gasto';
   desc.value = prefijo + ': ' + _transInvSeleccion.map(s => `${s.nombre} ×${s.cantidad}`).join(', ');
 }
 
@@ -6404,10 +6404,10 @@ async function guardarTransaccion() {
         }
       }
       const accion = tipo === 'ingreso' ? 'agregados al' : 'descontados del';
-      toast(`${tipo==='ingreso'?'Ingreso 💰':'Egreso 📤'} registrado · ${productosSeleccionados.length} producto(s) ${accion} inventario 📦`);
+      toast(`${tipo==='ingreso'?'Ingreso 💰':'Gasto 📤'} registrado · ${productosSeleccionados.length} producto(s) ${accion} inventario 📦`);
     }
   } else {
-    toast(tipo==='ingreso'?'Ingreso registrado 💰':'Egreso registrado 📤');
+    toast(tipo==='ingreso'?'Ingreso registrado 💰':'Gasto registrado 📤');
   }
 
   _unlockSubmit('trans', btn);
