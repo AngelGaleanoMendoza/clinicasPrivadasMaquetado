@@ -3695,7 +3695,6 @@ function openModalProducto(id){
   if(id){
     const p=C.inv.find(x=>x.id===id); if(!p) return;
     document.getElementById('prod-nombre').value=p.nombre;
-    document.getElementById('prod-codigo-minsa').value=p.codigoMinsa||'';
     document.getElementById('prod-categoria').value=p.categoria;
     document.getElementById('prod-unidad').value=p.unidad;
     document.getElementById('prod-stock').value=p.stock;
@@ -3703,7 +3702,7 @@ function openModalProducto(id){
     document.getElementById('prod-precio').value=p.precio!=null?p.precio:'';
     document.getElementById('prod-descripcion').value=p.descripcion||'';
   } else {
-    ['prod-nombre','prod-codigo-minsa','prod-stock','prod-stock-min','prod-precio','prod-descripcion'].forEach(f=>document.getElementById(f).value='');
+    ['prod-nombre','prod-stock','prod-stock-min','prod-precio','prod-descripcion'].forEach(f=>document.getElementById(f).value='');
     document.getElementById('prod-categoria').value='medicamento';
     document.getElementById('prod-unidad').value='unidad';
   }
@@ -3721,7 +3720,7 @@ async function guardarProducto(){
     stockMin:document.getElementById('prod-stock-min').value||0,
     precio:document.getElementById('prod-precio').value||null,
     descripcion:document.getElementById('prod-descripcion').value||null,
-    codigoMinsa:document.getElementById('prod-codigo-minsa').value.trim()||null
+    codigoMinsa:null
   });
   setLoading(true);
   if(editingProdId){
@@ -3825,54 +3824,125 @@ async function guardarCompra() {
   toast(`✅ Compra registrada: ${ok} producto${ok!==1?'s':''}${err?` (${err} con error)`:''}`, ok>0?'success':'warning');
 }
 
-function openModalEntrada(prodId){
-  fillProdSelect('ent-producto', prodId);
-  document.getElementById('ent-cantidad').value='';
-  document.getElementById('ent-fecha').value=hoy();
-  document.getElementById('ent-motivo').value='';
-  document.getElementById('modal-entrada').classList.add('open');
+// ── Modal Movimiento Masivo (Entrada / Salida) ──
+let _movTipo = 'entrada';
+let _movItems = {}; // { invId: cantidad }
+
+function openModalEntrada(prodId) { abrirModalMov('entrada', prodId); }
+function openModalSalida(prodId)  { abrirModalMov('salida',  prodId); }
+
+function abrirModalMov(tipo, prodId) {
+  _movTipo = tipo;
+  _movItems = {};
+  if(prodId) _movItems[prodId] = 1;
+  document.getElementById('mov-fecha').value = hoy();
+  document.getElementById('mov-motivo').value = '';
+  document.getElementById('mov-search').value = '';
+  switchMovTab(tipo);
+  filtrarInventarioMov('');
+  document.getElementById('modal-mov-masivo').classList.add('open');
 }
 
-function openModalSalida(prodId){
-  fillProdSelect('sal-producto', prodId);
-  document.getElementById('sal-cantidad').value='';
-  document.getElementById('sal-fecha').value=hoy();
-  document.getElementById('sal-motivo').value='';
-  document.getElementById('modal-salida').classList.add('open');
+function switchMovTab(tipo) {
+  _movTipo = tipo;
+  const esEntrada = tipo === 'entrada';
+  document.getElementById('mov-masivo-title').textContent = esEntrada ? '📥 Registrar Entrada' : '📤 Registrar Salida';
+  document.getElementById('mov-tab-entrada').className = 'btn btn-sm ' + (esEntrada ? 'btn-primary' : 'btn-secondary');
+  document.getElementById('mov-tab-salida').className  = 'btn btn-sm ' + (!esEntrada ? 'btn-danger' : 'btn-secondary');
+  document.getElementById('mov-confirm-btn').textContent = esEntrada ? '📥 Confirmar Entrada' : '📤 Confirmar Salida';
+  document.getElementById('mov-confirm-btn').style.background = esEntrada
+    ? 'linear-gradient(135deg,var(--success),#059669)'
+    : 'linear-gradient(135deg,#EF4444,#B91C1C)';
+  filtrarInventarioMov(document.getElementById('mov-search').value);
 }
 
-async function guardarMovimiento(tipo){
-  if(!currentClinicaId){ toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
-  const prefix=tipo==='entrada'?'ent':'sal';
-  const invId=parseInt(document.getElementById(prefix+'-producto').value);
-  const cantidad=Number(document.getElementById(prefix+'-cantidad').value);
-  const fecha=document.getElementById(prefix+'-fecha').value||hoy();
-  const motivo=document.getElementById(prefix+'-motivo').value.trim();
-  if(!invId||!cantidad||cantidad<=0){ toast('Selecciona un producto y cantidad válida','error'); return; }
-  const prod=C.inv.find(p=>p.id===invId);
-  if(tipo==='salida'&&prod&&cantidad>prod.stock){
-    const ok=await customConfirm({icon:'⚠️',title:'Stock insuficiente',msg:`Stock actual: <strong>${prod.stock} ${prod.unidad}</strong>.<br>¿Registrar salida de <strong>${cantidad}</strong> de todas formas?`,okText:'Registrar igual',danger:true});
-    if(!ok) return;
+function filtrarInventarioMov(q) {
+  const q2 = (q||'').toLowerCase();
+  const catIcon = c=>({medicamento:'💊',material:'🩺',equipo:'🔬',insumo:'🧹',papeleria:'📄',general:'📦'}[c]||'📦');
+  let items = C.inv;
+  if(q2) items = items.filter(p=>p.nombre.toLowerCase().includes(q2)||(p.descripcion||'').toLowerCase().includes(q2));
+  const grid = document.getElementById('mov-inv-grid');
+  if(!items.length){
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:32px;color:var(--text-light);font-size:14px">Sin productos en inventario</div>`;
+    _actualizarConteoMov(); return;
   }
-  setLoading(true);
-  const nuevoStock=(prod?.stock||0)+(tipo==='entrada'?cantidad:-cantidad);
-  const[{error:e1},{error:e2}]=await Promise.all([
-    sb.from('inventario_movimientos').insert({inventario_id:invId,clinica_id:currentClinicaId,tipo,cantidad,motivo:motivo||null,fecha}),
-    sb.from('inventario').update({stock_actual:Math.max(0,nuevoStock)}).eq('id',invId)
-  ]);
-  if(e1||e2){ toast('Error al registrar movimiento','error'); setLoading(false); return; }
-  toast(tipo==='entrada'?'Entrada registrada 📥':'Salida registrada 📤');
-  closeModal('modal-'+tipo);
-  // Auto-generar egreso financiero si hay precio en el producto y es una salida con venta
-  if(tipo==='salida' && prod?.precio && prod.precio > 0) {
-    const montoVenta = cantidad * prod.precio;
-    await sb.from('finanzas').insert({
-      clinica_id:currentClinicaId, tipo:'ingreso', categoria:'medicamento',
-      descripcion:`Despacho: ${prod.nombre} × ${cantidad} ${prod.unidad}`,
-      monto:montoVenta, fecha, metodo_pago:'efectivo',
-      creado_por:currentUser?.name
-    });
+  grid.innerHTML = items.map(p => {
+    const sel = !!_movItems[p.id];
+    const qty = _movItems[p.id] || '';
+    const stockCls = p.stock===0?'color:#EF4444':p.stockMin>0&&p.stock<=p.stockMin?'color:#F59E0B':'color:var(--success)';
+    return `<label id="mov-lbl-${p.id}" style="display:flex;align-items:flex-start;gap:8px;padding:9px 11px;background:var(--bg);border:1.5px solid ${sel?'var(--primary)':'var(--border)'};border-radius:9px;cursor:pointer;font-size:12px;transition:border .12s;user-select:none">
+      <input type="checkbox" ${sel?'checked':''} onchange="toggleMovItem(${p.id},this.checked)" style="margin-top:3px;flex-shrink:0">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:13px;color:var(--text);line-height:1.3">${catIcon(p.categoria)} ${p.nombre}</div>
+        <div style="font-size:11px;margin-top:2px;${stockCls}">Stock: ${p.stock} ${p.unidad}</div>
+        <input type="number" id="mov-qty-${p.id}" value="${qty}" min="1" placeholder="Cantidad" onclick="event.stopPropagation()"
+          oninput="_movItems[${p.id}]=Number(this.value)||0;_actualizarConteoMov()"
+          style="margin-top:6px;width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--card);color:var(--text);display:${sel?'block':'none'}">
+      </div>
+    </label>`;
+  }).join('');
+  _actualizarConteoMov();
+}
+
+function toggleMovItem(invId, checked) {
+  if(checked) { _movItems[invId] = 1; }
+  else { delete _movItems[invId]; }
+  const lbl = document.getElementById('mov-lbl-'+invId);
+  if(lbl){
+    lbl.style.borderColor = checked ? 'var(--primary)' : 'var(--border)';
+    const qtyEl = document.getElementById('mov-qty-'+invId);
+    if(qtyEl) { qtyEl.style.display = checked ? 'block' : 'none'; if(checked) qtyEl.focus(); }
   }
+  _actualizarConteoMov();
+}
+
+function seleccionarVisiblesMov() {
+  const q = document.getElementById('mov-search').value;
+  const q2 = (q||'').toLowerCase();
+  let items = C.inv;
+  if(q2) items = items.filter(p=>p.nombre.toLowerCase().includes(q2)||(p.descripcion||'').toLowerCase().includes(q2));
+  items.forEach(p=>{ if(!_movItems[p.id]) _movItems[p.id]=1; });
+  filtrarInventarioMov(q);
+}
+
+function _actualizarConteoMov() {
+  const n = Object.keys(_movItems).length;
+  const el = document.getElementById('mov-count');
+  if(el) el.textContent = `${n} producto${n!==1?'s':''} seleccionado${n!==1?'s':''}`;
+}
+
+async function confirmarMovMasivo() {
+  if(!currentClinicaId){ toast('No tienes clínica asignada','error'); return; }
+  const entries = Object.entries(_movItems).filter(([,qty])=>qty>0);
+  if(!entries.length){ toast('Selecciona al menos un producto con cantidad','error'); return; }
+  const fecha = document.getElementById('mov-fecha').value || hoy();
+  const motivo = document.getElementById('mov-motivo').value.trim() || null;
+  const tipo = _movTipo;
+
+  for(const [id, qty] of entries) {
+    const prod = C.inv.find(p=>p.id===Number(id));
+    if(!prod) continue;
+    if(tipo==='salida' && qty > prod.stock){
+      const ok = await customConfirm({icon:'⚠️',title:'Stock insuficiente',
+        msg:`<strong>${prod.nombre}</strong>: stock ${prod.stock} ${prod.unidad}, salida ${qty}.<br>¿Registrar de todas formas?`,
+        okText:'Registrar igual',danger:true});
+      if(!ok) continue;
+    }
+    const nuevoStock = (prod.stock||0) + (tipo==='entrada' ? qty : -qty);
+    await Promise.all([
+      sb.from('inventario_movimientos').insert({inventario_id:Number(id),clinica_id:currentClinicaId,tipo,cantidad:qty,motivo,fecha}),
+      sb.from('inventario').update({stock_actual:Math.max(0,nuevoStock)}).eq('id',Number(id))
+    ]);
+    if(tipo==='salida' && prod.precio && prod.precio > 0){
+      await sb.from('finanzas').insert({
+        clinica_id:currentClinicaId,tipo:'ingreso',categoria:'medicamento',
+        descripcion:`Despacho: ${prod.nombre} × ${qty} ${prod.unidad}`,
+        monto:qty*prod.precio,fecha,metodo_pago:'efectivo',creado_por:currentUser?.name
+      });
+    }
+  }
+  toast(tipo==='entrada'?`📥 ${entries.length} entrada${entries.length!==1?'s':''} registrada${entries.length!==1?'s':''}`:`📤 ${entries.length} salida${entries.length!==1?'s':''} registrada${entries.length!==1?'s':''}`);
+  closeModal('modal-mov-masivo');
   await loadAll(); renderInventario(); setLoading(false);
 }
 
@@ -4587,8 +4657,6 @@ function seleccionarProductoInv(p) {
   document.getElementById('prod-nombre').value    = p.n;
   document.getElementById('prod-categoria').value = p.cat;
   document.getElementById('prod-unidad').value    = p.u;
-  const cEl = document.getElementById('prod-codigo-minsa');
-  if(cEl) cEl.value = p.cod||'';
   document.getElementById('prod-sug').style.display='none';
   prodSugIdx=-1;
   document.getElementById('prod-stock').focus();

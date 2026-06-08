@@ -916,7 +916,6 @@
           <div id="prod-sug" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:400;max-height:240px;overflow-y:auto;margin-top:4px"></div>
         </div>
       </div>
-      <div class="form-group"><label>Código MINSA</label><input type="text" id="prod-codigo-minsa" placeholder="Ej: 01160210" style="font-family:monospace;letter-spacing:1px" maxlength="20"></div>
       <div class="form-group"><label>Categoría</label>
         <select id="prod-categoria">
           <option value="medicamento">💊 Medicamento</option>
@@ -953,36 +952,29 @@
   </div>
 </div>
 
-<!-- MODAL ENTRADA -->
-<div class="modal-overlay" id="modal-entrada">
-  <div class="modal" style="max-width:480px">
-    <h2>📥 Registrar Entrada</h2>
-    <div class="form-grid cols-1">
-      <div class="form-group"><label>Producto *</label><select id="ent-producto"><option value="">Seleccionar...</option></select></div>
-      <div class="form-group"><label>Cantidad *</label><input type="number" id="ent-cantidad" placeholder="0" min="1"></div>
-      <div class="form-group"><label>Fecha</label><input type="date" id="ent-fecha"></div>
-      <div class="form-group"><label>Motivo / Proveedor</label><input type="text" id="ent-motivo" placeholder="Ej: Compra mensual, donación, MINSA..."></div>
+<!-- MODAL MOVIMIENTO MASIVO (Entrada / Salida) -->
+<div class="modal-overlay" id="modal-mov-masivo">
+  <div class="modal" style="max-width:720px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden">
+    <h2 id="mov-masivo-title">📥 Registrar Entrada</h2>
+    <div style="display:flex;gap:6px;margin-bottom:10px">
+      <button id="mov-tab-entrada" class="btn btn-primary btn-sm" onclick="switchMovTab('entrada')">📥 Entrada</button>
+      <button id="mov-tab-salida"  class="btn btn-secondary btn-sm" onclick="switchMovTab('salida')">📤 Salida</button>
     </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('modal-entrada')">Cancelar</button>
-      <button class="btn btn-primary" style="background:linear-gradient(135deg,var(--success),#059669)" onclick="guardarMovimiento('entrada')">📥 Confirmar Entrada</button>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <input type="search" id="mov-search" placeholder="Buscar producto..." oninput="filtrarInventarioMov(this.value)" style="flex:1;padding:9px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;background:var(--bg);color:var(--text)">
+      <button class="btn btn-secondary btn-sm" onclick="seleccionarVisiblesMov()">Seleccionar visibles</button>
     </div>
-  </div>
-</div>
-
-<!-- MODAL SALIDA -->
-<div class="modal-overlay" id="modal-salida">
-  <div class="modal" style="max-width:480px">
-    <h2>📤 Registrar Salida</h2>
-    <div class="form-grid cols-1">
-      <div class="form-group"><label>Producto *</label><select id="sal-producto"><option value="">Seleccionar...</option></select></div>
-      <div class="form-group"><label>Cantidad *</label><input type="number" id="sal-cantidad" placeholder="0" min="1"></div>
-      <div class="form-group"><label>Fecha</label><input type="date" id="sal-fecha"></div>
-      <div class="form-group"><label>Motivo / Uso</label><input type="text" id="sal-motivo" placeholder="Ej: Usado en consulta, vencido, pérdida..."></div>
+    <div style="flex:1;overflow-y:auto;min-height:0">
+      <div id="mov-inv-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;padding-bottom:4px"></div>
     </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('modal-salida')">Cancelar</button>
-      <button class="btn btn-danger" onclick="guardarMovimiento('salida')">📤 Confirmar Salida</button>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding-top:12px;border-top:1px solid var(--border);margin-top:8px;flex-shrink:0">
+      <div class="form-group" style="margin:0"><label>Fecha</label><input type="date" id="mov-fecha"></div>
+      <div class="form-group" style="margin:0"><label>Motivo / Proveedor</label><input type="text" id="mov-motivo" placeholder="Ej: Compra, donación, uso en consulta..."></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;padding-top:10px;flex-shrink:0">
+      <span id="mov-count" style="font-size:13px;color:var(--text-light);flex:1">0 productos seleccionados</span>
+      <button class="btn btn-secondary" onclick="closeModal('modal-mov-masivo')">Cancelar</button>
+      <button id="mov-confirm-btn" class="btn btn-primary" style="background:linear-gradient(135deg,var(--success),#059669)" onclick="confirmarMovMasivo()">📥 Confirmar Entrada</button>
     </div>
   </div>
 </div>
@@ -1882,6 +1874,6 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260608e"></script>
+<script src="js/app.js?v=20260608f"></script>
 </body>
 </html>
