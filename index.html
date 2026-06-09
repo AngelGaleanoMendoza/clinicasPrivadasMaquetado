@@ -1411,11 +1411,10 @@
       <div class="form-group"><label>Observaciones</label><input type="text" id="ev-fo-obs" placeholder="Observaciones sobre fondo de ojo..."></div>
     </div>
 
-    <!-- Diagnóstico y Prescripción -->
+    <!-- Servicios Visuales -->
     <div style="margin-bottom:4px">
-      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--primary);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--primary)">📋 Diagnóstico y Prescripción</div>
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--primary);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--primary)">👁️ Servicios Visuales</div>
       <div class="form-grid cols-1">
-        <div class="form-group"><label>Diagnóstico</label><textarea id="ev-diagnostico" placeholder="Ej: Miopía bilateral, Astigmatismo OD, Presbicia..." style="min-height:65px"></textarea></div>
 
         <!-- Corrección recomendada -->
         <div class="form-group"><label>Tipo de corrección recomendada</label>
@@ -1661,7 +1660,7 @@
       <div class="form-group full"><label>Médico</label><select id="c-medico"><option value="">Sin asignar</option></select></div>
       <div class="form-group"><label>Fecha *</label><input type="date" id="c-fecha"></div>
       <div class="form-group"><label>Hora *</label><select id="c-hora"><option value="">Seleccionar hora...</option></select></div>
-      <div class="form-group full" style="position:relative">
+      <div id="c-motivo-wrap" class="form-group full" style="position:relative">
         <label>Motivo de Consulta *</label>
         <input type="text" id="c-motivo" placeholder="Ej: dolor de cabeza, fiebre, control..." autocomplete="off" oninput="mostrarSugerenciasDx(this.value)" onblur="setTimeout(()=>ocultarSugerenciasDx(),180)">
         <div id="dx-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;z-index:300;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.15);margin-top:4px"></div>
@@ -1858,6 +1857,6 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260608h"></script>
+<script src="js/app.js?v=20260609a"></script>
 </body>
 </html>

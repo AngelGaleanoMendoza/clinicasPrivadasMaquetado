@@ -1827,7 +1827,11 @@ function openModalCita(id){
   ['motivo','notas'].forEach(f=>document.getElementById('c-'+f).value='');
   dxElegidos=[]; renderDxElegidos(); ocultarSugerenciasDx();
   document.getElementById('c-estado').value='pendiente';
-  document.getElementById('c-tipo').value='consulta';
+
+  const esOptica = currentClinica?.tipo === 'optica';
+  const motivoWrap = document.getElementById('c-motivo-wrap');
+  if(motivoWrap) motivoWrap.style.display = esOptica ? 'none' : '';
+  document.getElementById('c-tipo').value = esOptica ? 'examen_visual' : 'consulta';
 
   // Restricción: médico solo puede crear citas en su propio nombre
   const medicoSel = document.getElementById('c-medico');
@@ -1870,7 +1874,8 @@ async function guardarCita(){
   const fecha=document.getElementById('c-fecha').value;
   const hora=document.getElementById('c-hora').value;
   const motivo=document.getElementById('c-motivo').value.trim();
-  if(!pid||!fecha||!hora||!motivo){ toast('Completa los campos obligatorios','error'); return; }
+  const esOptica = currentClinica?.tipo === 'optica';
+  if(!pid||!fecha||!hora||(!motivo&&!esOptica)){ toast('Completa los campos obligatorios','error'); return; }
   if(!editingId && fecha < hoy()){ toast('No se pueden agendar citas en fechas pasadas','error'); return; }
   if(!editingId && fecha === hoy()) {
     const minH = _getMinHoraHoy();
@@ -2673,7 +2678,7 @@ function verResumenCita(citaId) {
         <div class="rc-field"><span>Hora</span><strong>${c.hora}</strong></div>
         <div class="rc-field"><span>Tipo de consulta</span><strong>${c.tipo}</strong></div>
         <div class="rc-field"><span>Estado</span><strong>${estadoIcon} ${c.estado}</strong></div>
-        <div class="rc-field full"><span>Motivo de Consulta</span><strong>${c.motivo}</strong></div>
+        ${(currentClinica?.tipo !== 'optica' && c.motivo) ? `<div class="rc-field full"><span>Motivo de Consulta</span><strong>${c.motivo}</strong></div>` : ''}
         ${c.notas?`<div class="rc-field full"><span>Observaciones / Indicaciones de la cita</span><strong style="white-space:pre-wrap;font-weight:500">${c.notas}</strong></div>`:''}
       </div>
     </div>
@@ -5327,7 +5332,7 @@ function abrirExamenVisual(pacienteId) {
     'pa-dip','pa-dip-od','pa-dip-oi','pa-altura','pa-vertice',
     'pa-pantoscopico','pa-panoramico','pa-horizontal','pa-vertical','pa-diagonal','pa-puente','pa-obs',
     'av-cc-od','av-cc-oi','av-cc-ao','av-cc-obs',
-    'ev-rp-obs','ev-bm-obs-od','ev-bm-obs-oi','ev-fo-obs','ev-diagnostico','ev-recomendaciones'];
+    'ev-rp-obs','ev-bm-obs-od','ev-bm-obs-oi','ev-fo-obs','ev-recomendaciones'];
   campos.forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   ['ev-cover','ev-rp-od','ev-rp-oi','ev-bm-od','ev-bm-oi','ev-fo-od','ev-fo-oi','ev-material'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
@@ -5407,9 +5412,7 @@ async function guardarExamenVisual() {
     fila('OD', g('ev-fo-od')||'—'), fila('OI', g('ev-fo-oi')||'—'),
     fila('Observaciones', g('ev-fo-obs')),
     '',
-    g('ev-diagnostico') ? `▸ DIAGNÓSTICO\n  ${g('ev-diagnostico')}` : '',
-    '',
-    `▸ CORRECCIÓN RECOMENDADA\n  ${g('ev-correccion')}`,
+    `▸ SERVICIOS VISUALES\n  ${g('ev-correccion')}`,
     g('ev-material') ? fila('  Material', g('ev-material')) : '',
     (()=>{ const tr=[]; if(document.getElementById('tr-blueray')?.checked) tr.push('Blue Ray'); if(document.getElementById('tr-fotocrom')?.checked) tr.push('Fotocromático'); if(document.getElementById('tr-antireflejo')?.checked) tr.push('Antirreflejo'); if(document.getElementById('tr-amarillo')?.checked) tr.push('Filtro Amarillo'); if(document.getElementById('tr-polarizado')?.checked) tr.push('Polarizado'); return tr.length ? fila('  Tratamientos', tr.join(', ')) : ''; })(),
     g('ev-recomendaciones') ? `\n▸ OBSERVACIONES\n  ${g('ev-recomendaciones')}` : '',
