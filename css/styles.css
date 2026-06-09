@@ -589,9 +589,11 @@ body.dark .fact-item-row input,body.dark .fact-item-row select{background:#0F172
   /* ── PACIENTES / EXPEDIENTES ── */
   #view-pacientes .search-bar{flex-direction:column;align-items:stretch}
   .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-  /* Ocultar col Identificación para que quepan las acciones */
+  /* Ocultar col Identificación (pacientes) y Dosis (medicaciones) para que quepan las acciones */
   #view-pacientes .table-wrap thead th:nth-child(3),
   #view-pacientes .table-wrap tbody td:nth-child(3){display:none}
+  #view-medicaciones .table-wrap thead th:nth-child(3),
+  #view-medicaciones .table-wrap tbody td:nth-child(3){display:none}
   /* Botón Acudió: solo emoji en móvil */
   .acudio-text{display:none}
   /* Acciones compactas, sin wrap */
