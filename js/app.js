@@ -31,22 +31,42 @@ const PERMISOS_DEFECTO = {
 
 // ════════════════════ PROCEDIMIENTOS ODONTOLÓGICOS ════════════════════
 const PROCEDIMIENTOS_DENTALES = [
-  { cat:'Evaluación y diagnóstico', procs:['Consulta odontológica general','Historia clínica dental','Examen de dientes, encías, mordida y lengua','Radiografías dentales','Fotografías intraorales','Escaneo digital dental','Diagnóstico de caries','Diagnóstico de enfermedad periodontal','Evaluación de mordida','Evaluación de ATM','Detección de lesiones orales o cáncer oral'] },
-  { cat:'Prevención y limpieza', procs:['Limpieza dental profesional','Profilaxis dental','Eliminación de placa y sarro','Aplicación de flúor','Sellantes dentales','Pulido dental','Educación de higiene oral','Control de placa bacteriana','Limpieza profunda subgingival'] },
-  { cat:'Tratamientos restaurativos', procs:['Calzas o empastes dentales','Resinas estéticas','Restauraciones de amalgama','Reconstrucción dental','Incrustaciones inlay','Incrustaciones onlay','Coronas dentales','Carillas estéticas','Reparación de dientes fracturados','Reparación de bordes desgastados','Reemplazo de restauraciones antiguas'] },
-  { cat:'Endodoncia', procs:['Tratamiento de conducto','Retratamiento de conducto','Apicectomía','Drenaje de absceso dental','Tratamiento de infección pulpar','Reconstrucción posterior al conducto','Colocación de poste dental'] },
-  { cat:'Periodoncia', procs:['Limpieza periodontal profunda','Raspado y alisado radicular','Tratamiento de gingivitis','Tratamiento de periodontitis','Cirugía periodontal','Injerto de encía','Injerto óseo','Regeneración ósea guiada','Alargamiento de corona','Gingivectomía','Tratamiento de movilidad dental','Mantenimiento periodontal'] },
-  { cat:'Extracciones y cirugía oral', procs:['Extracción simple','Extracción quirúrgica','Extracción de muelas del juicio','Cirugía de dientes retenidos','Frenectomía','Drenaje de infecciones','Biopsia oral','Cirugía de quistes dentales','Regularización de hueso','Cirugía preprotésica','Tratamiento de trauma dental','Reimplante dental'] },
-  { cat:'Prótesis dentales', procs:['Prótesis parcial removible','Prótesis total','Prótesis flexible','Puente dental fijo','Corona individual','Corona sobre implante','Prótesis sobre implantes','Dentadura completa','Dentadura inmediata','Reparación de prótesis','Rebase o ajuste de prótesis'] },
-  { cat:'Implantes dentales', procs:['Colocación de implante dental','Corona sobre implante (implante)','Puente sobre implantes','Prótesis total sobre implantes','Elevación de seno maxilar','Injerto óseo para implantes','Regeneración ósea guiada (implante)','Mantenimiento de implantes','Tratamiento de periimplantitis'] },
-  { cat:'Ortodoncia', procs:['Brackets metálicos','Brackets estéticos','Brackets autoligables','Alineadores transparentes','Retenedores','Expansores','Corrección de apiñamiento','Corrección de espacios','Corrección de mordida abierta','Corrección de mordida cruzada','Corrección de sobremordida','Ortodoncia prequirúrgica'] },
-  { cat:'Odontología estética', procs:['Blanqueamiento dental','Carillas de resina','Carillas de porcelana','Diseño de sonrisa','Contorneado dental','Gingivoplastia estética','Cierre de espacios','Microabrasión dental','Cambios de forma, tamaño y color dental'] },
-  { cat:'Odontopediatría', procs:['Limpieza dental infantil','Aplicación de flúor infantil','Sellantes infantiles','Restauraciones en dientes de leche','Pulpotomía','Pulpectomía','Coronas pediátricas','Extracciones infantiles','Mantenedores de espacio','Tratamientos preventivos para caries temprana'] },
-  { cat:'Bruxismo y ATM', procs:['Férula de descarga','Protector nocturno','Ajuste oclusal','Tratamiento de bruxismo','Tratamiento de dolor mandibular','Tratamiento de chasquidos articulares','Terapia para ATM','Protectores deportivos'] },
-  { cat:'Urgencias dentales', procs:['Atención por dolor dental fuerte','Tratamiento de absceso dental','Drenaje de infección oral','Reparación de diente fracturado','Recementado de corona o puente','Control de sangrado','Extracción de emergencia','Tratamiento por golpe o trauma dental'] },
-  { cat:'Medicina oral', procs:['Evaluación de aftas','Tratamiento de lesiones en lengua, labios o encías','Diagnóstico de hongos orales','Tratamiento de boca seca','Manejo de halitosis','Biopsias orales','Evaluación de manchas blancas o rojas','Control de lesiones por prótesis','Evaluación de cáncer oral'] },
-  { cat:'Procedimientos complementarios', procs:['Anestesia local','Sedación consciente','Control radiográfico','Toma de impresiones','Escaneo intraoral','Modelos dentales','Planificación digital','Guías quirúrgicas','Ajuste de mordida','Cementación de restauraciones'] },
+  { cat:'Exámenes clínicos', procs:['Evaluación odontológica general','Odontograma inicial','Odontograma evolutivo','Examen periodontal','Examen de encías','Examen de movilidad dental','Examen de sangrado gingival','Examen de placa bacteriana','Examen de caries','Examen de oclusión o mordida','Examen de ATM','Examen de tejidos blandos','Examen de lengua, labios, paladar y mucosa','Evaluación de dolor dental','Evaluación de sensibilidad dental','Evaluación de halitosis','Evaluación de bruxismo','Evaluación de trauma dental','Evaluación estética de sonrisa','Evaluación para ortodoncia','Evaluación para implantes','Evaluación para prótesis dental','Evaluación prequirúrgica'] },
+  { cat:'Exámenes radiográficos', procs:['Radiografía periapical','Radiografía panorámica','Radiografía bitewing','Radiografía oclusal','Cefalometría lateral','Cefalometría posteroanterior','Tomografía dental CBCT','Radiografía de ATM','Serie radiográfica completa','Evaluación radiográfica de terceros molares','Evaluación radiográfica para implantes','Evaluación radiográfica de lesiones óseas','Control radiográfico postoperatorio','Control radiográfico de endodoncia'] },
+  { cat:'Registros clínicos', procs:['Fotografías intraorales','Fotografías extraorales','Escaneo intraoral','Registro de mordida','Modelos digitales','Modelos de estudio','Plan de tratamiento digital','Consentimiento informado digital','Evolución clínica por cita','Notas odontológicas','Registro de alergias','Antecedentes odontológicos','Alertas clínicas'] },
+  { cat:'Prevención', procs:['Profilaxis dental','Limpieza dental simple','Limpieza dental profunda','Aplicación de flúor','Sellantes dentales','Control de placa bacteriana','Pulido dental','Educación de higiene oral','Control preventivo infantil','Mantenimiento periodontal','Desensibilización dental','Aplicación de barniz de flúor'] },
+  { cat:'Restauraciones', procs:['Restauración con resina','Restauración con ionómero de vidrio','Restauración con amalgama','Reconstrucción dental','Restauración temporal','Cambio de restauración','Reparación de fractura dental','Incrustación inlay','Incrustación onlay','Incrustación overlay','Corona provisional','Corona definitiva','Cementación de corona','Recementado de corona','Poste dental','Núcleo dental'] },
+  { cat:'Endodoncia', procs:['Endodoncia unirradicular','Endodoncia birradicular','Endodoncia multirradicular','Retratamiento endodóntico','Apertura cameral','Pulpotomía','Pulpectomía','Apicectomía','Drenaje de absceso','Medicación intraconducto','Obturación de conducto','Control postendodoncia','Restauración postendodoncia'] },
+  { cat:'Periodoncia', procs:['Raspado y alisado radicular','Curetaje periodontal','Gingivectomía','Gingivoplastia','Cirugía periodontal','Injerto de encía','Injerto óseo','Regeneración tisular guiada','Alargamiento de corona','Tratamiento de recesión gingival','Tratamiento de bolsas periodontales','Mantenimiento periodontal','Ferulización dental','Control de movilidad dental'] },
+  { cat:'Cirugía oral', procs:['Extracción simple','Extracción quirúrgica','Extracción de cordales','Extracción de dientes retenidos','Alveoloplastia','Frenectomía','Biopsia oral','Drenaje de absceso oral','Cirugía de quiste oral','Regularización de reborde óseo','Sutura','Retiro de sutura','Control postquirúrgico','Tratamiento de alveolitis'] },
+  { cat:'Ortodoncia', procs:['Consulta ortodóntica','Estudio de ortodoncia','Toma de modelos','Análisis cefalométrico','Colocación de brackets metálicos','Colocación de brackets estéticos','Colocación de brackets autoligables','Alineadores invisibles','Activación de ortodoncia','Cambio de ligas','Reposición de bracket','Retiro de brackets','Limpieza postortodoncia','Retenedores fijos','Retenedores removibles','Expansor palatino','Mantenedor de espacio'] },
+  { cat:'Prótesis dental', procs:['Corona dental','Puente fijo','Prótesis parcial removible','Prótesis total','Prótesis flexible','Prótesis inmediata','Prótesis sobre implantes','Reparación de prótesis','Ajuste de prótesis','Rebase de prótesis','Toma de impresión','Prueba de estructura','Prueba estética','Instalación de prótesis','Control de prótesis'] },
+  { cat:'Implantología', procs:['Evaluación para implante','Planificación quirúrgica de implante','Colocación de implante dental','Colocación de pilar de cicatrización','Corona sobre implante','Prótesis sobre implante','Injerto óseo para implante','Elevación de seno maxilar','Regeneración ósea guiada','Mantenimiento de implante','Tratamiento de periimplantitis','Control radiográfico de implante'] },
+  { cat:'Estética dental', procs:['Blanqueamiento dental','Blanqueamiento en clínica','Blanqueamiento ambulatorio','Carillas de resina','Carillas de porcelana','Diseño de sonrisa','Contorneado dental','Cierre de diastemas','Microabrasión dental','Gingivoplastia estética','Restauración estética anterior','Cambio de color dental'] },
+  { cat:'Odontopediatría', procs:['Consulta odontopediátrica','Profilaxis infantil','Aplicación de flúor infantil','Sellantes infantiles','Restauración en diente temporal','Pulpotomía pediátrica','Pulpectomía pediátrica','Corona pediátrica','Extracción infantil','Mantenedor de espacio','Control de erupción dental','Manejo de caries temprana','Educación a padres','Evaluación de hábitos orales','Tratamiento por succión digital'] },
+  { cat:'Urgencias odontológicas', procs:['Dolor dental agudo','Absceso dental','Fractura dental','Avulsión dental','Luxación dental','Sangrado postextracción','Inflamación facial','Alveolitis','Corona desprendida','Prótesis fracturada','Bracket desprendido','Dolor postoperatorio','Infección dental'] },
+  { cat:'Medicina oral', procs:['Evaluación de lesiones orales','Diagnóstico de aftas','Diagnóstico de candidiasis oral','Diagnóstico de herpes oral','Evaluación de manchas blancas','Evaluación de manchas rojas','Evaluación de úlceras','Evaluación de lesiones premalignas','Biopsia oral','Control de xerostomía','Tratamiento de halitosis','Control de lesiones por prótesis','Evaluación de cáncer oral'] },
+  { cat:'ATM y bruxismo', procs:['Evaluación de ATM','Diagnóstico de bruxismo','Férula de descarga','Protector nocturno','Ajuste oclusal','Terapia oclusal','Control de dolor mandibular','Control de chasquidos articulares','Evaluación muscular facial','Control de desgaste dental','Protector deportivo'] },
 ];
+
+const ESTADOS_DIENTE = [
+  { key:'sano',       label:'Sano',           color:'#ffffff', border:'#9ca3af', text:'#374151' },
+  { key:'caries',     label:'Caries',          color:'#ef4444', border:'#b91c1c', text:'#fff' },
+  { key:'obturado',   label:'Obturado',        color:'#3b82f6', border:'#1d4ed8', text:'#fff' },
+  { key:'extraccion', label:'Extracción',      color:'#1f2937', border:'#111827', text:'#fff' },
+  { key:'corona',     label:'Corona',          color:'#f59e0b', border:'#b45309', text:'#fff' },
+  { key:'implante',   label:'Implante',        color:'#8b5cf6', border:'#6d28d9', text:'#fff' },
+  { key:'ausente',    label:'Ausente',         color:'#e5e7eb', border:'#9ca3af', text:'#9ca3af' },
+  { key:'fractura',   label:'Fractura',        color:'#f97316', border:'#c2410c', text:'#fff' },
+  { key:'sellante',   label:'Sellante',        color:'#10b981', border:'#047857', text:'#fff' },
+  { key:'puente',     label:'Puente',          color:'#06b6d4', border:'#0e7490', text:'#fff' },
+  { key:'tratamiento',label:'En tratamiento',  color:'#a855f7', border:'#7e22ce', text:'#fff' },
+];
+const DIENTES_SUP_R = [18,17,16,15,14,13,12,11];
+const DIENTES_SUP_L = [21,22,23,24,25,26,27,28];
+const DIENTES_INF_R = [48,47,46,45,44,43,42,41];
+const DIENTES_INF_L = [31,32,33,34,35,36,37,38];
+const TODOS_DIENTES = [...DIENTES_SUP_R,...DIENTES_SUP_L,...DIENTES_INF_L,...DIENTES_INF_R];
 
 // Detectar recovery token lo antes posible
 sb.auth.onAuthStateChange((event) => {
@@ -70,7 +90,7 @@ window.addEventListener('DOMContentLoaded', () => {
 }, { once: true });
 
 // ════════════════════ CACHE LOCAL ════════════════════
-const C = { p:[], c:[], m:[], n:[], e:[], prof:[], inv:[], mov:[], fin:[], fact:[], factItems:[], proc:[] };
+const C = { p:[], c:[], m:[], n:[], e:[], prof:[], inv:[], mov:[], fin:[], fact:[], factItems:[], proc:[], hd:[], odo:[], perio:[] };
 let currentClinicaId = null;
 let currentClinica   = null;
 
@@ -89,8 +109,12 @@ const fromInv = r => ({ id:r.id, nombre:r.nombre, categoria:r.categoria||'genera
 const toInv   = x => ({ nombre:x.nombre, categoria:x.categoria||'general', unidad:x.unidad||'unidad', stock_actual:Number(x.stock||0), stock_minimo:Number(x.stockMin||0), precio_unitario:x.precio||null, descripcion:x.descripcion||null, clinica_id:currentClinicaId, codigo_minsa:x.codigoMinsa||null });
 const fromMov     = r => ({ id:r.id, invId:r.inventario_id, tipo:r.tipo, cantidad:Number(r.cantidad), motivo:r.motivo||null, fecha:r.fecha, referencia:r.referencia||null, notas:r.notas||null });
 const fromFin     = r => ({ id:r.id, tipo:r.tipo, categoria:r.categoria||'general', descripcion:r.descripcion, monto:Number(r.monto), fecha:r.fecha, metodoPago:r.metodo_pago||'efectivo', referencia:r.referencia||null, citaId:r.cita_id||null, pacienteId:r.paciente_id||null, invMovId:r.inventario_mov_id||null, creadoPor:r.creado_por||null });
-const fromProc = r => ({ id:r.id, pacienteId:r.paciente_id, procedimiento:r.procedimiento, categoria:r.categoria, estado:r.estado||'planificado', fecha:r.fecha, notas:r.notas||null });
-const toProc   = x => ({ paciente_id:x.pacienteId, procedimiento:x.procedimiento, categoria:x.categoria, estado:x.estado||'planificado', fecha:x.fecha||hoy(), notas:x.notas||null, clinica_id:currentClinicaId });
+const fromProc = r => ({ id:r.id, pacienteId:r.paciente_id, procedimiento:r.procedimiento, categoria:r.categoria, estado:r.estado||'pendiente', fecha:r.fecha, notas:r.notas||null, presupuesto:r.presupuesto!=null?Number(r.presupuesto):null, diente:r.diente||null });
+const toProc   = x => ({ paciente_id:x.pacienteId, procedimiento:x.procedimiento, categoria:x.categoria, estado:x.estado||'pendiente', fecha:x.fecha||hoy(), notas:x.notas||null, presupuesto:x.presupuesto||null, diente:x.diente||null, clinica_id:currentClinicaId });
+const fromHD   = r => ({ id:r.id, pacienteId:r.paciente_id, motivoConsulta:r.motivo_consulta||'', antecedentesMedicos:r.antecedentes_medicos||'', medicamentosActuales:r.medicamentos_actuales||'', alergiasMedicamentos:r.alergias_medicamentos||'', enfermedadesSistemicas:r.enfermedades_sistemicas||'', ultimaVisitaDental:r.ultima_visita_dental||'', tratamientosPrevios:r.tratamientos_previos||'', habitosOrales:r.habitos_orales||'', higieneOral:r.higiene_oral||'', examenExtraoral:r.examen_extraoral||'', examenTejidosBlandos:r.examen_tejidos_blandos||'', examenOclusion:r.examen_oclusion||'', examenAtm:r.examen_atm||'', diagnosticoPrincipal:r.diagnostico_principal||'', observaciones:r.observaciones||'' });
+const toHD     = (x,pid) => ({ paciente_id:pid, motivo_consulta:x.motivoConsulta||null, antecedentes_medicos:x.antecedentesMedicos||null, medicamentos_actuales:x.medicamentosActuales||null, alergias_medicamentos:x.alergiasMedicamentos||null, enfermedades_sistemicas:x.enfermedadesSistemicas||null, ultima_visita_dental:x.ultimaVisitaDental||null, tratamientos_previos:x.tratamientosPrevios||null, habitos_orales:x.habitosOrales||null, higiene_oral:x.higieneOral||null, examen_extraoral:x.examenExtraoral||null, examen_tejidos_blandos:x.examenTejidosBlandos||null, examen_oclusion:x.examenOclusion||null, examen_atm:x.examenAtm||null, diagnostico_principal:x.diagnosticoPrincipal||null, observaciones:x.observaciones||null, updated_at:new Date().toISOString(), clinica_id:currentClinicaId });
+const fromOdo  = r => ({ id:r.id, pacienteId:r.paciente_id, dientes:r.dientes||{}, observaciones:r.observaciones||'' });
+const fromPerio= r => ({ id:r.id, pacienteId:r.paciente_id, datos:r.datos||{}, observaciones:r.observaciones||'' });
 
 const fromFact    = r => ({ id:r.id, numero:r.numero, pacienteId:r.paciente_id, pacienteNombre:r.paciente_nombre||'Consumidor Final', fecha:r.fecha, estado:r.estado||'pendiente', subtotal:Number(r.subtotal||0), impuestoPct:Number(r.impuesto_pct||0), impuesto:Number(r.impuesto||0), total:Number(r.total||0), notas:r.notas||null, citaId:r.cita_id||null });
 const fromFactItem= r => ({ id:r.id, facturaId:r.factura_id, descripcion:r.descripcion, tipo:r.tipo||'servicio', cantidad:Number(r.cantidad||1), precioUnitario:Number(r.precio_unitario||0), subtotal:Number(r.subtotal||0), inventarioId:r.inventario_id||null });
@@ -128,12 +152,20 @@ async function loadAll() {
     const rawFact = rfact.error ? [] : (rfact.data||[]);
     C.fact = rawFact.map(r => fromFact(r));
     C.factItems = rawFact.flatMap(r => (r.factura_items||[]).map(fromFactItem));
-    // Procedimientos odontológicos (carga separada: tabla opcional)
+    // Tablas odontológicas (carga separada: tablas opcionales)
     if(isOdontologo() || isSuperAdmin()) {
-      const rproc = await sb.from('procedimientos_odontologicos').select('*').eq('clinica_id', currentClinicaId).order('fecha', {ascending:false});
-      C.proc = rproc.error ? [] : (rproc.data||[]).map(fromProc);
+      const [rproc, rhd, rodo, rperio] = await Promise.all([
+        sb.from('procedimientos_odontologicos').select('*').eq('clinica_id', currentClinicaId).order('fecha', {ascending:false}),
+        sb.from('historial_dental').select('*').eq('clinica_id', currentClinicaId),
+        sb.from('odontograma').select('*').eq('clinica_id', currentClinicaId),
+        sb.from('periodontograma').select('*').eq('clinica_id', currentClinicaId),
+      ]);
+      C.proc  = rproc.error  ? [] : (rproc.data||[]).map(fromProc);
+      C.hd    = rhd.error    ? [] : (rhd.data||[]).map(fromHD);
+      C.odo   = rodo.error   ? [] : (rodo.data||[]).map(fromOdo);
+      C.perio = rperio.error ? [] : (rperio.data||[]).map(fromPerio);
     } else {
-      C.proc = [];
+      C.proc = []; C.hd = []; C.odo = []; C.perio = [];
     }
     setDbStatus(true);
   } catch(e) {
@@ -1391,10 +1423,16 @@ function renderDetalleP(pid){
     ${notas.length?`<div class="timeline">${notas.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(n=>`<div class="timeline-item"><div class="timeline-date">${formatFecha(n.fecha)} · <span class="tag tag-blue" style="font-size:10px">${n.tipo}</span></div><div class="timeline-content">${n.titulo?`<strong style="display:block;margin-bottom:5px">${n.titulo}</strong>`:''}<p style="white-space:pre-wrap;line-height:1.7">${n.contenido}</p><div style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-secondary btn-sm" onclick="verNota(${n.id})">👁️ Ver</button><button class="btn btn-secondary btn-sm" onclick="openModalNota(${n.id})">✏️ Editar</button><button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})">🖨️</button><button class="btn btn-danger btn-sm" onclick="eliminarNota(${n.id})">🗑️</button></div></div></div>`).join('')}</div>`:'<div class="empty-state"><div class="empty-icon">📝</div><p>Sin notas</p></div>'}
   </div>`;
 
-  // Pestaña procedimientos odontológicos — solo visible para odontólogo / superadmin
-  const tabBtnProc = document.getElementById('tab-btn-procedimientos-p');
-  if(tabBtnProc) tabBtnProc.style.display = (isOdontologo() || isSuperAdmin()) ? '' : 'none';
-  renderProcedimientosTab(pid);
+  // Pestañas odontológicas — solo visibles para odontólogo / superadmin
+  const esOdonto = isOdontologo() || isSuperAdmin();
+  ['tab-btn-historial-dental','tab-btn-odontograma','tab-btn-periodontograma','tab-btn-procedimientos-p']
+    .forEach(id => { const el=document.getElementById(id); if(el) el.style.display = esOdonto ? '' : 'none'; });
+  if(esOdonto) {
+    renderHistorialDental(pid);
+    renderOdontograma(pid);
+    renderPeriodontograma(pid);
+    renderProcedimientosTab(pid);
+  }
 
   const exp=C.e.find(x=>x.pacienteId===pid)||{};
   const imc=(exp.peso&&exp.talla)?(exp.peso/((exp.talla/100)**2)).toFixed(1):null;
@@ -4847,6 +4885,268 @@ function quitarDx(i) {
   renderDxElegidos();
 }
 
+// ════════════════════ ODONTOLOGÍA — HISTORIA CLÍNICA DENTAL ════════════════════
+function renderHistorialDental(pid) {
+  const el = document.getElementById('tab-historial-dental');
+  if(!el) return;
+  const hd = C.hd.find(x => x.pacienteId === pid) || {};
+  const f = (id, val='') => `<textarea id="hd-${id}" style="width:100%;min-height:60px;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:13px;background:var(--card);color:var(--text);resize:vertical">${val}</textarea>`;
+  const fi = (id, val='', type='text') => `<input type="${type}" id="hd-${id}" value="${escAttr(val)}" style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:13px;background:var(--card);color:var(--text)">`;
+  el.innerHTML = `<div class="card">
+    <div class="card-header"><h3>🦷 Historia Clínica Dental</h3>
+      <button class="btn btn-primary btn-sm" onclick="guardarHistorialDental(${pid})">💾 Guardar</button>
+    </div>
+    <div class="exp-section">
+      <div class="exp-section-title">📋 Motivo de Consulta y Antecedentes</div>
+      <div class="form-grid">
+        <div class="form-group full"><label>Motivo de consulta</label>${f('motivoConsulta', hd.motivoConsulta)}</div>
+        <div class="form-group"><label>Última visita dental</label>${fi('ultimaVisitaDental', hd.ultimaVisitaDental, 'date')}</div>
+        <div class="form-group"><label>Higiene oral</label>
+          <select id="hd-higieneOral" style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:13px;background:var(--card);color:var(--text)">
+            ${['','Buena','Regular','Deficiente'].map(v=>`<option value="${v}" ${hd.higieneOral===v?'selected':''}>${v||'—'}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group"><label>Hábitos orales</label>${f('habitosOrales', hd.habitosOrales)}</div>
+        <div class="form-group"><label>Antecedentes médicos generales</label>${f('antecedentesMedicos', hd.antecedentesMedicos)}</div>
+        <div class="form-group"><label>Enfermedades sistémicas</label>${f('enfermedadesSistemicas', hd.enfermedadesSistemicas)}</div>
+        <div class="form-group"><label>Medicamentos actuales</label>${f('medicamentosActuales', hd.medicamentosActuales)}</div>
+        <div class="form-group"><label>Alergias a medicamentos</label>${f('alergiasMedicamentos', hd.alergiasMedicamentos)}</div>
+        <div class="form-group full"><label>Tratamientos odontológicos previos</label>${f('tratamientosPrevios', hd.tratamientosPrevios)}</div>
+      </div>
+    </div>
+    <div class="exp-section">
+      <div class="exp-section-title">🔍 Examen Clínico</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Examen extraoral</label>${f('examenExtraoral', hd.examenExtraoral)}</div>
+        <div class="form-group"><label>Examen de tejidos blandos</label>${f('examenTejidosBlandos', hd.examenTejidosBlandos)}</div>
+        <div class="form-group"><label>Examen de oclusión / mordida</label>${f('examenOclusion', hd.examenOclusion)}</div>
+        <div class="form-group"><label>Examen de ATM</label>${f('examenAtm', hd.examenAtm)}</div>
+      </div>
+    </div>
+    <div class="exp-section">
+      <div class="exp-section-title">🩺 Diagnóstico</div>
+      <div class="form-grid">
+        <div class="form-group full"><label>Diagnóstico principal</label>${f('diagnosticoPrincipal', hd.diagnosticoPrincipal)}</div>
+        <div class="form-group full"><label>Observaciones clínicas</label>${f('observaciones', hd.observaciones)}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function guardarHistorialDental(pid) {
+  if(!currentClinicaId) { toast('Sin clínica','error'); return; }
+  const get = id => document.getElementById('hd-'+id)?.value?.trim()||'';
+  const data = { motivoConsulta:get('motivoConsulta'), antecedentesMedicos:get('antecedentesMedicos'), medicamentosActuales:get('medicamentosActuales'), alergiasMedicamentos:get('alergiasMedicamentos'), enfermedadesSistemicas:get('enfermedadesSistemicas'), ultimaVisitaDental:get('ultimaVisitaDental'), tratamientosPrevios:get('tratamientosPrevios'), habitosOrales:get('habitosOrales'), higieneOral:get('higieneOral'), examenExtraoral:get('examenExtraoral'), examenTejidosBlandos:get('examenTejidosBlandos'), examenOclusion:get('examenOclusion'), examenAtm:get('examenAtm'), diagnosticoPrincipal:get('diagnosticoPrincipal'), observaciones:get('observaciones') };
+  const existing = C.hd.find(x => x.pacienteId === pid);
+  setLoading(true);
+  let err;
+  if(existing) {
+    const r = await sb.from('historial_dental').update(toHD(data,pid)).eq('id', existing.id);
+    err = r.error;
+  } else {
+    const r = await sb.from('historial_dental').insert([toHD(data,pid)]);
+    err = r.error;
+  }
+  setLoading(false);
+  if(err) { toast('Error: '+err.message,'error'); return; }
+  toast('Historia clínica guardada ✅');
+  await loadAll();
+  renderHistorialDental(pid);
+}
+
+// ════════════════════ ODONTOLOGÍA — ODONTOGRAMA ════════════════════
+let _odoData = { dientes:{}, observaciones:'' };
+let _odoEstadoActivo = 'sano';
+
+function _getDienteIcon(estado) {
+  if(estado==='extraccion') return '✕';
+  if(estado==='implante')   return '▪';
+  if(estado==='corona')     return '◆';
+  if(estado==='puente')     return '━';
+  return '';
+}
+
+function _renderDienteBox(num, dData) {
+  const estado = dData?.estado || 'sano';
+  const e = ESTADOS_DIENTE.find(x=>x.key===estado) || ESTADOS_DIENTE[0];
+  return `<div onclick="clickDiente(${num})" id="odo-d-${num}" title="${e.label} — Diente ${num}"
+    style="width:30px;height:38px;border:2px solid ${e.border};background:${e.color};border-radius:5px;cursor:pointer;
+           display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:2px 1px;
+           transition:transform .12s,box-shadow .12s;user-select:none"
+    onmouseover="this.style.transform='scale(1.15)';this.style.boxShadow='0 4px 12px rgba(0,0,0,.2)'"
+    onmouseout="this.style.transform='';this.style.boxShadow=''">
+    <div style="font-size:8px;font-weight:700;color:${e.text};line-height:1">${num}</div>
+    <div style="font-size:12px;color:${e.text};line-height:1">${_getDienteIcon(estado)}</div>
+  </div>`;
+}
+
+function renderOdontograma(pid) {
+  const el = document.getElementById('tab-odontograma');
+  if(!el) return;
+  const existing = C.odo.find(x => x.pacienteId === pid) || { dientes:{}, observaciones:'' };
+  _odoData = JSON.parse(JSON.stringify({ dientes: existing.dientes||{}, observaciones: existing.observaciones||'' }));
+
+  const rowUpper = `
+    <div style="display:flex;gap:3px;align-items:flex-end;justify-content:center">
+      ${DIENTES_SUP_R.map(n=>_renderDienteBox(n,_odoData.dientes[n]||{})).join('')}
+      <div style="width:14px;border-bottom:2px dashed var(--border);margin-bottom:16px"></div>
+      ${DIENTES_SUP_L.map(n=>_renderDienteBox(n,_odoData.dientes[n]||{})).join('')}
+    </div>`;
+  const rowLower = `
+    <div style="display:flex;gap:3px;align-items:flex-start;justify-content:center;margin-top:4px">
+      ${DIENTES_INF_R.map(n=>_renderDienteBox(n,_odoData.dientes[n]||{})).join('')}
+      <div style="width:14px;border-bottom:2px dashed var(--border);margin-top:16px"></div>
+      ${DIENTES_INF_L.map(n=>_renderDienteBox(n,_odoData.dientes[n]||{})).join('')}
+    </div>`;
+
+  el.innerHTML = `<div class="card">
+    <div class="card-header"><h3>🗺️ Odontograma</h3>
+      <button class="btn btn-primary btn-sm" onclick="guardarOdontograma(${pid})">💾 Guardar</button>
+    </div>
+    <div style="margin-bottom:14px">
+      <div style="font-size:12px;font-weight:600;color:var(--text-light);margin-bottom:8px">Estado activo (haz clic en un diente para aplicar):</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${ESTADOS_DIENTE.map(e=>`
+          <div id="odo-leg-${e.key}" onclick="setEstadoActivo('${e.key}')"
+               style="display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;cursor:pointer;
+                      border:2px solid ${e.border};background:${e.color};color:${e.text};font-size:11px;font-weight:600;
+                      transition:all .15s;${e.key==='sano'?'box-shadow:0 0 0 3px var(--primary)':''}">
+            ${e.label}
+          </div>`).join('')}
+      </div>
+    </div>
+    <div style="overflow-x:auto;padding:12px 0">
+      <div style="min-width:580px">
+        <div style="text-align:center;font-size:10px;font-weight:700;color:var(--text-light);letter-spacing:.08em;margin-bottom:6px">SUPERIOR — Derecha del paciente | Izquierda del paciente</div>
+        ${rowUpper}
+        <div style="text-align:center;font-size:10px;color:var(--text-light);margin:8px 0">── LÍNEA MEDIA ──</div>
+        ${rowLower}
+        <div style="text-align:center;font-size:10px;font-weight:700;color:var(--text-light);letter-spacing:.08em;margin-top:6px">INFERIOR — Derecha del paciente | Izquierda del paciente</div>
+      </div>
+    </div>
+    <div style="margin-top:12px">
+      <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Observaciones</label>
+      <textarea id="odo-obs" style="width:100%;min-height:70px;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:13px;background:var(--card);color:var(--text);resize:vertical">${_odoData.observaciones}</textarea>
+    </div>
+  </div>`;
+}
+
+function setEstadoActivo(key) {
+  _odoEstadoActivo = key;
+  ESTADOS_DIENTE.forEach(e => {
+    const el = document.getElementById('odo-leg-'+e.key);
+    if(el) el.style.boxShadow = e.key===key ? '0 0 0 3px var(--primary)' : '';
+  });
+}
+
+function clickDiente(num) {
+  if(!_odoData.dientes) _odoData.dientes = {};
+  _odoData.dientes[num] = { ...(_odoData.dientes[num]||{}), estado: _odoEstadoActivo };
+  const el = document.getElementById('odo-d-'+num);
+  if(!el) return;
+  const e = ESTADOS_DIENTE.find(x=>x.key===_odoEstadoActivo)||ESTADOS_DIENTE[0];
+  el.style.background = e.color;
+  el.style.borderColor = e.border;
+  el.querySelectorAll('div')[0].style.color = e.text;
+  el.querySelectorAll('div')[1].textContent = _getDienteIcon(_odoEstadoActivo);
+  el.querySelectorAll('div')[1].style.color = e.text;
+  el.title = `${e.label} — Diente ${num}`;
+}
+
+async function guardarOdontograma(pid) {
+  if(!currentClinicaId) { toast('Sin clínica','error'); return; }
+  _odoData.observaciones = document.getElementById('odo-obs')?.value||'';
+  const existing = C.odo.find(x => x.pacienteId === pid);
+  const obj = { paciente_id:pid, clinica_id:currentClinicaId, dientes:_odoData.dientes||{}, observaciones:_odoData.observaciones||null, updated_at:new Date().toISOString() };
+  setLoading(true);
+  let err;
+  if(existing) { const r=await sb.from('odontograma').update(obj).eq('id',existing.id); err=r.error; }
+  else          { const r=await sb.from('odontograma').insert([obj]);                   err=r.error; }
+  setLoading(false);
+  if(err) { toast('Error: '+err.message,'error'); return; }
+  toast('Odontograma guardado ✅');
+  await loadAll();
+  renderOdontograma(pid);
+}
+
+// ════════════════════ ODONTOLOGÍA — PERIODONTOGRAMA ════════════════════
+const PERIO_DIENTES_SUP = [17,16,15,14,13,12,11,21,22,23,24,25,26,27];
+const PERIO_DIENTES_INF = [47,46,45,44,43,42,41,31,32,33,34,35,36,37];
+
+function renderPeriodontograma(pid) {
+  const el = document.getElementById('tab-periodontograma');
+  if(!el) return;
+  const existing = C.perio.find(x => x.pacienteId === pid) || { datos:{}, observaciones:'' };
+  const d = existing.datos || {};
+
+  const thStyle = 'padding:4px 2px;font-size:10px;font-weight:700;text-align:center;min-width:32px;color:var(--text-light)';
+  const tdStyle = 'padding:2px;text-align:center';
+  const inp = (diente, campo) => `<input type="number" min="0" max="12" step="1" id="perio-${diente}-${campo}" value="${d[diente]?.(d[diente][campo]??''):''}" style="width:30px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:2px 0;font-size:11px;background:var(--card);color:var(--text)">`;
+  const chk = (diente, campo) => `<input type="checkbox" id="perio-${diente}-${campo}" ${d[diente]?d[diente][campo]?'checked':''':''} style="accent-color:var(--primary)">`;
+
+  const buildTable = (dientes, label) => `
+    <div style="margin-bottom:20px">
+      <div style="font-size:11px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">${label}</div>
+      <div style="overflow-x:auto">
+        <table style="border-collapse:collapse;font-size:11px">
+          <thead><tr>
+            <th style="${thStyle};text-align:left;min-width:90px">Medición</th>
+            ${dientes.map(n=>`<th style="${thStyle}">${n}</th>`).join('')}
+          </tr></thead>
+          <tbody>
+            <tr><td style="${tdStyle};font-weight:600;font-size:11px;white-space:nowrap">PB Vestibular (mm)</td>${dientes.map(n=>`<td style="${tdStyle}">${inp(n,'pbv')}</td>`).join('')}</tr>
+            <tr style="background:var(--bg)"><td style="${tdStyle};font-weight:600;font-size:11px">PB Lingual (mm)</td>${dientes.map(n=>`<td style="${tdStyle}">${inp(n,'pbl')}</td>`).join('')}</tr>
+            <tr><td style="${tdStyle};font-weight:600;font-size:11px">Recesión (mm)</td>${dientes.map(n=>`<td style="${tdStyle}">${inp(n,'rec')}</td>`).join('')}</tr>
+            <tr style="background:var(--bg)"><td style="${tdStyle};font-weight:600;font-size:11px">Sangrado</td>${dientes.map(n=>`<td style="${tdStyle}">${chk(n,'sang')}</td>`).join('')}</tr>
+            <tr><td style="${tdStyle};font-weight:600;font-size:11px">Movilidad (0-3)</td>${dientes.map(n=>`<td style="${tdStyle}">${inp(n,'mov')}</td>`).join('')}</tr>
+            <tr style="background:var(--bg)"><td style="${tdStyle};font-weight:600;font-size:11px">Furcación (0-3)</td>${dientes.map(n=>`<td style="${tdStyle}">${inp(n,'fur')}</td>`).join('')}</tr>
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+
+  el.innerHTML = `<div class="card">
+    <div class="card-header"><h3>📏 Periodontograma</h3>
+      <button class="btn btn-primary btn-sm" onclick="guardarPeriodontograma(${pid})">💾 Guardar</button>
+    </div>
+    <div style="font-size:12px;color:var(--text-light);margin-bottom:14px">PB = Profundidad de bolsa. Sangrado al sondaje. Movilidad y furcación: 0–3.</div>
+    ${buildTable(PERIO_DIENTES_SUP,'Superiores')}
+    ${buildTable(PERIO_DIENTES_INF,'Inferiores')}
+    <div style="margin-top:12px">
+      <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Observaciones</label>
+      <textarea id="perio-obs" style="width:100%;min-height:70px;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:13px;background:var(--card);color:var(--text);resize:vertical">${existing.observaciones||''}</textarea>
+    </div>
+  </div>`;
+}
+
+async function guardarPeriodontograma(pid) {
+  if(!currentClinicaId) { toast('Sin clínica','error'); return; }
+  const allDientes = [...PERIO_DIENTES_SUP,...PERIO_DIENTES_INF];
+  const datos = {};
+  allDientes.forEach(n => {
+    datos[n] = {
+      pbv:  Number(document.getElementById(`perio-${n}-pbv`)?.value)||0,
+      pbl:  Number(document.getElementById(`perio-${n}-pbl`)?.value)||0,
+      rec:  Number(document.getElementById(`perio-${n}-rec`)?.value)||0,
+      sang: document.getElementById(`perio-${n}-sang`)?.checked||false,
+      mov:  Number(document.getElementById(`perio-${n}-mov`)?.value)||0,
+      fur:  Number(document.getElementById(`perio-${n}-fur`)?.value)||0,
+    };
+  });
+  const obs = document.getElementById('perio-obs')?.value||'';
+  const existing = C.perio.find(x => x.pacienteId === pid);
+  const obj = { paciente_id:pid, clinica_id:currentClinicaId, datos, observaciones:obs||null, updated_at:new Date().toISOString() };
+  setLoading(true);
+  let err;
+  if(existing) { const r=await sb.from('periodontograma').update(obj).eq('id',existing.id); err=r.error; }
+  else          { const r=await sb.from('periodontograma').insert([obj]);                    err=r.error; }
+  setLoading(false);
+  if(err) { toast('Error: '+err.message,'error'); return; }
+  toast('Periodontograma guardado ✅');
+  await loadAll();
+  renderPeriodontograma(pid);
+}
+
 // ════════════════════ ODONTOLOGÍA — PROCEDIMIENTOS ════════════════════
 let editingProcId = null;
 
@@ -4854,45 +5154,39 @@ function renderProcedimientosView() {
   const el = document.getElementById('view-procedimientos');
   if(!el) return;
 
-  const estadoColors = { planificado:'tag-blue', en_proceso:'tag-cyan', completado:'tag-green', cancelado:'tag-red' };
+  const ECOL = { pendiente:'tag-blue', iniciado:'tag-cyan', finalizado:'tag-green', cancelado:'tag-red' };
   const allProc = [...C.proc].sort((a,b) => b.fecha.localeCompare(a.fecha));
-
-  const byPac = {};
-  allProc.forEach(p => {
-    const pac = C.p.find(x => x.id === p.pacienteId);
-    const key = pac ? `${pac.nombre} ${pac.apellidos}` : 'Paciente desconocido';
-    if(!byPac[key]) byPac[key] = { pac, procs: [] };
-    byPac[key].procs.push(p);
-  });
-
-  const total = allProc.length;
-  const completados = allProc.filter(p => p.estado === 'completado').length;
-  const planificados = allProc.filter(p => p.estado === 'planificado').length;
-  const enProceso = allProc.filter(p => p.estado === 'en_proceso').length;
+  const total       = allProc.length;
+  const finalizados = allProc.filter(p => p.estado === 'finalizado').length;
+  const pendientes  = allProc.filter(p => p.estado === 'pendiente').length;
+  const iniciados   = allProc.filter(p => p.estado === 'iniciado').length;
+  const totalPres   = allProc.reduce((s,p) => s + (p.presupuesto||0), 0);
 
   el.innerHTML = `
     <div class="stats-grid" style="margin-bottom:20px">
       <div class="stat-card"><div class="stat-icon" style="background:linear-gradient(135deg,#e0f2fe,#bae6fd)">🦷</div><div class="stat-info"><h3>${total}</h3><p>Total procedimientos</p></div></div>
-      <div class="stat-card"><div class="stat-icon si-green">✅</div><div class="stat-info"><h3>${completados}</h3><p>Completados</p></div></div>
-      <div class="stat-card"><div class="stat-icon si-blue">⏳</div><div class="stat-info"><h3>${planificados}</h3><p>Planificados</p></div></div>
-      <div class="stat-card"><div class="stat-icon si-orange">🔄</div><div class="stat-info"><h3>${enProceso}</h3><p>En proceso</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-green">✅</div><div class="stat-info"><h3>${finalizados}</h3><p>Finalizados</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-blue">📋</div><div class="stat-info"><h3>${pendientes}</h3><p>Pendientes</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-orange">🔄</div><div class="stat-info"><h3>${iniciados}</h3><p>Iniciados</p></div></div>
+      ${totalPres>0?`<div class="stat-card"><div class="stat-icon" style="background:linear-gradient(135deg,#d1fae5,#a7f3d0)">💰</div><div class="stat-info"><h3>$${totalPres.toLocaleString()}</h3><p>Presupuesto total</p></div></div>`:''}
     </div>
     <div class="card">
       <div class="card-header">
-        <h3>🦷 Todos los procedimientos</h3>
+        <h3>📋 Plan de Tratamiento</h3>
         <button class="btn btn-primary btn-sm" onclick="openModalProcedimiento()">+ Nuevo</button>
       </div>
       ${!allProc.length ? '<div class="empty-state"><div class="empty-icon">🦷</div><p>Sin procedimientos registrados</p></div>' :
         `<div class="table-wrap"><table>
-          <thead><tr><th>Paciente</th><th>Procedimiento</th><th>Categoría</th><th>Estado</th><th>Fecha</th><th>Acciones</th></tr></thead>
+          <thead><tr><th>Paciente</th><th>Procedimiento</th><th>Diente</th><th>Estado</th><th>Presupuesto</th><th>Fecha</th><th>Acciones</th></tr></thead>
           <tbody>${allProc.map(proc => {
             const pac = C.p.find(x => x.id === proc.pacienteId);
             const nomPac = pac ? `${pac.nombre} ${pac.apellidos}` : '—';
             return `<tr>
               <td><a href="#" onclick="navigate('paciente-detalle',${proc.pacienteId});return false" style="color:var(--primary);font-weight:600">${nomPac}</a></td>
-              <td style="font-weight:600">${proc.procedimiento}</td>
-              <td><span class="tag tag-blue" style="font-size:11px">${proc.categoria}</span></td>
-              <td><span class="tag ${estadoColors[proc.estado]||'tag-blue'}">${proc.estado.replace('_',' ')}</span></td>
+              <td style="font-weight:600">${proc.procedimiento}<br><span class="tag tag-blue" style="font-size:10px">${proc.categoria}</span></td>
+              <td>${proc.diente||'—'}</td>
+              <td><span class="tag ${ECOL[proc.estado]||'tag-blue'}">${proc.estado}</span></td>
+              <td>${proc.presupuesto!=null?`$${Number(proc.presupuesto).toLocaleString()}`:'—'}</td>
               <td>${formatFecha(proc.fecha)}</td>
               <td><div class="actions-cell">
                 <button class="btn btn-secondary btn-sm" onclick="openModalProcedimiento(${proc.id})">✏️</button>
@@ -4909,7 +5203,8 @@ function renderProcedimientosTab(pid) {
   const el = document.getElementById('tab-procedimientos-p');
   if(!el) return;
   const procs = (C.proc||[]).filter(p => p.pacienteId === pid).sort((a,b) => b.fecha.localeCompare(a.fecha));
-  const estadoColors = { planificado:'tag-blue', en_proceso:'tag-cyan', completado:'tag-green', cancelado:'tag-red' };
+  const ECOL = { pendiente:'tag-blue', iniciado:'tag-cyan', finalizado:'tag-green', cancelado:'tag-red' };
+  const totalPres = procs.reduce((s,p) => s+(p.presupuesto||0), 0);
 
   const bycat = {};
   procs.forEach(p => {
@@ -4919,23 +5214,27 @@ function renderProcedimientosTab(pid) {
 
   el.innerHTML = `<div class="card">
     <div class="card-header">
-      <h3>🦷 Procedimientos</h3>
-      <button class="btn btn-primary btn-sm" onclick="openModalProcedimiento(null,${pid})">+ Nuevo</button>
+      <h3>📋 Plan de Tratamiento</h3>
+      <div style="display:flex;gap:8px;align-items:center">
+        ${totalPres>0?`<span style="font-size:13px;font-weight:700;color:var(--success)">$${totalPres.toLocaleString()}</span>`:''}
+        <button class="btn btn-primary btn-sm" onclick="openModalProcedimiento(null,${pid})">+ Nuevo</button>
+      </div>
     </div>
-    ${!procs.length ? '<div class="empty-state"><div class="empty-icon">🦷</div><p>Sin procedimientos para este paciente</p></div>' :
+    ${!procs.length ? '<div class="empty-state"><div class="empty-icon">📋</div><p>Sin procedimientos en el plan</p></div>' :
       Object.entries(bycat).map(([cat, items]) => `
         <div style="margin-bottom:16px">
-          <div style="font-size:12px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)">${cat}</div>
+          <div style="font-size:11px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)">${cat}</div>
           ${items.map(proc => `
-            <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
-              <span style="font-size:20px">🦷</span>
-              <div style="flex:1">
-                <div style="font-weight:600;font-size:14px">${proc.procedimiento}</div>
-                ${proc.notas ? `<div style="font-size:12px;color:var(--text-light);margin-top:3px">${proc.notas}</div>` : ''}
-                <div style="font-size:11px;color:var(--text-light);margin-top:3px">${formatFecha(proc.fecha)}</div>
+            <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+              <span style="font-size:18px">🦷</span>
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:600;font-size:13px">${proc.procedimiento}${proc.diente?` <span style="font-size:11px;color:var(--text-light);font-weight:400">— Diente ${proc.diente}</span>`:''}</div>
+                ${proc.notas?`<div style="font-size:12px;color:var(--text-light);margin-top:2px">${proc.notas}</div>`:''}
+                <div style="font-size:11px;color:var(--text-light);margin-top:2px">${formatFecha(proc.fecha)}</div>
               </div>
-              <span class="tag ${estadoColors[proc.estado]||'tag-blue'}" style="white-space:nowrap">${proc.estado.replace('_',' ')}</span>
-              <div class="actions-cell">
+              ${proc.presupuesto!=null?`<span style="font-weight:700;font-size:13px;color:var(--success);white-space:nowrap">$${Number(proc.presupuesto).toLocaleString()}</span>`:''}
+              <span class="tag ${ECOL[proc.estado]||'tag-blue'}" style="white-space:nowrap;flex-shrink:0">${proc.estado}</span>
+              <div class="actions-cell" style="flex-shrink:0">
                 <button class="btn btn-secondary btn-sm" onclick="openModalProcedimiento(${proc.id},${pid})">✏️</button>
                 <button class="btn btn-danger btn-sm" onclick="eliminarProcedimiento(${proc.id})">🗑️</button>
               </div>
@@ -4966,8 +5265,10 @@ function openModalProcedimiento(id, pid) {
   editingProcId = id || null;
   document.getElementById('modal-proc-title').textContent = id ? '✏️ Editar Procedimiento' : '🦷 Nuevo Procedimiento';
   document.getElementById('proc-fecha').value = hoy();
-  document.getElementById('proc-estado').value = 'planificado';
+  document.getElementById('proc-estado').value = 'pendiente';
   document.getElementById('proc-notas').value = '';
+  document.getElementById('proc-presupuesto').value = '';
+  document.getElementById('proc-diente').value = '';
 
   const procSel = document.getElementById('proc-procedimiento');
   procSel.innerHTML = '<option value="">Seleccionar procedimiento...</option>' + _buildProcCatOptions('');
@@ -4982,6 +5283,8 @@ function openModalProcedimiento(id, pid) {
       document.getElementById('proc-fecha').value = proc.fecha;
       document.getElementById('proc-estado').value = proc.estado;
       document.getElementById('proc-notas').value = proc.notas || '';
+      document.getElementById('proc-presupuesto').value = proc.presupuesto!=null ? proc.presupuesto : '';
+      document.getElementById('proc-diente').value = proc.diente || '';
     }
   }
   openModalOverlay('modal-procedimiento');
@@ -4996,10 +5299,12 @@ async function guardarProcedimiento() {
   const categoria     = selectedOpt?.dataset?.cat || '';
   const fecha  = document.getElementById('proc-fecha').value;
   const estado = document.getElementById('proc-estado').value;
-  const notas  = document.getElementById('proc-notas').value.trim();
+  const notas      = document.getElementById('proc-notas').value.trim();
+  const presupuesto= document.getElementById('proc-presupuesto').value ? Number(document.getElementById('proc-presupuesto').value) : null;
+  const diente     = document.getElementById('proc-diente').value.trim()||null;
   if(!pacienteId || !procedimiento || !fecha) { toast('Completa paciente, procedimiento y fecha','error'); return; }
   setLoading(true);
-  const obj = toProc({ pacienteId, procedimiento, categoria, fecha, estado, notas });
+  const obj = toProc({ pacienteId, procedimiento, categoria, fecha, estado, notas, presupuesto, diente });
   let err;
   if(editingProcId) {
     const r = await sb.from('procedimientos_odontologicos').update(obj).eq('id', editingProcId);

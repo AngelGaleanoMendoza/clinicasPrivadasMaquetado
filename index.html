@@ -336,13 +336,19 @@
           <button class="tab" onclick="switchTab('tab-meds-p',this)">💊 Medicaciones</button>
           <button class="tab" onclick="switchTab('tab-notas-p',this)">📝 Notas</button>
           <button class="tab" onclick="switchTab('tab-expediente',this)">📁 Expediente</button>
-          <button class="tab" id="tab-btn-procedimientos-p" onclick="switchTab('tab-procedimientos-p',this)" style="display:none">🦷 Procedimientos</button>
+          <button class="tab" id="tab-btn-historial-dental" onclick="switchTab('tab-historial-dental',this)" style="display:none">🦷 Historia Dental</button>
+          <button class="tab" id="tab-btn-odontograma" onclick="switchTab('tab-odontograma',this)" style="display:none">🗺️ Odontograma</button>
+          <button class="tab" id="tab-btn-periodontograma" onclick="switchTab('tab-periodontograma',this)" style="display:none">📏 Periodontograma</button>
+          <button class="tab" id="tab-btn-procedimientos-p" onclick="switchTab('tab-procedimientos-p',this)" style="display:none">📋 Plan Tratamiento</button>
         </div>
         <div id="tab-info"></div>
         <div id="tab-citas-p" style="display:none"></div>
         <div id="tab-meds-p" style="display:none"></div>
         <div id="tab-notas-p" style="display:none"></div>
         <div id="tab-expediente" style="display:none"></div>
+        <div id="tab-historial-dental" style="display:none"></div>
+        <div id="tab-odontograma" style="display:none"></div>
+        <div id="tab-periodontograma" style="display:none"></div>
         <div id="tab-procedimientos-p" style="display:none"></div>
       </div>
 
@@ -1739,14 +1745,16 @@
       <div class="form-group"><label>Fecha *</label><input type="date" id="proc-fecha"></div>
       <div class="form-group"><label>Estado</label>
         <select id="proc-estado">
-          <option value="planificado">Planificado</option>
-          <option value="en_proceso">En proceso</option>
-          <option value="completado">Completado</option>
+          <option value="pendiente">Pendiente</option>
+          <option value="iniciado">Iniciado</option>
+          <option value="finalizado">Finalizado</option>
           <option value="cancelado">Cancelado</option>
         </select>
       </div>
+      <div class="form-group"><label>Diente(s)</label><input type="text" id="proc-diente" placeholder="Ej: 11, 12, 21 o sector anterior"></div>
+      <div class="form-group"><label>Presupuesto ($)</label><input type="number" id="proc-presupuesto" min="0" step="0.01" placeholder="0.00"></div>
       <div class="form-group full"><label>Notas / Observaciones</label>
-        <textarea id="proc-notas" placeholder="Diente(s) afectados, observaciones del procedimiento..."></textarea>
+        <textarea id="proc-notas" placeholder="Observaciones clínicas del procedimiento..."></textarea>
       </div>
     </div>
     <div class="modal-footer">
@@ -1898,6 +1906,6 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260609f"></script>
+<script src="js/app.js?v=20260609g"></script>
 </body>
 </html>
