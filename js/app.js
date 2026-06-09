@@ -5081,8 +5081,8 @@ function renderPeriodontograma(pid) {
 
   const thStyle = 'padding:4px 2px;font-size:10px;font-weight:700;text-align:center;min-width:32px;color:var(--text-light)';
   const tdStyle = 'padding:2px;text-align:center';
-  const inp = (diente, campo) => `<input type="number" min="0" max="12" step="1" id="perio-${diente}-${campo}" value="${d[diente]?.(d[diente][campo]??''):''}" style="width:30px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:2px 0;font-size:11px;background:var(--card);color:var(--text)">`;
-  const chk = (diente, campo) => `<input type="checkbox" id="perio-${diente}-${campo}" ${d[diente]?d[diente][campo]?'checked':''':''} style="accent-color:var(--primary)">`;
+  const inp = (diente, campo) => `<input type="number" min="0" max="12" step="1" id="perio-${diente}-${campo}" value="${d[diente] ? (d[diente][campo] ?? '') : ''}" style="width:30px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:2px 0;font-size:11px;background:var(--card);color:var(--text)">`;
+  const chk = (diente, campo) => `<input type="checkbox" id="perio-${diente}-${campo}" ${d[diente] && d[diente][campo] ? 'checked' : ''} style="accent-color:var(--primary)">`;
 
   const buildTable = (dientes, label) => `
     <div style="margin-bottom:20px">
