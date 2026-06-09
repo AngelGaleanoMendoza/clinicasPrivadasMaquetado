@@ -466,7 +466,7 @@ function limpiarPendientesSesion() {
 }
 
 async function entrarConPerfil(profile) {
-  const rolLabel = {admin:'Administración',medico:'Médico',medico_admin:'Médico Adm.',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',farmaceutico:'Farmacéutico'}[profile.rol]||profile.rol;
+  const rolLabel = {admin:'Administración',medico:'Médico',medico_admin:'Médico Adm.',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',farmaceutico:'Farmacéutico',odontologo:'Odontólogo'}[profile.rol]||profile.rol;
   currentClinicaId = profile.clinica_id || null;
   // Obtener email desde todas las fuentes disponibles
   let emailFinal = (profile.email || '').trim().toLowerCase() || null;
