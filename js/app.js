@@ -588,6 +588,12 @@ function calcEdad(fn) {
   if(h.getMonth()<n.getMonth()||(h.getMonth()===n.getMonth()&&h.getDate()<n.getDate()))e--;
   return e+' años';
 }
+function _getEdadNum(fn) {
+  if(!fn) return null;
+  const h=new Date(), n=new Date(fn); let e=h.getFullYear()-n.getFullYear();
+  if(h.getMonth()<n.getMonth()||(h.getMonth()===n.getMonth()&&h.getDate()<n.getDate()))e--;
+  return e;
+}
 function ini(a,b){ return ((a||'')[0]||'').toUpperCase()+((b||'')[0]||'').toUpperCase(); }
 function colAvatar(id) { const c=['#2563EB','#06B6D4','#10B981','#F59E0B','#8B5CF6','#EF4444','#0891B2','#4F46E5']; return c[id%c.length]; }
 function estadoTag(e) {
@@ -5010,10 +5016,16 @@ function _getDienteIcon(estado) {
 let _odoSuperficieActiva = 'all';
 
 function renderOdontograma(pid) {
+  const p = C.p.find(x => x.id === pid);
   const elTab = document.getElementById('tab-odontograma');
   if(!elTab) return;
   const existing = C.odo.find(x => x.pacienteId === pid) || { dientes:{}, observaciones:'' };
   const dientes = existing.dientes || {};
+  const edad = p ? _getEdadNum(p.fechaNac) : null;
+  const esInfantil = edad !== null && edad <= 15;
+  const tipoLabel = esInfantil
+    ? '<span style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:10px;font-size:10px;font-weight:700;padding:2px 8px;margin-left:6px">Infantil</span>'
+    : '';
   const counts = {};
   Object.values(dientes).forEach(tooth => {
     ['v','l','m','d','o'].forEach(s => {
@@ -5026,7 +5038,7 @@ function renderOdontograma(pid) {
     .join('');
   elTab.innerHTML = `<div class="card">
     <div class="card-header">
-      <h3>🦷 Odontograma</h3>
+      <h3>🦷 Odontograma${tipoLabel}</h3>
       <div style="display:flex;gap:8px">
         <button class="btn btn-secondary btn-sm" onclick="imprimirOdontograma(${pid})">🖨️ Imprimir</button>
         <button class="btn btn-primary btn-sm" onclick="abrirModalOdontograma(${pid})">✏️ Editar</button>
@@ -5055,6 +5067,13 @@ function _migrateOdoData(raw) {
 
 function abrirModalOdontograma(pid) {
   _odoCurrentPid = pid;
+  const pac = C.p.find(x => x.id === pid);
+  const edad = pac ? _getEdadNum(pac.fechaNac) : null;
+  const esInfantil = edad !== null && edad <= 15;
+
+  const titleEl = document.getElementById('modal-odo-title');
+  if(titleEl) titleEl.textContent = esInfantil ? '🦷 Odontograma Infantil' : '🦷 Odontograma Adulto';
+
   const existing = C.odo.find(x => x.pacienteId === pid) || { dientes:{}, observaciones:'' };
   _odoData = JSON.parse(JSON.stringify({
     dientes: _migrateOdoData(existing.dientes),
@@ -5074,7 +5093,8 @@ function abrirModalOdontograma(pid) {
 
   const obsEl = document.getElementById('odo-obs');
   if(obsEl) obsEl.value = _odoData.observaciones || '';
-  renderArcoOdontograma();
+  if(esInfantil) renderArcoOdontogramaInfantil();
+  else renderArcoOdontograma();
   openModalOverlay('modal-odontograma');
 }
 
@@ -5128,18 +5148,19 @@ function renderToothSketch(num, isUpper) {
   return `<svg width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}" style="display:block">${crown}${roots}</svg>`;
 }
 
-function _renderCirculo(num) {
+function _renderCirculo(num, dashed) {
   const tooth = _odoData.dientes[num] || {};
   const gs = s => { const k=tooth[s]||(tooth.estado&&s==='v'?tooth.estado:'sano'); return ESTADOS_DIENTE.find(x=>x.key===k)||ESTADOS_DIENTE[0]; };
   const R=13, IR=5.8, D=+(R*0.7071).toFixed(2);
   const ev=gs('v'), el=gs('l'), em=gs('m'), ed=gs('d'), eo=gs('o');
+  const da = dashed ? ' stroke-dasharray="3,2"' : '';
   return `<svg width="28" height="28" viewBox="-14 -14 28 28" style="display:block;cursor:pointer;overflow:visible">
     <path d="M 0,0 L -${D},-${D} A ${R},${R} 0 0,1 ${D},-${D} Z" data-surf="v" fill="${ev.color}" stroke="${ev.border}" stroke-width="0.6" onclick="clickSuperficie(${num},'v')"/>
     <path d="M 0,0 L ${D},-${D} A ${R},${R} 0 0,1 ${D},${D} Z"  data-surf="d" fill="${ed.color}" stroke="${ed.border}" stroke-width="0.6" onclick="clickSuperficie(${num},'d')"/>
     <path d="M 0,0 L ${D},${D} A ${R},${R} 0 0,1 -${D},${D} Z"  data-surf="l" fill="${el.color}" stroke="${el.border}" stroke-width="0.6" onclick="clickSuperficie(${num},'l')"/>
     <path d="M 0,0 L -${D},${D} A ${R},${R} 0 0,1 -${D},-${D} Z" data-surf="m" fill="${em.color}" stroke="${em.border}" stroke-width="0.6" onclick="clickSuperficie(${num},'m')"/>
     <ellipse rx="${IR}" ry="${IR-1.2}" data-surf="o" fill="${eo.color}" stroke="${eo.border}" stroke-width="0.6" onclick="clickSuperficie(${num},'o')"/>
-    <circle r="${R}" fill="none" stroke="#374151" stroke-width="1.2"/>
+    <circle r="${R}" fill="none" stroke="#374151" stroke-width="1.2"${da}/>
   </svg>`;
 }
 
@@ -5185,6 +5206,118 @@ function renderArcoOdontograma() {
     </table>
   </div>
   <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:5px">
+    ${ESTADOS_DIENTE.map(e=>`<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px">
+      <span style="width:10px;height:10px;border-radius:2px;background:${e.color};border:1px solid ${e.border};flex-shrink:0;display:inline-block"></span>
+      <span style="color:var(--text-light)">${e.label}</span>
+    </span>`).join('')}
+  </div>`;
+}
+
+function renderArcoOdontogramaInfantil() {
+  const container = document.getElementById('odo-arco-container');
+  if(!container) return;
+  const tdS = 'padding:1px 2px;text-align:center;vertical-align:middle';
+
+  // Celda para dientes temporales (borde sólido)
+  const cellTemp = (num, isUpper) => `<td style="${tdS}">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:1px">
+      ${isUpper ? renderToothSketch(num, true) : ''}
+      <div id="odo-circle-${num}" style="line-height:0">${_renderCirculo(num, false)}</div>
+      ${!isUpper ? renderToothSketch(num, false) : ''}
+      <span style="font-size:8px;font-weight:800;color:${getNumColor(num)};line-height:1.1">${num}</span>
+    </div>
+  </td>`;
+
+  // Celda para dientes permanentes (borde discontinuo, opacidad reducida)
+  const cellPerm = (num, isUpper) => `<td style="${tdS};opacity:0.65">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:1px">
+      ${isUpper ? renderToothSketch(num, true) : ''}
+      <div id="odo-circle-${num}" style="line-height:0">${_renderCirculo(num, true)}</div>
+      ${!isUpper ? renderToothSketch(num, false) : ''}
+      <span style="font-size:8px;font-weight:800;color:${getNumColor(num)};line-height:1.1">${num}</span>
+    </div>
+  </td>`;
+
+  const SURFS=[{k:'all',l:'Todas'},{k:'v',l:'Vest.'},{k:'o',l:'Ocl.'},{k:'l',l:'Ling.'},{k:'m',l:'Mes.'},{k:'d',l:'Dist.'}];
+  const surfBar = SURFS.map(s=>`<button id="odo-surf-${s.k}" onclick="setSuperficieActiva('${s.k}')"
+    style="padding:3px 8px;border-radius:12px;border:1.5px solid var(--border);background:${s.k==='all'?'var(--primary)':'var(--card)'};
+           color:${s.k==='all'?'#fff':'var(--text)'};font-size:10px;font-weight:700;cursor:pointer">${s.l}</button>`).join('');
+
+  // Permanentes: Q1 (18→11), Q2 (21→28), Q4 (48→41), Q3 (31→38)
+  const permSupR = [18,17,16,15,14,13,12,11];
+  const permSupL = [21,22,23,24,25,26,27,28];
+  const permInfR = [48,47,46,45,44,43,42,41];
+  const permInfL = [31,32,33,34,35,36,37,38];
+  // Temporales: Q5 (55→51), Q6 (61→65), Q8 (85→81), Q7 (71→75)
+  const tempSupR = [55,54,53,52,51];
+  const tempSupL = [61,62,63,64,65];
+  const tempInfR = [85,84,83,82,81];
+  const tempInfL = [71,72,73,74,75];
+
+  container.innerHTML = `
+  <div style="margin-bottom:8px">
+    <span style="font-size:11px;color:var(--text-light);margin-right:6px;font-weight:600">Superficie:</span>
+    <span style="display:inline-flex;flex-wrap:wrap;gap:4px">${surfBar}</span>
+  </div>
+  <div style="overflow-x:auto">
+    <table style="border-collapse:collapse;margin:0 auto">
+      <!-- Fila de labels — permanentes superior -->
+      <tr>
+        <td colspan="8" style="padding:2px 4px;font-size:9px;font-weight:700;color:#6b7280;text-align:right;white-space:nowrap">Perm. Sup. Der. ▸</td>
+        <td colspan="8" style="padding:2px 4px;font-size:9px;font-weight:700;color:#6b7280;white-space:nowrap">◂ Perm. Sup. Izq.</td>
+      </tr>
+      <!-- Fila 1: Permanentes superiores (borde discontinuo) -->
+      <tr>${permSupR.map(n=>cellPerm(n,true)).join('')}${permSupL.map(n=>cellPerm(n,true)).join('')}</tr>
+      <!-- Label temporales superiores -->
+      <tr>
+        <td colspan="3"></td>
+        <td colspan="5" style="padding:1px 4px;font-size:9px;font-weight:700;color:#b45309;text-align:right;white-space:nowrap">Temp. Sup. Der. ▸</td>
+        <td colspan="5" style="padding:1px 4px;font-size:9px;font-weight:700;color:#b45309;white-space:nowrap">◂ Temp. Sup. Izq.</td>
+        <td colspan="3"></td>
+      </tr>
+      <!-- Fila 2: Temporales superiores centrados (55-51 | 61-65) -->
+      <tr>
+        <td colspan="3"></td>
+        ${tempSupR.map(n=>cellTemp(n,true)).join('')}
+        ${tempSupL.map(n=>cellTemp(n,true)).join('')}
+        <td colspan="3"></td>
+      </tr>
+      <!-- Separador arcos -->
+      <tr><td colspan="16" style="padding:2px 0"><hr style="border:none;border-top:1.8px solid #374151;margin:0"/></td></tr>
+      <!-- Fila 3: Temporales inferiores centrados (85-81 | 71-75) -->
+      <tr>
+        <td colspan="3"></td>
+        ${tempInfR.map(n=>cellTemp(n,false)).join('')}
+        ${tempInfL.map(n=>cellTemp(n,false)).join('')}
+        <td colspan="3"></td>
+      </tr>
+      <!-- Label temporales inferiores -->
+      <tr>
+        <td colspan="3"></td>
+        <td colspan="5" style="padding:1px 4px;font-size:9px;font-weight:700;color:#b45309;text-align:right;white-space:nowrap">Temp. Inf. Der. ▸</td>
+        <td colspan="5" style="padding:1px 4px;font-size:9px;font-weight:700;color:#b45309;white-space:nowrap">◂ Temp. Inf. Izq.</td>
+        <td colspan="3"></td>
+      </tr>
+      <!-- Fila 4: Permanentes inferiores (borde discontinuo) -->
+      <tr>${permInfR.map(n=>cellPerm(n,false)).join('')}${permInfL.map(n=>cellPerm(n,false)).join('')}</tr>
+      <!-- Labels permanentes inferior -->
+      <tr>
+        <td colspan="8" style="padding:2px 4px;font-size:9px;font-weight:700;color:#6b7280;text-align:right;white-space:nowrap">Perm. Inf. Der. ▸</td>
+        <td colspan="8" style="padding:2px 4px;font-size:9px;font-weight:700;color:#6b7280;white-space:nowrap">◂ Perm. Inf. Izq.</td>
+      </tr>
+    </table>
+  </div>
+  <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:5px;align-items:center">
+    <span style="font-size:10px;font-weight:700;color:var(--text-light);margin-right:2px">Tipo:</span>
+    <span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;margin-right:8px">
+      <span style="width:10px;height:10px;border:1.5px dashed #374151;border-radius:50%;display:inline-block"></span>
+      <span style="color:var(--text-light)">Permanente</span>
+    </span>
+    <span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;margin-right:8px">
+      <span style="width:10px;height:10px;border:1.5px solid #374151;border-radius:50%;display:inline-block"></span>
+      <span style="color:var(--text-light)">Temporal</span>
+    </span>
+    <span style="font-size:10px;font-weight:700;color:var(--text-light);margin:0 2px">Estado:</span>
     ${ESTADOS_DIENTE.map(e=>`<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px">
       <span style="width:10px;height:10px;border-radius:2px;background:${e.color};border:1px solid ${e.border};flex-shrink:0;display:inline-block"></span>
       <span style="color:var(--text-light)">${e.label}</span>
@@ -5488,7 +5621,40 @@ function renderProcedimientosView() {
           }).join('')}</tbody>
         </table></div>`
       }
+    </div>
+    <div class="card" style="margin-top:20px">
+      <div class="card-header">
+        <h3>🦷 Odontogramas — por Cita</h3>
+        <div style="font-size:12px;color:var(--text-light)">Abre el odontograma del paciente vinculado a su cita · <strong>Adulto</strong> ≥18 años · <strong>Infantil</strong> ≤15 años</div>
+      </div>
+      ${_buildOdoModulo()}
     </div>`;
+}
+
+function _buildOdoModulo() {
+  const citas = [...C.c].sort((a,b) => b.fecha.localeCompare(a.fecha)).slice(0, 40);
+  if(!citas.length) return '<div class="empty-state"><div class="empty-icon">📅</div><p>Sin citas registradas</p></div>';
+  return `<div class="table-wrap"><table>
+    <thead><tr><th>Paciente</th><th>Fecha / Hora</th><th>Motivo</th><th>Estado cita</th><th>Tipo odo.</th><th>Acción</th></tr></thead>
+    <tbody>${citas.map(cita => {
+      const pac = C.p.find(x => x.id === cita.pacienteId);
+      if(!pac) return '';
+      const edad = _getEdadNum(pac.fechaNac);
+      const esInfantil = edad !== null && edad <= 15;
+      const tipoTag = esInfantil
+        ? '<span style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:10px;font-size:10px;font-weight:700;padding:2px 7px">Infantil</span>'
+        : '<span style="background:#dbeafe;color:#1e40af;border:1px solid #93c5fd;border-radius:10px;font-size:10px;font-weight:700;padding:2px 7px">Adulto</span>';
+      return `<tr>
+        <td><a href="#" onclick="navigate('paciente-detalle',${pac.id});return false" style="color:var(--primary);font-weight:600">${pac.nombre} ${pac.apellidos}</a></td>
+        <td style="white-space:nowrap">${formatFecha(cita.fecha)} ${cita.hora}</td>
+        <td>${cita.motivo}</td>
+        <td>${estadoTag(cita.estado)}</td>
+        <td>${tipoTag}</td>
+        <td><button class="btn btn-sm" style="background:linear-gradient(135deg,#0891b2,#0e7490);color:#fff;font-size:11px;white-space:nowrap"
+            onclick="abrirModalOdontograma(${pac.id})">🦷 Odontograma</button></td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table></div>`;
 }
 
 function renderProcedimientosTab(pid) {
