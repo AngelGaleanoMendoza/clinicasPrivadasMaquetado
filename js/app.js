@@ -4960,33 +4960,44 @@ let _odoData = { dientes:{}, observaciones:'' };
 let _odoEstadoActivo = 'sano';
 let _odoCurrentPid = null;
 
-// Coordenadas FDI — arco elíptico con rotación y tamaño por grupo dental
+// Coordenadas FDI — orientación estándar: incisivos ARRIBA, molares abajo-laterales
+// Q1: 18→11 (izq exterior→centro), Q2: 21→28 (centro→der exterior)
+// Q4: 48→41 (izq exterior→centro), Q3: 31→38 (centro→der exterior)
 const ODO_POSITIONS = {
   Q1: [
-    {num:18,x:52, y:48, rot:-75,w:28,h:24},{num:17,x:68, y:85, rot:-65,w:26,h:24},
-    {num:16,x:93, y:118,rot:-52,w:26,h:24},{num:15,x:124,y:147,rot:-37,w:22,h:22},
-    {num:14,x:158,y:170,rot:-23,w:22,h:22},{num:13,x:196,y:188,rot:-11,w:18,h:23},
-    {num:12,x:237,y:200,rot:-4, w:15,h:21},{num:11,x:278,y:207,rot:0,  w:17,h:21}
+    {num:18,x:55, y:232,rot:72, w:28,h:24},{num:17,x:73, y:193,rot:62, w:26,h:24},
+    {num:16,x:100,y:158,rot:50, w:26,h:24},{num:15,x:133,y:128,rot:35, w:22,h:22},
+    {num:14,x:170,y:106,rot:21, w:22,h:22},{num:13,x:212,y:91, rot:10, w:18,h:23},
+    {num:12,x:255,y:82, rot:3,  w:15,h:21},{num:11,x:296,y:79, rot:0,  w:17,h:21}
   ],
   Q2: [
-    {num:21,x:302,y:207,rot:0,  w:17,h:21},{num:22,x:343,y:200,rot:4,  w:15,h:21},
-    {num:23,x:384,y:188,rot:11, w:18,h:23},{num:24,x:422,y:170,rot:23, w:22,h:22},
-    {num:25,x:456,y:147,rot:37, w:22,h:22},{num:26,x:487,y:118,rot:52, w:26,h:24},
-    {num:27,x:512,y:85, rot:65, w:26,h:24},{num:28,x:528,y:48, rot:75, w:28,h:24}
+    {num:21,x:316,y:79, rot:0,  w:17,h:21},{num:22,x:357,y:82, rot:-3, w:15,h:21},
+    {num:23,x:400,y:91, rot:-10,w:18,h:23},{num:24,x:442,y:106,rot:-21,w:22,h:22},
+    {num:25,x:479,y:128,rot:-35,w:22,h:22},{num:26,x:512,y:158,rot:-50,w:26,h:24},
+    {num:27,x:539,y:193,rot:-62,w:26,h:24},{num:28,x:557,y:232,rot:-72,w:28,h:24}
   ],
   Q3: [
-    {num:31,x:302,y:283,rot:0,  w:17,h:21},{num:32,x:343,y:290,rot:-4, w:15,h:21},
-    {num:33,x:384,y:302,rot:-11,w:18,h:23},{num:34,x:422,y:320,rot:-23,w:22,h:22},
-    {num:35,x:456,y:343,rot:-37,w:22,h:22},{num:36,x:487,y:372,rot:-52,w:26,h:24},
-    {num:37,x:512,y:405,rot:-65,w:26,h:24},{num:38,x:528,y:442,rot:-75,w:28,h:24}
+    {num:31,x:316,y:420,rot:0,  w:17,h:21},{num:32,x:357,y:417,rot:3,  w:15,h:21},
+    {num:33,x:400,y:408,rot:10, w:18,h:23},{num:34,x:442,y:393,rot:21, w:22,h:22},
+    {num:35,x:479,y:371,rot:35, w:22,h:22},{num:36,x:512,y:341,rot:50, w:26,h:24},
+    {num:37,x:539,y:306,rot:62, w:26,h:24},{num:38,x:557,y:267,rot:72, w:28,h:24}
   ],
   Q4: [
-    {num:48,x:52, y:442,rot:75, w:28,h:24},{num:47,x:68, y:405,rot:65, w:26,h:24},
-    {num:46,x:93, y:372,rot:52, w:26,h:24},{num:45,x:124,y:343,rot:37, w:22,h:22},
-    {num:44,x:158,y:320,rot:23, w:22,h:22},{num:43,x:196,y:302,rot:11, w:18,h:23},
-    {num:42,x:237,y:290,rot:4,  w:15,h:21},{num:41,x:278,y:283,rot:0,  w:17,h:21}
+    {num:48,x:55, y:267,rot:-72,w:28,h:24},{num:47,x:73, y:306,rot:-62,w:26,h:24},
+    {num:46,x:100,y:341,rot:-50,w:26,h:24},{num:45,x:133,y:371,rot:-35,w:22,h:22},
+    {num:44,x:170,y:393,rot:-21,w:22,h:22},{num:43,x:212,y:408,rot:-10,w:18,h:23},
+    {num:42,x:255,y:417,rot:-3, w:15,h:21},{num:41,x:296,y:420,rot:0,  w:17,h:21}
   ]
 };
+
+// Color del número según tipo dental (incisivo/canino/premolar/molar)
+function getNumColor(num) {
+  const t = num % 10;
+  if (t === 1 || t === 2) return '#f59e0b';
+  if (t === 3) return '#22c55e';
+  if (t === 4 || t === 5) return '#94a3b8';
+  return '#60a5fa';
+}
 
 function _getDienteIcon(estado) {
   if(estado==='extraccion') return '✕';
@@ -5049,8 +5060,9 @@ function renderArcoOdontograma() {
   const container = document.getElementById('odo-arco-container');
   if(!container) return;
 
-  const ACU = {cx:280, cy:128};
-  const ACL = {cx:280, cy:362};
+  // centros del arco para calcular dirección de número exterior
+  const ACU = {cx:306, cy:158};
+  const ACL = {cx:306, cy:341};
 
   const renderTooth = (tooth, isUpper) => {
     const {num, x, y, rot, w, h} = tooth;
@@ -5064,46 +5076,56 @@ function renderArcoOdontograma() {
     const numX = +(x + nx*(h/2+11)).toFixed(1);
     const numY = +(y + ny*(h/2+11)).toFixed(1);
     const icon = _getDienteIcon(estado);
+    const nColor = getNumColor(num);
     return `<g id="odo-g-${num}" onclick="clickDiente(${num})" style="cursor:pointer">
-      <rect transform="rotate(${rot},${x},${y})" x="${x-w/2}" y="${y-h/2}" width="${w}" height="${h}" rx="3.5"
+      <rect transform="rotate(${rot},${x},${y})" x="${x-w/2}" y="${y-h/2}" width="${w}" height="${h}" rx="5"
         fill="${e.color}" stroke="${e.border}" stroke-width="1.8"
         onmouseover="this.setAttribute('stroke-width','3')" onmouseout="this.setAttribute('stroke-width','1.8')"/>
+      <rect transform="rotate(${rot},${x},${y})" x="${x-w/2+3}" y="${y-h/2+3}" width="${w-6}" height="${(h/2)-1}" rx="3"
+        fill="rgba(255,255,255,0.28)" stroke="none" pointer-events="none"/>
       <text id="odo-num-${num}" x="${numX}" y="${numY}" text-anchor="middle" dominant-baseline="middle"
-        font-size="8" font-weight="800" fill="#4b5563" pointer-events="none">${num}</text>
+        font-size="8.5" font-weight="800" fill="${nColor}" pointer-events="none">${num}</text>
       <text id="odo-ico-${num}" x="${x}" y="${y+1}" text-anchor="middle" dominant-baseline="middle"
         font-size="9" fill="${e.text}" pointer-events="none">${icon}</text>
     </g>`;
   };
 
   container.innerHTML = `
-  <svg viewBox="15 22 550 450" width="100%" style="max-width:550px;display:block;margin:0 auto;min-width:290px">
-    <!-- ══ MAXILAR SUPERIOR ══ -->
-    <ellipse cx="280" cy="128" rx="168" ry="92" fill="#f8c4cf" opacity="0.65"/>
-    <ellipse cx="280" cy="128" rx="122" ry="65" fill="#f0a0ba" opacity="0.42"/>
-    <path d="M 46,48 C 40,252 520,252 514,48" fill="none" stroke="#f9a8b4" stroke-width="50" stroke-linecap="round" opacity="0.30"/>
+  <svg viewBox="12 40 588 430" width="100%" style="max-width:580px;display:block;margin:0 auto;min-width:290px">
 
-    <!-- ══ MAXILAR INFERIOR ══ -->
-    <ellipse cx="280" cy="362" rx="168" ry="92" fill="#f8c4cf" opacity="0.65"/>
-    <ellipse cx="280" cy="362" rx="122" ry="65" fill="#f0a0ba" opacity="0.42"/>
-    <path d="M 46,442 C 40,238 520,238 514,442" fill="none" stroke="#f9a8b4" stroke-width="50" stroke-linecap="round" opacity="0.30"/>
+    <!-- ══ PALADAR SUPERIOR (forma D invertida: curva arriba, plano abajo) ══ -->
+    <path d="M 32,256 C 26,212 26,86 306,44 C 586,86 586,212 580,256 Z"
+      fill="#f0b0c5" opacity="0.58"/>
+    <path d="M 58,256 C 52,215 52,100 306,60 C 560,100 560,215 554,256 Z"
+      fill="#fcd8e4" opacity="0.60"/>
+
+    <!-- ══ ENCÍA SUPERIOR (banda exterior tras dientes) ══ -->
+    <path d="M 32,256 C 26,212 26,86 306,44 C 586,86 586,212 580,256"
+      fill="none" stroke="#f9a8b4" stroke-width="44" stroke-linecap="butt" opacity="0.28"/>
+
+    <!-- ══ ALVEOLAR INFERIOR (forma D: plano arriba, curva abajo) ══ -->
+    <path d="M 32,258 C 26,302 26,428 306,470 C 586,428 586,302 580,258 Z"
+      fill="#f0b0c5" opacity="0.58"/>
+    <path d="M 58,258 C 52,299 52,414 306,454 C 560,414 560,299 554,258 Z"
+      fill="#fcd8e4" opacity="0.60"/>
+
+    <!-- ══ ENCÍA INFERIOR ══ -->
+    <path d="M 32,258 C 26,302 26,428 306,470 C 586,428 586,302 580,258"
+      fill="none" stroke="#f9a8b4" stroke-width="44" stroke-linecap="butt" opacity="0.28"/>
 
     <!-- ══ LÍNEAS MEDIAS ══ -->
-    <line x1="20" y1="245" x2="560" y2="245" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="6,4" opacity="0.6"/>
-    <line x1="280" y1="28" x2="280" y2="464" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="6,4" opacity="0.6"/>
+    <line x1="12" y1="257" x2="600" y2="257" stroke="#9ca3af" stroke-width="1.5"/>
+    <line x1="306" y1="44" x2="306" y2="466" stroke="#6b7280" stroke-width="1.2" stroke-dasharray="7,5"/>
 
     <!-- ══ ETIQUETAS CUADRANTES ══ -->
-    <text x="165" y="136" text-anchor="middle" font-size="11" font-weight="700" fill="#94a3b8" opacity="0.85">Cuadrante</text>
-    <text x="165" y="153" text-anchor="middle" font-size="16" font-weight="900" fill="#94a3b8" opacity="0.85">1</text>
-    <text x="395" y="136" text-anchor="middle" font-size="11" font-weight="700" fill="#94a3b8" opacity="0.85">Cuadrante</text>
-    <text x="395" y="153" text-anchor="middle" font-size="16" font-weight="900" fill="#94a3b8" opacity="0.85">2</text>
-    <text x="395" y="370" text-anchor="middle" font-size="11" font-weight="700" fill="#94a3b8" opacity="0.85">Cuadrante</text>
-    <text x="395" y="387" text-anchor="middle" font-size="16" font-weight="900" fill="#94a3b8" opacity="0.85">3</text>
-    <text x="165" y="370" text-anchor="middle" font-size="11" font-weight="700" fill="#94a3b8" opacity="0.85">Cuadrante</text>
-    <text x="165" y="387" text-anchor="middle" font-size="16" font-weight="900" fill="#94a3b8" opacity="0.85">4</text>
-
-    <!-- ══ ETIQUETAS MAXILARES ══ -->
-    <text x="280" y="34" text-anchor="middle" font-size="9" font-weight="700" fill="#94a3b8" letter-spacing="1.5">MAXILAR SUPERIOR</text>
-    <text x="280" y="472" text-anchor="middle" font-size="9" font-weight="700" fill="#94a3b8" letter-spacing="1.5">MAXILAR INFERIOR</text>
+    <text x="162" y="165" text-anchor="middle" font-size="11" font-weight="700" fill="#94a3b8">Cuadrante</text>
+    <text x="162" y="183" text-anchor="middle" font-size="17" font-weight="900" fill="#94a3b8">1</text>
+    <text x="450" y="165" text-anchor="middle" font-size="11" font-weight="700" fill="#94a3b8">Cuadrante</text>
+    <text x="450" y="183" text-anchor="middle" font-size="17" font-weight="900" fill="#94a3b8">2</text>
+    <text x="450" y="336" text-anchor="middle" font-size="11" font-weight="700" fill="#94a3b8">Cuadrante</text>
+    <text x="450" y="354" text-anchor="middle" font-size="17" font-weight="900" fill="#94a3b8">3</text>
+    <text x="162" y="336" text-anchor="middle" font-size="11" font-weight="700" fill="#94a3b8">Cuadrante</text>
+    <text x="162" y="354" text-anchor="middle" font-size="17" font-weight="900" fill="#94a3b8">4</text>
 
     <!-- ══ DIENTES ══ -->
     ${[...ODO_POSITIONS.Q1, ...ODO_POSITIONS.Q2].map(t => renderTooth(t, true)).join('')}
@@ -5237,8 +5259,8 @@ function imprimirOdontograma(pid) {
   const dientes = rec.dientes || {};
   const cfg = currentClinica || {};
 
-  const ACU = {cx:280, cy:128};
-  const ACL = {cx:280, cy:362};
+  const ACU = {cx:306, cy:158};
+  const ACL = {cx:306, cy:341};
   const tooth = (t, isUpper) => {
     const {num, x, y, rot, w, h} = t;
     const estado = (dientes[num]||{}).estado || 'sano';
@@ -5249,33 +5271,34 @@ function imprimirOdontograma(pid) {
     const numX = +(x + (dx/dist)*(h/2+11)).toFixed(1);
     const numY = +(y + (dy/dist)*(h/2+11)).toFixed(1);
     const icon = _getDienteIcon(estado);
+    const nColor = getNumColor(num);
     return `<g>
-      <rect transform="rotate(${rot},${x},${y})" x="${x-w/2}" y="${y-h/2}" width="${w}" height="${h}" rx="3.5"
+      <rect transform="rotate(${rot},${x},${y})" x="${x-w/2}" y="${y-h/2}" width="${w}" height="${h}" rx="5"
         fill="${e.color}" stroke="${e.border}" stroke-width="1.5"/>
-      <text x="${numX}" y="${numY}" text-anchor="middle" dominant-baseline="middle" font-size="8" font-weight="800" fill="#4b5563">${num}</text>
+      <rect transform="rotate(${rot},${x},${y})" x="${x-w/2+3}" y="${y-h/2+3}" width="${w-6}" height="${(h/2)-1}" rx="3"
+        fill="rgba(255,255,255,0.28)" stroke="none"/>
+      <text x="${numX}" y="${numY}" text-anchor="middle" dominant-baseline="middle" font-size="8.5" font-weight="800" fill="${nColor}">${num}</text>
       ${icon?`<text x="${x}" y="${y+1}" text-anchor="middle" dominant-baseline="middle" font-size="9" fill="${e.text}">${icon}</text>`:''}
     </g>`;
   };
 
-  const svg = `<svg viewBox="15 22 550 450" width="480" height="396" xmlns="http://www.w3.org/2000/svg">
-    <ellipse cx="280" cy="128" rx="168" ry="92" fill="#f8c4cf" opacity="0.65"/>
-    <ellipse cx="280" cy="128" rx="122" ry="65" fill="#f0a0ba" opacity="0.42"/>
-    <path d="M 46,48 C 40,252 520,252 514,48" fill="none" stroke="#f9a8b4" stroke-width="50" stroke-linecap="round" opacity="0.30"/>
-    <ellipse cx="280" cy="362" rx="168" ry="92" fill="#f8c4cf" opacity="0.65"/>
-    <ellipse cx="280" cy="362" rx="122" ry="65" fill="#f0a0ba" opacity="0.42"/>
-    <path d="M 46,442 C 40,238 520,238 514,442" fill="none" stroke="#f9a8b4" stroke-width="50" stroke-linecap="round" opacity="0.30"/>
-    <line x1="20" y1="245" x2="560" y2="245" stroke="#d1d5db" stroke-width="1" stroke-dasharray="6,4"/>
-    <line x1="280" y1="28" x2="280" y2="464" stroke="#d1d5db" stroke-width="1" stroke-dasharray="6,4"/>
-    <text x="165" y="136" text-anchor="middle" font-size="11" font-weight="700" fill="#9ca3af">Cuadrante</text>
-    <text x="165" y="153" text-anchor="middle" font-size="16" font-weight="900" fill="#9ca3af">1</text>
-    <text x="395" y="136" text-anchor="middle" font-size="11" font-weight="700" fill="#9ca3af">Cuadrante</text>
-    <text x="395" y="153" text-anchor="middle" font-size="16" font-weight="900" fill="#9ca3af">2</text>
-    <text x="395" y="370" text-anchor="middle" font-size="11" font-weight="700" fill="#9ca3af">Cuadrante</text>
-    <text x="395" y="387" text-anchor="middle" font-size="16" font-weight="900" fill="#9ca3af">3</text>
-    <text x="165" y="370" text-anchor="middle" font-size="11" font-weight="700" fill="#9ca3af">Cuadrante</text>
-    <text x="165" y="387" text-anchor="middle" font-size="16" font-weight="900" fill="#9ca3af">4</text>
-    <text x="280" y="34" text-anchor="middle" font-size="9" font-weight="700" fill="#9ca3af" letter-spacing="1.5">MAXILAR SUPERIOR</text>
-    <text x="280" y="472" text-anchor="middle" font-size="9" font-weight="700" fill="#9ca3af" letter-spacing="1.5">MAXILAR INFERIOR</text>
+  const svg = `<svg viewBox="12 40 588 430" width="500" height="366" xmlns="http://www.w3.org/2000/svg">
+    <path d="M 32,256 C 26,212 26,86 306,44 C 586,86 586,212 580,256 Z" fill="#f0b0c5" opacity="0.58"/>
+    <path d="M 58,256 C 52,215 52,100 306,60 C 560,100 560,215 554,256 Z" fill="#fcd8e4" opacity="0.60"/>
+    <path d="M 32,256 C 26,212 26,86 306,44 C 586,86 586,212 580,256" fill="none" stroke="#f9a8b4" stroke-width="44" stroke-linecap="butt" opacity="0.28"/>
+    <path d="M 32,258 C 26,302 26,428 306,470 C 586,428 586,302 580,258 Z" fill="#f0b0c5" opacity="0.58"/>
+    <path d="M 58,258 C 52,299 52,414 306,454 C 560,414 560,299 554,258 Z" fill="#fcd8e4" opacity="0.60"/>
+    <path d="M 32,258 C 26,302 26,428 306,470 C 586,428 586,302 580,258" fill="none" stroke="#f9a8b4" stroke-width="44" stroke-linecap="butt" opacity="0.28"/>
+    <line x1="12" y1="257" x2="600" y2="257" stroke="#9ca3af" stroke-width="1.5"/>
+    <line x1="306" y1="44" x2="306" y2="466" stroke="#9ca3af" stroke-width="1.2" stroke-dasharray="7,5"/>
+    <text x="162" y="165" text-anchor="middle" font-size="11" font-weight="700" fill="#9ca3af">Cuadrante</text>
+    <text x="162" y="183" text-anchor="middle" font-size="17" font-weight="900" fill="#9ca3af">1</text>
+    <text x="450" y="165" text-anchor="middle" font-size="11" font-weight="700" fill="#9ca3af">Cuadrante</text>
+    <text x="450" y="183" text-anchor="middle" font-size="17" font-weight="900" fill="#9ca3af">2</text>
+    <text x="450" y="336" text-anchor="middle" font-size="11" font-weight="700" fill="#9ca3af">Cuadrante</text>
+    <text x="450" y="354" text-anchor="middle" font-size="17" font-weight="900" fill="#9ca3af">3</text>
+    <text x="162" y="336" text-anchor="middle" font-size="11" font-weight="700" fill="#9ca3af">Cuadrante</text>
+    <text x="162" y="354" text-anchor="middle" font-size="17" font-weight="900" fill="#9ca3af">4</text>
     ${[...ODO_POSITIONS.Q1,...ODO_POSITIONS.Q2].map(t=>tooth(t,true)).join('')}
     ${[...ODO_POSITIONS.Q4,...ODO_POSITIONS.Q3].map(t=>tooth(t,false)).join('')}
   </svg>`;
