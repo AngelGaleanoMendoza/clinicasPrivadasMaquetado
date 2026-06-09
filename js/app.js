@@ -5624,37 +5624,42 @@ function renderProcedimientosView() {
     </div>
     <div class="card" style="margin-top:20px">
       <div class="card-header">
-        <h3>🦷 Odontogramas — por Cita</h3>
-        <div style="font-size:12px;color:var(--text-light)">Abre el odontograma del paciente vinculado a su cita · <strong>Adulto</strong> ≥18 años · <strong>Infantil</strong> ≤15 años</div>
+        <h3>🦷 Odontogramas</h3>
+        <div style="font-size:12px;color:var(--text-light)">Acceso rápido al odontograma de cualquier paciente</div>
       </div>
-      ${_buildOdoModulo()}
+      <div style="padding:12px 16px 4px">
+        <input id="odo-search-input" type="text" placeholder="Buscar paciente por nombre..." style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);font-size:13px;box-sizing:border-box" oninput="_renderOdoSearchResults()" />
+      </div>
+      <div id="odo-search-results">${_buildOdoSearchRows('')}</div>
     </div>`;
 }
 
-function _buildOdoModulo() {
-  const citas = [...C.c].sort((a,b) => b.fecha.localeCompare(a.fecha)).slice(0, 40);
-  if(!citas.length) return '<div class="empty-state"><div class="empty-icon">📅</div><p>Sin citas registradas</p></div>';
-  return `<div class="table-wrap"><table>
-    <thead><tr><th>Paciente</th><th>Fecha / Hora</th><th>Motivo</th><th>Estado cita</th><th>Tipo odo.</th><th>Acción</th></tr></thead>
-    <tbody>${citas.map(cita => {
-      const pac = C.p.find(x => x.id === cita.pacienteId);
-      if(!pac) return '';
-      const edad = _getEdadNum(pac.fechaNac);
-      const esInfantil = edad !== null && edad <= 15;
-      const tipoTag = esInfantil
-        ? '<span style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:10px;font-size:10px;font-weight:700;padding:2px 7px">Infantil</span>'
-        : '<span style="background:#dbeafe;color:#1e40af;border:1px solid #93c5fd;border-radius:10px;font-size:10px;font-weight:700;padding:2px 7px">Adulto</span>';
-      return `<tr>
-        <td><a href="#" onclick="navigate('paciente-detalle',${pac.id});return false" style="color:var(--primary);font-weight:600">${pac.nombre} ${pac.apellidos}</a></td>
-        <td style="white-space:nowrap">${formatFecha(cita.fecha)} ${cita.hora}</td>
-        <td>${cita.motivo}</td>
-        <td>${estadoTag(cita.estado)}</td>
-        <td>${tipoTag}</td>
-        <td><button class="btn btn-sm" style="background:linear-gradient(135deg,#0891b2,#0e7490);color:#fff;font-size:11px;white-space:nowrap"
-            onclick="abrirModalOdontograma(${pac.id})">🦷 Odontograma</button></td>
-      </tr>`;
-    }).join('')}</tbody>
-  </table></div>`;
+function _buildOdoSearchRows(q) {
+  const term = (q||'').toLowerCase().trim();
+  let pacs = [...C.p].sort((a,b) => b.id - a.id);
+  if(term) pacs = pacs.filter(p => (p.nombre+' '+p.apellidos).toLowerCase().includes(term));
+  pacs = pacs.slice(0, 10);
+  if(!pacs.length) return '<div class="empty-state" style="padding:20px"><div class="empty-icon">🔍</div><p>Sin pacientes encontrados</p></div>';
+  return pacs.map(pac => {
+    const edad = _getEdadNum(pac.fechaNac);
+    const esInfantil = edad !== null && edad <= 15;
+    const tipoTag = esInfantil
+      ? '<span style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:10px;font-size:10px;font-weight:700;padding:2px 7px">Infantil</span>'
+      : '<span style="background:#dbeafe;color:#1e40af;border:1px solid #93c5fd;border-radius:10px;font-size:10px;font-weight:700;padding:2px 7px">Adulto</span>';
+    return `<div style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--border)">
+      <div style="width:34px;height:34px;border-radius:8px;background:${colAvatar(pac.id)};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;flex-shrink:0">${ini(pac.nombre,pac.apellidos)}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:13px">${pac.nombre} ${pac.apellidos}</div>
+        <div style="font-size:11px;color:var(--text-light);margin-top:2px">${edad!=null?edad+' años':'—'} &nbsp;${tipoTag}</div>
+      </div>
+      <button class="btn btn-sm" style="background:linear-gradient(135deg,#0891b2,#0e7490);color:#fff;font-size:11px;white-space:nowrap;flex-shrink:0" onclick="abrirModalOdontograma(${pac.id})">🦷 Ver odontograma</button>
+    </div>`;
+  }).join('');
+}
+function _renderOdoSearchResults() {
+  const q = document.getElementById('odo-search-input')?.value || '';
+  const el = document.getElementById('odo-search-results');
+  if(el) el.innerHTML = _buildOdoSearchRows(q);
 }
 
 function renderProcedimientosTab(pid) {
