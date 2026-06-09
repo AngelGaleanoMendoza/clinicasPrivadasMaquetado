@@ -1162,7 +1162,7 @@ function renderPacientesList(lista){
     <td>${x.identificacion||'—'}</td><td>${calcEdad(x.fechaNac)}</td><td>${x.telefono||'—'}</td>
     <td>${estadoTag(x.estado||'activo')}</td>
     <td><div class="actions-cell">
-      <button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;white-space:nowrap" onclick="registrarAcudidoPaciente(${x.id})">✅ Acudió</button>
+      <button class="btn btn-sm btn-acudio" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff" onclick="registrarAcudidoPaciente(${x.id})">✅ <span class="acudio-text">Acudió</span></button>
       <button class="btn btn-secondary btn-sm" onclick="navigate('paciente-detalle',${x.id})">👁️</button>
       <button class="btn btn-secondary btn-sm" onclick="openModalPaciente(${x.id})">✏️</button>
       <button class="btn btn-danger btn-sm" onclick="eliminarPaciente(${x.id})">🗑️</button>

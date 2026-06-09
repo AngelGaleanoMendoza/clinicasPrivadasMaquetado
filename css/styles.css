@@ -589,6 +589,14 @@ body.dark .fact-item-row input,body.dark .fact-item-row select{background:#0F172
   /* ── PACIENTES / EXPEDIENTES ── */
   #view-pacientes .search-bar{flex-direction:column;align-items:stretch}
   .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  /* Ocultar col Identificación para que quepan las acciones */
+  #view-pacientes .table-wrap thead th:nth-child(3),
+  #view-pacientes .table-wrap tbody td:nth-child(3){display:none}
+  /* Botón Acudió: solo emoji en móvil */
+  .acudio-text{display:none}
+  /* Acciones compactas, sin wrap */
+  #view-pacientes .actions-cell{gap:3px;flex-wrap:nowrap}
+  #view-pacientes .actions-cell .btn-sm{padding:5px 7px}
 
   /* ── CITAS / AGENDAS ── */
   #view-citas .card-header{flex-wrap:wrap;gap:8px}
@@ -767,6 +775,10 @@ body.dark .fact-item-row input,body.dark .fact-item-row select{background:#0F172
   .atendido-time{min-width:44px;font-size:12px}
   .sa-agenda-time{min-width:36px;font-size:11px}
   .patient-detail-header{gap:8px}
+
+  /* Pacientes 360px: ocultar N° Expediente también, solo Paciente + Acciones */
+  #view-pacientes .table-wrap thead th:nth-child(2),
+  #view-pacientes .table-wrap tbody td:nth-child(2){display:none}
 
   /* Login */
   .login-card{width:92vw;padding:0 4px}
