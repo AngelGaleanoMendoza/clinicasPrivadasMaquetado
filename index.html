@@ -780,13 +780,10 @@
           <div class="card">
             <div class="card-header">
               <h3>🔄 Transacciones</h3>
-              <div style="display:flex;gap:8px;align-items:center">
-                <div class="filter-chips">
-                  <span class="chip active" onclick="setFinTipo('',this)">Todas</span>
-                  <span class="chip" onclick="setFinTipo('ingreso',this)">💰 Ingresos</span>
-                  <span class="chip" onclick="setFinTipo('egreso',this)">📤 Gastos</span>
-                </div>
-                <button class="btn btn-secondary btn-sm" onclick="openModalTransaccion('egreso')">📤 Gasto</button>
+              <div class="filter-chips">
+                <span class="chip active" onclick="setFinTipo('',this)">Todas</span>
+                <span class="chip" onclick="setFinTipo('ingreso',this)">💰 Ingresos</span>
+                <span class="chip" onclick="setFinTipo('egreso',this)">📤 Gastos</span>
               </div>
             </div>
             <div id="fin-trans-list"></div>
@@ -1922,7 +1919,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260609r"></script>
+<script src="js/app.js?v=20260609s"></script>
 </body>
 </html>
 
