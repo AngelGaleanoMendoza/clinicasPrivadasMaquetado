@@ -5007,130 +5007,189 @@ function _getDienteIcon(estado) {
   return '';
 }
 
-function renderOdontograma(pid) {
-  const el = document.getElementById('tab-odontograma');
-  if(!el) return;
-  const existing = C.odo.find(x => x.pacienteId === pid) || { dientes:{}, observaciones:'' };
-  _odoData = JSON.parse(JSON.stringify({ dientes: existing.dientes||{}, observaciones: existing.observaciones||'' }));
+let _odoSuperficieActiva = 'all';
 
+function renderOdontograma(pid) {
+  const elTab = document.getElementById('tab-odontograma');
+  if(!elTab) return;
+  const existing = C.odo.find(x => x.pacienteId === pid) || { dientes:{}, observaciones:'' };
+  const dientes = existing.dientes || {};
   const counts = {};
-  Object.values(_odoData.dientes).forEach(d => {
-    if(d.estado && d.estado !== 'sano') counts[d.estado] = (counts[d.estado]||0)+1;
+  Object.values(dientes).forEach(tooth => {
+    ['v','l','m','d','o'].forEach(s => {
+      const est = tooth[s] || (tooth.estado || 'sano');
+      if(est !== 'sano') counts[est] = (counts[est]||0)+1;
+    });
   });
   const badges = ESTADOS_DIENTE.filter(e => e.key !== 'sano' && counts[e.key])
     .map(e => `<span style="padding:3px 10px;border-radius:12px;background:${e.color};border:1.5px solid ${e.border};font-size:11px;font-weight:700;color:${e.text}">${e.label}: ${counts[e.key]}</span>`)
     .join('');
-
-  el.innerHTML = `<div class="card">
+  elTab.innerHTML = `<div class="card">
     <div class="card-header">
-      <h3>🗺️ Odontograma</h3>
-      <button class="btn btn-primary btn-sm" onclick="abrirModalOdontograma(${pid})">🦷 Editar Odontograma</button>
+      <h3>🦷 Odontograma</h3>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary btn-sm" onclick="imprimirOdontograma(${pid})">🖨️ Imprimir</button>
+        <button class="btn btn-primary btn-sm" onclick="abrirModalOdontograma(${pid})">✏️ Editar</button>
+      </div>
     </div>
     <div style="padding:12px 16px">
       ${badges
         ? `<div style="display:flex;flex-wrap:wrap;gap:6px">${badges}</div>`
-        : `<p style="color:var(--text-light);font-size:13px;margin:0">Sin registro — haz clic en "Editar Odontograma" para iniciar.</p>`}
+        : `<p style="color:var(--text-light);font-size:13px;margin:0">Sin registro — haz clic en "Editar" para iniciar.</p>`}
     </div>
   </div>`;
+}
+
+function _migrateOdoData(raw) {
+  const result = {};
+  Object.entries(raw || {}).forEach(([k, val]) => {
+    if(!val) return;
+    if(val.estado !== undefined && val.v === undefined) {
+      result[k] = { v:val.estado, l:'sano', m:'sano', d:'sano', o:'sano' };
+    } else {
+      result[k] = { v:val.v||'sano', l:val.l||'sano', m:val.m||'sano', d:val.d||'sano', o:val.o||'sano' };
+    }
+  });
+  return result;
 }
 
 function abrirModalOdontograma(pid) {
   _odoCurrentPid = pid;
   const existing = C.odo.find(x => x.pacienteId === pid) || { dientes:{}, observaciones:'' };
-  _odoData = JSON.parse(JSON.stringify({ dientes: existing.dientes||{}, observaciones: existing.observaciones||'' }));
+  _odoData = JSON.parse(JSON.stringify({
+    dientes: _migrateOdoData(existing.dientes),
+    observaciones: existing.observaciones || ''
+  }));
   _odoEstadoActivo = 'sano';
+  _odoSuperficieActiva = 'all';
 
   const bar = document.getElementById('odo-estados-bar');
   if(bar) bar.innerHTML = ESTADOS_DIENTE.map(e => `
     <button id="odo-btn-${e.key}" onclick="setEstadoActivo('${e.key}')"
-      style="padding:4px 10px;border-radius:16px;border:2px solid ${e.border};background:${e.color};color:${e.text};
-             font-size:11px;font-weight:700;cursor:pointer;transition:box-shadow .12s;
+      style="padding:4px 9px;border-radius:14px;border:2px solid ${e.border};background:${e.color};color:${e.text};
+             font-size:10px;font-weight:700;cursor:pointer;transition:box-shadow .12s;
              ${e.key==='sano'?'box-shadow:0 0 0 3px var(--primary)':''}">
       ${e.label}
     </button>`).join('');
 
   const obsEl = document.getElementById('odo-obs');
   if(obsEl) obsEl.value = _odoData.observaciones || '';
-
   renderArcoOdontograma();
   openModalOverlay('modal-odontograma');
+}
+
+function renderToothSketch(num, isUpper) {
+  const t = num % 10;
+  const sp = {
+    1:[10,8,1,13,false], 2:[8,7,1,12,false], 3:[7,10,1,15,true],
+    4:[10,9,2,11,false],  5:[10,9,2,10,false],
+    6:[15,10,3,10,false], 7:[14,10,3,9,false], 8:[13,9,2,8,false]
+  };
+  const [cw, ch, rn, rl, isCanine] = sp[t] || sp[6];
+  const svgW = cw + 8, svgH = ch + rl + 4;
+  const cx = svgW / 2;
+  const crownY  = isUpper ? (svgH - ch - 2) : 2;
+  const rootStY = isUpper ? crownY : (crownY + ch);
+  const rootEdY = isUpper ? (rootStY - rl) : (rootStY + rl);
+  const occlY   = isUpper ? (crownY + ch) : crownY;
+  const cDir    = isUpper ? 1 : -1;
+
+  let crown = '';
+  if(isCanine) {
+    crown = `<path d="M ${cx-cw/2},${crownY+ch} L ${cx},${crownY} L ${cx+cw/2},${crownY+ch} Z" fill="none" stroke="#94a3b8" stroke-width="1.2" stroke-linejoin="round"/>`;
+  } else {
+    crown = `<rect x="${cx-cw/2}" y="${crownY}" width="${cw}" height="${ch}" rx="2.5" fill="none" stroke="#94a3b8" stroke-width="1.2"/>`;
+    if(t >= 6) {
+      const s = cw/3;
+      crown += [`M ${cx-cw/2},${occlY} Q ${cx-cw/2+s*0.5},${occlY+cDir*4} ${cx-cw/2+s},${occlY}`,
+                `M ${cx-cw/2+s},${occlY} Q ${cx-cw/2+s*1.5},${occlY+cDir*4} ${cx-cw/2+s*2},${occlY}`,
+                `M ${cx-cw/2+s*2},${occlY} Q ${cx-cw/2+s*2.5},${occlY+cDir*4} ${cx+cw/2},${occlY}`]
+        .map(d => `<path d="${d}" fill="none" stroke="#94a3b8" stroke-width="0.8"/>`).join('');
+    } else if(t === 4 || t === 5) {
+      crown += `<path d="M ${cx-2.5},${occlY} Q ${cx},${occlY+cDir*4} ${cx+2.5},${occlY}" fill="none" stroke="#94a3b8" stroke-width="0.8"/>`;
+    }
+  }
+
+  let roots = '';
+  if(rn === 1) {
+    const rw = cw*0.18;
+    roots = `<line x1="${cx-rw}" y1="${rootStY}" x2="${cx-rw/1.5}" y2="${rootEdY}" stroke="#94a3b8" stroke-width="1.1"/>
+             <line x1="${cx+rw}" y1="${rootStY}" x2="${cx+rw/1.5}" y2="${rootEdY}" stroke="#94a3b8" stroke-width="1.1"/>`;
+  } else if(rn === 2) {
+    const o = cw*0.22;
+    roots = `<line x1="${cx-o}" y1="${rootStY}" x2="${cx-o-1}" y2="${rootEdY}" stroke="#94a3b8" stroke-width="1.1"/>
+             <line x1="${cx+o}" y1="${rootStY}" x2="${cx+o+1}" y2="${rootEdY}" stroke="#94a3b8" stroke-width="1.1"/>`;
+  } else {
+    const o = cw*0.3;
+    roots = `<line x1="${cx-o}" y1="${rootStY}" x2="${cx-o-2}" y2="${rootEdY}" stroke="#94a3b8" stroke-width="1.1"/>
+             <line x1="${cx}" y1="${rootStY}" x2="${cx}" y2="${rootEdY+cDir*3}" stroke="#94a3b8" stroke-width="1.1"/>
+             <line x1="${cx+o}" y1="${rootStY}" x2="${cx+o+2}" y2="${rootEdY}" stroke="#94a3b8" stroke-width="1.1"/>`;
+  }
+  return `<svg width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}" style="display:block">${crown}${roots}</svg>`;
+}
+
+function _renderCirculo(num) {
+  const tooth = _odoData.dientes[num] || {};
+  const gs = s => { const k=tooth[s]||(tooth.estado&&s==='v'?tooth.estado:'sano'); return ESTADOS_DIENTE.find(x=>x.key===k)||ESTADOS_DIENTE[0]; };
+  const R=13, IR=5.8, D=+(R*0.7071).toFixed(2);
+  const ev=gs('v'), el=gs('l'), em=gs('m'), ed=gs('d'), eo=gs('o');
+  return `<svg width="28" height="28" viewBox="-14 -14 28 28" style="display:block;cursor:pointer;overflow:visible">
+    <path d="M 0,0 L -${D},-${D} A ${R},${R} 0 0,1 ${D},-${D} Z" data-surf="v" fill="${ev.color}" stroke="${ev.border}" stroke-width="0.6" onclick="clickSuperficie(${num},'v')"/>
+    <path d="M 0,0 L ${D},-${D} A ${R},${R} 0 0,1 ${D},${D} Z"  data-surf="d" fill="${ed.color}" stroke="${ed.border}" stroke-width="0.6" onclick="clickSuperficie(${num},'d')"/>
+    <path d="M 0,0 L ${D},${D} A ${R},${R} 0 0,1 -${D},${D} Z"  data-surf="l" fill="${el.color}" stroke="${el.border}" stroke-width="0.6" onclick="clickSuperficie(${num},'l')"/>
+    <path d="M 0,0 L -${D},${D} A ${R},${R} 0 0,1 -${D},-${D} Z" data-surf="m" fill="${em.color}" stroke="${em.border}" stroke-width="0.6" onclick="clickSuperficie(${num},'m')"/>
+    <ellipse rx="${IR}" ry="${IR-1.2}" data-surf="o" fill="${eo.color}" stroke="${eo.border}" stroke-width="0.6" onclick="clickSuperficie(${num},'o')"/>
+    <circle r="${R}" fill="none" stroke="#374151" stroke-width="1.2"/>
+  </svg>`;
 }
 
 function renderArcoOdontograma() {
   const container = document.getElementById('odo-arco-container');
   if(!container) return;
+  const upper = [...ODO_POSITIONS.Q1, ...ODO_POSITIONS.Q2];
+  const lower = [...ODO_POSITIONS.Q4, ...ODO_POSITIONS.Q3];
+  const tdS = 'padding:1px 2px;text-align:center;vertical-align:middle';
 
-  // centros del arco para calcular dirección de número exterior
-  const ACU = {cx:306, cy:158};
-  const ACL = {cx:306, cy:341};
+  const cell = (num, isUpper) => `<td style="${tdS}">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:1px">
+      ${isUpper ? renderToothSketch(num, true) : ''}
+      <div id="odo-circle-${num}" style="line-height:0">${_renderCirculo(num)}</div>
+      ${!isUpper ? renderToothSketch(num, false) : ''}
+      <span style="font-size:8px;font-weight:800;color:${getNumColor(num)};line-height:1.1">${num}</span>
+    </div>
+  </td>`;
 
-  const renderTooth = (tooth, isUpper) => {
-    const {num, x, y, rot, w, h} = tooth;
-    const d = _odoData.dientes[num] || {};
-    const estado = d.estado || 'sano';
-    const e = ESTADOS_DIENTE.find(s => s.key === estado) || ESTADOS_DIENTE[0];
-    const ac = isUpper ? ACU : ACL;
-    const dx = x - ac.cx, dy = y - ac.cy;
-    const dist = Math.sqrt(dx*dx + dy*dy) || 1;
-    const nx = dx/dist, ny = dy/dist;
-    const numX = +(x + nx*(h/2+11)).toFixed(1);
-    const numY = +(y + ny*(h/2+11)).toFixed(1);
-    const icon = _getDienteIcon(estado);
-    const nColor = getNumColor(num);
-    return `<g id="odo-g-${num}" onclick="clickDiente(${num})" style="cursor:pointer">
-      <rect transform="rotate(${rot},${x},${y})" x="${x-w/2}" y="${y-h/2}" width="${w}" height="${h}" rx="5"
-        fill="${e.color}" stroke="${e.border}" stroke-width="1.8"
-        onmouseover="this.setAttribute('stroke-width','3')" onmouseout="this.setAttribute('stroke-width','1.8')"/>
-      <rect transform="rotate(${rot},${x},${y})" x="${x-w/2+3}" y="${y-h/2+3}" width="${w-6}" height="${(h/2)-1}" rx="3"
-        fill="rgba(255,255,255,0.28)" stroke="none" pointer-events="none"/>
-      <text id="odo-num-${num}" x="${numX}" y="${numY}" text-anchor="middle" dominant-baseline="middle"
-        font-size="8.5" font-weight="800" fill="${nColor}" pointer-events="none">${num}</text>
-      <text id="odo-ico-${num}" x="${x}" y="${y+1}" text-anchor="middle" dominant-baseline="middle"
-        font-size="9" fill="${e.text}" pointer-events="none">${icon}</text>
-    </g>`;
-  };
+  const SURFS=[{k:'all',l:'Todas'},{k:'v',l:'Vest.'},{k:'o',l:'Ocl.'},{k:'l',l:'Ling.'},{k:'m',l:'Mes.'},{k:'d',l:'Dist.'}];
+  const surfBar = SURFS.map(s=>`<button id="odo-surf-${s.k}" onclick="setSuperficieActiva('${s.k}')"
+    style="padding:3px 8px;border-radius:12px;border:1.5px solid var(--border);background:${s.k==='all'?'var(--primary)':'var(--card)'};
+           color:${s.k==='all'?'#fff':'var(--text)'};font-size:10px;font-weight:700;cursor:pointer">${s.l}</button>`).join('');
 
   container.innerHTML = `
-  <svg viewBox="12 40 588 430" width="100%" style="max-width:580px;display:block;margin:0 auto;min-width:290px">
-
-    <!-- ══ PALADAR SUPERIOR (forma D invertida: curva arriba, plano abajo) ══ -->
-    <path d="M 32,256 C 26,212 26,86 306,44 C 586,86 586,212 580,256 Z"
-      fill="#f0b0c5" opacity="0.58"/>
-    <path d="M 58,256 C 52,215 52,100 306,60 C 560,100 560,215 554,256 Z"
-      fill="#fcd8e4" opacity="0.60"/>
-
-    <!-- ══ ENCÍA SUPERIOR (banda exterior tras dientes) ══ -->
-    <path d="M 32,256 C 26,212 26,86 306,44 C 586,86 586,212 580,256"
-      fill="none" stroke="#f9a8b4" stroke-width="44" stroke-linecap="butt" opacity="0.28"/>
-
-    <!-- ══ ALVEOLAR INFERIOR (forma D: plano arriba, curva abajo) ══ -->
-    <path d="M 32,258 C 26,302 26,428 306,470 C 586,428 586,302 580,258 Z"
-      fill="#f0b0c5" opacity="0.58"/>
-    <path d="M 58,258 C 52,299 52,414 306,454 C 560,414 560,299 554,258 Z"
-      fill="#fcd8e4" opacity="0.60"/>
-
-    <!-- ══ ENCÍA INFERIOR ══ -->
-    <path d="M 32,258 C 26,302 26,428 306,470 C 586,428 586,302 580,258"
-      fill="none" stroke="#f9a8b4" stroke-width="44" stroke-linecap="butt" opacity="0.28"/>
-
-    <!-- ══ LÍNEAS MEDIAS ══ -->
-    <line x1="12" y1="257" x2="600" y2="257" stroke="#9ca3af" stroke-width="1.5"/>
-    <line x1="306" y1="44" x2="306" y2="466" stroke="#6b7280" stroke-width="1.2" stroke-dasharray="7,5"/>
-
-    <!-- ══ ETIQUETAS CUADRANTES ══ -->
-    <text x="162" y="165" text-anchor="middle" font-size="11" font-weight="700" fill="#94a3b8">Cuadrante</text>
-    <text x="162" y="183" text-anchor="middle" font-size="17" font-weight="900" fill="#94a3b8">1</text>
-    <text x="450" y="165" text-anchor="middle" font-size="11" font-weight="700" fill="#94a3b8">Cuadrante</text>
-    <text x="450" y="183" text-anchor="middle" font-size="17" font-weight="900" fill="#94a3b8">2</text>
-    <text x="450" y="336" text-anchor="middle" font-size="11" font-weight="700" fill="#94a3b8">Cuadrante</text>
-    <text x="450" y="354" text-anchor="middle" font-size="17" font-weight="900" fill="#94a3b8">3</text>
-    <text x="162" y="336" text-anchor="middle" font-size="11" font-weight="700" fill="#94a3b8">Cuadrante</text>
-    <text x="162" y="354" text-anchor="middle" font-size="17" font-weight="900" fill="#94a3b8">4</text>
-
-    <!-- ══ DIENTES ══ -->
-    ${[...ODO_POSITIONS.Q1, ...ODO_POSITIONS.Q2].map(t => renderTooth(t, true)).join('')}
-    ${[...ODO_POSITIONS.Q4, ...ODO_POSITIONS.Q3].map(t => renderTooth(t, false)).join('')}
-  </svg>`;
+  <div style="margin-bottom:8px">
+    <span style="font-size:11px;color:var(--text-light);margin-right:6px;font-weight:600">Superficie:</span>
+    <span style="display:inline-flex;flex-wrap:wrap;gap:4px">${surfBar}</span>
+  </div>
+  <div style="overflow-x:auto">
+    <table style="border-collapse:collapse;margin:0 auto">
+      <tr>
+        <td colspan="8" style="padding:2px 4px;font-size:9px;font-weight:700;color:#6b7280;text-align:right;white-space:nowrap">Superior Derecho ▸</td>
+        <td colspan="8" style="padding:2px 4px;font-size:9px;font-weight:700;color:#6b7280;white-space:nowrap">◂ Superior Izquierda</td>
+      </tr>
+      <tr>${upper.map(t=>cell(t.num,true)).join('')}</tr>
+      <tr><td colspan="16" style="padding:2px 0"><hr style="border:none;border-top:1.8px solid #374151;margin:0"/></td></tr>
+      <tr>${lower.map(t=>cell(t.num,false)).join('')}</tr>
+      <tr>
+        <td colspan="8" style="padding:2px 4px;font-size:9px;font-weight:700;color:#6b7280;text-align:right;white-space:nowrap">Inferior Derecho ▸</td>
+        <td colspan="8" style="padding:2px 4px;font-size:9px;font-weight:700;color:#6b7280;white-space:nowrap">◂ Inferior Izquierda</td>
+      </tr>
+    </table>
+  </div>
+  <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:5px">
+    ${ESTADOS_DIENTE.map(e=>`<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px">
+      <span style="width:10px;height:10px;border-radius:2px;background:${e.color};border:1px solid ${e.border};flex-shrink:0;display:inline-block"></span>
+      <span style="color:var(--text-light)">${e.label}</span>
+    </span>`).join('')}
+  </div>`;
 }
 
 function setEstadoActivo(key) {
@@ -5141,17 +5200,29 @@ function setEstadoActivo(key) {
   });
 }
 
-function clickDiente(num) {
-  if(!_odoData.dientes) _odoData.dientes = {};
-  _odoData.dientes[num] = { ...(_odoData.dientes[num]||{}), estado: _odoEstadoActivo };
-  const g = document.getElementById('odo-g-'+num);
-  if(!g) return;
-  const e = ESTADOS_DIENTE.find(x => x.key===_odoEstadoActivo) || ESTADOS_DIENTE[0];
-  const rect = g.querySelector('rect');
-  if(rect) { rect.setAttribute('fill', e.color); rect.setAttribute('stroke', e.border); }
-  const ico = document.getElementById('odo-ico-'+num);
-  if(ico) { ico.setAttribute('fill', e.text); ico.textContent = _getDienteIcon(_odoEstadoActivo); }
+function setSuperficieActiva(key) {
+  _odoSuperficieActiva = key;
+  ['all','v','o','l','m','d'].forEach(k => {
+    const btn = document.getElementById('odo-surf-'+k);
+    if(!btn) return;
+    btn.style.background = k===key ? 'var(--primary)' : 'var(--card)';
+    btn.style.color = k===key ? '#fff' : 'var(--text)';
+  });
 }
+
+function clickSuperficie(num, clickedSurf) {
+  if(!_odoData.dientes) _odoData.dientes = {};
+  if(!_odoData.dientes[num]) _odoData.dientes[num] = {};
+  const s = _odoSuperficieActiva === 'all' ? clickedSurf : _odoSuperficieActiva;
+  _odoData.dientes[num][s] = _odoEstadoActivo;
+  const circleEl = document.getElementById('odo-circle-'+num);
+  if(!circleEl) return;
+  const e = ESTADOS_DIENTE.find(x => x.key===_odoEstadoActivo) || ESTADOS_DIENTE[0];
+  const sec = circleEl.querySelector(`[data-surf="${s}"]`);
+  if(sec) { sec.setAttribute('fill', e.color); sec.setAttribute('stroke', e.border); }
+}
+
+function clickDiente(num) { clickSuperficie(num, 'o'); }
 
 async function guardarOdontograma() {
   const pid = _odoCurrentPid;
@@ -5254,73 +5325,68 @@ async function guardarPeriodontograma(pid) {
 
 // ════════════════════ ODONTOLOGÍA — IMPRESIÓN ════════════════════
 function imprimirOdontograma(pid) {
-  const p   = C.p.find(x => x.id === pid);
+  const p = C.p.find(x => x.id === pid);
   const rec = C.odo.find(x => x.pacienteId === pid) || { dientes:{}, observaciones:'' };
-  const dientes = rec.dientes || {};
+  const dientes = _migrateOdoData(rec.dientes);
   const cfg = currentClinica || {};
 
-  const ACU = {cx:306, cy:158};
-  const ACL = {cx:306, cy:341};
-  const tooth = (t, isUpper) => {
-    const {num, x, y, rot, w, h} = t;
-    const estado = (dientes[num]||{}).estado || 'sano';
-    const e = ESTADOS_DIENTE.find(s => s.key === estado) || ESTADOS_DIENTE[0];
-    const ac = isUpper ? ACU : ACL;
-    const dx = x - ac.cx, dy = y - ac.cy;
-    const dist = Math.sqrt(dx*dx+dy*dy) || 1;
-    const numX = +(x + (dx/dist)*(h/2+11)).toFixed(1);
-    const numY = +(y + (dy/dist)*(h/2+11)).toFixed(1);
-    const icon = _getDienteIcon(estado);
-    const nColor = getNumColor(num);
-    return `<g>
-      <rect transform="rotate(${rot},${x},${y})" x="${x-w/2}" y="${y-h/2}" width="${w}" height="${h}" rx="5"
-        fill="${e.color}" stroke="${e.border}" stroke-width="1.5"/>
-      <rect transform="rotate(${rot},${x},${y})" x="${x-w/2+3}" y="${y-h/2+3}" width="${w-6}" height="${(h/2)-1}" rx="3"
-        fill="rgba(255,255,255,0.28)" stroke="none"/>
-      <text x="${numX}" y="${numY}" text-anchor="middle" dominant-baseline="middle" font-size="8.5" font-weight="800" fill="${nColor}">${num}</text>
-      ${icon?`<text x="${x}" y="${y+1}" text-anchor="middle" dominant-baseline="middle" font-size="9" fill="${e.text}">${icon}</text>`:''}
-    </g>`;
+  const R=13, IR=5.8, D=+(R*0.7071).toFixed(2);
+  const gs = (num, s) => {
+    const tooth = dientes[num] || {};
+    const k = tooth[s] || (tooth.estado && s==='v' ? tooth.estado : 'sano');
+    return ESTADOS_DIENTE.find(x=>x.key===k) || ESTADOS_DIENTE[0];
   };
 
-  const svg = `<svg viewBox="12 40 588 430" width="500" height="366" xmlns="http://www.w3.org/2000/svg">
-    <path d="M 32,256 C 26,212 26,86 306,44 C 586,86 586,212 580,256 Z" fill="#f0b0c5" opacity="0.58"/>
-    <path d="M 58,256 C 52,215 52,100 306,60 C 560,100 560,215 554,256 Z" fill="#fcd8e4" opacity="0.60"/>
-    <path d="M 32,256 C 26,212 26,86 306,44 C 586,86 586,212 580,256" fill="none" stroke="#f9a8b4" stroke-width="44" stroke-linecap="butt" opacity="0.28"/>
-    <path d="M 32,258 C 26,302 26,428 306,470 C 586,428 586,302 580,258 Z" fill="#f0b0c5" opacity="0.58"/>
-    <path d="M 58,258 C 52,299 52,414 306,454 C 560,414 560,299 554,258 Z" fill="#fcd8e4" opacity="0.60"/>
-    <path d="M 32,258 C 26,302 26,428 306,470 C 586,428 586,302 580,258" fill="none" stroke="#f9a8b4" stroke-width="44" stroke-linecap="butt" opacity="0.28"/>
-    <line x1="12" y1="257" x2="600" y2="257" stroke="#9ca3af" stroke-width="1.5"/>
-    <line x1="306" y1="44" x2="306" y2="466" stroke="#9ca3af" stroke-width="1.2" stroke-dasharray="7,5"/>
-    <text x="162" y="165" text-anchor="middle" font-size="11" font-weight="700" fill="#9ca3af">Cuadrante</text>
-    <text x="162" y="183" text-anchor="middle" font-size="17" font-weight="900" fill="#9ca3af">1</text>
-    <text x="450" y="165" text-anchor="middle" font-size="11" font-weight="700" fill="#9ca3af">Cuadrante</text>
-    <text x="450" y="183" text-anchor="middle" font-size="17" font-weight="900" fill="#9ca3af">2</text>
-    <text x="450" y="336" text-anchor="middle" font-size="11" font-weight="700" fill="#9ca3af">Cuadrante</text>
-    <text x="450" y="354" text-anchor="middle" font-size="17" font-weight="900" fill="#9ca3af">3</text>
-    <text x="162" y="336" text-anchor="middle" font-size="11" font-weight="700" fill="#9ca3af">Cuadrante</text>
-    <text x="162" y="354" text-anchor="middle" font-size="17" font-weight="900" fill="#9ca3af">4</text>
-    ${[...ODO_POSITIONS.Q1,...ODO_POSITIONS.Q2].map(t=>tooth(t,true)).join('')}
-    ${[...ODO_POSITIONS.Q4,...ODO_POSITIONS.Q3].map(t=>tooth(t,false)).join('')}
-  </svg>`;
+  const printCircle = (num) => {
+    const ev=gs(num,'v'), el=gs(num,'l'), em=gs(num,'m'), ed=gs(num,'d'), eo=gs(num,'o');
+    return `<td style="padding:1px 2px;text-align:center;vertical-align:middle">
+      <svg width="26" height="26" viewBox="-13 -13 26 26" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 0,0 L -${D},-${D} A ${R},${R} 0 0,1 ${D},-${D} Z" fill="${ev.color}" stroke="${ev.border}" stroke-width="0.6"/>
+        <path d="M 0,0 L ${D},-${D} A ${R},${R} 0 0,1 ${D},${D} Z"  fill="${ed.color}" stroke="${ed.border}" stroke-width="0.6"/>
+        <path d="M 0,0 L ${D},${D} A ${R},${R} 0 0,1 -${D},${D} Z"  fill="${el.color}" stroke="${el.border}" stroke-width="0.6"/>
+        <path d="M 0,0 L -${D},${D} A ${R},${R} 0 0,1 -${D},-${D} Z" fill="${em.color}" stroke="${em.border}" stroke-width="0.6"/>
+        <ellipse rx="${IR}" ry="${IR-1.2}" fill="${eo.color}" stroke="${eo.border}" stroke-width="0.6"/>
+        <circle r="${R}" fill="none" stroke="#374151" stroke-width="1.2"/>
+      </svg>
+      <div style="font-size:7px;font-weight:800;color:${getNumColor(num)};line-height:1.2">${num}</div>
+    </td>`;
+  };
+
+  const upper = [...ODO_POSITIONS.Q1,...ODO_POSITIONS.Q2];
+  const lower = [...ODO_POSITIONS.Q4,...ODO_POSITIONS.Q3];
+
+  const table = `<table style="border-collapse:collapse;margin:0 auto">
+    <tr>
+      <td colspan="8" style="padding:2px 4px;font-size:9px;font-weight:700;color:#6b7280;text-align:right">Superior Derecho ▸</td>
+      <td colspan="8" style="padding:2px 4px;font-size:9px;font-weight:700;color:#6b7280">◂ Superior Izquierda</td>
+    </tr>
+    <tr>${upper.map(t=>printCircle(t.num)).join('')}</tr>
+    <tr><td colspan="16" style="padding:2px 0"><hr style="border:none;border-top:1.8px solid #374151;margin:0"/></td></tr>
+    <tr>${lower.map(t=>printCircle(t.num)).join('')}</tr>
+    <tr>
+      <td colspan="8" style="padding:2px 4px;font-size:9px;font-weight:700;color:#6b7280;text-align:right">Inferior Derecho ▸</td>
+      <td colspan="8" style="padding:2px 4px;font-size:9px;font-weight:700;color:#6b7280">◂ Inferior Izquierda</td>
+    </tr>
+  </table>`;
 
   const legend = ESTADOS_DIENTE.map(e =>
     `<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 8px 4px 0">
-      <span style="width:12px;height:12px;border-radius:3px;background:${e.color};border:1.5px solid ${e.border};display:inline-block;flex-shrink:0"></span>
-      <span style="font-size:11px;color:#374151">${e.label}</span>
+      <span style="width:11px;height:11px;border-radius:2px;background:${e.color};border:1px solid ${e.border};display:inline-block;flex-shrink:0"></span>
+      <span style="font-size:10px;color:#374151">${e.label}</span>
     </span>`).join('');
 
   const body = `
-    <div class="section-title">🗺️ Odontograma</div>
-    <table style="width:100%;margin-bottom:12px"><tr>
+    <div class="section-title">🦷 Odontograma — Plantilla Adulto</div>
+    <table style="width:100%;margin-bottom:10px"><tr>
       <td><strong>Paciente:</strong> ${p ? p.nombre+' '+p.apellidos : '—'}</td>
-      <td style="text-align:right;color:#6b7280;font-size:12px">Fecha: ${new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'})}</td>
+      <td style="text-align:right;color:#6b7280;font-size:11px">Fecha: ${new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'})}</td>
     </tr></table>
-    <div style="text-align:center;margin-bottom:16px">${svg}</div>
+    <div style="margin-bottom:14px">${table}</div>
     <div style="margin-bottom:${rec.observaciones?'12px':'0'}">
-      <strong style="font-size:12px">Leyenda:</strong>
-      <div style="margin-top:6px;display:flex;flex-wrap:wrap">${legend}</div>
+      <strong style="font-size:11px">Leyenda:</strong>
+      <div style="margin-top:5px;display:flex;flex-wrap:wrap">${legend}</div>
     </div>
-    ${rec.observaciones ? `<div><strong style="font-size:12px">Observaciones:</strong><p style="font-size:13px;margin:4px 0 0;white-space:pre-wrap">${rec.observaciones}</p></div>` : ''}`;
+    ${rec.observaciones ? `<div><strong style="font-size:11px">Observaciones:</strong><p style="font-size:12px;margin:4px 0 0;white-space:pre-wrap">${rec.observaciones}</p></div>` : ''}`;
 
   pdfAbrir(`Odontograma — ${p ? p.nombre+' '+p.apellidos : 'Paciente'}`, body, cfg);
 }
