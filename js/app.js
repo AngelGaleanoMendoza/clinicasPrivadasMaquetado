@@ -6225,7 +6225,7 @@ function renderResumenFinanzas() {
       <div class="stat-info"><h3 style="color:${utilidad>=0?'var(--primary)':'var(--danger)'};font-size:20px">${fmtC(utilidad)}</h3><p>Utilidad neta</p></div></div>
     <div class="stat-card"><div class="stat-icon" style="background:#FFFBEB">🧾</div>
       <div class="stat-info"><h3 style="font-size:20px">${fEmit}</h3><p>Facturas (${fPag} pagadas)</p></div></div>`;
-  const recent = [...(C.fin||[])].sort((a,b)=>b.fecha.localeCompare(a.fecha)).slice(0,6);
+  const recent = [...finData].sort((a,b)=>b.fecha.localeCompare(a.fecha)).slice(0,6);
   const ultEl = document.getElementById('fin-ultimas');
   if(ultEl) {
     if(!recent.length) { ultEl.innerHTML='<div class="empty-state" style="padding:32px"><div class="empty-icon">💰</div><p>No hay transacciones aún</p></div>'; }
@@ -6642,17 +6642,32 @@ async function guardarTransaccion() {
 
   setLoading(true);
 
-  // Guardar registro en finanzas
-  const {error} = await sb.from('finanzas').insert({
+  // Guardar registro en finanzas — obtener ID para enlazar con movimientos
+  const {data: finData, error} = await sb.from('finanzas').insert({
     clinica_id:currentClinicaId, tipo, descripcion:desc, monto, fecha,
     categoria:cat, metodo_pago:metodo, referencia:ref||null, creado_por:currentUser?.name
-  });
+  }).select('id').single();
   if(error){ toast('Error al guardar transacción','error'); setLoading(false); _unlockSubmit('trans', btn); return; }
 
   // Si hay productos seleccionados, mover inventario
   if(productosSeleccionados.length) {
+    // Validar stock suficiente para egresos antes de proceder
+    if(tipo === 'egreso') {
+      const sinStock = productosSeleccionados.filter(s => {
+        const prod = C.inv.find(p => p.id === s.id);
+        return prod && s.cantidad > prod.stock;
+      });
+      if(sinStock.length) {
+        const nombres = sinStock.map(s => {
+          const prod = C.inv.find(p => p.id === s.id);
+          return `${s.nombre} (stock: ${prod?.stock||0}, pedido: ${s.cantidad})`;
+        }).join(', ');
+        toast(`Stock insuficiente: ${nombres}`, 'warning');
+      }
+    }
     const tipoMov  = tipo === 'ingreso' ? 'entrada' : 'salida';
-    const motivoMov = tipo === 'ingreso' ? 'compra' : 'despacho';
+    // motivo incluye el ID de la finanza para poder revertir si se elimina
+    const motivoMov = `fin:${finData.id}`;
     const movimientos = productosSeleccionados.map(s => ({
       inventario_id: s.id, tipo: tipoMov, cantidad: s.cantidad,
       motivo: motivoMov, fecha, clinica_id: currentClinicaId
@@ -6687,8 +6702,26 @@ async function eliminarTransaccion(id) {
   const ok = await customConfirm({icon:'🗑️',title:'Eliminar transacción',msg:'¿Seguro que deseas eliminar esta transacción? No se puede deshacer.',okText:'Eliminar',danger:true});
   if(!ok) return;
   setLoading(true);
+
+  // Revertir movimientos de inventario enlazados a esta transacción
+  const { data: movs } = await sb.from('inventario_movimientos')
+    .select('*').eq('motivo', `fin:${id}`).eq('clinica_id', currentClinicaId);
+  if(movs && movs.length) {
+    for(const mov of movs) {
+      const prod = C.inv.find(p => p.id === mov.inventario_id);
+      if(prod) {
+        // Invertir: si fue entrada, se resta; si fue salida, se suma
+        const stockRevertido = mov.tipo === 'entrada'
+          ? Math.max(0, prod.stock - mov.cantidad)
+          : prod.stock + mov.cantidad;
+        await sb.from('inventario').update({ stock_actual: stockRevertido }).eq('id', mov.inventario_id);
+      }
+    }
+    await sb.from('inventario_movimientos').delete().eq('motivo', `fin:${id}`).eq('clinica_id', currentClinicaId);
+  }
+
   await sb.from('finanzas').delete().eq('id',id);
-  toast('Transacción eliminada');
+  toast('Transacción eliminada' + (movs?.length ? ` · ${movs.length} movimiento(s) de inventario revertido(s)` : ''));
   await loadAll(); renderFinanzas(); setLoading(false);
 }
 
@@ -6697,8 +6730,12 @@ function generarNumFactura() {
   const d = new Date();
   const y = d.getFullYear();
   const m = String(d.getMonth()+1).padStart(2,'0');
-  const seq = String((C.fact||[]).length + 1).padStart(4,'0');
-  return `FACT-${y}${m}-${seq}`;
+  const prefix = `FACT-${y}${m}-`;
+  const existing = (C.fact||[])
+    .map(f => parseInt((f.numero||'').replace(prefix,''),10))
+    .filter(n => !isNaN(n));
+  const next = existing.length ? Math.max(...existing) + 1 : 1;
+  return `${prefix}${String(next).padStart(4,'0')}`;
 }
 
 function openModalFactura(citaId=null, pacienteId=null) {
@@ -6818,19 +6855,48 @@ async function guardarFactura() {
 async function pagarFactura(id) {
   const fact = (C.fact||[]).find(f=>f.id===id);
   if(!fact) return;
+  const metodosOpts = ['efectivo','tarjeta','transferencia','cheque','otro']
+    .map(m=>`<option value="${m}">${m.charAt(0).toUpperCase()+m.slice(1)}</option>`).join('');
   const ok = await customConfirm({icon:'✅',title:'Confirmar pago',
-    msg:`¿Confirmas el pago de la factura <strong>${fact.numero||'#'+id}</strong>?<br>Total: <strong>${fmtC(fact.total)}</strong>`,
+    msg:`¿Confirmas el pago de la factura <strong>${fact.numero||'#'+id}</strong>?<br>Total: <strong>${fmtC(fact.total)}</strong><br><br>
+      <label style="font-size:13px;font-weight:600">Método de pago:<br>
+        <select id="pagar-metodo" style="margin-top:6px;width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+          ${metodosOpts}
+        </select>
+      </label>`,
     okText:'Confirmar pago',danger:false});
   if(!ok) return;
+  const metodo = document.getElementById('pagar-metodo')?.value || 'efectivo';
   setLoading(true);
   await sb.from('facturas').update({estado:'pagada'}).eq('id',id);
   await sb.from('finanzas').insert({
     clinica_id:currentClinicaId, tipo:'ingreso', categoria:'factura',
     descripcion:`Pago factura ${fact.numero||'#'+id} — ${fact.pacienteNombre}`,
-    monto:fact.total, fecha:hoy(), metodo_pago:'efectivo',
+    monto:fact.total, fecha:hoy(), metodo_pago:metodo,
     referencia:fact.numero||null, creado_por:currentUser?.name
   });
-  toast('Factura pagada ✅ — ingreso registrado automáticamente');
+
+  // Descontar inventario para ítems de tipo producto con inventario_id
+  const itemsFact = (C.factItems||[]).filter(i => i.facturaId === id && i.inventarioId);
+  if(itemsFact.length) {
+    const movsInv = itemsFact.map(i => ({
+      inventario_id: i.inventarioId, tipo: 'salida', cantidad: i.cantidad,
+      motivo: `factura:${fact.numero||id}`, fecha: hoy(), clinica_id: currentClinicaId
+    }));
+    const { error: movErr } = await sb.from('inventario_movimientos').insert(movsInv);
+    if(!movErr) {
+      for(const item of itemsFact) {
+        const prod = C.inv.find(p => p.id === item.inventarioId);
+        if(prod) {
+          const nuevoStock = Math.max(0, prod.stock - item.cantidad);
+          await sb.from('inventario').update({ stock_actual: nuevoStock }).eq('id', item.inventarioId);
+        }
+      }
+    }
+  }
+
+  const invMsg = itemsFact.length ? ` · ${itemsFact.length} producto(s) descontado(s) del inventario` : '';
+  toast('Factura pagada ✅ — ingreso registrado automáticamente' + invMsg);
   await loadAll(); renderFacturasList(); setLoading(false);
 }
 
