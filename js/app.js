@@ -3097,6 +3097,7 @@ function closeModal(id){
   else if(id==='modal-medicacion') editingMedId=null;
   else if(id==='modal-nota') editingNotaId=null;
   else if(id==='modal-procedimiento') editingProcId=null;
+  else if(id==='modal-odontograma') _odoCurrentPid=null;
   else editingId=null;
   // solo quitar scroll-lock si no queda otro modal abierto
   if(!document.querySelector('.modal-overlay.open')) document.body.classList.remove('modal-open');
@@ -4957,6 +4958,15 @@ async function guardarHistorialDental(pid) {
 // ════════════════════ ODONTOLOGÍA — ODONTOGRAMA ════════════════════
 let _odoData = { dientes:{}, observaciones:'' };
 let _odoEstadoActivo = 'sano';
+let _odoCurrentPid = null;
+
+// Coordenadas FDI en arco — calculadas sobre elipse (cx=280, cy=20, a=235, b=205)
+const ODO_POSITIONS = {
+  Q1: [{num:18,x:47,y:49},{num:17,x:58,y:87},{num:16,x:76,y:122},{num:15,x:102,y:154},{num:14,x:133,y:180},{num:13,x:171,y:202},{num:12,x:211,y:216},{num:11,x:255,y:224}],
+  Q2: [{num:21,x:305,y:224},{num:22,x:349,y:216},{num:23,x:389,y:202},{num:24,x:427,y:180},{num:25,x:458,y:154},{num:26,x:484,y:122},{num:27,x:502,y:87},{num:28,x:513,y:49}],
+  Q3: [{num:31,x:305,y:266},{num:32,x:349,y:274},{num:33,x:389,y:288},{num:34,x:427,y:310},{num:35,x:458,y:336},{num:36,x:484,y:368},{num:37,x:502,y:403},{num:38,x:513,y:441}],
+  Q4: [{num:48,x:47,y:441},{num:47,x:58,y:403},{num:46,x:76,y:368},{num:45,x:102,y:336},{num:44,x:133,y:310},{num:43,x:171,y:288},{num:42,x:211,y:274},{num:41,x:255,y:266}]
+};
 
 function _getDienteIcon(estado) {
   if(estado==='extraccion') return '✕';
@@ -4966,95 +4976,130 @@ function _getDienteIcon(estado) {
   return '';
 }
 
-function _renderDienteBox(num, dData) {
-  const estado = dData?.estado || 'sano';
-  const e = ESTADOS_DIENTE.find(x=>x.key===estado) || ESTADOS_DIENTE[0];
-  return `<div onclick="clickDiente(${num})" id="odo-d-${num}" title="${e.label} — Diente ${num}"
-    style="width:30px;height:38px;border:2px solid ${e.border};background:${e.color};border-radius:5px;cursor:pointer;
-           display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:2px 1px;
-           transition:transform .12s,box-shadow .12s;user-select:none"
-    onmouseover="this.style.transform='scale(1.15)';this.style.boxShadow='0 4px 12px rgba(0,0,0,.2)'"
-    onmouseout="this.style.transform='';this.style.boxShadow=''">
-    <div style="font-size:8px;font-weight:700;color:${e.text};line-height:1">${num}</div>
-    <div style="font-size:12px;color:${e.text};line-height:1">${_getDienteIcon(estado)}</div>
-  </div>`;
-}
-
 function renderOdontograma(pid) {
   const el = document.getElementById('tab-odontograma');
   if(!el) return;
   const existing = C.odo.find(x => x.pacienteId === pid) || { dientes:{}, observaciones:'' };
   _odoData = JSON.parse(JSON.stringify({ dientes: existing.dientes||{}, observaciones: existing.observaciones||'' }));
 
-  const rowUpper = `
-    <div style="display:flex;gap:3px;align-items:flex-end;justify-content:center">
-      ${DIENTES_SUP_R.map(n=>_renderDienteBox(n,_odoData.dientes[n]||{})).join('')}
-      <div style="width:14px;border-bottom:2px dashed var(--border);margin-bottom:16px"></div>
-      ${DIENTES_SUP_L.map(n=>_renderDienteBox(n,_odoData.dientes[n]||{})).join('')}
-    </div>`;
-  const rowLower = `
-    <div style="display:flex;gap:3px;align-items:flex-start;justify-content:center;margin-top:4px">
-      ${DIENTES_INF_R.map(n=>_renderDienteBox(n,_odoData.dientes[n]||{})).join('')}
-      <div style="width:14px;border-bottom:2px dashed var(--border);margin-top:16px"></div>
-      ${DIENTES_INF_L.map(n=>_renderDienteBox(n,_odoData.dientes[n]||{})).join('')}
-    </div>`;
+  const counts = {};
+  Object.values(_odoData.dientes).forEach(d => {
+    if(d.estado && d.estado !== 'sano') counts[d.estado] = (counts[d.estado]||0)+1;
+  });
+  const badges = ESTADOS_DIENTE.filter(e => e.key !== 'sano' && counts[e.key])
+    .map(e => `<span style="padding:3px 10px;border-radius:12px;background:${e.color};border:1.5px solid ${e.border};font-size:11px;font-weight:700;color:${e.text}">${e.label}: ${counts[e.key]}</span>`)
+    .join('');
 
   el.innerHTML = `<div class="card">
-    <div class="card-header"><h3>🗺️ Odontograma</h3>
-      <button class="btn btn-primary btn-sm" onclick="guardarOdontograma(${pid})">💾 Guardar</button>
+    <div class="card-header">
+      <h3>🗺️ Odontograma</h3>
+      <button class="btn btn-primary btn-sm" onclick="abrirModalOdontograma(${pid})">🦷 Editar Odontograma</button>
     </div>
-    <div style="margin-bottom:14px">
-      <div style="font-size:12px;font-weight:600;color:var(--text-light);margin-bottom:8px">Estado activo (haz clic en un diente para aplicar):</div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px">
-        ${ESTADOS_DIENTE.map(e=>`
-          <div id="odo-leg-${e.key}" onclick="setEstadoActivo('${e.key}')"
-               style="display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;cursor:pointer;
-                      border:2px solid ${e.border};background:${e.color};color:${e.text};font-size:11px;font-weight:600;
-                      transition:all .15s;${e.key==='sano'?'box-shadow:0 0 0 3px var(--primary)':''}">
-            ${e.label}
-          </div>`).join('')}
-      </div>
-    </div>
-    <div style="overflow-x:auto;padding:12px 0">
-      <div style="min-width:580px">
-        <div style="text-align:center;font-size:10px;font-weight:700;color:var(--text-light);letter-spacing:.08em;margin-bottom:6px">SUPERIOR — Derecha del paciente | Izquierda del paciente</div>
-        ${rowUpper}
-        <div style="text-align:center;font-size:10px;color:var(--text-light);margin:8px 0">── LÍNEA MEDIA ──</div>
-        ${rowLower}
-        <div style="text-align:center;font-size:10px;font-weight:700;color:var(--text-light);letter-spacing:.08em;margin-top:6px">INFERIOR — Derecha del paciente | Izquierda del paciente</div>
-      </div>
-    </div>
-    <div style="margin-top:12px">
-      <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Observaciones</label>
-      <textarea id="odo-obs" style="width:100%;min-height:70px;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:13px;background:var(--card);color:var(--text);resize:vertical">${_odoData.observaciones}</textarea>
+    <div style="padding:12px 16px">
+      ${badges
+        ? `<div style="display:flex;flex-wrap:wrap;gap:6px">${badges}</div>`
+        : `<p style="color:var(--text-light);font-size:13px;margin:0">Sin registro — haz clic en "Editar Odontograma" para iniciar.</p>`}
     </div>
   </div>`;
+}
+
+function abrirModalOdontograma(pid) {
+  _odoCurrentPid = pid;
+  const existing = C.odo.find(x => x.pacienteId === pid) || { dientes:{}, observaciones:'' };
+  _odoData = JSON.parse(JSON.stringify({ dientes: existing.dientes||{}, observaciones: existing.observaciones||'' }));
+  _odoEstadoActivo = 'sano';
+
+  const bar = document.getElementById('odo-estados-bar');
+  if(bar) bar.innerHTML = ESTADOS_DIENTE.map(e => `
+    <button id="odo-btn-${e.key}" onclick="setEstadoActivo('${e.key}')"
+      style="padding:4px 10px;border-radius:16px;border:2px solid ${e.border};background:${e.color};color:${e.text};
+             font-size:11px;font-weight:700;cursor:pointer;transition:box-shadow .12s;
+             ${e.key==='sano'?'box-shadow:0 0 0 3px var(--primary)':''}">
+      ${e.label}
+    </button>`).join('');
+
+  const obsEl = document.getElementById('odo-obs');
+  if(obsEl) obsEl.value = _odoData.observaciones || '';
+
+  renderArcoOdontograma();
+  openModalOverlay('modal-odontograma');
+}
+
+function renderArcoOdontograma() {
+  const container = document.getElementById('odo-arco-container');
+  if(!container) return;
+  const W = 22, H = 26;
+  const renderTooth = ({num, x, y}) => {
+    const d = _odoData.dientes[num] || {};
+    const estado = d.estado || 'sano';
+    const e = ESTADOS_DIENTE.find(s => s.key === estado) || ESTADOS_DIENTE[0];
+    return `<g id="odo-g-${num}" onclick="clickDiente(${num})" style="cursor:pointer">
+      <rect x="${x-W/2}" y="${y-H/2}" width="${W}" height="${H}" rx="4"
+        fill="${e.color}" stroke="${e.border}" stroke-width="1.5"
+        onmouseover="this.setAttribute('stroke-width','3')" onmouseout="this.setAttribute('stroke-width','1.5')"/>
+      <text x="${x}" y="${y-4}" text-anchor="middle" font-size="7" font-weight="800" fill="${e.text}" pointer-events="none">${num}</text>
+      <text x="${x}" y="${y+8}" text-anchor="middle" font-size="9" fill="${e.text}" pointer-events="none">${_getDienteIcon(estado)}</text>
+    </g>`;
+  };
+
+  container.innerHTML = `
+  <svg viewBox="20 28 520 448" width="100%" style="max-width:520px;display:block;margin:0 auto;min-width:280px">
+    <!-- Encía superior (arco en rosa) -->
+    <path d="M 47,49 C 47,282 513,282 513,49" fill="none" stroke="#fda4af" stroke-width="54" stroke-linecap="round" opacity="0.3"/>
+    <!-- Paladar superior (oval central) -->
+    <ellipse cx="280" cy="145" rx="138" ry="88" fill="#fecaca" opacity="0.18"/>
+
+    <!-- Encía inferior (arco en rosa) -->
+    <path d="M 47,441 C 47,208 513,208 513,441" fill="none" stroke="#fda4af" stroke-width="54" stroke-linecap="round" opacity="0.3"/>
+    <!-- Suelo boca inferior -->
+    <ellipse cx="280" cy="345" rx="138" ry="88" fill="#fecaca" opacity="0.18"/>
+
+    <!-- Línea media horizontal -->
+    <line x1="28" y1="245" x2="532" y2="245" stroke="var(--border)" stroke-width="1" stroke-dasharray="5,4" opacity="0.5"/>
+    <!-- Línea media vertical -->
+    <line x1="280" y1="34" x2="280" y2="456" stroke="var(--border)" stroke-width="1" stroke-dasharray="5,4" opacity="0.5"/>
+
+    <!-- Etiquetas cuadrantes -->
+    <text x="130" y="44" text-anchor="middle" font-size="10" font-weight="700" fill="#9ca3af">Cuadrante 1</text>
+    <text x="430" y="44" text-anchor="middle" font-size="10" font-weight="700" fill="#9ca3af">Cuadrante 2</text>
+    <text x="430" y="460" text-anchor="middle" font-size="10" font-weight="700" fill="#9ca3af">Cuadrante 3</text>
+    <text x="130" y="460" text-anchor="middle" font-size="10" font-weight="700" fill="#9ca3af">Cuadrante 4</text>
+
+    <!-- Etiquetas maxilares -->
+    <text x="280" y="38" text-anchor="middle" font-size="9" font-weight="700" fill="#9ca3af" letter-spacing="1">SUPERIOR</text>
+    <text x="280" y="471" text-anchor="middle" font-size="9" font-weight="700" fill="#9ca3af" letter-spacing="1">INFERIOR</text>
+
+    <!-- Dientes superiores Q1 (18→11) y Q2 (21→28) -->
+    ${[...ODO_POSITIONS.Q1, ...ODO_POSITIONS.Q2].map(renderTooth).join('')}
+    <!-- Dientes inferiores Q4 (48→41) y Q3 (31→38) -->
+    ${[...ODO_POSITIONS.Q4, ...ODO_POSITIONS.Q3].map(renderTooth).join('')}
+  </svg>`;
 }
 
 function setEstadoActivo(key) {
   _odoEstadoActivo = key;
   ESTADOS_DIENTE.forEach(e => {
-    const el = document.getElementById('odo-leg-'+e.key);
-    if(el) el.style.boxShadow = e.key===key ? '0 0 0 3px var(--primary)' : '';
+    const btn = document.getElementById('odo-btn-'+e.key);
+    if(btn) btn.style.boxShadow = e.key===key ? '0 0 0 3px var(--primary)' : '';
   });
 }
 
 function clickDiente(num) {
   if(!_odoData.dientes) _odoData.dientes = {};
   _odoData.dientes[num] = { ...(_odoData.dientes[num]||{}), estado: _odoEstadoActivo };
-  const el = document.getElementById('odo-d-'+num);
-  if(!el) return;
-  const e = ESTADOS_DIENTE.find(x=>x.key===_odoEstadoActivo)||ESTADOS_DIENTE[0];
-  el.style.background = e.color;
-  el.style.borderColor = e.border;
-  el.querySelectorAll('div')[0].style.color = e.text;
-  el.querySelectorAll('div')[1].textContent = _getDienteIcon(_odoEstadoActivo);
-  el.querySelectorAll('div')[1].style.color = e.text;
-  el.title = `${e.label} — Diente ${num}`;
+  const g = document.getElementById('odo-g-'+num);
+  if(!g) return;
+  const e = ESTADOS_DIENTE.find(x => x.key===_odoEstadoActivo) || ESTADOS_DIENTE[0];
+  const rect = g.querySelector('rect');
+  if(rect) { rect.setAttribute('fill', e.color); rect.setAttribute('stroke', e.border); }
+  const texts = g.querySelectorAll('text');
+  if(texts[0]) texts[0].setAttribute('fill', e.text);
+  if(texts[1]) { texts[1].setAttribute('fill', e.text); texts[1].textContent = _getDienteIcon(_odoEstadoActivo); }
 }
 
-async function guardarOdontograma(pid) {
-  if(!currentClinicaId) { toast('Sin clínica','error'); return; }
+async function guardarOdontograma() {
+  const pid = _odoCurrentPid;
+  if(!pid || !currentClinicaId) { toast('Sin clínica','error'); return; }
   _odoData.observaciones = document.getElementById('odo-obs')?.value||'';
   const existing = C.odo.find(x => x.pacienteId === pid);
   const obj = { paciente_id:pid, clinica_id:currentClinicaId, dientes:_odoData.dientes||{}, observaciones:_odoData.observaciones||null, updated_at:new Date().toISOString() };
@@ -5065,6 +5110,7 @@ async function guardarOdontograma(pid) {
   setLoading(false);
   if(err) { toast('Error: '+err.message,'error'); return; }
   toast('Odontograma guardado ✅');
+  closeModal('modal-odontograma');
   await loadAll();
   renderOdontograma(pid);
 }
