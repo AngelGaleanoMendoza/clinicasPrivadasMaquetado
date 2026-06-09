@@ -3515,6 +3515,8 @@ function renderInventario() {
     <div class="stat-card"><div class="stat-icon si-green">📥</div><div class="stat-info"><h3>${entHoy}</h3><p>Unidades entrada hoy</p></div></div>
     <div class="stat-card"><div class="stat-icon si-orange">📤</div><div class="stat-info"><h3>${salHoy}</h3><p>Unidades salida hoy</p></div></div>
     <div class="stat-card"><div class="stat-icon" style="background:linear-gradient(135deg,#FEF2F2,#FEE2E2)">⚠️</div><div class="stat-info"><h3>${bajoStock}</h3><p>Bajo stock / sin stock (${sinStock})</p></div></div>`;
+  const btnBorrar = document.getElementById('btn-borrar-inventario');
+  if(btnBorrar) btnBorrar.style.display = isSuperAdmin() ? '' : 'none';
   switchInvTab(invTab);
 }
 
@@ -3745,6 +3747,27 @@ async function eliminarProducto(id){
   if(error){ toast('Error: '+error.message,'error'); setLoading(false); return; }
   toast('Producto eliminado');
   await loadAll(); renderInventario(); setLoading(false);
+}
+
+async function eliminarTodoInventario() {
+  if(!isSuperAdmin()) return;
+  const total = C.inv.length;
+  if(!total) { toast('El inventario ya está vacío','info'); return; }
+  const ok = await customConfirm({
+    icon: '🗑️',
+    title: 'Borrar todo el inventario',
+    msg: `¿Estás seguro? Se eliminarán <strong>${total} producto${total!==1?'s':''}</strong> y todos sus movimientos de esta clínica.<br><br>Esta acción <strong>no se puede deshacer</strong>.`,
+    okText: 'Sí, borrar todo',
+    cancelText: 'Cancelar'
+  });
+  if(!ok) return;
+  setLoading(true);
+  const { error: errMov } = await sb.from('movimientos').delete().eq('clinica_id', currentClinicaId);
+  if(errMov) { toast('Error al borrar movimientos: '+errMov.message,'error'); setLoading(false); return; }
+  const { error: errInv } = await sb.from('inventario').delete().eq('clinica_id', currentClinicaId);
+  if(errInv) { toast('Error al borrar inventario: '+errInv.message,'error'); setLoading(false); return; }
+  await loadAll(); renderInventario(); setLoading(false);
+  toast(`Inventario borrado — ${total} producto${total!==1?'s':''} eliminado${total!==1?'s':''}`, 'success');
 }
 
 // ── Modales Entrada / Salida ──
