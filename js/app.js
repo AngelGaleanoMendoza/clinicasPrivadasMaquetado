@@ -1680,7 +1680,7 @@ function imprimirExpedienteCompleto(pid) {
 }
 
 function switchTab(tabId, btn){
-  ['tab-info','tab-citas-p','tab-meds-p','tab-notas-p','tab-expediente'].forEach(id=>{ const e=document.getElementById(id); if(e) e.style.display='none'; });
+  ['tab-info','tab-citas-p','tab-meds-p','tab-notas-p','tab-expediente','tab-historial-dental','tab-odontograma','tab-periodontograma','tab-procedimientos-p'].forEach(id=>{ const e=document.getElementById(id); if(e) e.style.display='none'; });
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.getElementById(tabId).style.display='block';
   if(btn) btn.classList.add('active');
