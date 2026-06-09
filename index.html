@@ -86,6 +86,7 @@
       <div class="menu-section">Principal</div>
       <div class="menu-item active" onclick="navigate('dashboard')"><span class="icon">📊</span> Dashboard</div>
       <div class="menu-item" id="menu-expedientes" onclick="navigate('expedientes')"><span class="icon">📋</span> Expedientes</div>
+      <div class="menu-item" id="menu-procedimientos" onclick="navigate('procedimientos')" style="display:none"><span class="icon">🦷</span> Procedimientos</div>
       <div class="menu-item" id="menu-farmacia" onclick="navigate('farmacia')" style="display:none"><span class="icon">💊</span> Farmacia</div>
       <div class="menu-section" id="menu-clinica-section">Clínica</div>
       <div class="menu-item" id="menu-pacientes" onclick="navigate('pacientes')"><span class="icon">👥</span> Pacientes <span class="badge" id="badge-pacientes">0</span></div>
@@ -335,12 +336,14 @@
           <button class="tab" onclick="switchTab('tab-meds-p',this)">💊 Medicaciones</button>
           <button class="tab" onclick="switchTab('tab-notas-p',this)">📝 Notas</button>
           <button class="tab" onclick="switchTab('tab-expediente',this)">📁 Expediente</button>
+          <button class="tab" id="tab-btn-procedimientos-p" onclick="switchTab('tab-procedimientos-p',this)" style="display:none">🦷 Procedimientos</button>
         </div>
         <div id="tab-info"></div>
         <div id="tab-citas-p" style="display:none"></div>
         <div id="tab-meds-p" style="display:none"></div>
         <div id="tab-notas-p" style="display:none"></div>
         <div id="tab-expediente" style="display:none"></div>
+        <div id="tab-procedimientos-p" style="display:none"></div>
       </div>
 
       <!-- EXPEDIENTES -->
@@ -414,6 +417,9 @@
           </div>
         </div>
       </div>
+
+      <!-- PROCEDIMIENTOS ODONTOLÓGICOS -->
+      <div id="view-procedimientos" class="view"></div>
 
       <!-- FARMACIA -->
       <div id="view-farmacia" class="view">
@@ -1715,6 +1721,40 @@
   </div>
 </div>
 
+<!-- MODAL PROCEDIMIENTO ODONTOLÓGICO -->
+<div class="modal-overlay" id="modal-procedimiento">
+  <div class="modal">
+    <button class="modal-close-btn" onclick="closeModal('modal-procedimiento')" title="Cerrar">✕</button>
+    <h2 id="modal-proc-title">🦷 Nuevo Procedimiento</h2>
+    <div class="form-grid">
+      <div class="form-group full"><label>Paciente *</label>
+        <select id="proc-paciente"></select>
+      </div>
+      <div class="form-group full"><label>Procedimiento *</label>
+        <select id="proc-procedimiento">
+          <option value="">Seleccionar procedimiento...</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Fecha *</label><input type="date" id="proc-fecha"></div>
+      <div class="form-group"><label>Estado</label>
+        <select id="proc-estado">
+          <option value="planificado">Planificado</option>
+          <option value="en_proceso">En proceso</option>
+          <option value="completado">Completado</option>
+          <option value="cancelado">Cancelado</option>
+        </select>
+      </div>
+      <div class="form-group full"><label>Notas / Observaciones</label>
+        <textarea id="proc-notas" placeholder="Diente(s) afectados, observaciones del procedimiento..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-procedimiento')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarProcedimiento()">💾 Guardar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL NOTA -->
 <div class="modal-overlay" id="modal-nota">
   <div class="modal">
@@ -1857,6 +1897,6 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260609d"></script>
+<script src="js/app.js?v=20260609e"></script>
 </body>
 </html>

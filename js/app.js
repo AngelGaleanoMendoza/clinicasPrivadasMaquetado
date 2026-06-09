@@ -26,7 +26,27 @@ const PERMISOS_DEFECTO = {
   recepcion:    ['pacientes','citas'],
   enfermeria:   ['pacientes','medicaciones','notas'],
   farmaceutico: ['inventario','finanzas','farmacia'],
+  odontologo:   ['pacientes','citas','medicaciones','notas'],
 };
+
+// ════════════════════ PROCEDIMIENTOS ODONTOLÓGICOS ════════════════════
+const PROCEDIMIENTOS_DENTALES = [
+  { cat:'Evaluación y diagnóstico', procs:['Consulta odontológica general','Historia clínica dental','Examen de dientes, encías, mordida y lengua','Radiografías dentales','Fotografías intraorales','Escaneo digital dental','Diagnóstico de caries','Diagnóstico de enfermedad periodontal','Evaluación de mordida','Evaluación de ATM','Detección de lesiones orales o cáncer oral'] },
+  { cat:'Prevención y limpieza', procs:['Limpieza dental profesional','Profilaxis dental','Eliminación de placa y sarro','Aplicación de flúor','Sellantes dentales','Pulido dental','Educación de higiene oral','Control de placa bacteriana','Limpieza profunda subgingival'] },
+  { cat:'Tratamientos restaurativos', procs:['Calzas o empastes dentales','Resinas estéticas','Restauraciones de amalgama','Reconstrucción dental','Incrustaciones inlay','Incrustaciones onlay','Coronas dentales','Carillas estéticas','Reparación de dientes fracturados','Reparación de bordes desgastados','Reemplazo de restauraciones antiguas'] },
+  { cat:'Endodoncia', procs:['Tratamiento de conducto','Retratamiento de conducto','Apicectomía','Drenaje de absceso dental','Tratamiento de infección pulpar','Reconstrucción posterior al conducto','Colocación de poste dental'] },
+  { cat:'Periodoncia', procs:['Limpieza periodontal profunda','Raspado y alisado radicular','Tratamiento de gingivitis','Tratamiento de periodontitis','Cirugía periodontal','Injerto de encía','Injerto óseo','Regeneración ósea guiada','Alargamiento de corona','Gingivectomía','Tratamiento de movilidad dental','Mantenimiento periodontal'] },
+  { cat:'Extracciones y cirugía oral', procs:['Extracción simple','Extracción quirúrgica','Extracción de muelas del juicio','Cirugía de dientes retenidos','Frenectomía','Drenaje de infecciones','Biopsia oral','Cirugía de quistes dentales','Regularización de hueso','Cirugía preprotésica','Tratamiento de trauma dental','Reimplante dental'] },
+  { cat:'Prótesis dentales', procs:['Prótesis parcial removible','Prótesis total','Prótesis flexible','Puente dental fijo','Corona individual','Corona sobre implante','Prótesis sobre implantes','Dentadura completa','Dentadura inmediata','Reparación de prótesis','Rebase o ajuste de prótesis'] },
+  { cat:'Implantes dentales', procs:['Colocación de implante dental','Corona sobre implante (implante)','Puente sobre implantes','Prótesis total sobre implantes','Elevación de seno maxilar','Injerto óseo para implantes','Regeneración ósea guiada (implante)','Mantenimiento de implantes','Tratamiento de periimplantitis'] },
+  { cat:'Ortodoncia', procs:['Brackets metálicos','Brackets estéticos','Brackets autoligables','Alineadores transparentes','Retenedores','Expansores','Corrección de apiñamiento','Corrección de espacios','Corrección de mordida abierta','Corrección de mordida cruzada','Corrección de sobremordida','Ortodoncia prequirúrgica'] },
+  { cat:'Odontología estética', procs:['Blanqueamiento dental','Carillas de resina','Carillas de porcelana','Diseño de sonrisa','Contorneado dental','Gingivoplastia estética','Cierre de espacios','Microabrasión dental','Cambios de forma, tamaño y color dental'] },
+  { cat:'Odontopediatría', procs:['Limpieza dental infantil','Aplicación de flúor infantil','Sellantes infantiles','Restauraciones en dientes de leche','Pulpotomía','Pulpectomía','Coronas pediátricas','Extracciones infantiles','Mantenedores de espacio','Tratamientos preventivos para caries temprana'] },
+  { cat:'Bruxismo y ATM', procs:['Férula de descarga','Protector nocturno','Ajuste oclusal','Tratamiento de bruxismo','Tratamiento de dolor mandibular','Tratamiento de chasquidos articulares','Terapia para ATM','Protectores deportivos'] },
+  { cat:'Urgencias dentales', procs:['Atención por dolor dental fuerte','Tratamiento de absceso dental','Drenaje de infección oral','Reparación de diente fracturado','Recementado de corona o puente','Control de sangrado','Extracción de emergencia','Tratamiento por golpe o trauma dental'] },
+  { cat:'Medicina oral', procs:['Evaluación de aftas','Tratamiento de lesiones en lengua, labios o encías','Diagnóstico de hongos orales','Tratamiento de boca seca','Manejo de halitosis','Biopsias orales','Evaluación de manchas blancas o rojas','Control de lesiones por prótesis','Evaluación de cáncer oral'] },
+  { cat:'Procedimientos complementarios', procs:['Anestesia local','Sedación consciente','Control radiográfico','Toma de impresiones','Escaneo intraoral','Modelos dentales','Planificación digital','Guías quirúrgicas','Ajuste de mordida','Cementación de restauraciones'] },
+];
 
 // Detectar recovery token lo antes posible
 sb.auth.onAuthStateChange((event) => {
@@ -50,7 +70,7 @@ window.addEventListener('DOMContentLoaded', () => {
 }, { once: true });
 
 // ════════════════════ CACHE LOCAL ════════════════════
-const C = { p:[], c:[], m:[], n:[], e:[], prof:[], inv:[], mov:[], fin:[], fact:[], factItems:[] };
+const C = { p:[], c:[], m:[], n:[], e:[], prof:[], inv:[], mov:[], fin:[], fact:[], factItems:[], proc:[] };
 let currentClinicaId = null;
 let currentClinica   = null;
 
@@ -69,6 +89,9 @@ const fromInv = r => ({ id:r.id, nombre:r.nombre, categoria:r.categoria||'genera
 const toInv   = x => ({ nombre:x.nombre, categoria:x.categoria||'general', unidad:x.unidad||'unidad', stock_actual:Number(x.stock||0), stock_minimo:Number(x.stockMin||0), precio_unitario:x.precio||null, descripcion:x.descripcion||null, clinica_id:currentClinicaId, codigo_minsa:x.codigoMinsa||null });
 const fromMov     = r => ({ id:r.id, invId:r.inventario_id, tipo:r.tipo, cantidad:Number(r.cantidad), motivo:r.motivo||null, fecha:r.fecha, referencia:r.referencia||null, notas:r.notas||null });
 const fromFin     = r => ({ id:r.id, tipo:r.tipo, categoria:r.categoria||'general', descripcion:r.descripcion, monto:Number(r.monto), fecha:r.fecha, metodoPago:r.metodo_pago||'efectivo', referencia:r.referencia||null, citaId:r.cita_id||null, pacienteId:r.paciente_id||null, invMovId:r.inventario_mov_id||null, creadoPor:r.creado_por||null });
+const fromProc = r => ({ id:r.id, pacienteId:r.paciente_id, procedimiento:r.procedimiento, categoria:r.categoria, estado:r.estado||'planificado', fecha:r.fecha, notas:r.notas||null });
+const toProc   = x => ({ paciente_id:x.pacienteId, procedimiento:x.procedimiento, categoria:x.categoria, estado:x.estado||'planificado', fecha:x.fecha||hoy(), notas:x.notas||null, clinica_id:currentClinicaId });
+
 const fromFact    = r => ({ id:r.id, numero:r.numero, pacienteId:r.paciente_id, pacienteNombre:r.paciente_nombre||'Consumidor Final', fecha:r.fecha, estado:r.estado||'pendiente', subtotal:Number(r.subtotal||0), impuestoPct:Number(r.impuesto_pct||0), impuesto:Number(r.impuesto||0), total:Number(r.total||0), notas:r.notas||null, citaId:r.cita_id||null });
 const fromFactItem= r => ({ id:r.id, facturaId:r.factura_id, descripcion:r.descripcion, tipo:r.tipo||'servicio', cantidad:Number(r.cantidad||1), precioUnitario:Number(r.precio_unitario||0), subtotal:Number(r.subtotal||0), inventarioId:r.inventario_id||null });
 
@@ -105,6 +128,13 @@ async function loadAll() {
     const rawFact = rfact.error ? [] : (rfact.data||[]);
     C.fact = rawFact.map(r => fromFact(r));
     C.factItems = rawFact.flatMap(r => (r.factura_items||[]).map(fromFactItem));
+    // Procedimientos odontológicos (carga separada: tabla opcional)
+    if(isOdontologo() || isSuperAdmin()) {
+      const rproc = await sb.from('procedimientos_odontologicos').select('*').eq('clinica_id', currentClinicaId).order('fecha', {ascending:false});
+      C.proc = rproc.error ? [] : (rproc.data||[]).map(fromProc);
+    } else {
+      C.proc = [];
+    }
     setDbStatus(true);
   } catch(e) {
     console.error('Supabase:', e);
@@ -569,7 +599,7 @@ async function navigate(view, patientId) {
   if(el) el.classList.add('active');
   const mi=document.querySelector(`.menu-item[onclick*="'${view}'"]`);
   if(mi) mi.classList.add('active');
-  const titles={dashboard:'Dashboard',expedientes:'Expedientes Clínicos',pacientes:'Pacientes',citas:'Citas',agendas:'Agendas',medicaciones:'Medicaciones',notas:'Notas Clínicas',atendidos:'Atendidos por Día',estadisticas:'Estadísticas',configuracion:'Configuración Clínica',exportar:'Exportar / Enviar','paciente-detalle':'Expediente del Paciente',admin:'Administración',inventario:'Inventario',finanzas:'Finanzas'};
+  const titles={dashboard:'Dashboard',expedientes:'Expedientes Clínicos',pacientes:'Pacientes',citas:'Citas',agendas:'Agendas',medicaciones:'Medicaciones',notas:'Notas Clínicas',atendidos:'Atendidos por Día',estadisticas:'Estadísticas',configuracion:'Configuración Clínica',exportar:'Exportar / Enviar','paciente-detalle':'Expediente del Paciente',admin:'Administración',inventario:'Inventario',finanzas:'Finanzas',procedimientos:'Procedimientos Odontológicos'};
   document.getElementById('page-title').textContent = titles[view]||view;
   currentView=view;
   if(patientId) currentPatientId=patientId;
@@ -594,6 +624,7 @@ async function navigate(view, patientId) {
   if(view==='atendidos'    && !hasPermiso('atendidos'))    { navigate('dashboard'); return; }
   if(view==='pacientes' && (role==='farmaceutico' || esFarmacia)) { navigate('farmacia'); return; }
   if(view==='expedientes' && (role==='farmaceutico' || esFarmacia)) { navigate('farmacia'); return; }
+  if(view==='procedimientos' && !isOdontologo() && !isSuperAdmin()) { navigate('dashboard'); return; }
   // Rutas especiales sin loadAll
   if(view==='finanzas'){
     renderFinanzas(); if(window.innerWidth<=768) closeSidebar(); return;
@@ -625,6 +656,7 @@ function renderView(v) {
     case 'inventario': renderInventario(); break;
     case 'farmacia': renderFarmacia(); break;
     case 'paciente-detalle': renderDetalleP(currentPatientId); break;
+    case 'procedimientos': renderProcedimientosView(); break;
   }
   updateBadges();
 }
@@ -1359,6 +1391,11 @@ function renderDetalleP(pid){
     ${notas.length?`<div class="timeline">${notas.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(n=>`<div class="timeline-item"><div class="timeline-date">${formatFecha(n.fecha)} · <span class="tag tag-blue" style="font-size:10px">${n.tipo}</span></div><div class="timeline-content">${n.titulo?`<strong style="display:block;margin-bottom:5px">${n.titulo}</strong>`:''}<p style="white-space:pre-wrap;line-height:1.7">${n.contenido}</p><div style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-secondary btn-sm" onclick="verNota(${n.id})">👁️ Ver</button><button class="btn btn-secondary btn-sm" onclick="openModalNota(${n.id})">✏️ Editar</button><button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})">🖨️</button><button class="btn btn-danger btn-sm" onclick="eliminarNota(${n.id})">🗑️</button></div></div></div>`).join('')}</div>`:'<div class="empty-state"><div class="empty-icon">📝</div><p>Sin notas</p></div>'}
   </div>`;
 
+  // Pestaña procedimientos odontológicos — solo visible para odontólogo / superadmin
+  const tabBtnProc = document.getElementById('tab-btn-procedimientos-p');
+  if(tabBtnProc) tabBtnProc.style.display = (isOdontologo() || isSuperAdmin()) ? '' : 'none';
+  renderProcedimientosTab(pid);
+
   const exp=C.e.find(x=>x.pacienteId===pid)||{};
   const imc=(exp.peso&&exp.talla)?(exp.peso/((exp.talla/100)**2)).toFixed(1):null;
   document.getElementById('tab-expediente').innerHTML=`
@@ -1832,7 +1869,11 @@ function openModalCita(id){
   const esOptica = currentClinica?.tipo === 'optica';
   const motivoWrap = document.getElementById('c-motivo-wrap');
   if(motivoWrap) motivoWrap.style.display = esOptica ? 'none' : '';
-  document.getElementById('c-tipo').value = esOptica ? 'examen_visual' : 'consulta';
+  document.getElementById('c-tipo').value = esOptica ? 'examen_visual' : isOdontologo() ? 'odontologia' : 'consulta';
+  const motivoInput = document.getElementById('c-motivo');
+  if(motivoInput && isOdontologo()) motivoInput.placeholder = 'Escribe el procedimiento dental (ej: limpieza, conducto...)';
+  const motivoLabel = motivoWrap?.querySelector('label');
+  if(motivoLabel && isOdontologo()) motivoLabel.textContent = 'Procedimiento / Motivo *';
 
   // Restricción: médico solo puede crear citas en su propio nombre
   const medicoSel = document.getElementById('c-medico');
@@ -3017,6 +3058,7 @@ function closeModal(id){
   if(id==='modal-cita') editingCitaId=null;
   else if(id==='modal-medicacion') editingMedId=null;
   else if(id==='modal-nota') editingNotaId=null;
+  else if(id==='modal-procedimiento') editingProcId=null;
   else editingId=null;
   // solo quitar scroll-lock si no queda otro modal abierto
   if(!document.querySelector('.modal-overlay.open')) document.body.classList.remove('modal-open');
@@ -4729,9 +4771,34 @@ function buscarDiagnosticos(query) {
   return [...found].slice(0, 9);
 }
 
+function buscarProcedimientosDentales(q) {
+  if(!q || q.length < 2) return [];
+  const lq = q.toLowerCase();
+  const results = [];
+  for(const cat of PROCEDIMIENTOS_DENTALES) {
+    for(const proc of cat.procs) {
+      if(proc.toLowerCase().includes(lq)) results.push({ label: proc, cat: cat.cat });
+      if(results.length >= 10) return results;
+    }
+  }
+  return results;
+}
+
 function mostrarSugerenciasDx(query) {
   const el = document.getElementById('dx-suggestions');
   if(!el) return;
+  if(isOdontologo()) {
+    const procs = buscarProcedimientosDentales(query);
+    if(!procs.length){ el.style.display='none'; return; }
+    el.style.display = 'block';
+    el.innerHTML = procs.map(p =>
+      `<div onclick="seleccionarDx(${JSON.stringify(p.label)})" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:2px" onmouseover="this.style.background='var(--primary-light)'" onmouseout="this.style.background=''">
+        <span style="font-weight:600;font-size:13px">🦷 ${p.label}</span>
+        <span style="font-size:11px;color:var(--text-light)">${p.cat}</span>
+      </div>`
+    ).join('');
+    return;
+  }
   const dxs = buscarDiagnosticos(query);
   if(!dxs.length){ el.style.display='none'; return; }
   el.style.display = 'block';
@@ -4778,6 +4845,187 @@ function renderDxElegidos() {
 function quitarDx(i) {
   dxElegidos.splice(i,1);
   renderDxElegidos();
+}
+
+// ════════════════════ ODONTOLOGÍA — PROCEDIMIENTOS ════════════════════
+let editingProcId = null;
+
+function renderProcedimientosView() {
+  const el = document.getElementById('view-procedimientos');
+  if(!el) return;
+
+  const estadoColors = { planificado:'tag-blue', en_proceso:'tag-cyan', completado:'tag-green', cancelado:'tag-red' };
+  const allProc = [...C.proc].sort((a,b) => b.fecha.localeCompare(a.fecha));
+
+  const byPac = {};
+  allProc.forEach(p => {
+    const pac = C.p.find(x => x.id === p.pacienteId);
+    const key = pac ? `${pac.nombre} ${pac.apellidos}` : 'Paciente desconocido';
+    if(!byPac[key]) byPac[key] = { pac, procs: [] };
+    byPac[key].procs.push(p);
+  });
+
+  const total = allProc.length;
+  const completados = allProc.filter(p => p.estado === 'completado').length;
+  const planificados = allProc.filter(p => p.estado === 'planificado').length;
+  const enProceso = allProc.filter(p => p.estado === 'en_proceso').length;
+
+  el.innerHTML = `
+    <div class="stats-grid" style="margin-bottom:20px">
+      <div class="stat-card"><div class="stat-icon" style="background:linear-gradient(135deg,#e0f2fe,#bae6fd)">🦷</div><div class="stat-info"><h3>${total}</h3><p>Total procedimientos</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-green">✅</div><div class="stat-info"><h3>${completados}</h3><p>Completados</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-blue">⏳</div><div class="stat-info"><h3>${planificados}</h3><p>Planificados</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-orange">🔄</div><div class="stat-info"><h3>${enProceso}</h3><p>En proceso</p></div></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <h3>🦷 Todos los procedimientos</h3>
+        <button class="btn btn-primary btn-sm" onclick="openModalProcedimiento()">+ Nuevo</button>
+      </div>
+      ${!allProc.length ? '<div class="empty-state"><div class="empty-icon">🦷</div><p>Sin procedimientos registrados</p></div>' :
+        `<div class="table-wrap"><table>
+          <thead><tr><th>Paciente</th><th>Procedimiento</th><th>Categoría</th><th>Estado</th><th>Fecha</th><th>Acciones</th></tr></thead>
+          <tbody>${allProc.map(proc => {
+            const pac = C.p.find(x => x.id === proc.pacienteId);
+            const nomPac = pac ? `${pac.nombre} ${pac.apellidos}` : '—';
+            return `<tr>
+              <td><a href="#" onclick="navigate('paciente-detalle',${proc.pacienteId});return false" style="color:var(--primary);font-weight:600">${nomPac}</a></td>
+              <td style="font-weight:600">${proc.procedimiento}</td>
+              <td><span class="tag tag-blue" style="font-size:11px">${proc.categoria}</span></td>
+              <td><span class="tag ${estadoColors[proc.estado]||'tag-blue'}">${proc.estado.replace('_',' ')}</span></td>
+              <td>${formatFecha(proc.fecha)}</td>
+              <td><div class="actions-cell">
+                <button class="btn btn-secondary btn-sm" onclick="openModalProcedimiento(${proc.id})">✏️</button>
+                <button class="btn btn-danger btn-sm" onclick="eliminarProcedimiento(${proc.id})">🗑️</button>
+              </div></td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table></div>`
+      }
+    </div>`;
+}
+
+function renderProcedimientosTab(pid) {
+  const el = document.getElementById('tab-procedimientos-p');
+  if(!el) return;
+  const procs = (C.proc||[]).filter(p => p.pacienteId === pid).sort((a,b) => b.fecha.localeCompare(a.fecha));
+  const estadoColors = { planificado:'tag-blue', en_proceso:'tag-cyan', completado:'tag-green', cancelado:'tag-red' };
+
+  const bycat = {};
+  procs.forEach(p => {
+    if(!bycat[p.categoria]) bycat[p.categoria] = [];
+    bycat[p.categoria].push(p);
+  });
+
+  el.innerHTML = `<div class="card">
+    <div class="card-header">
+      <h3>🦷 Procedimientos</h3>
+      <button class="btn btn-primary btn-sm" onclick="openModalProcedimiento(null,${pid})">+ Nuevo</button>
+    </div>
+    ${!procs.length ? '<div class="empty-state"><div class="empty-icon">🦷</div><p>Sin procedimientos para este paciente</p></div>' :
+      Object.entries(bycat).map(([cat, items]) => `
+        <div style="margin-bottom:16px">
+          <div style="font-size:12px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)">${cat}</div>
+          ${items.map(proc => `
+            <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+              <span style="font-size:20px">🦷</span>
+              <div style="flex:1">
+                <div style="font-weight:600;font-size:14px">${proc.procedimiento}</div>
+                ${proc.notas ? `<div style="font-size:12px;color:var(--text-light);margin-top:3px">${proc.notas}</div>` : ''}
+                <div style="font-size:11px;color:var(--text-light);margin-top:3px">${formatFecha(proc.fecha)}</div>
+              </div>
+              <span class="tag ${estadoColors[proc.estado]||'tag-blue'}" style="white-space:nowrap">${proc.estado.replace('_',' ')}</span>
+              <div class="actions-cell">
+                <button class="btn btn-secondary btn-sm" onclick="openModalProcedimiento(${proc.id},${pid})">✏️</button>
+                <button class="btn btn-danger btn-sm" onclick="eliminarProcedimiento(${proc.id})">🗑️</button>
+              </div>
+            </div>`).join('')}
+        </div>`).join('')
+    }
+  </div>`;
+}
+
+function _buildProcCatOptions(selectedCat) {
+  return PROCEDIMIENTOS_DENTALES.map(c =>
+    `<optgroup label="${c.cat}">${c.procs.map(p =>
+      `<option value="${escAttr(p)}" data-cat="${escAttr(c.cat)}" ${p===selectedCat?'selected':''}>${p}</option>`
+    ).join('')}</optgroup>`
+  ).join('');
+}
+
+function _fillProcPacienteSelect(selectedId) {
+  const sel = document.getElementById('proc-paciente');
+  if(!sel) return;
+  sel.innerHTML = '<option value="">Seleccionar paciente...</option>' +
+    [...C.p].sort((a,b)=>(a.nombre+a.apellidos).localeCompare(b.nombre+b.apellidos))
+    .map(p => `<option value="${p.id}" ${p.id===selectedId?'selected':''}>${p.nombre} ${p.apellidos}</option>`)
+    .join('');
+}
+
+function openModalProcedimiento(id, pid) {
+  editingProcId = id || null;
+  document.getElementById('modal-proc-title').textContent = id ? '✏️ Editar Procedimiento' : '🦷 Nuevo Procedimiento';
+  document.getElementById('proc-fecha').value = hoy();
+  document.getElementById('proc-estado').value = 'planificado';
+  document.getElementById('proc-notas').value = '';
+
+  const procSel = document.getElementById('proc-procedimiento');
+  procSel.innerHTML = '<option value="">Seleccionar procedimiento...</option>' + _buildProcCatOptions('');
+
+  _fillProcPacienteSelect(pid || null);
+
+  if(id) {
+    const proc = C.proc.find(p => p.id === id);
+    if(proc) {
+      _fillProcPacienteSelect(proc.pacienteId);
+      procSel.innerHTML = '<option value="">Seleccionar procedimiento...</option>' + _buildProcCatOptions(proc.procedimiento);
+      document.getElementById('proc-fecha').value = proc.fecha;
+      document.getElementById('proc-estado').value = proc.estado;
+      document.getElementById('proc-notas').value = proc.notas || '';
+    }
+  }
+  openModalOverlay('modal-procedimiento');
+}
+
+async function guardarProcedimiento() {
+  if(!currentClinicaId) { toast('Sin clínica asignada','error'); return; }
+  const pacienteId = parseInt(document.getElementById('proc-paciente').value) || null;
+  const procSel    = document.getElementById('proc-procedimiento');
+  const procedimiento = procSel.value;
+  const selectedOpt   = procSel.options[procSel.selectedIndex];
+  const categoria     = selectedOpt?.dataset?.cat || '';
+  const fecha  = document.getElementById('proc-fecha').value;
+  const estado = document.getElementById('proc-estado').value;
+  const notas  = document.getElementById('proc-notas').value.trim();
+  if(!pacienteId || !procedimiento || !fecha) { toast('Completa paciente, procedimiento y fecha','error'); return; }
+  setLoading(true);
+  const obj = toProc({ pacienteId, procedimiento, categoria, fecha, estado, notas });
+  let err;
+  if(editingProcId) {
+    const r = await sb.from('procedimientos_odontologicos').update(obj).eq('id', editingProcId);
+    err = r.error;
+  } else {
+    const r = await sb.from('procedimientos_odontologicos').insert([obj]);
+    err = r.error;
+  }
+  setLoading(false);
+  if(err) { toast('Error: ' + err.message, 'error'); return; }
+  toast(editingProcId ? 'Procedimiento actualizado' : 'Procedimiento registrado ✅');
+  closeModal('modal-procedimiento');
+  await loadAll();
+  renderView(currentView);
+}
+
+async function eliminarProcedimiento(id) {
+  const ok = await customConfirm({ icon:'🗑️', title:'Eliminar procedimiento', msg:'¿Eliminar este procedimiento? Esta acción no se puede deshacer.', okText:'Eliminar', danger:true });
+  if(!ok) return;
+  setLoading(true);
+  const { error } = await sb.from('procedimientos_odontologicos').delete().eq('id', id);
+  setLoading(false);
+  if(error) { toast('Error: ' + error.message, 'error'); return; }
+  toast('Procedimiento eliminado');
+  await loadAll();
+  renderView(currentView);
 }
 
 // ════════════════════ PDF HELPERS ════════════════════
@@ -5037,6 +5285,7 @@ function isSuperAdmin() {
   return emailMatch || rolMatch;
 }
 function isFarmaceutico() { return currentUser?.key === 'farmaceutico'; }
+function isOdontologo()   { return currentUser?.key === 'odontologo'; }
 function hasPermiso(perm) {
   if(isSuperAdmin()) return true;
   const p = currentUser?.permisos;
@@ -5055,6 +5304,7 @@ function applyRoleMenu() {
   const isRec    = role === 'recepcion';
   const isEnf    = role === 'enfermeria';
   const isFarm   = role === 'farmaceutico';
+  const isOdonto = isOdontologo();
   const esFarmacia  = currentClinica?.tipo === 'farmacia';
   const modoFarmacia = isFarm || esFarmacia;
 
@@ -5074,11 +5324,12 @@ function applyRoleMenu() {
   const hasClinica = !modoFarmacia;
   vis('menu-clinica-section', hasClinica);
   vis('menu-pacientes',       hasClinica && hasPermiso('pacientes'));
-  vis('menu-citas',           hasClinica && hasPermiso('citas'));
-  vis('menu-agendas',         hasClinica && hasPermiso('agendas'));
-  vis('menu-medicaciones',    hasClinica && hasPermiso('medicaciones'));
-  vis('menu-notas',           hasClinica && hasPermiso('notas'));
-  vis('menu-atendidos',       hasClinica && hasPermiso('atendidos'));
+  vis('menu-citas',             hasClinica && hasPermiso('citas'));
+  vis('menu-agendas',          hasClinica && hasPermiso('agendas') && !isOdonto);
+  vis('menu-medicaciones',     hasClinica && hasPermiso('medicaciones'));
+  vis('menu-notas',            hasClinica && hasPermiso('notas'));
+  vis('menu-atendidos',        hasClinica && hasPermiso('atendidos') && !isOdonto);
+  vis('menu-procedimientos',   hasClinica && (isOdonto || sa));
 
   // ─ Sección Gestión
   const invAccess  = hasPermiso('inventario') || esFarmacia;
