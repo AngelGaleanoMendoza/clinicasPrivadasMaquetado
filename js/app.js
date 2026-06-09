@@ -3762,7 +3762,7 @@ async function eliminarTodoInventario() {
   });
   if(!ok) return;
   setLoading(true);
-  const { error: errMov } = await sb.from('movimientos').delete().eq('clinica_id', currentClinicaId);
+  const { error: errMov } = await sb.from('inventario_movimientos').delete().eq('clinica_id', currentClinicaId);
   if(errMov) { toast('Error al borrar movimientos: '+errMov.message,'error'); setLoading(false); return; }
   const { error: errInv } = await sb.from('inventario').delete().eq('clinica_id', currentClinicaId);
   if(errInv) { toast('Error al borrar inventario: '+errInv.message,'error'); setLoading(false); return; }
