@@ -3699,19 +3699,22 @@ function renderReportesInv(){
 function openModalProducto(id){
   editingProdId=id||null;
   document.getElementById('modal-producto-title').textContent=id?'✏️ Editar Producto':'📦 Nuevo Producto';
+  const stockWrap = document.getElementById('prod-stock-wrap');
   if(id){
     const p=C.inv.find(x=>x.id===id); if(!p) return;
     document.getElementById('prod-nombre').value=p.nombre;
     document.getElementById('prod-categoria').value=p.categoria;
     document.getElementById('prod-unidad').value=p.unidad;
-    document.getElementById('prod-stock').value=p.stock;
     document.getElementById('prod-stock-min').value=p.stockMin;
     document.getElementById('prod-precio').value=p.precio!=null?p.precio:'';
     document.getElementById('prod-descripcion').value=p.descripcion||'';
+    // Ocultar stock al editar — el stock solo cambia mediante movimientos de entrada/salida
+    if(stockWrap) stockWrap.style.display='none';
   } else {
     ['prod-nombre','prod-stock','prod-stock-min','prod-precio','prod-descripcion'].forEach(f=>document.getElementById(f).value='');
     document.getElementById('prod-categoria').value='medicamento';
     document.getElementById('prod-unidad').value='unidad';
+    if(stockWrap) stockWrap.style.display='';
   }
   document.getElementById('modal-producto').classList.add('open');
 }
@@ -3720,21 +3723,32 @@ async function guardarProducto(){
   if(!currentClinicaId){ toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
   const nombre=document.getElementById('prod-nombre').value.trim();
   if(!nombre){ toast('El nombre es obligatorio','error'); return; }
-  const obj=toInv({
-    nombre, categoria:document.getElementById('prod-categoria').value,
-    unidad:document.getElementById('prod-unidad').value,
-    stock:document.getElementById('prod-stock').value||0,
-    stockMin:document.getElementById('prod-stock-min').value||0,
-    precio:document.getElementById('prod-precio').value||null,
-    descripcion:document.getElementById('prod-descripcion').value||null,
-    codigoMinsa:null
-  });
   setLoading(true);
   if(editingProdId){
-    const{error}=await sb.from('inventario').update(obj).eq('id',editingProdId);
+    // Al editar: no tocar stock_actual (solo se mueve con movimientos) ni borrar codigoMinsa
+    const existing = C.inv.find(p=>p.id===editingProdId);
+    const upd = {
+      nombre,
+      categoria: document.getElementById('prod-categoria').value,
+      unidad: document.getElementById('prod-unidad').value,
+      stock_minimo: Number(document.getElementById('prod-stock-min').value||0),
+      precio_unitario: document.getElementById('prod-precio').value||null,
+      descripcion: document.getElementById('prod-descripcion').value||null,
+      codigo_minsa: existing?.codigoMinsa||null
+    };
+    const{error}=await sb.from('inventario').update(upd).eq('id',editingProdId);
     if(error){ toast('Error: '+error.message,'error'); setLoading(false); return; }
     toast('Producto actualizado');
   } else {
+    const obj=toInv({
+      nombre, categoria:document.getElementById('prod-categoria').value,
+      unidad:document.getElementById('prod-unidad').value,
+      stock:document.getElementById('prod-stock').value||0,
+      stockMin:document.getElementById('prod-stock-min').value||0,
+      precio:document.getElementById('prod-precio').value||null,
+      descripcion:document.getElementById('prod-descripcion').value||null,
+      codigoMinsa:null
+    });
     const{error}=await sb.from('inventario').insert(obj);
     if(error){ toast('Error: '+error.message,'error'); setLoading(false); return; }
     toast('Producto agregado ✅');
@@ -3877,12 +3891,14 @@ function seleccionarVisiblesMov() {
   const q2 = (q||'').toLowerCase();
   let items = C.inv;
   if(q2) items = items.filter(p=>p.nombre.toLowerCase().includes(q2)||(p.descripcion||'').toLowerCase().includes(q2));
+  // En modo salida no seleccionar productos sin stock
+  if(_movTipo === 'salida') items = items.filter(p=>p.stock > 0);
   items.forEach(p=>{ if(!_movItems[p.id]) _movItems[p.id]=1; });
   filtrarInventarioMov(q);
 }
 
 function _actualizarConteoMov() {
-  const n = Object.keys(_movItems).length;
+  const n = Object.values(_movItems).filter(qty=>qty>0).length;
   const el = document.getElementById('mov-count');
   if(el) el.textContent = `${n} producto${n!==1?'s':''} seleccionado${n!==1?'s':''}`;
 }
@@ -3894,6 +3910,7 @@ async function confirmarMovMasivo() {
   const fecha = document.getElementById('mov-fecha').value || hoy();
   const motivo = document.getElementById('mov-motivo').value.trim() || null;
   const tipo = _movTipo;
+  setLoading(true);
 
   for(const [id, qty] of entries) {
     const prod = C.inv.find(p=>p.id===Number(id));
