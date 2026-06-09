@@ -514,6 +514,7 @@ function shakeLogin() {
 
 // ════════════════════ UTILS ════════════════════
 function hoy() { return new Date().toISOString().split('T')[0]; }
+function escAttr(s) { return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function formatFecha(f) {
   if(!f) return '—';
   const d = new Date(f+'T12:00:00');
@@ -559,7 +560,7 @@ function _confirmOk()     { document.getElementById('modal-confirm').classList.r
 function _confirmCancel() { document.getElementById('modal-confirm').classList.remove('open'); if(_confirmResolve) { _confirmResolve(false); _confirmResolve=null; } }
 
 // ════════════════════ NAVIGATION ════════════════════
-let currentView='dashboard', editingId=null, currentPatientId=null, selCalDate=hoy(), currentResumenCitaId=null, currentNotaId=null;
+let currentView='dashboard', editingId=null, editingCitaId=null, editingMedId=null, editingNotaId=null, currentPatientId=null, selCalDate=hoy(), currentResumenCitaId=null, currentNotaId=null;
 
 async function navigate(view, patientId) {
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
@@ -1815,7 +1816,7 @@ function formatHora12(h24) {
 
 function openModalCita(id){
   const isMedico = currentUser?.key === 'medico';
-  editingId=id||null;
+  editingCitaId=id||null;
   document.getElementById('modal-cita-title').textContent=id?'✏️ Editar Cita':'📅 Nueva Cita';
   fillSelect('c-paciente');
   fillMedicoSelect('c-medico');
@@ -1876,8 +1877,8 @@ async function guardarCita(){
   const motivo=document.getElementById('c-motivo').value.trim();
   const esOptica = currentClinica?.tipo === 'optica';
   if(!pid||!fecha||!hora||(!motivo&&!esOptica)){ toast('Completa los campos obligatorios','error'); return; }
-  if(!editingId && fecha < hoy()){ toast('No se pueden agendar citas en fechas pasadas','error'); return; }
-  if(!editingId && fecha === hoy()) {
+  if(!editingCitaId && fecha < hoy()){ toast('No se pueden agendar citas en fechas pasadas','error'); return; }
+  if(!editingCitaId && fecha === hoy()) {
     const minH = _getMinHoraHoy();
     if(minH && hora < minH){ toast('No se puede agendar en un horario ya pasado','error'); return; }
   }
@@ -1886,12 +1887,12 @@ async function guardarCita(){
   const obj={pacienteId:pid,medicoId,fecha,hora,motivo,tipo:document.getElementById('c-tipo').value,estado:document.getElementById('c-estado').value,notas:document.getElementById('c-notas').value.trim()};
   setLoading(true);
   let err;
-  if(editingId){ const r=await sb.from('citas').update(toC(obj)).eq('id',editingId); err=r.error; }
+  if(editingCitaId){ const r=await sb.from('citas').update(toC(obj)).eq('id',editingCitaId); err=r.error; }
   else { const r=await sb.from('citas').insert([toC(obj)]); err=r.error; }
   setLoading(false);
   if(err){ toast('Error: '+err.message,'error'); return; }
-  toast(editingId?'Cita actualizada':'Cita registrada ✅');
-  if(!editingId) logActivity('cita');
+  toast(editingCitaId?'Cita actualizada':'Cita registrada ✅');
+  if(!editingCitaId) logActivity('cita');
   closeModal('modal-cita');
   await loadAll();
   renderView(currentView);
@@ -1950,7 +1951,7 @@ async function marcarCitaCompletada(id){
 }
 
 function abrirNotaEvolucion(pacienteId, cita) {
-  editingId = null;
+  editingNotaId = null;
   document.getElementById('modal-nota-title').textContent = '📝 Nota de Evolución';
   fillSelect('n-paciente');
   setPacienteSelect('n-paciente', pacienteId);
@@ -1968,7 +1969,7 @@ function renderMedicaciones(){
   const tbody=document.getElementById('tabla-medicaciones'), empty=document.getElementById('meds-empty');
   if(!C.m.length){ tbody.innerHTML=''; empty.style.display='block'; return; }
   empty.style.display='none';
-  tbody.innerHTML=C.m.map(x=>{ const p=C.p.find(q=>q.id===x.pacienteId); return `<tr>
+  tbody.innerHTML=[...C.m].sort((a,b)=>(b.inicio||'').localeCompare(a.inicio||'')).map(x=>{ const p=C.p.find(q=>q.id===x.pacienteId); return `<tr>
     <td><div class="patient-name-cell"><div class="patient-avatar" style="background:${colAvatar(x.pacienteId||0)};width:28px;height:28px;font-size:10px">${p?ini(p.nombre,p.apellidos):'?'}</div><div>${p?p.nombre+' '+p.apellidos:'Desconocido'}</div></div></td>
     <td><strong>${x.nombre}</strong></td><td>${x.dosis}</td><td>${x.frecuencia}</td><td>${formatFecha(x.inicio)}</td><td>${x.fin?formatFecha(x.fin):'—'}</td><td>${estadoTag(x.estado)}</td>
     <td><div class="actions-cell"><button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirRecetaPaciente(${x.pacienteId})" title="Imprimir receta del paciente">🖨️</button><button class="btn btn-secondary btn-sm" onclick="openModalMedicacion(${x.id})">✏️</button><button class="btn btn-danger btn-sm" onclick="eliminarMedicacion(${x.id})">🗑️</button></div></td></tr>`; }).join('');
@@ -2006,7 +2007,7 @@ function parseDosisStr(d) {
 let medItems = [];
 
 function openModalMedicacion(id) {
-  editingId = id || null;
+  editingMedId = id || null;
   document.getElementById('modal-med-title').textContent = id ? '✏️ Editar Medicación' : '💊 Nueva Receta';
   fillSelect('m-paciente');
   document.getElementById('m-estado').value = 'activa';
@@ -2025,7 +2026,7 @@ function openModalMedicacion(id) {
   } else {
     medItems = [{nombre:'', dosisQty:'1', dosisUnit:'tableta(s)', frecuencia:'Cada 8 horas', via:'oral', indicaciones:''}];
   }
-  document.getElementById('btn-add-med-item').style.display = editingId ? 'none' : 'inline-flex';
+  document.getElementById('btn-add-med-item').style.display = editingMedId ? 'none' : 'inline-flex';
   renderMedItems();
   openModalOverlay('modal-medicacion');
 }
@@ -2041,7 +2042,7 @@ function renderMedItems() {
     + '<div class="form-grid">'
     +   '<div class="form-group full" style="position:relative">'
     +     '<label>Medicamento *</label>'
-    +     '<input type="text" id="mi-nombre-'+i+'" value="'+item.nombre+'" placeholder="Buscar medicamento..." autocomplete="off" oninput="medItems['+i+'].nombre=this.value;buscarMedItem(this.value,'+i+')" onblur="setTimeout(()=>hideMedItemSug('+i+'),180)">'
+    +     '<input type="text" id="mi-nombre-'+i+'" value="'+escAttr(item.nombre)+'" placeholder="Buscar medicamento..." autocomplete="off" oninput="medItems['+i+'].nombre=this.value;buscarMedItem(this.value,'+i+')" onblur="setTimeout(()=>hideMedItemSug('+i+'),180)">'
     +     '<div id="mi-sug-'+i+'" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:400;max-height:200px;overflow-y:auto;margin-top:4px"></div>'
     +   '</div>'
     +   '<div class="form-group"><label>Dosificación *</label><div style="display:flex;gap:8px">'
@@ -2052,7 +2053,7 @@ function renderMedItems() {
     +     ['Cada 4 horas','Cada 8 horas','Cada 12 horas','Cada 24 horas','Cada 2 días','Cada 3 días','1 vez al día','Una vez con alimentos','En ayunas','Al almorzar','Al cenar','Antes de dormir'].map(f=>'<option value="'+f+'"'+(item.frecuencia===f?' selected':'')+'>'+f+'</option>').join('')
     +     '</select></div>'
     +   '<div class="form-group"><label>Vía</label><select id="mi-via-'+i+'" onchange="medItems['+i+'].via=this.value">'+vias.map(([v,l])=>'<option value="'+v+'"'+(item.via===v?' selected':'')+'>'+l+'</option>').join('')+'</select></div>'
-    +   '<div class="form-group full"><label>Indicaciones</label><input type="text" id="mi-ind-'+i+'" value="'+item.indicaciones+'" placeholder="Tomar con alimentos..." oninput="medItems['+i+'].indicaciones=this.value"></div>'
+    +   '<div class="form-group full"><label>Indicaciones</label><input type="text" id="mi-ind-'+i+'" value="'+escAttr(item.indicaciones)+'" placeholder="Tomar con alimentos..." oninput="medItems['+i+'].indicaciones=this.value"></div>'
     + '</div></div>'
   ).join('');
 }
@@ -2112,15 +2113,16 @@ async function guardarMedicacion() {
   const fin = document.getElementById('m-fin').value;
   const estado = document.getElementById('m-estado').value;
   const buildDosis = item => ((item.dosisQty||'1') + ' ' + (item.dosisUnit||'tableta(s)')).trim();
-  if(editingId) {
+  if(editingMedId) {
     const item = medItems[0];
     if(!item.nombre||!item.dosisQty||!item.frecuencia) { toast('Completa nombre, dosificación y frecuencia','error'); return; }
     const obj = {pacienteId:pid,nombre:item.nombre,dosis:buildDosis(item),frecuencia:item.frecuencia,inicio,fin,via:item.via,estado,indicaciones:item.indicaciones};
     setLoading(true);
-    const {error} = await sb.from('medicaciones').update(toM(obj)).eq('id',editingId);
+    const {error} = await sb.from('medicaciones').update(toM(obj)).eq('id',editingMedId);
     setLoading(false);
     if(error) { toast('Error: '+error.message,'error'); return; }
     toast('Medicación actualizada');
+    logActivity('medicacion');
   } else {
     const valid = medItems.filter(item => item.nombre && item.dosisQty && item.frecuencia);
     if(!valid.length) { toast('Agrega al menos un medicamento con nombre, dosificación y frecuencia','error'); return; }
@@ -2184,7 +2186,7 @@ function renderNotas(){
 }
 
 function openModalNota(id){
-  editingId=id||null;
+  editingNotaId=id||null;
   document.getElementById('modal-nota-title').textContent=id?'✏️ Editar Nota':'📝 Nueva Nota Clínica';
   fillSelect('n-paciente');
   document.getElementById('n-tipo').value='evolucion'; document.getElementById('n-fecha').value=hoy(); document.getElementById('n-titulo').value=''; document.getElementById('n-contenido').value='';
@@ -2204,12 +2206,12 @@ async function guardarNota(){
   const obj={pacienteId:pid,tipo:document.getElementById('n-tipo').value,fecha:document.getElementById('n-fecha').value||hoy(),titulo:document.getElementById('n-titulo').value.trim(),contenido};
   setLoading(true);
   let err;
-  if(editingId){ const r=await sb.from('notas').update(toN(obj)).eq('id',editingId); err=r.error; }
+  if(editingNotaId){ const r=await sb.from('notas').update(toN(obj)).eq('id',editingNotaId); err=r.error; }
   else { const r=await sb.from('notas').insert([toN(obj)]); err=r.error; }
   setLoading(false);
   if(err){ toast('Error: '+err.message,'error'); return; }
-  toast(editingId?'Nota actualizada':'Nota guardada ✅');
-  if(!editingId) logActivity('nota');
+  toast(editingNotaId?'Nota actualizada':'Nota guardada ✅');
+  if(!editingNotaId) logActivity('nota');
   closeModal('modal-nota');
   await loadAll(); renderNotas();
   if(currentView==='paciente-detalle') renderDetalleP(currentPatientId);
@@ -2286,11 +2288,9 @@ function imprimirReceta(id) {
 function imprimirRecetaPaciente(pid) {
   const p = C.p.find(x => x.id === pid);
   const e = C.e.find(x => x.pacienteId === pid);
-  const meds = C.m.filter(m => m.pacienteId === pid).sort((a,b) => {
-    const ord = {activa:0,finalizada:1,suspendida:2};
-    return (ord[a.estado]||0) - (ord[b.estado]||0);
-  });
-  if(!meds.length) { toast('Este paciente no tiene medicaciones registradas','info'); return; }
+  const meds = C.m.filter(m => m.pacienteId === pid && m.estado === 'activa')
+    .sort((a,b) => (a.nombre||'').localeCompare(b.nombre||''));
+  if(!meds.length) { toast('Este paciente no tiene medicaciones activas','info'); return; }
   const cfg = getClinicaConfig();
   const fmtF = f => { if(!f) return '—'; const d=new Date(f+'T12:00:00'); return d.toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'}); };
   const viaLabel = v => ({oral:'Oral',inyectable:'Inyectable',topica:'Tópica',inhalada:'Inhalada',sublingual:'Sublingual',otra:'Otra'})[v||'oral'] || v || 'Oral';
@@ -3014,7 +3014,10 @@ function setPacienteSelect(sid, pid) {
 function openModalOverlay(id){ document.getElementById(id).classList.add('open'); document.body.classList.add('modal-open'); }
 function closeModal(id){
   document.getElementById(id).classList.remove('open');
-  editingId=null;
+  if(id==='modal-cita') editingCitaId=null;
+  else if(id==='modal-medicacion') editingMedId=null;
+  else if(id==='modal-nota') editingNotaId=null;
+  else editingId=null;
   // solo quitar scroll-lock si no queda otro modal abierto
   if(!document.querySelector('.modal-overlay.open')) document.body.classList.remove('modal-open');
 }
