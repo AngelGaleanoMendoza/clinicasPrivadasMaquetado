@@ -1778,10 +1778,7 @@
       <label style="font-size:12px;font-weight:600;color:var(--text-light)">Observaciones</label>
       <textarea id="odo-obs" placeholder="Notas del odontograma..." style="width:100%;min-height:52px;margin-top:4px;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:13px;background:var(--card);color:var(--text);resize:vertical;box-sizing:border-box"></textarea>
     </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('modal-odontograma')">Cancelar</button>
-      <button class="btn btn-primary" onclick="guardarOdontograma()">💾 Guardar</button>
-    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-odontograma')">Cancelar</button><button class="btn btn-secondary" onclick="imprimirOdontograma(_odoCurrentPid)">🖨️ Imprimir</button><button class="btn btn-primary" onclick="guardarOdontograma()">💾 Guardar</button></div>
   </div>
 </div>
 
@@ -1927,9 +1924,11 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260609k"></script>
+<script src="js/app.js?v=20260609l"></script>
 </body>
 </html>
+
+
 
 
 

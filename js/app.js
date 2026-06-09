@@ -5153,7 +5153,10 @@ function renderPeriodontograma(pid) {
 
   el.innerHTML = `<div class="card">
     <div class="card-header"><h3>📏 Periodontograma</h3>
-      <button class="btn btn-primary btn-sm" onclick="guardarPeriodontograma(${pid})">💾 Guardar</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary btn-sm" onclick="imprimirPeriodontograma(${pid})">🖨️ Imprimir</button>
+        <button class="btn btn-primary btn-sm" onclick="guardarPeriodontograma(${pid})">💾 Guardar</button>
+      </div>
     </div>
     <div style="font-size:12px;color:var(--text-light);margin-bottom:14px">PB = Profundidad de bolsa. Sangrado al sondaje. Movilidad y furcación: 0–3.</div>
     ${buildTable(PERIO_DIENTES_SUP,'Superiores')}
@@ -5191,6 +5194,111 @@ async function guardarPeriodontograma(pid) {
   toast('Periodontograma guardado ✅');
   await loadAll();
   renderPeriodontograma(pid);
+}
+
+// ════════════════════ ODONTOLOGÍA — IMPRESIÓN ════════════════════
+function imprimirOdontograma(pid) {
+  const p   = C.p.find(x => x.id === pid);
+  const rec = C.odo.find(x => x.pacienteId === pid) || { dientes:{}, observaciones:'' };
+  const dientes = rec.dientes || {};
+  const cfg = currentClinica || {};
+
+  const W = 22, H = 26;
+  const tooth = ({num, x, y}) => {
+    const estado = (dientes[num]||{}).estado || 'sano';
+    const e = ESTADOS_DIENTE.find(s => s.key === estado) || ESTADOS_DIENTE[0];
+    return `<g>
+      <rect x="${x-W/2}" y="${y-H/2}" width="${W}" height="${H}" rx="4"
+        fill="${e.color}" stroke="${e.border}" stroke-width="1.5"/>
+      <text x="${x}" y="${y-4}" text-anchor="middle" font-size="7" font-weight="800" fill="${e.text}">${num}</text>
+      <text x="${x}" y="${y+8}" text-anchor="middle" font-size="9" fill="${e.text}">${_getDienteIcon(estado)}</text>
+    </g>`;
+  };
+
+  const svg = `<svg viewBox="20 28 520 448" width="480" height="420" xmlns="http://www.w3.org/2000/svg">
+    <path d="M 47,49 C 47,282 513,282 513,49" fill="none" stroke="#fda4af" stroke-width="54" stroke-linecap="round" opacity="0.3"/>
+    <ellipse cx="280" cy="145" rx="138" ry="88" fill="#fecaca" opacity="0.18"/>
+    <path d="M 47,441 C 47,208 513,208 513,441" fill="none" stroke="#fda4af" stroke-width="54" stroke-linecap="round" opacity="0.3"/>
+    <ellipse cx="280" cy="345" rx="138" ry="88" fill="#fecaca" opacity="0.18"/>
+    <line x1="28" y1="245" x2="532" y2="245" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="5,4"/>
+    <line x1="280" y1="34" x2="280" y2="456" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="5,4"/>
+    <text x="130" y="44" text-anchor="middle" font-size="10" font-weight="700" fill="#9ca3af">Cuadrante 1</text>
+    <text x="430" y="44" text-anchor="middle" font-size="10" font-weight="700" fill="#9ca3af">Cuadrante 2</text>
+    <text x="430" y="460" text-anchor="middle" font-size="10" font-weight="700" fill="#9ca3af">Cuadrante 3</text>
+    <text x="130" y="460" text-anchor="middle" font-size="10" font-weight="700" fill="#9ca3af">Cuadrante 4</text>
+    <text x="280" y="38" text-anchor="middle" font-size="9" font-weight="700" fill="#9ca3af" letter-spacing="1">SUPERIOR</text>
+    <text x="280" y="471" text-anchor="middle" font-size="9" font-weight="700" fill="#9ca3af" letter-spacing="1">INFERIOR</text>
+    ${[...ODO_POSITIONS.Q1,...ODO_POSITIONS.Q2,...ODO_POSITIONS.Q4,...ODO_POSITIONS.Q3].map(tooth).join('')}
+  </svg>`;
+
+  const legend = ESTADOS_DIENTE.map(e =>
+    `<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 8px 4px 0">
+      <span style="width:12px;height:12px;border-radius:3px;background:${e.color};border:1.5px solid ${e.border};display:inline-block;flex-shrink:0"></span>
+      <span style="font-size:11px;color:#374151">${e.label}</span>
+    </span>`).join('');
+
+  const body = `
+    <div class="section-title">🗺️ Odontograma</div>
+    <table style="width:100%;margin-bottom:12px"><tr>
+      <td><strong>Paciente:</strong> ${p ? p.nombre+' '+p.apellidos : '—'}</td>
+      <td style="text-align:right;color:#6b7280;font-size:12px">Fecha: ${new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'})}</td>
+    </tr></table>
+    <div style="text-align:center;margin-bottom:16px">${svg}</div>
+    <div style="margin-bottom:${rec.observaciones?'12px':'0'}">
+      <strong style="font-size:12px">Leyenda:</strong>
+      <div style="margin-top:6px;display:flex;flex-wrap:wrap">${legend}</div>
+    </div>
+    ${rec.observaciones ? `<div><strong style="font-size:12px">Observaciones:</strong><p style="font-size:13px;margin:4px 0 0;white-space:pre-wrap">${rec.observaciones}</p></div>` : ''}`;
+
+  pdfAbrir(`Odontograma — ${p ? p.nombre+' '+p.apellidos : 'Paciente'}`, body, cfg);
+}
+
+function imprimirPeriodontograma(pid) {
+  const p   = C.p.find(x => x.id === pid);
+  const rec = C.perio.find(x => x.pacienteId === pid) || { datos:{}, observaciones:'' };
+  const d   = rec.datos || {};
+  const cfg = currentClinica || {};
+
+  const th = 'padding:5px 3px;font-size:10px;font-weight:700;text-align:center;border:1px solid #e5e7eb;background:#f3f4f6';
+  const td = 'padding:4px 2px;text-align:center;border:1px solid #e5e7eb;font-size:11px';
+  const rows = [
+    ['PB Vestibular (mm)', n => d[n]?.pbv ?? 0],
+    ['PB Lingual (mm)',    n => d[n]?.pbl ?? 0],
+    ['Recesión (mm)',      n => d[n]?.rec ?? 0],
+    ['Sangrado',           n => d[n]?.sang ? '<span style="color:#ef4444;font-weight:700">●</span>' : '○'],
+    ['Movilidad (0–3)',    n => d[n]?.mov ?? 0],
+    ['Furcación (0–3)',    n => d[n]?.fur ?? 0],
+  ];
+
+  const buildTable = (dientes, label) => `
+    <div style="margin-bottom:20px">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;color:#374151">${label}</div>
+      <table style="border-collapse:collapse;width:100%">
+        <thead><tr>
+          <th style="${th};text-align:left;min-width:110px">Medición</th>
+          ${dientes.map(n=>`<th style="${th}">${n}</th>`).join('')}
+        </tr></thead>
+        <tbody>${rows.map(([label,fn],i) => `
+          <tr style="${i%2?'background:#f9fafb':''}">
+            <td style="${td};font-weight:600;text-align:left">${label}</td>
+            ${dientes.map(n=>`<td style="${td}">${fn(n)}</td>`).join('')}
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+
+  const body = `
+    <div class="section-title">📏 Periodontograma</div>
+    <table style="width:100%;margin-bottom:8px"><tr>
+      <td><strong>Paciente:</strong> ${p ? p.nombre+' '+p.apellidos : '—'}</td>
+      <td style="text-align:right;color:#6b7280;font-size:12px">Fecha: ${new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'})}</td>
+    </tr></table>
+    <p style="font-size:11px;color:#6b7280;margin:0 0 14px">PB = Profundidad de bolsa en mm · Sangrado al sondaje: ● sí / ○ no · Movilidad y furcación: escala 0–3</p>
+    ${buildTable(PERIO_DIENTES_SUP,'Superiores')}
+    ${buildTable(PERIO_DIENTES_INF,'Inferiores')}
+    ${rec.observaciones ? `<div><strong style="font-size:12px">Observaciones:</strong><p style="font-size:13px;margin:4px 0 0;white-space:pre-wrap">${rec.observaciones}</p></div>` : ''}`;
+
+  pdfAbrir(`Periodontograma — ${p ? p.nombre+' '+p.apellidos : 'Paciente'}`, body, cfg);
 }
 
 // ════════════════════ ODONTOLOGÍA — PROCEDIMIENTOS ════════════════════
