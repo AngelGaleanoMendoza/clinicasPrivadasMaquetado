@@ -1,4 +1,4 @@
-// ════════════════════ SUPABASE ════════════════════
+﻿// ════════════════════ SUPABASE ════════════════════
 const SURL = 'https://ckpskotpdkmojgaqxyht.supabase.co';
 const SKEY = 'sb_publishable_2W-uJNSJSFLMYn5NJShPKw_sRCynIka';
 const sb = supabase.createClient(SURL, SKEY, {
@@ -112,7 +112,7 @@ const fromFin     = r => ({ id:r.id, tipo:r.tipo, categoria:r.categoria||'genera
 const fromProc = r => ({ id:r.id, pacienteId:r.paciente_id, procedimiento:r.procedimiento, categoria:r.categoria, estado:r.estado||'pendiente', fecha:r.fecha, notas:r.notas||null, presupuesto:r.presupuesto!=null?Number(r.presupuesto):null, diente:r.diente||null });
 const toProc   = x => ({ paciente_id:x.pacienteId, procedimiento:x.procedimiento, categoria:x.categoria, estado:x.estado||'pendiente', fecha:x.fecha||hoy(), notas:x.notas||null, presupuesto:x.presupuesto||null, diente:x.diente||null, clinica_id:currentClinicaId });
 const fromHD   = r => ({ id:r.id, pacienteId:r.paciente_id, motivoConsulta:r.motivo_consulta||'', antecedentesMedicos:r.antecedentes_medicos||'', medicamentosActuales:r.medicamentos_actuales||'', alergiasMedicamentos:r.alergias_medicamentos||'', enfermedadesSistemicas:r.enfermedades_sistemicas||'', ultimaVisitaDental:r.ultima_visita_dental||'', tratamientosPrevios:r.tratamientos_previos||'', habitosOrales:r.habitos_orales||'', higieneOral:r.higiene_oral||'', examenExtraoral:r.examen_extraoral||'', examenTejidosBlandos:r.examen_tejidos_blandos||'', examenOclusion:r.examen_oclusion||'', examenAtm:r.examen_atm||'', diagnosticoPrincipal:r.diagnostico_principal||'', observaciones:r.observaciones||'' });
-const toHD     = (x,pid) => ({ paciente_id:pid, motivo_consulta:x.motivoConsulta||null, antecedentes_medicos:x.antecedentesMedicos||null, medicamentos_actuales:x.medicamentosActuales||null, alergias_medicamentos:x.alergiasMedicamentos||null, enfermedades_sistemicas:x.enfermedadesSistemicas||null, ultima_visita_dental:x.ultimaVisitaDental||null, tratamientos_previos:x.tratamientosPrevios||null, habitos_orales:x.habitosOrales||null, higiene_oral:x.higieneOral||null, examen_extraoral:x.examenExtraoral||null, examen_tejidos_blandos:x.examenTejidosBlandos||null, examen_oclusion:x.examenOclusion||null, examen_atm:x.examenAtm||null, diagnostico_principal:x.diagnosticoPrincipal||null, observaciones:x.observaciones||null, updated_at:new Date().toISOString(), clinica_id:currentClinicaId });
+const toHD     = (x,pid) => ({ paciente_id:pid, motivo_consulta:x.motivoConsulta||null, antecedentes_medicos:x.antecedentesMedicos||null, medicamentos_actuales:x.medicamentosActuales||null, alergias_medicamentos:x.alergiasMedicamentos||null, enfermedades_sistemicas:x.enfermedadesSistemicas||null, ultima_visita_dental:x.ultimaVisitaDental||null, tratamientos_previos:x.tratamientosPrevios||null, habitos_orales:x.habitosOrales||null, higiene_oral:x.higieneOral||null, examen_extraoral:x.examenExtraoral||null, examen_tejidos_blandos:x.examenTejidosBlandos||null, examen_oclusion:x.examenOclusion||null, examen_atm:x.examenAtm||null, diagnostico_principal:x.diagnosticoPrincipal||null, observaciones:x.observaciones||null, clinica_id:currentClinicaId });
 const fromOdo  = r => ({ id:r.id, pacienteId:r.paciente_id, dientes:r.dientes||{}, observaciones:r.observaciones||'' });
 const fromPerio= r => ({ id:r.id, pacienteId:r.paciente_id, datos:r.datos||{}, observaciones:r.observaciones||'' });
 
@@ -5102,7 +5102,7 @@ async function guardarOdontograma() {
   if(!pid || !currentClinicaId) { toast('Sin clínica','error'); return; }
   _odoData.observaciones = document.getElementById('odo-obs')?.value||'';
   const existing = C.odo.find(x => x.pacienteId === pid);
-  const obj = { paciente_id:pid, clinica_id:currentClinicaId, dientes:_odoData.dientes||{}, observaciones:_odoData.observaciones||null, updated_at:new Date().toISOString() };
+  const obj = { paciente_id:pid, clinica_id:currentClinicaId, dientes:_odoData.dientes||{}, observaciones:_odoData.observaciones||null };
   setLoading(true);
   let err;
   if(existing) { const r=await sb.from('odontograma').update(obj).eq('id',existing.id); err=r.error; }
@@ -5181,7 +5181,7 @@ async function guardarPeriodontograma(pid) {
   });
   const obs = document.getElementById('perio-obs')?.value||'';
   const existing = C.perio.find(x => x.pacienteId === pid);
-  const obj = { paciente_id:pid, clinica_id:currentClinicaId, datos, observaciones:obs||null, updated_at:new Date().toISOString() };
+  const obj = { paciente_id:pid, clinica_id:currentClinicaId, datos, observaciones:obs||null };
   setLoading(true);
   let err;
   if(existing) { const r=await sb.from('periodontograma').update(obj).eq('id',existing.id); err=r.error; }
@@ -8546,3 +8546,4 @@ function descargarPDFFarmacia() {
 
   pdfAbrir('Reporte Farmacia — ' + label, body, cfg);
 }
+
