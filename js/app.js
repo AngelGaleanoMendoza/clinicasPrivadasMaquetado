@@ -765,10 +765,25 @@ function renderCalDayCitas(date){
   if(!el) return;
   if(!citas.length){ el.innerHTML=`<p class="text-light" style="text-align:center;padding:12px">Sin citas el ${formatFecha(date)}</p>`; return; }
   el.innerHTML=`<p style="font-size:11px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${formatFecha(date)}</p>`+
-    citas.map(c=>{ const p=C.p.find(x=>x.id===c.pacienteId); return `<div class="cita-item ${c.estado}">
+    citas.map(c=>{
+      const p=C.p.find(x=>x.id===c.pacienteId);
+      const esCompletada=c.estado==='completada';
+      const esCancelada=c.estado==='cancelada';
+      return `<div class="cita-item ${c.estado}" style="gap:10px;flex-wrap:wrap">
       <div class="cita-time">${c.hora}</div>
-      <div class="cita-info"><div class="cita-paciente">${p?p.nombre+' '+p.apellidos:'Desconocido'}</div><div class="cita-motivo">${c.motivo}</div></div>
-      ${estadoTag(c.estado)}</div>`; }).join('');
+      <div style="flex:1;min-width:0">
+        <div class="cita-paciente">${p?p.nombre+' '+p.apellidos:'Desconocido'}</div>
+        <div class="cita-motivo">${c.motivo}${c.tipo?` · <span class="tag tag-cyan" style="font-size:10px">${c.tipo}</span>`:''}</div>
+      </div>
+      ${esCompletada ? '<span class="acudio-badge">✅ Atendido</span>' : estadoTag(c.estado)}
+      <div class="actions-cell" style="gap:6px;flex-wrap:wrap">
+        <button class="btn btn-sm" style="background:var(--primary);color:#fff;font-size:15px;font-weight:800;padding:4px 10px;line-height:1" onclick="openModalCitaP(${c.pacienteId})" title="Nueva cita">+</button>
+        ${!esCompletada&&!esCancelada?`<button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;font-size:11px;font-weight:700;white-space:nowrap" onclick="marcarCitaCompletada(${c.id})">✅ Atendido</button>`:''}
+        <button class="btn btn-primary btn-sm" onclick="verResumenCita(${c.id})" title="Ver hoja">📄</button>
+        <button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">🗑️</button>
+      </div>
+    </div>`; }).join('');
 }
 
 // ════════════════════ ACCESOS RÁPIDOS MOBILE ════════════════════
@@ -1744,12 +1759,12 @@ function filtrarTablaCitas(q) {
 }
 
 // ── CITAS TABS ──
-let citasTab = 'hoy';
+let citasTab = 'calendario';
 let citasTabFecha = '';
 
 function switchCitasTab(tab) {
   citasTab = tab;
-  ['hoy','manana','fecha','calendario'].forEach(t => {
+  ['fecha','calendario'].forEach(t => {
     const el = document.getElementById('ctab-'+t);
     if(el) el.classList.toggle('active', t===tab);
   });
@@ -1760,9 +1775,7 @@ function switchCitasTab(tab) {
   if(tabLista)  tabLista.style.display  = tab==='calendario' ? 'none' : 'block';
   if(tabCal)    tabCal.style.display    = tab==='calendario' ? 'block' : 'none';
 
-  if(tab==='hoy')       renderCitasParaFecha(hoy());
-  else if(tab==='manana'){ const d=new Date(); d.setDate(d.getDate()+1); renderCitasParaFecha(d.toISOString().split('T')[0]); }
-  else if(tab==='fecha'){ if(citasTabFecha) renderCitasParaFecha(citasTabFecha); }
+  if(tab==='fecha'){ if(citasTabFecha) renderCitasParaFecha(citasTabFecha); }
   else if(tab==='calendario'){ renderCalendar('citas-cal',true); renderCalDayCitas(selCalDate); }
 }
 
@@ -1810,19 +1823,7 @@ function renderCitasFechaPersonalizada(fecha) {
 }
 
 function renderCitas(){
-  const h = hoy();
-  const manana = new Date(); manana.setDate(manana.getDate()+1);
-  const mananaStr = manana.toISOString().split('T')[0];
-
-  // Actualizar badges de tabs
-  const cntH = C.c.filter(c=>c.fecha===h).length;
-  const cntM = C.c.filter(c=>c.fecha===mananaStr).length;
-  const bH = document.getElementById('ctab-badge-hoy');
-  const bM = document.getElementById('ctab-badge-manana');
-  if(bH) bH.textContent = cntH;
-  if(bM) bM.textContent = cntM;
-
-  // Renderizar tab activo
+  // Renderizar tab activo (Calendario por defecto)
   switchCitasTab(citasTab);
 
   // Historial completo — flex rows (mismo patrón que Pacientes)
