@@ -602,14 +602,6 @@ body.dark .fact-item-row input,body.dark .fact-item-row select{background:#0F172
 
   /* ── CITAS / AGENDAS ── */
   #view-citas .card-header{flex-wrap:wrap;gap:8px}
-  /* Ocultar Hora (col2) → queda Fecha + Paciente + Acciones, igual que Pacientes */
-  #view-citas .table-wrap thead th:nth-child(2),
-  #view-citas .table-wrap tbody td:nth-child(2){display:none}
-  /* Ocultar + y Atendido en historial — solo 📄 ✏️ 🗑️ */
-  .btn-cita-extra{display:none}
-  /* Acciones compactas */
-  #view-citas .actions-cell{gap:3px;flex-wrap:nowrap}
-  #view-citas .actions-cell .btn-sm{padding:5px 7px}
 
   /* ── MODALES — botones footer ── */
   .modal-footer{flex-wrap:wrap}

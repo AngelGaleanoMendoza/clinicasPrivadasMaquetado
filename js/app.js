@@ -1738,10 +1738,8 @@ function abrirCitaDesdeVista(pid, nombre) {
 
 function filtrarTablaCitas(q) {
   const q2 = (q||'').toLowerCase();
-  const rows = document.querySelectorAll('#tabla-citas tr');
-  rows.forEach(row => {
-    const txt = row.textContent.toLowerCase();
-    row.style.display = (!q2 || txt.includes(q2)) ? '' : 'none';
+  document.querySelectorAll('.cita-historial-item').forEach(el => {
+    el.style.display = (!q2 || (el.dataset.search||'').includes(q2)) ? '' : 'none';
   });
 }
 
@@ -1827,24 +1825,34 @@ function renderCitas(){
   // Renderizar tab activo
   switchCitasTab(citasTab);
 
-  // Tabla historial completo
-  const tbody = document.getElementById('tabla-citas'), empty = document.getElementById('citas-empty');
-  if(!C.c.length){ if(tbody) tbody.innerHTML=''; if(empty) empty.style.display='block'; return; }
+  // Historial completo — flex rows (mismo patrón que Pacientes)
+  const listaH = document.getElementById('historial-citas-lista');
+  const empty  = document.getElementById('citas-empty');
+  if(!C.c.length){ if(listaH) listaH.innerHTML=''; if(empty) empty.style.display='block'; return; }
   if(empty) empty.style.display='none';
-  if(tbody) tbody.innerHTML=[...C.c].sort((a,b)=>b.fecha.localeCompare(a.fecha)||a.hora.localeCompare(b.hora)).map(c=>{
-    const p=C.p.find(x=>x.id===c.pacienteId);
+  const MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  if(listaH) listaH.innerHTML = [...C.c].sort((a,b)=>b.fecha.localeCompare(a.fecha)||a.hora.localeCompare(b.hora)).map(c=>{
+    const p = C.p.find(x=>x.id===c.pacienteId);
     const esComp = c.estado==='completada';
-    return `<tr><td>${formatFecha(c.fecha)}</td><td>${formatHora12(c.hora)}</td>
-      <td><div class="patient-name-cell"><div class="patient-avatar" style="background:${colAvatar(c.pacienteId||0)};width:28px;height:28px;font-size:10px">${p?ini(p.nombre,p.apellidos):'?'}</div><div>${p?p.nombre+' '+p.apellidos:'Desconocido'}</div></div></td>
-      <td>${c.motivo}</td><td><span class="tag tag-cyan">${c.tipo}</span></td>
-      <td>${esComp?'<span class="acudio-badge">✅ Atendido</span>':estadoTag(c.estado)}</td>
-      <td><div class="actions-cell">
-        <button class="btn btn-sm btn-cita-extra" style="background:var(--primary);color:#fff;font-size:16px;font-weight:700;padding:2px 9px;line-height:1" onclick="openModalCitaP(${c.pacienteId})" title="Nueva cita">+</button>
-        ${!esComp&&c.estado!=='cancelada'?`<button class="btn btn-sm btn-cita-extra" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;white-space:nowrap;font-size:11px" onclick="marcarCitaCompletada(${c.id})">✅ Atendido</button>`:''}
+    const [,mm,dd] = c.fecha.split('-');
+    const search = ((p?p.nombre+' '+p.apellidos:'')+' '+c.motivo+' '+c.fecha).toLowerCase();
+    return `<div class="cita-historial-item" data-search="${search}" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)">
+      <div style="width:36px;flex-shrink:0;text-align:center;background:var(--primary-light);border-radius:8px;padding:5px 2px">
+        <div style="font-size:13px;font-weight:800;color:var(--primary);line-height:1">${dd}</div>
+        <div style="font-size:10px;color:var(--primary);text-transform:uppercase;font-weight:600">${MESES[parseInt(mm)-1]}</div>
+      </div>
+      <div class="patient-avatar" style="background:${colAvatar(c.pacienteId||0)};width:32px;height:32px;font-size:11px;flex-shrink:0">${p?ini(p.nombre,p.apellidos):'?'}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p?p.nombre+' '+p.apellidos:'Desconocido'}</div>
+        <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.motivo||'—'}</div>
+      </div>
+      ${esComp?'<span class="acudio-badge" style="flex-shrink:0">✅</span>':`<span style="flex-shrink:0">${estadoTag(c.estado)}</span>`}
+      <div class="actions-cell" style="flex-shrink:0;gap:3px;flex-wrap:nowrap">
         <button class="btn btn-primary btn-sm" onclick="verResumenCita(${c.id})" title="Ver hoja">📄</button>
         <button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">✏️</button>
         <button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">🗑️</button>
-      </div></td></tr>`;
+      </div>
+    </div>`;
   }).join('');
 }
 

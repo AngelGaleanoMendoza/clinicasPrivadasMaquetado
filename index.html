@@ -10,7 +10,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
-<link rel="stylesheet" href="css/styles.css?v=20260610c">
+<link rel="stylesheet" href="css/styles.css?v=20260610d">
 </head>
 <body>
 <script>
@@ -287,16 +287,13 @@
           </div>
         </div>
 
-        <!-- Tabla historial completo (siempre al fondo) -->
+        <!-- Historial completo -->
         <div class="card" style="margin-top:18px">
           <div class="card-header">
             <h3>📋 Historial completo</h3>
             <input type="text" id="citas-filtro-paciente" placeholder="Filtrar por paciente o motivo..." style="padding:8px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;background:var(--bg);color:var(--text);outline:none;min-width:260px;margin:0" oninput="filtrarTablaCitas(this.value)">
           </div>
-          <div class="table-wrap">
-            <table><thead><tr><th>Fecha</th><th>Hora</th><th>Paciente</th><th>Motivo</th><th>Tipo</th><th>Estado</th><th>Acciones</th></tr></thead>
-            <tbody id="tabla-citas"></tbody></table>
-          </div>
+          <div id="historial-citas-lista"></div>
           <div id="citas-empty" class="empty-state" style="display:none"><div class="empty-icon">📅</div><p>No hay citas registradas.</p></div>
         </div>
       </div>
@@ -1919,7 +1916,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260610c"></script>
+<script src="js/app.js?v=20260610d"></script>
 </body>
 </html>
 
