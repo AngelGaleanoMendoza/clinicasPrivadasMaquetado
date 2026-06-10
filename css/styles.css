@@ -1033,6 +1033,9 @@ body.dark .acudio-badge{background:rgba(16,185,129,.15);color:#6EE7B7;border-col
   /* Tarjetas de cita en el detalle de paciente: acciones en su propia fila */
   #tab-citas-p .cita-item,#tab-meds-p .cita-item,#tab-notas-p .cita-item{flex-wrap:wrap;gap:8px}
   #tab-citas-p .cita-item .actions-cell{width:100%;justify-content:flex-end}
+  /* Lista de Pacientes (tarjetas): acciones en su propia fila */
+  #tabla-pacientes .pac-row{flex-wrap:wrap;gap:8px}
+  #tabla-pacientes .pac-row .actions-cell{width:100%;justify-content:flex-end}
 }
 
 /* ══ CITAS — calendario centrado + tarjeta del día sin desbordar (móvil) ══ */

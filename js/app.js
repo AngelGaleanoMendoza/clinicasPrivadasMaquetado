@@ -1238,21 +1238,27 @@ function renderPacientes(){
 }
 
 function renderPacientesList(lista){
-  const tbody=document.getElementById('tabla-pacientes'), empty=document.getElementById('pacientes-empty');
-  if(!lista.length){ tbody.innerHTML=''; empty.style.display='block'; return; }
-  empty.style.display='none';
-  tbody.innerHTML=lista.map(x=>`<tr>
-    <td><div class="patient-name-cell">${x.fotoUrl?`<img src="${x.fotoUrl}" style="width:34px;height:34px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--border)" alt="foto">`:`<div class="patient-avatar" style="background:${colAvatar(x.id)}">${ini(x.nombre,x.apellidos)}</div>`}
-    <div><div style="font-weight:600">${x.nombre} ${x.apellidos}</div><div class="text-light">${calcEdad(x.fechaNac)}</div></div></div></td>
-    <td><code style="background:var(--primary-light);color:var(--primary);padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700">${getExpedienteNum(x.id)}</code></td>
-    <td>${x.identificacion||'—'}</td><td>${calcEdad(x.fechaNac)}</td><td>${x.telefono||'—'}</td>
-    <td>${estadoTag(x.estado||'activo')}</td>
-    <td><div class="actions-cell">
+  const el=document.getElementById('tabla-pacientes'), empty=document.getElementById('pacientes-empty');
+  if(!el) return;
+  if(!lista.length){ el.innerHTML=''; if(empty) empty.style.display='block'; return; }
+  if(empty) empty.style.display='none';
+  el.innerHTML=lista.map(x=>`<div class="pac-row" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)">
+    ${x.fotoUrl?`<img src="${x.fotoUrl}" style="width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--border)" alt="foto">`:`<div class="patient-avatar" style="background:${colAvatar(x.id)};width:38px;height:38px;flex-shrink:0">${ini(x.nombre,x.apellidos)}</div>`}
+    <div style="flex:1;min-width:0">
+      <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.nombre} ${x.apellidos}</div>
+      <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+        <code style="background:var(--primary-light);color:var(--primary);padding:1px 6px;border-radius:5px;font-size:10px;font-weight:700">${getExpedienteNum(x.id)}</code>
+        · ${calcEdad(x.fechaNac)}${x.telefono?` · ${x.telefono}`:''}
+      </div>
+    </div>
+    <span style="flex-shrink:0">${estadoTag(x.estado||'activo')}</span>
+    <div class="actions-cell" style="gap:5px;flex-wrap:wrap;flex-shrink:0">
       <button class="btn btn-sm btn-acudio" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff" onclick="registrarAcudidoPaciente(${x.id})">✅ <span class="acudio-text">Acudió</span></button>
       <button class="btn btn-secondary btn-sm" onclick="navigate('paciente-detalle',${x.id})">👁️</button>
       <button class="btn btn-secondary btn-sm" onclick="openModalPaciente(${x.id})">✏️</button>
       <button class="btn btn-danger btn-sm" onclick="eliminarPaciente(${x.id})">🗑️</button>
-    </div></td></tr>`).join('');
+    </div>
+  </div>`).join('');
 }
 
 function openModalPaciente(id){
@@ -3059,7 +3065,7 @@ function buscarPacienteEnModal(q) {
     return;
   }
   el.innerHTML = matches.map(p => `
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--card);border-radius:8px;margin-bottom:6px;border:1.5px solid var(--accent-blue)">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--card);border-radius:8px;margin-bottom:6px;border:1.5px solid var(--primary)">
       <div>
         <div style="font-weight:700;font-size:13px">${p.nombre} ${p.apellidos}</div>
         <div style="font-size:11px;color:var(--text-light)">${p.identificacion||''} · ${calcEdad(p.fechaNac)}</div>
@@ -8456,13 +8462,13 @@ function renderFarmaDespacho() {
           style="background:var(--card);border:1.5px solid ${sinStock ? '#e53e3e33' : 'var(--border)'};
           border-radius:12px;padding:12px;cursor:${sinStock ? 'not-allowed' : 'pointer'};
           opacity:${sinStock ? 0.5 : 1};transition:border-color .15s"
-          onmouseover="${sinStock ? '' : "this.style.borderColor='var(--accent-blue)'"}"
+          onmouseover="${sinStock ? '' : "this.style.borderColor='var(--primary)'"}"
           onmouseout="${sinStock ? '' : "this.style.borderColor='var(--border)'"}">
           <div style="font-size:1.4rem;margin-bottom:6px">${icon}</div>
           <div style="font-weight:600;font-size:13px;line-height:1.3;margin-bottom:4px">${p.nombre}</div>
           <div style="font-size:11px;color:var(--text-light);margin-bottom:6px">${p.descripcion || p.unidad}</div>
           <div style="display:flex;justify-content:space-between;align-items:center">
-            <span style="font-weight:700;color:var(--accent-blue)">${p.precio ? fmtC(p.precio) : 'Sin precio'}</span>
+            <span style="font-weight:700;color:var(--primary)">${p.precio ? fmtC(p.precio) : 'Sin precio'}</span>
             <span style="font-size:11px;color:${stockColor};font-weight:600">Stock: ${p.stock}</span>
           </div>
         </div>`;
@@ -8750,7 +8756,7 @@ function renderFarmaVentas() {
       <td style="font-size:12px">${v.referencia || '—'}</td>
       <td>${metIcon[v.metodoPago]||''} ${v.metodoPago||'—'}</td>
       <td>${esR ? '<span class="tag tag-blue">Receta</span>' : '<span class="tag tag-gray">Directa</span>'}</td>
-      <td style="font-weight:700;color:var(--accent-blue)">${fmtC(v.monto)}</td>
+      <td style="font-weight:700;color:var(--primary)">${fmtC(v.monto)}</td>
       <td><button class="btn btn-secondary btn-sm" onclick="reimprimirVentaFarma(${v.id})" title="Imprimir ticket">🖨️</button></td>
     </tr>`;
   }).join('');
@@ -8930,7 +8936,7 @@ function renderFarmaEstadisticas() {
       <div style="flex:1">
         <div style="font-size:13px;font-weight:600">${nombre}</div>
         <div style="height:5px;background:var(--border);border-radius:3px;margin-top:4px">
-          <div style="height:100%;width:${Math.round(cantidad/maxVal*100)}%;background:var(--accent-blue);border-radius:3px"></div>
+          <div style="height:100%;width:${Math.round(cantidad/maxVal*100)}%;background:var(--primary);border-radius:3px"></div>
         </div>
       </div>
       <span style="font-weight:700;font-size:13px;min-width:55px;text-align:right">${cantidad} uds</span>
