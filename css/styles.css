@@ -1,4 +1,15 @@
 *{margin:0;padding:0;box-sizing:border-box}
+
+/* ══ COMPORTAMIENTO TÁCTIL — evita zoom por doble-tap y flash gris al tocar ══ */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+*{-webkit-tap-highlight-color:transparent}
+button,a,label,select,input,textarea,summary,
+.btn,.btn-sm,.btn-ghost,.btn-login,.btn-logout,.menu-item,.menu-toggle,
+.chip,.tab,.citas-view-tab,.nav-quick-item,.bn-item,.dia-item,.atendido-item,
+.agenda-slot,.doc-card,.stat-card,.sa-kpi,.sa-quick-btn,.sa-agenda-item,
+.sa-rec-item,.icon-opt,.theme-toggle,.modal-close-btn,.admin-item-card,
+.patient-name-cell,.actions-cell button,[onclick]{touch-action:manipulation}
+
 :root{
   --primary:#2563EB;--primary-dark:#1D4ED8;--primary-light:#EFF6FF;
   --accent:#06B6D4;--success:#10B981;--warning:#F59E0B;--danger:#EF4444;
@@ -651,8 +662,8 @@ body.dark .fact-item-row input,body.dark .fact-item-row select{background:#0F172
   .topbar-search{min-width:80px}
   .theme-toggle-wrap span{display:none}
 
-  /* Contenido */
-  .content{padding:10px 10px 90px}
+  /* Contenido — sin bottom-nav: padding normal + safe-area del notch inferior */
+  .content{padding:10px 10px calc(20px + env(safe-area-inset-bottom,0px))}
 
   /* Cards */
   .card{padding:14px 12px}
