@@ -4891,7 +4891,7 @@ function mostrarSugerenciasDx(query) {
     if(!procs.length){ el.style.display='none'; return; }
     el.style.display = 'block';
     el.innerHTML = procs.map(p =>
-      `<div onclick="seleccionarDx(${JSON.stringify(p.label)})" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:2px" onmouseover="this.style.background='var(--primary-light)'" onmouseout="this.style.background=''">
+      `<div onmousedown="seleccionarDx('${p.label.replace(/'/g,"\\'")}')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:2px" onmouseover="this.style.background='var(--primary-light)'" onmouseout="this.style.background=''">
         <span style="font-weight:600;font-size:13px">🦷 ${p.label}</span>
         <span style="font-size:11px;color:var(--text-light)">${p.cat}</span>
       </div>`
