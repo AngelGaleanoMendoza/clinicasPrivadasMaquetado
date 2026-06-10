@@ -10,7 +10,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
-<link rel="stylesheet" href="css/styles.css?v=20260610e">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.22.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="css/styles.css?v=20260610f">
 </head>
 <body>
 <script>
@@ -84,25 +85,25 @@
     </div>
     <nav class="sidebar-menu">
       <div class="menu-section">Principal</div>
-      <div class="menu-item active" onclick="navigate('dashboard')"><span class="icon">📊</span> Dashboard</div>
-      <div class="menu-item" id="menu-expedientes" onclick="navigate('expedientes')"><span class="icon">📋</span> Expedientes</div>
-      <div class="menu-item" id="menu-procedimientos" onclick="navigate('procedimientos')" style="display:none"><span class="icon">🦷</span> Procedimientos</div>
-      <div class="menu-item" id="menu-farmacia" onclick="navigate('farmacia')" style="display:none"><span class="icon">💊</span> Farmacia</div>
+      <div class="menu-item active" onclick="navigate('dashboard')"><span class="icon"><i class="ti ti-layout-dashboard"></i></span> Dashboard</div>
+      <div class="menu-item" id="menu-expedientes" onclick="navigate('expedientes')"><span class="icon"><i class="ti ti-clipboard-list"></i></span> Expedientes</div>
+      <div class="menu-item" id="menu-procedimientos" onclick="navigate('procedimientos')" style="display:none"><span class="icon"><i class="ti ti-tooth"></i></span> Procedimientos</div>
+      <div class="menu-item" id="menu-farmacia" onclick="navigate('farmacia')" style="display:none"><span class="icon"><i class="ti ti-building-store"></i></span> Farmacia</div>
       <div class="menu-section" id="menu-clinica-section">Clínica</div>
-      <div class="menu-item" id="menu-pacientes" onclick="navigate('pacientes')"><span class="icon">👥</span> Pacientes <span class="badge" id="badge-pacientes">0</span></div>
-      <div class="menu-item" id="menu-citas" onclick="navigate('citas')"><span class="icon">📅</span> Citas <span class="badge" id="badge-citas">0</span></div>
-      <div class="menu-item" id="menu-agendas" onclick="navigate('agendas')"><span class="icon">🗓️</span> Agendas</div>
-      <div class="menu-item" id="menu-medicaciones" onclick="navigate('medicaciones')"><span class="icon">💊</span> Medicaciones</div>
-      <div class="menu-item" id="menu-notas" onclick="navigate('notas')"><span class="icon">📝</span> Notas Clínicas</div>
-      <div class="menu-item" id="menu-atendidos" onclick="navigate('atendidos')"><span class="icon">📊</span> Atendidos por Día</div>
+      <div class="menu-item" id="menu-pacientes" onclick="navigate('pacientes')"><span class="icon"><i class="ti ti-users"></i></span> Pacientes <span class="badge" id="badge-pacientes">0</span></div>
+      <div class="menu-item" id="menu-citas" onclick="navigate('citas')"><span class="icon"><i class="ti ti-calendar"></i></span> Citas <span class="badge" id="badge-citas">0</span></div>
+      <div class="menu-item" id="menu-agendas" onclick="navigate('agendas')"><span class="icon"><i class="ti ti-calendar-event"></i></span> Agendas</div>
+      <div class="menu-item" id="menu-medicaciones" onclick="navigate('medicaciones')"><span class="icon"><i class="ti ti-pill"></i></span> Medicaciones</div>
+      <div class="menu-item" id="menu-notas" onclick="navigate('notas')"><span class="icon"><i class="ti ti-notes"></i></span> Notas Clínicas</div>
+      <div class="menu-item" id="menu-atendidos" onclick="navigate('atendidos')"><span class="icon"><i class="ti ti-chart-bar"></i></span> Atendidos por Día</div>
       <div class="menu-section" id="menu-gestion-section" style="display:none">Gestión</div>
-      <div class="menu-item" id="menu-inventario" onclick="navigate('inventario')" style="display:none"><span class="icon">📦</span> Inventario</div>
-      <div class="menu-item" id="menu-finanzas" onclick="navigate('finanzas')" style="display:none"><span class="icon">💰</span> Finanzas</div>
-      <div class="menu-item" id="menu-estadisticas" onclick="navigate('estadisticas')" style="display:none"><span class="icon">📈</span> Estadísticas</div>
-      <div class="menu-item" id="menu-exportar" onclick="navigate('exportar')" style="display:none"><span class="icon">📤</span> Exportar</div>
+      <div class="menu-item" id="menu-inventario" onclick="navigate('inventario')" style="display:none"><span class="icon"><i class="ti ti-package"></i></span> Inventario</div>
+      <div class="menu-item" id="menu-finanzas" onclick="navigate('finanzas')" style="display:none"><span class="icon"><i class="ti ti-coins"></i></span> Finanzas</div>
+      <div class="menu-item" id="menu-estadisticas" onclick="navigate('estadisticas')" style="display:none"><span class="icon"><i class="ti ti-chart-line"></i></span> Estadísticas</div>
+      <div class="menu-item" id="menu-exportar" onclick="navigate('exportar')" style="display:none"><span class="icon"><i class="ti ti-upload"></i></span> Exportar</div>
       <div class="menu-section" id="menu-admin-section" style="display:none">Super Admin</div>
-      <div class="menu-item" id="menu-admin" onclick="navigate('admin')" style="display:none"><span class="icon">👑</span> Administración</div>
-      <div class="menu-item" id="menu-configuracion" onclick="navigate('configuracion')" style="display:none"><span class="icon">⚙️</span> Configuración</div>
+      <div class="menu-item" id="menu-admin" onclick="navigate('admin')" style="display:none"><span class="icon"><i class="ti ti-crown"></i></span> Administración</div>
+      <div class="menu-item" id="menu-configuracion" onclick="navigate('configuracion')" style="display:none"><span class="icon"><i class="ti ti-settings"></i></span> Configuración</div>
     </nav>
     <div class="sidebar-footer">
       <div class="sf-user">
@@ -113,22 +114,22 @@
         </div>
       </div>
       <button class="btn-logout" onclick="doLogout()">
-        <span style="font-size:15px">⏻</span> Cerrar sesión
+        <i class="ti ti-power" style="font-size:15px"></i> Cerrar sesión
       </button>
     </div>
   </aside>
 
   <div class="main">
     <div class="topbar">
-      <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+      <button class="menu-toggle" onclick="toggleSidebar()"><i class="ti ti-menu-2"></i></button>
       <h1 id="page-title">Dashboard</h1>
       <div class="topbar-search">
-        <span style="color:var(--text-light);font-size:15px">🔍</span>
+        <i class="ti ti-search" style="color:var(--text-light);font-size:15px"></i>
         <input type="text" id="global-search" placeholder="Buscar paciente..." oninput="globalSearch(this.value)">
       </div>
       <div class="topbar-date" id="topbar-date"></div>
       <div class="theme-toggle-wrap">
-        <span id="theme-icon">☀️</span>
+        <i class="ti ti-sun" id="theme-icon"></i>
         <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Cambiar modo"></button>
       </div>
       <div class="db-status" id="db-status" style="display:none"><div class="db-dot" id="db-dot"></div><span id="db-label">Conectando...</span></div>
@@ -144,17 +145,17 @@
         <!-- Grid de accesos rápidos — solo visible en mobile -->
         <div class="nav-quick-grid" id="nav-quick-grid"></div>
         <div class="stats-grid">
-          <div class="stat-card"><div class="stat-icon si-blue">👥</div><div class="stat-info"><h3 id="stat-pacientes">—</h3><p>Pacientes registrados</p></div></div>
-          <div class="stat-card"><div class="stat-icon si-green">📅</div><div class="stat-info"><h3 id="stat-citas-hoy">—</h3><p>Citas hoy</p></div></div>
-          <div class="stat-card"><div class="stat-icon" style="background:linear-gradient(135deg,#FEF3C7,#FDE68A)">⏳</div><div class="stat-info"><h3 id="stat-pendientes">—</h3><p>Citas pendientes</p><div class="stat-trend warn" id="stat-pendientes-trend"></div></div></div>
-          <div class="stat-card"><div class="stat-icon si-orange">💊</div><div class="stat-info"><h3 id="stat-meds">—</h3><p>Medicaciones activas</p></div></div>
+          <div class="stat-card"><div class="stat-icon si-blue"><i class="ti ti-users"></i></div><div class="stat-info"><h3 id="stat-pacientes">—</h3><p>Pacientes registrados</p></div></div>
+          <div class="stat-card"><div class="stat-icon si-green"><i class="ti ti-calendar"></i></div><div class="stat-info"><h3 id="stat-citas-hoy">—</h3><p>Citas hoy</p></div></div>
+          <div class="stat-card"><div class="stat-icon" style="background:linear-gradient(135deg,#FEF3C7,#FDE68A)"><i class="ti ti-clock"></i></div><div class="stat-info"><h3 id="stat-pendientes">—</h3><p>Citas pendientes</p><div class="stat-trend warn" id="stat-pendientes-trend"></div></div></div>
+          <div class="stat-card"><div class="stat-icon si-orange"><i class="ti ti-pill"></i></div><div class="stat-info"><h3 id="stat-meds">—</h3><p>Medicaciones activas</p></div></div>
         </div>
         <div class="grid-2">
           <div class="card">
             <div class="card-header">
-              <h3>📅 Pacientes del día</h3>
+              <h3><i class="ti ti-calendar"></i> Pacientes del día</h3>
               <div style="display:flex;gap:6px">
-                <button class="btn btn-secondary btn-sm" onclick="openModalPaciente();document.querySelector('#modal-paciente .modal-footer .btn-primary').textContent='📋 Guardar y abrir expediente'" title="Registrar paciente nuevo y abrir su expediente">🚶 Nuevo paciente</button>
+                <button class="btn btn-secondary btn-sm" onclick="openModalPaciente();document.querySelector('#modal-paciente .modal-footer .btn-primary').textContent='Guardar y abrir expediente'" title="Registrar paciente nuevo y abrir su expediente"><i class="ti ti-walk"></i> Nuevo paciente</button>
                 <button class="btn btn-primary btn-sm" onclick="navigate('citas')">Ver citas</button>
               </div>
             </div>
@@ -162,16 +163,16 @@
           </div>
           <div>
             <div class="card" style="margin-bottom:18px">
-              <div class="card-header"><h3>🗓️ Calendario</h3></div>
+              <div class="card-header"><h3><i class="ti ti-calendar-event"></i> Calendario</h3></div>
               <div class="cal-wrap" id="dashboard-cal"></div>
               <div class="cal-legend"><div class="cal-legend-dot"></div><span>Tiene citas</span></div>
             </div>
             <div class="card">
-              <div class="card-header" style="margin-bottom:10px"><h3>🕐 Actividad Reciente</h3></div>
+              <div class="card-header" style="margin-bottom:10px"><h3><i class="ti ti-history"></i> Actividad Reciente</h3></div>
               <div class="tabs" style="margin-bottom:12px">
-                <button class="tab active" id="tab-rec-pacientes"   onclick="switchRecTab('pacientes')">👥 Pacientes</button>
-                <button class="tab"        id="tab-rec-citas"       onclick="switchRecTab('citas')">📅 Citas</button>
-                <button class="tab"        id="tab-rec-meds"        onclick="switchRecTab('meds')">💊 Meds</button>
+                <button class="tab active" id="tab-rec-pacientes"   onclick="switchRecTab('pacientes')"><i class="ti ti-users"></i> Pacientes</button>
+                <button class="tab"        id="tab-rec-citas"       onclick="switchRecTab('citas')"><i class="ti ti-calendar"></i> Citas</button>
+                <button class="tab"        id="tab-rec-meds"        onclick="switchRecTab('meds')"><i class="ti ti-pill"></i> Meds</button>
               </div>
               <div id="recientes-content"></div>
             </div>
@@ -187,7 +188,7 @@
           <div>
             <div class="card">
               <div class="card-header" style="margin-bottom:14px">
-                <h3>👨‍⚕️ Personal</h3>
+                <h3><i class="ti ti-user-heart"></i> Personal</h3>
                 <button class="btn btn-secondary btn-sm" onclick="navigate('configuracion')" title="Agregar médico">+ Agregar</button>
               </div>
               <div id="agendas-doctors-list"></div>
@@ -196,7 +197,7 @@
           <!-- Panel derecho: agenda del médico seleccionado -->
           <div id="agendas-right-panel">
             <div class="empty-state" style="padding:72px 20px;background:var(--card);border-radius:var(--radius);border:1px solid var(--border)">
-              <div class="empty-icon">🗓️</div>
+              <div class="empty-icon"><i class="ti ti-calendar-event"></i></div>
               <p>Selecciona un médico o profesional<br>para ver su agenda</p>
             </div>
           </div>
@@ -206,10 +207,10 @@
       <!-- PACIENTES -->
       <div id="view-pacientes" class="view">
         <div class="card">
-          <div class="card-header"><h3>👥 Registro de Pacientes</h3><button class="btn btn-primary" onclick="openModalPaciente()">+ Nuevo Paciente</button></div>
+          <div class="card-header"><h3><i class="ti ti-users"></i> Registro de Pacientes</h3><button class="btn btn-primary" onclick="openModalPaciente()"><i class="ti ti-plus"></i> Nuevo Paciente</button></div>
           <div class="search-bar">
             <div class="search-bar-input">
-              <span style="color:var(--text-light)">🔍</span>
+              <i class="ti ti-search" style="color:var(--text-light)"></i>
               <input type="text" id="pacientes-search" placeholder="Buscar por nombre, apellidos, DNI o teléfono..." oninput="filterPacientes(this.value)">
             </div>
             <div class="filter-chips">
@@ -225,7 +226,7 @@
               <tbody id="tabla-pacientes"></tbody>
             </table>
           </div>
-          <div id="pacientes-empty" class="empty-state" style="display:none"><div class="empty-icon">👥</div><p>No hay pacientes registrados.<br>Haz clic en <strong>+ Nuevo Paciente</strong> para comenzar.</p></div>
+          <div id="pacientes-empty" class="empty-state" style="display:none"><div class="empty-icon"><i class="ti ti-users"></i></div><p>No hay pacientes registrados.<br>Haz clic en <strong>+ Nuevo Paciente</strong> para comenzar.</p></div>
         </div>
       </div>
 
@@ -234,10 +235,10 @@
 
         <!-- Buscador rápido de paciente para citar -->
         <div class="card" style="margin-bottom:18px">
-          <div class="card-header"><h3>📅 Nueva cita para</h3><button class="btn btn-primary btn-sm" style="white-space:nowrap" onclick="openModalCita()">+ Nueva Cita</button></div>
+          <div class="card-header"><h3><i class="ti ti-calendar-plus"></i> Nueva cita para</h3><button class="btn btn-primary btn-sm" style="white-space:nowrap" onclick="openModalCita()"><i class="ti ti-plus"></i> Nueva Cita</button></div>
           <div class="search-bar" style="margin-bottom:0;margin-top:14px">
             <div class="search-bar-input" style="position:relative">
-              <span style="color:var(--text-light)">🔍</span>
+              <i class="ti ti-search" style="color:var(--text-light)"></i>
               <input type="text" id="cita-pac-buscar"
                 placeholder="Buscar paciente por nombre, expediente o ID..."
                 autocomplete="off"
@@ -253,16 +254,16 @@
           <!-- TABS de fecha -->
           <div class="citas-view-tabs" id="citas-view-tabs">
             <button class="citas-view-tab active" id="ctab-hoy" onclick="switchCitasTab('hoy')">
-              📅 Hoy <span class="ctab-badge" id="ctab-badge-hoy">0</span>
+              <i class="ti ti-calendar"></i> Hoy <span class="ctab-badge" id="ctab-badge-hoy">0</span>
             </button>
             <button class="citas-view-tab" id="ctab-manana" onclick="switchCitasTab('manana')">
-              🌅 Mañana <span class="ctab-badge" id="ctab-badge-manana">0</span>
+              <i class="ti ti-sunrise"></i> Mañana <span class="ctab-badge" id="ctab-badge-manana">0</span>
             </button>
             <button class="citas-view-tab" id="ctab-fecha" onclick="switchCitasTab('fecha')">
-              🗓️ Buscar fecha
+              <i class="ti ti-calendar-search"></i> Buscar fecha
             </button>
             <button class="citas-view-tab" id="ctab-calendario" onclick="switchCitasTab('calendario')">
-              📆 Calendario
+              <i class="ti ti-calendar-month"></i> Calendario
             </button>
           </div>
 
@@ -276,7 +277,7 @@
           <!-- Lista de citas (tabs hoy / mañana / fecha personalizada) -->
           <div id="citas-tab-lista" style="display:block">
             <div id="lista-citas-tab"></div>
-            <div id="citas-tab-empty" class="empty-state" style="display:none;padding:28px 0"><div class="empty-icon">📅</div><p id="citas-tab-empty-msg">Sin citas para esta fecha</p></div>
+            <div id="citas-tab-empty" class="empty-state" style="display:none;padding:28px 0"><div class="empty-icon"><i class="ti ti-calendar"></i></div><p id="citas-tab-empty-msg">Sin citas para esta fecha</p></div>
           </div>
 
           <!-- Calendario (tab calendario) -->
@@ -290,47 +291,47 @@
         <!-- Historial completo -->
         <div class="card" style="margin-top:18px">
           <div class="card-header">
-            <h3>📋 Historial completo</h3>
+            <h3><i class="ti ti-list"></i> Historial completo</h3>
             <input type="text" id="citas-filtro-paciente" placeholder="Filtrar por paciente o motivo..." style="padding:8px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;background:var(--bg);color:var(--text);outline:none;min-width:260px;margin:0" oninput="filtrarTablaCitas(this.value)">
           </div>
           <div id="historial-citas-lista"></div>
-          <div id="citas-empty" class="empty-state" style="display:none"><div class="empty-icon">📅</div><p>No hay citas registradas.</p></div>
+          <div id="citas-empty" class="empty-state" style="display:none"><div class="empty-icon"><i class="ti ti-calendar"></i></div><p>No hay citas registradas.</p></div>
         </div>
       </div>
 
       <!-- MEDICACIONES -->
       <div id="view-medicaciones" class="view">
         <div class="card">
-          <div class="card-header"><h3>💊 Medicaciones</h3><button class="btn btn-primary" onclick="openModalMedicacion()">+ Nueva Medicación</button></div>
+          <div class="card-header"><h3><i class="ti ti-pill"></i> Medicaciones</h3><button class="btn btn-primary" onclick="openModalMedicacion()"><i class="ti ti-plus"></i> Nueva Medicación</button></div>
           <div id="tabla-medicaciones"></div>
-          <div id="meds-empty" class="empty-state" style="display:none"><div class="empty-icon">💊</div><p>No hay medicaciones registradas.</p></div>
+          <div id="meds-empty" class="empty-state" style="display:none"><div class="empty-icon"><i class="ti ti-pill"></i></div><p>No hay medicaciones registradas.</p></div>
         </div>
       </div>
 
       <!-- NOTAS -->
       <div id="view-notas" class="view">
         <div class="card">
-          <div class="card-header"><h3>📝 Notas Clínicas</h3><button class="btn btn-primary" onclick="openModalNota()">+ Nueva Nota</button></div>
+          <div class="card-header"><h3><i class="ti ti-notes"></i> Notas Clínicas</h3><button class="btn btn-primary" onclick="openModalNota()"><i class="ti ti-plus"></i> Nueva Nota</button></div>
           <div id="notas-clinic-badge-container"></div>
           <div id="tabla-notas"></div>
-          <div id="notas-empty" class="empty-state" style="display:none"><div class="empty-icon">📝</div><p>No hay notas clínicas.</p></div>
+          <div id="notas-empty" class="empty-state" style="display:none"><div class="empty-icon"><i class="ti ti-notes"></i></div><p>No hay notas clínicas.</p></div>
         </div>
       </div>
 
       <!-- DETALLE PACIENTE -->
       <div id="view-paciente-detalle" class="view">
-        <div style="margin-bottom:14px"><button class="btn btn-secondary btn-sm" onclick="navigate('pacientes')">← Volver</button></div>
+        <div style="margin-bottom:14px"><button class="btn btn-secondary btn-sm" onclick="navigate('pacientes')"><i class="ti ti-arrow-left"></i> Volver</button></div>
         <div id="detalle-header"></div>
         <div class="tabs">
-          <button class="tab active" onclick="switchTab('tab-info',this)">📋 Información</button>
-          <button class="tab" onclick="switchTab('tab-citas-p',this)">📅 Citas</button>
-          <button class="tab" onclick="switchTab('tab-meds-p',this)">💊 Medicaciones</button>
-          <button class="tab" onclick="switchTab('tab-notas-p',this)">📝 Notas</button>
-          <button class="tab" onclick="switchTab('tab-expediente',this)">📁 Expediente</button>
-          <button class="tab" id="tab-btn-historial-dental" onclick="switchTab('tab-historial-dental',this)" style="display:none">🦷 Historia Dental</button>
-          <button class="tab" id="tab-btn-odontograma" onclick="switchTab('tab-odontograma',this)" style="display:none">🗺️ Odontograma</button>
-          <button class="tab" id="tab-btn-periodontograma" onclick="switchTab('tab-periodontograma',this)" style="display:none">📏 Periodontograma</button>
-          <button class="tab" id="tab-btn-procedimientos-p" onclick="switchTab('tab-procedimientos-p',this)" style="display:none">📋 Plan Tratamiento</button>
+          <button class="tab active" onclick="switchTab('tab-info',this)"><i class="ti ti-info-circle"></i> Información</button>
+          <button class="tab" onclick="switchTab('tab-citas-p',this)"><i class="ti ti-calendar"></i> Citas</button>
+          <button class="tab" onclick="switchTab('tab-meds-p',this)"><i class="ti ti-pill"></i> Medicaciones</button>
+          <button class="tab" onclick="switchTab('tab-notas-p',this)"><i class="ti ti-notes"></i> Notas</button>
+          <button class="tab" onclick="switchTab('tab-expediente',this)"><i class="ti ti-folder"></i> Expediente</button>
+          <button class="tab" id="tab-btn-historial-dental" onclick="switchTab('tab-historial-dental',this)" style="display:none"><i class="ti ti-tooth"></i> Historia Dental</button>
+          <button class="tab" id="tab-btn-odontograma" onclick="switchTab('tab-odontograma',this)" style="display:none"><i class="ti ti-layout-grid"></i> Odontograma</button>
+          <button class="tab" id="tab-btn-periodontograma" onclick="switchTab('tab-periodontograma',this)" style="display:none"><i class="ti ti-ruler"></i> Periodontograma</button>
+          <button class="tab" id="tab-btn-procedimientos-p" onclick="switchTab('tab-procedimientos-p',this)" style="display:none"><i class="ti ti-clipboard-list"></i> Plan Tratamiento</button>
         </div>
         <div id="tab-info"></div>
         <div id="tab-citas-p" style="display:none"></div>
@@ -347,7 +348,7 @@
       <div id="view-expedientes" class="view">
         <div class="card">
           <div class="card-header">
-            <h3>📋 Expedientes Clínicos</h3>
+            <h3><i class="ti ti-clipboard-list"></i> Expedientes Clínicos</h3>
             <input type="text" id="exp-search" placeholder="Buscar por nombre, apellido o N° expediente..."
               oninput="filtrarExpedientes(this.value)"
               style="padding:8px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;background:var(--bg);color:var(--text);outline:none;min-width:260px">
@@ -360,9 +361,9 @@
       <div id="view-atendidos" class="view">
         <div class="card">
           <div class="card-header">
-            <h3>📊 Pacientes Atendidos por Día</h3>
+            <h3><i class="ti ti-chart-bar"></i> Pacientes Atendidos por Día</h3>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-              <button class="btn btn-secondary btn-sm" onclick="openModalPaciente()" title="Registrar paciente que llegó sin cita previa">🚶 Nuevo paciente</button>
+              <button class="btn btn-secondary btn-sm" onclick="openModalPaciente()" title="Registrar paciente que llegó sin cita previa"><i class="ti ti-walk"></i> Nuevo paciente</button>
               <input type="date" id="atendidos-fecha-picker" onchange="renderAtendidos(this.value)" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;outline:none;cursor:pointer;color:var(--text);background:var(--card)">
               <button class="btn btn-secondary btn-sm" onclick="renderAtendidos(hoy())">Hoy</button>
             </div>
@@ -376,14 +377,14 @@
       <div id="view-configuracion" class="view">
         <div class="grid-2">
           <div class="card">
-            <div class="card-header"><h3>⚙️ Datos de la Clínica</h3></div>
+            <div class="card-header"><h3><i class="ti ti-settings"></i> Datos de la Clínica</h3></div>
             <div style="display:flex;gap:18px;align-items:center;margin-bottom:22px">
-              <div id="config-logo-box" class="config-logo-box" onclick="document.getElementById('config-logo-file').click()" style="cursor:pointer;border:2px dashed transparent;transition:border-color .2s" onmouseenter="this.style.borderColor='var(--primary)'" onmouseleave="this.style.borderColor='transparent'" title="Haz clic para cambiar el logo">🏥</div>
+              <div id="config-logo-box" class="config-logo-box" onclick="document.getElementById('config-logo-file').click()" style="cursor:pointer;border:2px dashed transparent;transition:border-color .2s" onmouseenter="this.style.borderColor='var(--primary)'" onmouseleave="this.style.borderColor='transparent'" title="Haz clic para cambiar el logo"><i class="ti ti-building-hospital" style="font-size:36px"></i></div>
               <div style="flex:1">
                 <input type="hidden" id="config-logo-url">
                 <input type="file" id="config-logo-file" accept="image/*" style="display:none" onchange="onConfigLogoSelected(this)">
                 <div style="display:flex;gap:8px;flex-wrap:wrap">
-                  <button class="btn btn-secondary btn-sm" onclick="document.getElementById('config-logo-file').click()">📁 Subir logo</button>
+                  <button class="btn btn-secondary btn-sm" onclick="document.getElementById('config-logo-file').click()"><i class="ti ti-upload"></i> Subir logo</button>
                   <button class="btn btn-sm" id="config-logo-remove" onclick="removeConfigLogo()" style="display:none;background:#FEE2E2;color:#DC2626;border:1px solid #FECACA">✕ Quitar</button>
                 </div>
                 <p class="text-light" style="margin-top:6px;font-size:11px">PNG, JPG o SVG · Aparece en todos los PDFs e impresiones</p>
@@ -400,11 +401,11 @@
               <div class="form-group full"><label>Nota al pie (en notas de consulta)</label><input type="text" id="config-nota-pie" placeholder="Horario: Lunes a Viernes 8am–5pm"></div>
             </div>
             <div style="margin-top:18px">
-              <button class="btn btn-primary" onclick="guardarConfigClinica()">💾 Guardar Configuración</button>
+              <button class="btn btn-primary" onclick="guardarConfigClinica()"><i class="ti ti-device-floppy"></i> Guardar Configuración</button>
             </div>
           </div>
           <div class="card">
-            <div class="card-header"><h3>👁️ Vista Previa Nota de Consulta</h3></div>
+            <div class="card-header"><h3><i class="ti ti-eye"></i> Vista Previa Nota de Consulta</h3></div>
             <div id="config-preview" style="border:1px solid var(--border);border-radius:10px;padding:18px;background:var(--bg)">
               <p class="text-light" style="text-align:center;padding:20px">Llena los datos y guarda para ver la vista previa en las notas de consulta.</p>
             </div>
@@ -422,21 +423,21 @@
       <div id="view-farmacia" class="view">
         <div class="card" style="margin-bottom:18px">
           <div class="card-header">
-            <h3>💊 Farmacia</h3>
+            <h3><i class="ti ti-building-store"></i> Farmacia</h3>
             <div id="farma-action-btns"></div>
           </div>
           <div class="stats-grid" id="farma-stats-row" style="margin-bottom:14px">
-            <div class="stat-card"><div class="stat-icon si-blue">💰</div><div class="stat-info"><h3 id="farma-stat-ventas">C$ 0</h3><p>Ventas Hoy</p></div></div>
-            <div class="stat-card"><div class="stat-icon si-cyan">📦</div><div class="stat-info"><h3 id="farma-stat-despachos">0</h3><p>Despachos Hoy</p></div></div>
-            <div class="stat-card"><div class="stat-icon si-orange">⚠️</div><div class="stat-info"><h3 id="farma-stat-alertas">0</h3><p>Alertas Stock</p></div></div>
-            <div class="stat-card"><div class="stat-icon si-green">📄</div><div class="stat-info"><h3 id="farma-stat-recetas">0</h3><p>Recetas Hoy</p></div></div>
+            <div class="stat-card"><div class="stat-icon si-blue"><i class="ti ti-coins"></i></div><div class="stat-info"><h3 id="farma-stat-ventas">C$ 0</h3><p>Ventas Hoy</p></div></div>
+            <div class="stat-card"><div class="stat-icon si-cyan"><i class="ti ti-package"></i></div><div class="stat-info"><h3 id="farma-stat-despachos">0</h3><p>Despachos Hoy</p></div></div>
+            <div class="stat-card"><div class="stat-icon si-orange"><i class="ti ti-alert-triangle"></i></div><div class="stat-info"><h3 id="farma-stat-alertas">0</h3><p>Alertas Stock</p></div></div>
+            <div class="stat-card"><div class="stat-icon si-green"><i class="ti ti-receipt"></i></div><div class="stat-info"><h3 id="farma-stat-recetas">0</h3><p>Recetas Hoy</p></div></div>
           </div>
           <div class="tabs" style="margin-bottom:0">
-            <button class="tab active" id="tab-farma-despacho"     onclick="switchFarmaTab('despacho')">🛒 Despacho</button>
-            <button class="tab"        id="tab-farma-ventas"       onclick="switchFarmaTab('ventas')">📋 Ventas</button>
-            <button class="tab"        id="tab-farma-recetas"      onclick="switchFarmaTab('recetas')">📄 Recetas</button>
-            <button class="tab"        id="tab-farma-alertas"      onclick="switchFarmaTab('alertas')">⚠️ Alertas</button>
-            <button class="tab"        id="tab-farma-estadisticas" onclick="switchFarmaTab('estadisticas')">📈 Estadísticas</button>
+            <button class="tab active" id="tab-farma-despacho"     onclick="switchFarmaTab('despacho')"><i class="ti ti-shopping-cart"></i> Despacho</button>
+            <button class="tab"        id="tab-farma-ventas"       onclick="switchFarmaTab('ventas')"><i class="ti ti-clipboard-list"></i> Ventas</button>
+            <button class="tab"        id="tab-farma-recetas"      onclick="switchFarmaTab('recetas')"><i class="ti ti-file-text"></i> Recetas</button>
+            <button class="tab"        id="tab-farma-alertas"      onclick="switchFarmaTab('alertas')"><i class="ti ti-alert-triangle"></i> Alertas</button>
+            <button class="tab"        id="tab-farma-estadisticas" onclick="switchFarmaTab('estadisticas')"><i class="ti ti-chart-line"></i> Estadísticas</button>
           </div>
         </div>
 
@@ -447,15 +448,15 @@
             <div class="card">
               <div class="search-bar" style="margin-bottom:14px">
                 <div class="search-bar-input">
-                  <span style="color:var(--text-light)">🔍</span>
+                  <i class="ti ti-search" style="color:var(--text-light)"></i>
                   <input type="text" id="farma-buscar" placeholder="Buscar medicamento o producto..." oninput="filtrarProductosFarma()">
                 </div>
                 <div class="filter-chips" id="farma-cat-chips">
                   <span class="chip active" onclick="setFarmaCat('',this)">Todos</span>
-                  <span class="chip" onclick="setFarmaCat('medicamento',this)">💊 Medicamentos</span>
-                  <span class="chip" onclick="setFarmaCat('material',this)">🩺 Material</span>
-                  <span class="chip" onclick="setFarmaCat('insumo',this)">🧹 Insumos</span>
-                  <span class="chip" onclick="setFarmaCat('general',this)">📦 General</span>
+                  <span class="chip" onclick="setFarmaCat('medicamento',this)"><i class="ti ti-pill"></i> Medicamentos</span>
+                  <span class="chip" onclick="setFarmaCat('material',this)"><i class="ti ti-stethoscope"></i> Material</span>
+                  <span class="chip" onclick="setFarmaCat('insumo',this)"><i class="ti ti-brush"></i> Insumos</span>
+                  <span class="chip" onclick="setFarmaCat('general',this)"><i class="ti ti-package"></i> General</span>
                 </div>
               </div>
               <div id="farma-productos-grid" class="farma-prod-grid"></div>
@@ -463,8 +464,8 @@
             <!-- Carrito -->
             <div class="card farma-carrito-card">
               <div class="card-header" style="margin-bottom:16px">
-                <h3>🛒 Carrito</h3>
-                <button class="btn btn-secondary btn-sm" onclick="limpiarCarrito()">🗑️ Vaciar</button>
+                <h3><i class="ti ti-shopping-cart"></i> Carrito</h3>
+                <button class="btn btn-secondary btn-sm" onclick="limpiarCarrito()"><i class="ti ti-trash"></i> Vaciar</button>
               </div>
               <div id="farma-carrito-items" class="farma-carrito-items"></div>
               <div class="farma-totales">
@@ -485,9 +486,9 @@
                 <div class="form-group">
                   <label>Método de Pago</label>
                   <select id="farma-metodo-pago">
-                    <option value="efectivo">💵 Efectivo</option>
-                    <option value="tarjeta">💳 Tarjeta</option>
-                    <option value="transferencia">🏦 Transferencia</option>
+                    <option value="efectivo">Efectivo</option>
+                    <option value="tarjeta">Tarjeta</option>
+                    <option value="transferencia">Transferencia</option>
                     <option value="otro">Otro</option>
                   </select>
                 </div>
@@ -505,7 +506,7 @@
                     <input type="text" id="farma-paciente-receta" placeholder="Nombre del paciente">
                   </div>
                 </div>
-                <button class="btn btn-primary" onclick="completarVentaFarma()" style="width:100%;padding:12px;font-size:15px;font-weight:700">✅ Completar Venta</button>
+                <button class="btn btn-primary" onclick="completarVentaFarma()" style="width:100%;padding:12px;font-size:15px;font-weight:700"><i class="ti ti-circle-check"></i> Completar Venta</button>
               </div>
             </div>
           </div>
@@ -515,7 +516,7 @@
         <div id="farma-panel-ventas" style="display:none">
           <div class="card">
             <div class="card-header">
-              <h3>📋 Ventas del Día</h3>
+              <h3><i class="ti ti-clipboard-list"></i> Ventas del Día</h3>
               <input type="date" id="farma-ventas-fecha" onchange="renderFarmaVentas()" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit;outline:none;color:var(--text);background:var(--card)">
             </div>
             <div class="table-wrap">
@@ -529,7 +530,7 @@
         <!-- Panel: Recetas -->
         <div id="farma-panel-recetas" style="display:none">
           <div class="card">
-            <div class="card-header"><h3>📄 Recetas Despachadas</h3></div>
+            <div class="card-header"><h3><i class="ti ti-file-text"></i> Recetas Despachadas</h3></div>
             <div class="table-wrap">
               <table><thead><tr><th>Fecha</th><th>Paciente</th><th>Médico</th><th>Medicamentos</th><th>Total</th></tr></thead>
               <tbody id="farma-recetas-tbody"></tbody></table>
@@ -541,11 +542,11 @@
         <div id="farma-panel-alertas" style="display:none">
           <div class="grid-2">
             <div class="card">
-              <div class="card-header"><h3 style="color:#e53e3e">❌ Sin Stock</h3></div>
+              <div class="card-header"><h3 style="color:#e53e3e"><i class="ti ti-circle-x"></i> Sin Stock</h3></div>
               <div id="farma-alertas-cero" style="padding-top:4px"></div>
             </div>
             <div class="card">
-              <div class="card-header"><h3 style="color:#d69e2e">⚠️ Stock Bajo</h3></div>
+              <div class="card-header"><h3 style="color:#d69e2e"><i class="ti ti-alert-triangle"></i> Stock Bajo</h3></div>
               <div id="farma-alertas-bajo" style="padding-top:4px"></div>
             </div>
           </div>
@@ -562,27 +563,27 @@
                 <span class="chip" onclick="setFarmaEstPeriodo('semana',this)">Esta semana</span>
                 <span class="chip" onclick="setFarmaEstPeriodo('anio',this)">Este año</span>
               </div>
-              <button class="btn btn-primary btn-sm" onclick="descargarPDFFarmacia()">⬇️ Descargar PDF</button>
+              <button class="btn btn-primary btn-sm" onclick="descargarPDFFarmacia()"><i class="ti ti-download"></i> Descargar PDF</button>
             </div>
           </div>
           <div class="stats-grid" style="margin-bottom:18px">
-            <div class="stat-card"><div class="stat-icon si-blue">💰</div><div class="stat-info"><h3 id="farma-est-hoy">C$ 0</h3><p>Ventas</p></div></div>
-            <div class="stat-card"><div class="stat-icon si-green">📅</div><div class="stat-info"><h3 id="farma-est-mes">C$ 0</h3><p>Ventas Este Mes</p></div></div>
-            <div class="stat-card"><div class="stat-icon si-cyan">📦</div><div class="stat-info"><h3 id="farma-est-despachos">0</h3><p>Despachos</p></div></div>
-            <div class="stat-card"><div class="stat-icon si-orange">📄</div><div class="stat-info"><h3 id="farma-est-recetas">0</h3><p>Recetas</p></div></div>
+            <div class="stat-card"><div class="stat-icon si-blue"><i class="ti ti-coins"></i></div><div class="stat-info"><h3 id="farma-est-hoy">C$ 0</h3><p>Ventas</p></div></div>
+            <div class="stat-card"><div class="stat-icon si-green"><i class="ti ti-calendar"></i></div><div class="stat-info"><h3 id="farma-est-mes">C$ 0</h3><p>Ventas Este Mes</p></div></div>
+            <div class="stat-card"><div class="stat-icon si-cyan"><i class="ti ti-package"></i></div><div class="stat-info"><h3 id="farma-est-despachos">0</h3><p>Despachos</p></div></div>
+            <div class="stat-card"><div class="stat-icon si-orange"><i class="ti ti-receipt"></i></div><div class="stat-info"><h3 id="farma-est-recetas">0</h3><p>Recetas</p></div></div>
           </div>
           <div class="grid-2" style="margin-bottom:18px">
             <div class="card">
-              <div class="card-header"><h3>🏆 Top 10 Productos Más Vendidos</h3></div>
+              <div class="card-header"><h3><i class="ti ti-trophy"></i> Top 10 Productos Más Vendidos</h3></div>
               <div id="farma-top-productos" style="padding-top:6px"></div>
             </div>
             <div class="card">
-              <div class="card-header"><h3>📥 Entradas de Stock (Compras)</h3></div>
+              <div class="card-header"><h3><i class="ti ti-inbox"></i> Entradas de Stock (Compras)</h3></div>
               <div id="farma-est-entradas" style="padding-top:6px"></div>
             </div>
           </div>
           <div class="card" style="margin-bottom:18px">
-            <div class="card-header"><h3>📤 Salidas de Stock del Período</h3></div>
+            <div class="card-header"><h3><i class="ti ti-send"></i> Salidas de Stock del Período</h3></div>
             <div class="table-wrap">
               <table><thead><tr><th>Producto</th><th>Categoría</th><th>Salidas</th><th>Stock Actual</th><th>Stock Mín</th><th>Estado</th></tr></thead>
               <tbody id="farma-est-salidas"></tbody></table>
@@ -602,13 +603,13 @@
       <div id="view-estadisticas" class="view">
         <div class="card" style="margin-bottom:18px">
           <div class="card-header">
-            <h3>📈 Estadísticas de Pacientes Atendidos</h3>
-            <button class="btn btn-primary btn-sm" onclick="descargarPDFEstadisticas()">⬇️ Descargar PDF</button>
+            <h3><i class="ti ti-chart-line"></i> Estadísticas de Pacientes Atendidos</h3>
+            <button class="btn btn-primary btn-sm" onclick="descargarPDFEstadisticas()"><i class="ti ti-download"></i> Descargar PDF</button>
           </div>
           <div class="tabs" style="margin-bottom:0">
-            <button class="tab active" id="tab-est-dia"    onclick="switchEstTab('dia')">📅 Diario</button>
-            <button class="tab"        id="tab-est-semana" onclick="switchEstTab('semana')">📆 Semanal</button>
-            <button class="tab"        id="tab-est-mes"    onclick="switchEstTab('mes')">🗓️ Mensual</button>
+            <button class="tab active" id="tab-est-dia"    onclick="switchEstTab('dia')"><i class="ti ti-calendar"></i> Diario</button>
+            <button class="tab"        id="tab-est-semana" onclick="switchEstTab('semana')"><i class="ti ti-calendar-week"></i> Semanal</button>
+            <button class="tab"        id="tab-est-mes"    onclick="switchEstTab('mes')"><i class="ti ti-calendar-month"></i> Mensual</button>
           </div>
         </div>
 
@@ -644,21 +645,21 @@
       <div id="view-inventario" class="view">
         <div class="card" style="margin-bottom:18px">
           <div class="card-header">
-            <h3>📦 Inventario de Clínica</h3>
+            <h3><i class="ti ti-package"></i> Inventario de Clínica</h3>
             <div style="display:flex;gap:8px;flex-wrap:wrap" id="inv-action-btns">
-              <button class="btn btn-secondary btn-sm" onclick="openModalEntrada()">📥 Entrada</button>
-              <button class="btn btn-secondary btn-sm" onclick="openModalSalida()">📤 Salida</button>
-              <button class="btn btn-secondary btn-sm" onclick="openModalCompra()" title="Registrar compra de varios productos a la vez">🛒 Compra</button>
-              <button class="btn btn-secondary btn-sm" id="btn-importar-minsa" onclick="abrirSelectorMINSA()" style="display:none">📋 Catálogo MINSA</button>
-              <button class="btn btn-danger btn-sm" id="btn-borrar-inventario" onclick="eliminarTodoInventario()" style="display:none">🗑️ Borrar todo</button>
-              <button class="btn btn-primary btn-sm" onclick="openModalProducto()">+ Producto</button>
+              <button class="btn btn-secondary btn-sm" onclick="openModalEntrada()"><i class="ti ti-inbox"></i> Entrada</button>
+              <button class="btn btn-secondary btn-sm" onclick="openModalSalida()"><i class="ti ti-send"></i> Salida</button>
+              <button class="btn btn-secondary btn-sm" onclick="openModalCompra()" title="Registrar compra de varios productos a la vez"><i class="ti ti-shopping-cart"></i> Compra</button>
+              <button class="btn btn-secondary btn-sm" id="btn-importar-minsa" onclick="abrirSelectorMINSA()" style="display:none"><i class="ti ti-clipboard-list"></i> Catálogo MINSA</button>
+              <button class="btn btn-danger btn-sm" id="btn-borrar-inventario" onclick="eliminarTodoInventario()" style="display:none"><i class="ti ti-trash"></i> Borrar todo</button>
+              <button class="btn btn-primary btn-sm" onclick="openModalProducto()"><i class="ti ti-plus"></i> Producto</button>
             </div>
           </div>
           <div id="inv-stats-row" class="stats-grid" style="margin-bottom:14px"></div>
           <div class="tabs" style="margin-bottom:0">
-            <button class="tab active" id="tab-inv-productos"   onclick="switchInvTab('productos')">📦 Productos</button>
-            <button class="tab"        id="tab-inv-movimientos" onclick="switchInvTab('movimientos')">🔄 Movimientos</button>
-            <button class="tab"        id="tab-inv-reportes"    onclick="switchInvTab('reportes')">📈 Reportes</button>
+            <button class="tab active" id="tab-inv-productos"   onclick="switchInvTab('productos')"><i class="ti ti-package"></i> Productos</button>
+            <button class="tab"        id="tab-inv-movimientos" onclick="switchInvTab('movimientos')"><i class="ti ti-refresh"></i> Movimientos</button>
+            <button class="tab"        id="tab-inv-reportes"    onclick="switchInvTab('reportes')"><i class="ti ti-chart-line"></i> Reportes</button>
           </div>
         </div>
 
@@ -666,20 +667,20 @@
           <div class="card">
             <div class="search-bar" style="margin-bottom:14px">
               <div class="search-bar-input">
-                <span style="color:var(--text-light)">🔍</span>
+                <i class="ti ti-search" style="color:var(--text-light)"></i>
                 <input type="text" id="inv-search" placeholder="Buscar producto..." oninput="filterInventario(this.value)">
               </div>
               <div class="filter-chips">
                 <span class="chip active" onclick="setInvCat('',this)">Todos</span>
-                <span class="chip" onclick="setInvCat('medicamento',this)">💊 Medicamentos</span>
-                <span class="chip" onclick="setInvCat('material',this)">🩺 Material médico</span>
-                <span class="chip" onclick="setInvCat('equipo',this)">🔬 Equipos</span>
-                <span class="chip" onclick="setInvCat('insumo',this)">🧹 Insumos</span>
+                <span class="chip" onclick="setInvCat('medicamento',this)"><i class="ti ti-pill"></i> Medicamentos</span>
+                <span class="chip" onclick="setInvCat('material',this)"><i class="ti ti-stethoscope"></i> Material médico</span>
+                <span class="chip" onclick="setInvCat('equipo',this)"><i class="ti ti-microscope"></i> Equipos</span>
+                <span class="chip" onclick="setInvCat('insumo',this)"><i class="ti ti-brush"></i> Insumos</span>
               </div>
             </div>
             <div id="tabla-inventario"></div>
             <div id="inv-empty" class="empty-state" style="display:none">
-              <div class="empty-icon">📦</div>
+              <div class="empty-icon"><i class="ti ti-package"></i></div>
               <p>No hay productos en inventario.<br>Agrega el primero con <strong>+ Producto</strong></p>
             </div>
           </div>
@@ -692,23 +693,23 @@
               <button class="btn btn-secondary btn-sm" onclick="document.getElementById('inv-mov-fecha').value='';renderMovimientos()">Todos</button>
               <div class="filter-chips">
                 <span class="chip active" id="chip-mov-todos"    onclick="setMovTipo('',this)">Todos</span>
-                <span class="chip"        id="chip-mov-entrada"  onclick="setMovTipo('entrada',this)">📥 Entradas</span>
-                <span class="chip"        id="chip-mov-salida"   onclick="setMovTipo('salida',this)">📤 Salidas</span>
+                <span class="chip"        id="chip-mov-entrada"  onclick="setMovTipo('entrada',this)"><i class="ti ti-inbox"></i> Entradas</span>
+                <span class="chip"        id="chip-mov-salida"   onclick="setMovTipo('salida',this)"><i class="ti ti-send"></i> Salidas</span>
               </div>
             </div>
             <div id="tabla-movimientos"></div>
-            <div id="mov-empty" class="empty-state" style="display:none"><div class="empty-icon">🔄</div><p>Sin movimientos registrados</p></div>
+            <div id="mov-empty" class="empty-state" style="display:none"><div class="empty-icon"><i class="ti ti-refresh"></i></div><p>Sin movimientos registrados</p></div>
           </div>
         </div>
 
         <div id="inv-panel-reportes" style="display:none">
           <div class="card" style="margin-bottom:16px">
-            <div class="card-header"><h3>📈 Período</h3><button class="btn btn-primary btn-sm" onclick="descargarPDFInventario()">⬇️ Descargar PDF</button></div>
+            <div class="card-header"><h3><i class="ti ti-chart-line"></i> Período</h3><button class="btn btn-primary btn-sm" onclick="descargarPDFInventario()"><i class="ti ti-download"></i> Descargar PDF</button></div>
             <div class="tabs" style="margin-bottom:16px">
-              <button class="tab active" id="tab-rep-dia"    onclick="switchRepTab('dia')">📅 Diario</button>
-              <button class="tab"        id="tab-rep-semana" onclick="switchRepTab('semana')">📆 Semanal</button>
-              <button class="tab"        id="tab-rep-mes"    onclick="switchRepTab('mes')">🗓️ Mensual</button>
-              <button class="tab"        id="tab-rep-anual"  onclick="switchRepTab('anual')">📊 Anual</button>
+              <button class="tab active" id="tab-rep-dia"    onclick="switchRepTab('dia')"><i class="ti ti-calendar"></i> Diario</button>
+              <button class="tab"        id="tab-rep-semana" onclick="switchRepTab('semana')"><i class="ti ti-calendar-week"></i> Semanal</button>
+              <button class="tab"        id="tab-rep-mes"    onclick="switchRepTab('mes')"><i class="ti ti-calendar-month"></i> Mensual</button>
+              <button class="tab"        id="tab-rep-anual"  onclick="switchRepTab('anual')"><i class="ti ti-chart-bar"></i> Anual</button>
             </div>
             <div id="rep-inv-content"></div>
           </div>
@@ -719,7 +720,7 @@
       <div id="view-finanzas" class="view">
         <div class="card" style="margin-bottom:18px">
           <div class="card-header">
-            <h3>💰 Módulo de Finanzas</h3>
+            <h3><i class="ti ti-coins"></i> Módulo de Finanzas</h3>
             <div style="display:flex;gap:8px;align-items:center">
               <div class="filter-chips" id="fin-periodo-chips">
                 <span class="chip" onclick="setFinPeriodo('hoy',this)">Hoy</span>
@@ -727,13 +728,13 @@
                 <span class="chip" onclick="setFinPeriodo('semana',this)">Esta semana</span>
                 <span class="chip" onclick="setFinPeriodo('anio',this)">Este año</span>
               </div>
-              <button id="btn-pdf-resumen-fin" class="btn btn-primary btn-sm" onclick="descargarPDFResumenFinanzas()" style="display:none">⬇️ PDF Resumen</button>
+              <button id="btn-pdf-resumen-fin" class="btn btn-primary btn-sm" onclick="descargarPDFResumenFinanzas()" style="display:none"><i class="ti ti-download"></i> PDF Resumen</button>
             </div>
           </div>
           <div class="tabs" style="margin-bottom:0">
-            <button class="tab active" id="tab-fin-resumen"       onclick="switchFinTab('resumen')">📊 Resumen</button>
-            <button class="tab"        id="tab-fin-transacciones" onclick="switchFinTab('transacciones')">🔄 Transacciones</button>
-            <button class="tab"        id="tab-fin-facturas"      onclick="switchFinTab('facturas')">🧾 Facturas</button>
+            <button class="tab active" id="tab-fin-resumen"       onclick="switchFinTab('resumen')"><i class="ti ti-chart-pie"></i> Resumen</button>
+            <button class="tab"        id="tab-fin-transacciones" onclick="switchFinTab('transacciones')"><i class="ti ti-refresh"></i> Transacciones</button>
+            <button class="tab"        id="tab-fin-facturas"      onclick="switchFinTab('facturas')"><i class="ti ti-receipt"></i> Facturas</button>
           </div>
         </div>
 
@@ -743,17 +744,17 @@
           <div class="grid-2">
             <div class="card">
               <div class="card-header">
-                <h3>🔄 Últimas transacciones</h3>
+                <h3><i class="ti ti-refresh"></i> Últimas transacciones</h3>
                 <div style="display:flex;gap:8px">
-                  <button class="btn btn-secondary btn-sm" onclick="openModalTransaccion('egreso')">📤 Gasto</button>
+                  <button class="btn btn-secondary btn-sm" onclick="openModalTransaccion('egreso')"><i class="ti ti-send"></i> Gasto</button>
                 </div>
               </div>
               <div id="fin-ultimas"></div>
             </div>
             <div class="card">
               <div class="card-header">
-                <h3>🧾 Últimas facturas</h3>
-                <button class="btn btn-primary btn-sm" onclick="openModalFactura()">+ Nueva Factura</button>
+                <h3><i class="ti ti-receipt"></i> Últimas facturas</h3>
+                <button class="btn btn-primary btn-sm" onclick="openModalFactura()"><i class="ti ti-plus"></i> Nueva Factura</button>
               </div>
               <div id="fin-fact-resumen"></div>
             </div>
@@ -764,11 +765,11 @@
         <div id="fin-panel-transacciones" style="display:none">
           <div class="card">
             <div class="card-header">
-              <h3>🔄 Transacciones</h3>
+              <h3><i class="ti ti-refresh"></i> Transacciones</h3>
               <div class="filter-chips">
                 <span class="chip active" onclick="setFinTipo('',this)">Todas</span>
-                <span class="chip" onclick="setFinTipo('ingreso',this)">💰 Ingresos</span>
-                <span class="chip" onclick="setFinTipo('egreso',this)">📤 Gastos</span>
+                <span class="chip" onclick="setFinTipo('ingreso',this)"><i class="ti ti-coins"></i> Ingresos</span>
+                <span class="chip" onclick="setFinTipo('egreso',this)"><i class="ti ti-send"></i> Gastos</span>
               </div>
             </div>
             <div id="fin-trans-list"></div>
@@ -779,12 +780,12 @@
         <div id="fin-panel-facturas" style="display:none">
           <div class="card">
             <div class="card-header">
-              <h3>🧾 Facturas Electrónicas</h3>
-              <button class="btn btn-primary btn-sm" onclick="openModalFactura()">+ Nueva Factura</button>
+              <h3><i class="ti ti-receipt"></i> Facturas Electrónicas</h3>
+              <button class="btn btn-primary btn-sm" onclick="openModalFactura()"><i class="ti ti-plus"></i> Nueva Factura</button>
             </div>
             <div class="search-bar" style="margin-bottom:14px">
               <div class="search-bar-input">
-                <span style="color:var(--text-light)">🔍</span>
+                <i class="ti ti-search" style="color:var(--text-light)"></i>
                 <input type="text" id="fact-search" placeholder="Buscar por número, paciente o estado..." oninput="renderFacturasList()">
               </div>
               <div class="filter-chips" id="fact-estado-chips">
@@ -804,15 +805,15 @@
       <div id="view-admin" class="view">
         <div class="card" style="margin-bottom:18px">
           <div class="card-header">
-            <h3>👑 Panel de Administración <span class="admin-badge-sa">Super Admin</span></h3>
-            <button class="btn btn-primary btn-sm" id="btn-admin-add" onclick="adminAddNew()">+ Nueva Clínica</button>
+            <h3><i class="ti ti-crown"></i> Panel de Administración <span class="admin-badge-sa">Super Admin</span></h3>
+            <button class="btn btn-primary btn-sm" id="btn-admin-add" onclick="adminAddNew()"><i class="ti ti-plus"></i> Nueva Clínica</button>
           </div>
           <div id="admin-stats-row" class="admin-stat-row"></div>
           <div class="tabs" style="margin-bottom:0">
-            <button class="tab active" id="tab-admin-clinicas"      onclick="switchAdminTab('clinicas')">🏥 Clínicas</button>
-            <button class="tab"        id="tab-admin-usuarios"      onclick="switchAdminTab('usuarios')">👥 Usuarios</button>
-            <button class="tab"        id="tab-admin-productividad" onclick="switchAdminTab('productividad')">📊 Productividad</button>
-            <button class="tab"        id="tab-admin-global"        onclick="switchAdminTab('global')">🌐 Global</button>
+            <button class="tab active" id="tab-admin-clinicas"      onclick="switchAdminTab('clinicas')"><i class="ti ti-building-hospital"></i> Clínicas</button>
+            <button class="tab"        id="tab-admin-usuarios"      onclick="switchAdminTab('usuarios')"><i class="ti ti-users"></i> Usuarios</button>
+            <button class="tab"        id="tab-admin-productividad" onclick="switchAdminTab('productividad')"><i class="ti ti-chart-bar"></i> Productividad</button>
+            <button class="tab"        id="tab-admin-global"        onclick="switchAdminTab('global')"><i class="ti ti-world"></i> Global</button>
           </div>
         </div>
         <div id="admin-panel-clinicas">
@@ -823,7 +824,7 @@
         </div>
         <div id="admin-panel-global" style="display:none">
           <div class="card" style="margin-bottom:16px">
-            <div class="card-header"><h3>🌐 Resumen Global del Sistema</h3><span id="global-updated" class="tag tag-gray" style="font-size:11px"></span></div>
+            <div class="card-header"><h3><i class="ti ti-world"></i> Resumen Global del Sistema</h3><span id="global-updated" class="tag tag-gray" style="font-size:11px"></span></div>
             <div id="global-stats-row" class="stats-grid" style="margin-bottom:18px"></div>
             <div id="global-clinicas-table"></div>
           </div>
@@ -831,7 +832,7 @@
         <div id="admin-panel-productividad" style="display:none">
           <div class="card" style="margin-bottom:16px">
             <div class="card-header">
-              <h3>📊 Actividad por usuario</h3>
+              <h3><i class="ti ti-chart-bar"></i> Actividad por usuario</h3>
               <div class="filter-chips">
                 <span class="chip active" id="prod-chip-hoy"    onclick="setProdPeriodo('hoy',this)">Hoy</span>
                 <span class="chip"        id="prod-chip-semana" onclick="setProdPeriodo('semana',this)">Esta semana</span>
@@ -842,14 +843,14 @@
             <div id="prod-usuarios-list"></div>
           </div>
           <div class="card">
-            <div class="card-header"><h3>📅 Línea de actividad — últimos 7 días</h3></div>
+            <div class="card-header"><h3><i class="ti ti-activity"></i> Línea de actividad — últimos 7 días</h3></div>
             <div id="prod-timeline"></div>
           </div>
         </div>
         <!-- MIGRACIÓN A SUPABASE AUTH -->
         <div class="card" id="card-migracion" style="margin-top:18px;border:1.5px solid rgba(245,158,11,.3);background:rgba(245,158,11,.04)">
           <div class="card-header">
-            <h3>🔐 Supabase Auth — Seguridad real</h3>
+            <h3><i class="ti ti-lock"></i> Supabase Auth — Seguridad real</h3>
             <span id="auth-status-badge" class="tag tag-orange">Pendiente</span>
           </div>
           <p style="font-size:13px;color:var(--text-light);margin-bottom:16px;line-height:1.6">
@@ -858,8 +859,8 @@
             <strong>Requisito previo:</strong> En Supabase → Authentication → Settings → Email → desactivar <em>"Confirm email"</em>.
           </p>
           <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-            <button class="btn btn-primary" onclick="migrarUsuariosAAuth()">🚀 Migrar usuarios a Supabase Auth</button>
-            <button class="btn btn-secondary" onclick="verificarEstadoAuth()">🔍 Verificar estado</button>
+            <button class="btn btn-primary" onclick="migrarUsuariosAAuth()"><i class="ti ti-rocket"></i> Migrar usuarios a Supabase Auth</button>
+            <button class="btn btn-secondary" onclick="verificarEstadoAuth()"><i class="ti ti-search"></i> Verificar estado</button>
             <span id="migracion-progress" style="font-size:12px;color:var(--text-light)"></span>
           </div>
           <div id="migracion-log" style="margin-top:14px;font-size:12px;font-family:monospace;max-height:140px;overflow-y:auto;background:var(--bg);border-radius:8px;padding:10px;display:none"></div>
@@ -870,25 +871,25 @@
       <div id="view-exportar" class="view">
         <div class="grid-2">
           <div class="card">
-            <h3 style="margin-bottom:18px">📤 Exportar Datos</h3>
+            <h3 style="margin-bottom:18px"><i class="ti ti-upload"></i> Exportar Datos</h3>
             <div class="export-box" style="margin-bottom:14px">
-              <div class="export-icon">📧</div><h3>Enviar a tu correo</h3>
+              <div class="export-icon"><i class="ti ti-mail"></i></div><h3>Enviar a tu correo</h3>
               <p>Reporte a <strong>sebasgale65@gmail.com</strong></p>
-              <button class="btn btn-primary" onclick="exportarEmail()">📧 Enviar</button>
+              <button class="btn btn-primary" onclick="exportarEmail()"><i class="ti ti-mail"></i> Enviar</button>
             </div>
             <div class="export-box" style="margin-bottom:14px">
-              <div class="export-icon">📩</div><h3>Backup por Correo</h3>
+              <div class="export-icon"><i class="ti ti-database-export"></i></div><h3>Backup por Correo</h3>
               <p>Envía un respaldo completo a <strong>sebasgale65@gmail.com</strong></p>
-              <button class="btn btn-secondary" onclick="exportarJSON()">📩 Enviar Backup</button>
+              <button class="btn btn-secondary" onclick="exportarJSON()"><i class="ti ti-database-export"></i> Enviar Backup</button>
             </div>
             <div class="export-box">
-              <div class="export-icon">📥</div><h3>Importar Backup</h3>
+              <div class="export-icon"><i class="ti ti-database-import"></i></div><h3>Importar Backup</h3>
               <p>Restaura desde un archivo anterior</p>
               <input type="file" id="import-file" accept=".json" style="display:none" onchange="importarJSON(event)">
-              <button class="btn btn-secondary" onclick="document.getElementById('import-file').click()">📥 Importar</button>
+              <button class="btn btn-secondary" onclick="document.getElementById('import-file').click()"><i class="ti ti-database-import"></i> Importar</button>
             </div>
           </div>
-          <div class="card"><h3 style="margin-bottom:18px">📊 Resumen</h3><div id="resumen-exportar"></div></div>
+          <div class="card"><h3 style="margin-bottom:18px"><i class="ti ti-chart-pie"></i> Resumen</h3><div id="resumen-exportar"></div></div>
         </div>
       </div>
 
@@ -1904,7 +1905,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260610e"></script>
+<script src="js/app.js?v=20260610g"></script>
 </body>
 </html>
 

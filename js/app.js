@@ -1,4 +1,7 @@
-﻿// ════════════════════ SUPABASE ════════════════════
+﻿// ════════════════════ ICON HELPER ════════════════════
+function ico(name, extra='') { return `<i class="ti ti-${name}${extra?' '+extra:''}"></i>`; }
+
+// ════════════════════ SUPABASE ════════════════════
 const SURL = 'https://ckpskotpdkmojgaqxyht.supabase.co';
 const SKEY = 'sb_publishable_2W-uJNSJSFLMYn5NJShPKw_sRCynIka';
 const sb = supabase.createClient(SURL, SKEY, {
@@ -7,17 +10,17 @@ const sb = supabase.createClient(SURL, SKEY, {
 
 // ════════════════════ PERMISOS ════════════════════
 const ALL_PERMISOS = [
-  { id:'pacientes',    label:'Pacientes',          icon:'👥' },
-  { id:'citas',        label:'Citas',               icon:'📅' },
-  { id:'agendas',      label:'Agendas',             icon:'🗓️' },
-  { id:'medicaciones', label:'Recetas / Medicac.',  icon:'💊' },
-  { id:'notas',        label:'Notas Clínicas',      icon:'📝' },
-  { id:'atendidos',    label:'Atendidos por Día',   icon:'📊' },
-  { id:'inventario',   label:'Inventario',          icon:'📦' },
-  { id:'finanzas',     label:'Finanzas',            icon:'💰' },
-  { id:'estadisticas', label:'Estadísticas',        icon:'📈' },
-  { id:'exportar',     label:'Exportar / Enviar',   icon:'📤' },
-  { id:'farmacia',     label:'Módulo Farmacia',     icon:'🏪' },
+  { id:'pacientes',    label:'Pacientes',          icon:'ti-users' },
+  { id:'citas',        label:'Citas',               icon:'ti-calendar' },
+  { id:'agendas',      label:'Agendas',             icon:'ti-calendar-event' },
+  { id:'medicaciones', label:'Recetas / Medicac.',  icon:'ti-pill' },
+  { id:'notas',        label:'Notas Clínicas',      icon:'ti-notes' },
+  { id:'atendidos',    label:'Atendidos por Día',   icon:'ti-chart-bar' },
+  { id:'inventario',   label:'Inventario',          icon:'ti-package' },
+  { id:'finanzas',     label:'Finanzas',            icon:'ti-coins' },
+  { id:'estadisticas', label:'Estadísticas',        icon:'ti-chart-line' },
+  { id:'exportar',     label:'Exportar / Enviar',   icon:'ti-upload' },
+  { id:'farmacia',     label:'Módulo Farmacia',     icon:'ti-building-store' },
 ];
 const PERMISOS_DEFECTO = {
   medico:       ['pacientes','citas','agendas','medicaciones','notas'],
@@ -336,7 +339,7 @@ function guardarBorradoresSesion() {
     if(motivo || fecha) {
       const p = pid ? C.p.find(x=>x.id==pid) : null;
       drafts.push({ id: Date.now()+1, modulo:'cita', titulo:'Cita pendiente'+(p?` — ${p.nombre} ${p.apellidos}`:''),
-        icono:'📅', data:{ pacienteId:pid||null, fecha, hora:document.getElementById('c-hora')?.value,
+        icono:ico('calendar'), data:{ pacienteId:pid||null, fecha, hora:document.getElementById('c-hora')?.value,
         motivo, tipo:document.getElementById('c-tipo')?.value, estado:'pendiente',
         notas:document.getElementById('c-notas')?.value }});
     }
@@ -348,7 +351,7 @@ function guardarBorradoresSesion() {
     if(items.length) {
       const p = pid ? C.p.find(x=>x.id==pid) : null;
       drafts.push({ id: Date.now()+2, modulo:'medicacion', titulo:'Medicación pendiente'+(p?` — ${p.nombre} ${p.apellidos}`:''),
-        icono:'💊', data:{ pacienteId:pid||null, items,
+        icono:ico('pill'), data:{ pacienteId:pid||null, items,
         inicio:document.getElementById('m-inicio')?.value, fin:document.getElementById('m-fin')?.value,
         estado:document.getElementById('m-estado')?.value }});
     }
@@ -360,7 +363,7 @@ function guardarBorradoresSesion() {
     if(contenido) {
       const p = pid ? C.p.find(x=>x.id==pid) : null;
       drafts.push({ id: Date.now()+3, modulo:'nota', titulo:'Nota clínica pendiente'+(p?` — ${p.nombre} ${p.apellidos}`:''),
-        icono:'📝', data:{ pacienteId:pid||null, tipo:document.getElementById('n-tipo')?.value,
+        icono:ico('notes'), data:{ pacienteId:pid||null, tipo:document.getElementById('n-tipo')?.value,
         tituloNota:document.getElementById('n-titulo')?.value, contenido }});
     }
   }
@@ -370,7 +373,7 @@ function guardarBorradoresSesion() {
     const apellidos = document.getElementById('p-apellidos')?.value?.trim();
     if(nombre) {
       drafts.push({ id: Date.now()+4, modulo:'paciente', titulo:'Registro de paciente pendiente'+(apellidos?` — ${nombre} ${apellidos}`:` — ${nombre}`),
-        icono:'👤', data:{ nombre, apellidos, identificacion:document.getElementById('p-id')?.value,
+        icono:ico('user'), data:{ nombre, apellidos, identificacion:document.getElementById('p-id')?.value,
         telefono:document.getElementById('p-telefono')?.value }});
     }
   }
@@ -415,7 +418,7 @@ function renderPendientesSesion() {
     <div class="card" style="border:2px solid var(--warning);background:linear-gradient(135deg,#FFFBEB,#FEF3C7)">
       <div class="card-header" style="border-bottom:1px solid #FDE68A;padding-bottom:14px">
         <div style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:22px">⏳</span>
+          <span>${ico('clock')}</span>
           <div>
             <h3 style="color:#92400E;margin:0">Pendientes de finalización</h3>
             <p style="font-size:12px;color:#B45309;margin:0">${drafts.length} elemento${drafts.length>1?'s':''} guardado${drafts.length>1?'s':''} al cerrar la sesión anterior</p>
@@ -426,13 +429,13 @@ function renderPendientesSesion() {
       <div style="padding-top:12px;display:flex;flex-direction:column;gap:8px">
         ${drafts.map((d,i) => `
           <div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #FDE68A;border-radius:10px;padding:12px 14px">
-            <span style="font-size:20px;flex-shrink:0">${d.icono||'📋'}</span>
+            <span style="font-size:20px;flex-shrink:0">${d.icono||ico('clipboard-list')}</span>
             <div style="flex:1;min-width:0">
               <div style="font-weight:700;font-size:13px;color:#0F172A">${d.titulo}</div>
               <div style="font-size:11px;color:#B45309;margin-top:2px">Guardado: ${d.ts||''} · Por: ${d.usuario||''}</div>
             </div>
             <div style="display:flex;gap:6px;flex-shrink:0">
-              <button class="btn btn-sm btn-primary" onclick="recuperarDraft(${i})">♻️ Recuperar</button>
+              <button class="btn btn-sm btn-primary" onclick="recuperarDraft(${i})">${ico('refresh')} Recuperar</button>
               <button class="btn btn-sm btn-secondary" onclick="descartarDraft(${i})">✕</button>
             </div>
           </div>`).join('')}
@@ -601,20 +604,20 @@ function estadoTag(e) {
   return `<span class="tag ${m[e]||'tag-gray'}">${e}</span>`;
 }
 function toast(msg, type='success') {
-  const icons = {success:'✅',error:'❌',info:'ℹ️',warning:'⚠️'};
+  const icons = {success:ico('circle-check'),error:ico('circle-x'),info:ico('info-circle'),warning:ico('alert-triangle')};
   const c = document.getElementById('toasts');
   const t = document.createElement('div');
   t.className = 'toast ' + type;
-  t.innerHTML = `<span class="t-icon">${icons[type]||'ℹ️'}</span><span class="t-msg">${msg}</span><button class="t-close" onclick="this.closest('.toast').remove()">✕</button><div class="t-bar"></div>`;
+  t.innerHTML = `<span class="t-icon">${icons[type]||ico('info-circle')}</span><span class="t-msg">${msg}</span><button class="t-close" onclick="this.closest('.toast').remove()">✕</button><div class="t-bar"></div>`;
   c.appendChild(t);
   setTimeout(() => t.remove(), 3800);
 }
 
 let _confirmResolve = null;
-function customConfirm({icon='⚠️', title, msg, okText='Confirmar', cancelText='Cancelar', danger=true}) {
+function customConfirm({icon=null, title, msg, okText='Confirmar', cancelText='Cancelar', danger=true}) {
   return new Promise(resolve => {
     _confirmResolve = resolve;
-    document.getElementById('mc-icon').textContent   = icon;
+    document.getElementById('mc-icon').innerHTML = icon || ico('alert-triangle');
     document.getElementById('mc-title').textContent  = title;
     document.getElementById('mc-msg').innerHTML      = msg;
     document.getElementById('mc-cancel').textContent = cancelText;
@@ -777,20 +780,20 @@ function renderNavQuickGrid(cv) {
   if(!el) return;
   const sa = isSuperAdmin();
   const all = [
-    { view:'pacientes',    icon:'👥', label:'Pacientes',    show: hasPermiso('pacientes') },
-    { view:'citas',        icon:'📅', label:'Citas',        show: hasPermiso('citas') },
-    { view:'agendas',      icon:'🗓️', label:'Agendas',      show: hasPermiso('agendas') },
-    { view:'medicaciones', icon:'💊', label:'Recetas',      show: hasPermiso('medicaciones') },
-    { view:'notas',        icon:'📝', label:'Notas',        show: hasPermiso('notas') },
-    { view:'atendidos',    icon:'📊', label:'Atendidos',    show: hasPermiso('atendidos') },
-    { view:'estadisticas', icon:'📈', label:'Estadísticas', show: hasPermiso('estadisticas') },
-    { view:'inventario',   icon:'📦', label:'Inventario',   show: hasPermiso('inventario') },
-    { view:'exportar',     icon:'📤', label:'Exportar',     show: hasPermiso('exportar') },
-    { view:'configuracion',icon:'⚙️', label:'Config.',      show: sa },
+    { view:'pacientes',    icon:'ti-users',          label:'Pacientes',    show: hasPermiso('pacientes') },
+    { view:'citas',        icon:'ti-calendar',       label:'Citas',        show: hasPermiso('citas') },
+    { view:'agendas',      icon:'ti-calendar-event', label:'Agendas',      show: hasPermiso('agendas') },
+    { view:'medicaciones', icon:'ti-pill',           label:'Recetas',      show: hasPermiso('medicaciones') },
+    { view:'notas',        icon:'ti-notes',          label:'Notas',        show: hasPermiso('notas') },
+    { view:'atendidos',    icon:'ti-chart-bar',      label:'Atendidos',    show: hasPermiso('atendidos') },
+    { view:'estadisticas', icon:'ti-chart-line',     label:'Estadísticas', show: hasPermiso('estadisticas') },
+    { view:'inventario',   icon:'ti-package',        label:'Inventario',   show: hasPermiso('inventario') },
+    { view:'exportar',     icon:'ti-upload',         label:'Exportar',     show: hasPermiso('exportar') },
+    { view:'configuracion',icon:'ti-settings',       label:'Config.',      show: sa },
   ].filter(x=>x.show);
   el.innerHTML = all.map(x =>
     `<div class="nav-quick-item${cv===x.view?' nq-active':''}" onclick="navigate('${x.view}')">
-      <span class="nq-icon">${x.icon}</span>
+      <span class="nq-icon"><i class="ti ${x.icon}"></i></span>
       <span class="nq-label">${x.label}</span>
     </div>`
   ).join('');
@@ -826,30 +829,30 @@ function renderDashboardSA() {
     <!-- KPIs -->
     <div class="sa-kpi-row">
       <div class="sa-kpi" onclick="navigate('pacientes')">
-        <span class="sa-kpi-icon">👥</span>
+        <span class="sa-kpi-icon">${ico('users')}</span>
         <div><div class="sa-kpi-val">${C.p.length}</div><div class="sa-kpi-lbl">Pacientes</div></div>
       </div>
       <div class="sa-kpi" onclick="navigate('citas')">
-        <span class="sa-kpi-icon">📅</span>
+        <span class="sa-kpi-icon">${ico('calendar')}</span>
         <div><div class="sa-kpi-val">${citasHoy.length}</div><div class="sa-kpi-lbl">Citas hoy</div>
         <div class="sa-kpi-trend ${completadasH>0?'up':'warn'}">${completadasH} atendidas · ${pendientes.length} pendientes</div></div>
       </div>
       <div class="sa-kpi" onclick="navigate('medicaciones')">
-        <span class="sa-kpi-icon">💊</span>
+        <span class="sa-kpi-icon">${ico('pill')}</span>
         <div><div class="sa-kpi-val">${medsActivas}</div><div class="sa-kpi-lbl">Meds activas</div></div>
       </div>
       <div class="sa-kpi" onclick="navigate('finanzas')">
-        <span class="sa-kpi-icon">💰</span>
+        <span class="sa-kpi-icon">${ico('coins')}</span>
         <div><div class="sa-kpi-val" style="font-size:14px">${fmtC(ingresosH)}</div><div class="sa-kpi-lbl">Ingresos hoy</div>
         <div class="sa-kpi-trend ${egresosH>0?'down':'ok'}">${egresosH>0?'−'+fmtC(egresosH)+' gastos':'Sin gastos'}</div></div>
       </div>
       <div class="sa-kpi" onclick="navigate('inventario')">
-        <span class="sa-kpi-icon">📦</span>
+        <span class="sa-kpi-icon">${ico('package')}</span>
         <div><div class="sa-kpi-val">${C.inv.length}</div><div class="sa-kpi-lbl">Inventario</div>
-        ${sinStock>0?`<div class="sa-kpi-trend down">⚠️ ${sinStock} sin stock</div>`:'<div class="sa-kpi-trend up">✅ OK</div>'}</div>
+        ${sinStock>0?`<div class="sa-kpi-trend down">${ico('alert-triangle')} ${sinStock} sin stock</div>`:`<div class="sa-kpi-trend up">${ico('check')} OK</div>`}</div>
       </div>
       <div class="sa-kpi" onclick="navigate('notas')">
-        <span class="sa-kpi-icon">📝</span>
+        <span class="sa-kpi-icon">${ico('notes')}</span>
         <div><div class="sa-kpi-val">${C.n.length}</div><div class="sa-kpi-lbl">Notas clínicas</div></div>
       </div>
     </div>
@@ -861,7 +864,7 @@ function renderDashboardSA() {
       <div class="sa-col">
         <div class="sa-panel flex-1">
           <div class="sa-panel-hdr">
-            <h4>📅 Agenda de hoy</h4>
+            <h4>${ico('calendar')} Agenda de hoy</h4>
             <button class="btn btn-primary btn-sm" onclick="openModalCita()">+ Cita</button>
           </div>
           <div class="sa-panel-body">
@@ -874,9 +877,9 @@ function renderDashboardSA() {
                   <div class="sa-agenda-name">${p?p.nombre+' '+p.apellidos:'Desconocido'}</div>
                   <div class="sa-agenda-sub">${c.motivo} · <span style="color:${c.estado==='completada'?'#15803D':c.estado==='cancelada'?'#e53e3e':'#d69e2e'}">${c.estado}</span></div>
                 </div>
-                ${c.estado!=='completada'&&c.estado!=='cancelada'?`<button class="btn btn-sm" style="background:var(--success);color:#fff;padding:3px 8px;font-size:11px;flex-shrink:0" onclick="event.stopPropagation();marcarCitaCompletada(${c.id})">✅</button>`:''}
+                ${c.estado!=='completada'&&c.estado!=='cancelada'?`<button class="btn btn-sm" style="background:var(--success);color:#fff;padding:3px 8px;font-size:11px;flex-shrink:0" onclick="event.stopPropagation();marcarCitaCompletada(${c.id})">${ico('check')}</button>`:''}
               </div>`;
-            }).join('') : `<div class="empty-state" style="padding:32px 0"><div class="empty-icon">📅</div><p>Sin citas hoy</p></div>`}
+            }).join('') : `<div class="empty-state" style="padding:32px 0"><div class="empty-icon">${ico('calendar')}</div><p>Sin citas hoy</p></div>`}
           </div>
         </div>
       </div>
@@ -885,7 +888,7 @@ function renderDashboardSA() {
       <div class="sa-col">
         <div class="sa-panel flex-half">
           <div class="sa-panel-hdr">
-            <h4>👤 Personal hoy</h4>
+            <h4>${ico('user')} Personal hoy</h4>
           </div>
           <div class="sa-panel-body">
             ${medicos.length ? medicos.map(u=>{
@@ -908,16 +911,16 @@ function renderDashboardSA() {
         </div>
         <div class="sa-panel flex-half">
           <div class="sa-panel-hdr">
-            <h4>💰 Finanzas hoy</h4>
+            <h4>${ico('coins')} Finanzas hoy</h4>
             <button class="btn btn-secondary btn-sm" onclick="navigate('finanzas')">Ver todo</button>
           </div>
           <div class="sa-panel-body">
-            <div class="sa-fin-row"><span class="sa-fin-lbl">💵 Ingresos</span><span class="sa-fin-val" style="color:#15803D">${fmtC(ingresosH)}</span></div>
-            <div class="sa-fin-row"><span class="sa-fin-lbl">📤 Gastos</span><span class="sa-fin-val" style="color:#e53e3e">${fmtC(egresosH)}</span></div>
-            <div class="sa-fin-row" style="background:var(--primary-light)"><span class="sa-fin-lbl" style="color:var(--primary)">📊 Balance</span><span class="sa-fin-val" style="color:var(--primary)">${fmtC(ingresosH-egresosH)}</span></div>
+            <div class="sa-fin-row"><span class="sa-fin-lbl">${ico('arrow-down-circle')} Ingresos</span><span class="sa-fin-val" style="color:#15803D">${fmtC(ingresosH)}</span></div>
+            <div class="sa-fin-row"><span class="sa-fin-lbl">${ico('arrow-up-circle')} Gastos</span><span class="sa-fin-val" style="color:#e53e3e">${fmtC(egresosH)}</span></div>
+            <div class="sa-fin-row" style="background:var(--primary-light)"><span class="sa-fin-lbl" style="color:var(--primary)">${ico('chart-bar')} Balance</span><span class="sa-fin-val" style="color:var(--primary)">${fmtC(ingresosH-egresosH)}</span></div>
             ${C.inv.filter(p=>p.stock<=0||p.stock<=p.stockMin).slice(0,3).map(p=>`
             <div class="sa-fin-row" style="background:#FEF2F2">
-              <span class="sa-fin-lbl" style="color:#e53e3e">⚠️ ${p.nombre.slice(0,18)}</span>
+              <span class="sa-fin-lbl" style="color:#e53e3e">${ico('alert-triangle')} ${p.nombre.slice(0,18)}</span>
               <span class="sa-fin-val" style="color:#e53e3e">${p.stock<=0?'Sin stock':'Bajo'}</span>
             </div>`).join('')}
           </div>
@@ -927,23 +930,23 @@ function renderDashboardSA() {
       <!-- COL 3: Accesos rápidos + Actividad reciente -->
       <div class="sa-col">
         <div class="sa-panel" style="flex-shrink:0">
-          <div class="sa-panel-hdr"><h4>⚡ Accesos rápidos</h4></div>
+          <div class="sa-panel-hdr"><h4>${ico('bolt')} Accesos rápidos</h4></div>
           <div class="sa-quick-grid">
             ${[
-              {icon:'👥',lbl:'Pacientes',v:'pacientes'},
-              {icon:'📅',lbl:'Citas',v:'citas'},
-              {icon:'💊',lbl:'Recetas',v:'medicaciones'},
-              {icon:'📝',lbl:'Notas',v:'notas'},
-              {icon:'📦',lbl:'Inventario',v:'inventario'},
-              {icon:'💰',lbl:'Finanzas',v:'finanzas'},
-              {icon:'📈',lbl:'Estadísticas',v:'estadisticas'},
-              {icon:'📤',lbl:'Exportar',v:'exportar'},
-              {icon:'👑',lbl:'Admin',v:'admin'},
-            ].map(x=>`<div class="sa-quick-btn" onclick="navigate('${x.v}')"><span>${x.icon}</span><span>${x.lbl}</span></div>`).join('')}
+              {icon:'ti-users',lbl:'Pacientes',v:'pacientes'},
+              {icon:'ti-calendar',lbl:'Citas',v:'citas'},
+              {icon:'ti-pill',lbl:'Recetas',v:'medicaciones'},
+              {icon:'ti-notes',lbl:'Notas',v:'notas'},
+              {icon:'ti-package',lbl:'Inventario',v:'inventario'},
+              {icon:'ti-coins',lbl:'Finanzas',v:'finanzas'},
+              {icon:'ti-chart-line',lbl:'Estadísticas',v:'estadisticas'},
+              {icon:'ti-upload',lbl:'Exportar',v:'exportar'},
+              {icon:'ti-crown',lbl:'Admin',v:'admin'},
+            ].map(x=>`<div class="sa-quick-btn" onclick="navigate('${x.v}')"><i class="ti ${x.icon}"></i><span>${x.lbl}</span></div>`).join('')}
           </div>
         </div>
         <div class="sa-panel flex-1">
-          <div class="sa-panel-hdr"><h4>🕐 Actividad reciente</h4></div>
+          <div class="sa-panel-hdr"><h4>${ico('clock')} Actividad reciente</h4></div>
           <div class="sa-panel-body">
             ${[...C.p].reverse().slice(0,8).map(p=>`
             <div class="sa-rec-item" onclick="navigate('paciente-detalle',${p.id})">
@@ -970,7 +973,7 @@ function renderDashboardClinica(){
   document.getElementById('stat-citas-hoy').textContent=C.c.filter(c=>c.fecha===h).length;
   document.getElementById('stat-pendientes').textContent=pendientes.length;
   const tEl=document.getElementById('stat-pendientes-trend');
-  if(tEl) tEl.innerHTML=pendientes.length>0?`⚠️ ${pendientes.length} por confirmar`:'✅ Sin pendientes';
+  if(tEl) tEl.innerHTML=pendientes.length>0?`${ico('alert-triangle')} ${pendientes.length} por confirmar`:`${ico('check')} Sin pendientes`;
   if(tEl) tEl.className='stat-trend '+(pendientes.length>0?'warn':'ok');
   document.getElementById('stat-meds').textContent=C.m.filter(x=>x.estado==='activa').length;
 
@@ -986,9 +989,9 @@ function renderDashboardClinica(){
         <div class="dia-sub">${c.motivo}${edad?' · '+edad:''}</div>
       </div>
       ${estadoTag(c.estado)}
-      ${c.estado!=='completada'&&c.estado!=='cancelada'?`<button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;flex-shrink:0" onclick="event.stopPropagation();marcarCitaCompletada(${c.id})" title="Marcar que acudió">✅</button>`:''}
+      ${c.estado!=='completada'&&c.estado!=='cancelada'?`<button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;flex-shrink:0" onclick="event.stopPropagation();marcarCitaCompletada(${c.id})" title="Marcar que acudió">${ico('check')}</button>`:''}
       </div>`;
-  }).join(''):`<div class="empty-state" style="padding:28px 0"><div class="empty-icon" style="font-size:32px">📅</div><p>Sin citas para hoy</p></div>`;
+  }).join(''):`<div class="empty-state" style="padding:28px 0"><div class="empty-icon">${ico('calendar')}</div><p>Sin citas para hoy</p></div>`;
 
   renderCalendar('dashboard-cal',false);
   switchRecTab('pacientes');
@@ -1008,7 +1011,7 @@ function renderDashboardPorUsuario() {
   const citasHoy = C.c.filter(c => c.fecha === h);
   el.innerHTML = `
     <div class="card" style="margin-top:18px">
-      <div class="card-header"><h3>👤 Actividad del Personal — Hoy</h3></div>
+      <div class="card-header"><h3>${ico('users')} Actividad del Personal — Hoy</h3></div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;padding-top:4px">
         ${medicos.map(u => {
           const atendidas = citasHoy.filter(c => c.medicoId === u.id && c.estado === 'completada').length;
@@ -1056,69 +1059,69 @@ function renderDashboardFarmacia() {
   view.innerHTML = `
     <div id="panel-pendientes-sesion-farma" style="margin-bottom:18px"></div>
     <div class="stats-grid" style="margin-bottom:18px">
-      <div class="stat-card"><div class="stat-icon si-green">💰</div><div class="stat-info"><h3>${fmtC(totalIng)}</h3><p>Ingresos de Hoy</p></div></div>
-      <div class="stat-card"><div class="stat-icon" style="background:#FEF2F2">📤</div><div class="stat-info"><h3 style="color:#e53e3e">${fmtC(totalEgr)}</h3><p>Gastos de Hoy</p></div></div>
-      <div class="stat-card"><div class="stat-icon si-blue">🛒</div><div class="stat-info"><h3>${despachos}</h3><p>Despachos de Hoy</p></div></div>
-      <div class="stat-card"><div class="stat-icon si-cyan">📥</div><div class="stat-info"><h3>${comprasHoy.length}</h3><p>Compras / Entradas</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-green">${ico('coins')}</div><div class="stat-info"><h3>${fmtC(totalIng)}</h3><p>Ingresos de Hoy</p></div></div>
+      <div class="stat-card"><div class="stat-icon" style="background:#FEF2F2">${ico('arrow-up-circle')}</div><div class="stat-info"><h3 style="color:#e53e3e">${fmtC(totalEgr)}</h3><p>Gastos de Hoy</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-blue">${ico('shopping-cart')}</div><div class="stat-info"><h3>${despachos}</h3><p>Despachos de Hoy</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-cyan">${ico('arrow-down-circle')}</div><div class="stat-info"><h3>${comprasHoy.length}</h3><p>Compras / Entradas</p></div></div>
     </div>
 
     <div class="grid-2" style="margin-bottom:18px">
       <!-- Últimos productos vendidos -->
       <div class="card">
-        <div class="card-header"><h3>🛒 Últimas Ventas del Día</h3><button class="btn btn-primary btn-sm" onclick="navigate('farmacia')">Ver Farmacia</button></div>
+        <div class="card-header"><h3>${ico('shopping-cart')} Últimas Ventas del Día</h3><button class="btn btn-primary btn-sm" onclick="navigate('farmacia')">Ver Farmacia</button></div>
         ${ventasHoy.length ? `<div>${[...ventasHoy].sort((a,b)=>b.fecha.localeCompare(a.fecha)).slice(0,8).map(v=>`
           <div class="search-result-item" style="cursor:default">
-            <div style="font-size:20px;flex-shrink:0">💊</div>
+            <div style="font-size:20px;flex-shrink:0">${ico('pill')}</div>
             <div style="flex:1;min-width:0">
               <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${(v.descripcion||'').replace('Venta farmacia: ','')}</div>
               <div class="text-light">${v.metodoPago||'—'} · ${formatFecha(v.fecha)}</div>
             </div>
             <span style="font-weight:700;color:#15803D;flex-shrink:0">${fmtC(v.monto)}</span>
           </div>`).join('')}</div>`
-        : `<div class="empty-state" style="padding:28px 0"><div class="empty-icon" style="font-size:28px">🛒</div><p>Sin ventas hoy</p></div>`}
+        : `<div class="empty-state" style="padding:28px 0"><div class="empty-icon">${ico('shopping-cart')}</div><p>Sin ventas hoy</p></div>`}
       </div>
 
       <!-- Compras / entradas de stock del día -->
       <div class="card">
-        <div class="card-header"><h3>📥 Compras / Entradas de Stock Hoy</h3><button class="btn btn-secondary btn-sm" onclick="navigate('inventario')">Ver Inventario</button></div>
+        <div class="card-header"><h3>${ico('arrow-down-circle')} Compras / Entradas de Stock Hoy</h3><button class="btn btn-secondary btn-sm" onclick="navigate('inventario')">Ver Inventario</button></div>
         ${comprasHoy.length ? `<div>${comprasHoy.slice(0,8).map(m=>{
           const prod = C.inv.find(p=>p.id===m.invId);
           return `<div class="search-result-item" style="cursor:default">
-            <span class="tag tag-green" style="flex-shrink:0;font-size:13px">📥 +${m.cantidad}</span>
+            <span class="tag tag-green" style="flex-shrink:0;font-size:13px">${ico('arrow-down-circle')} +${m.cantidad}</span>
             <div style="flex:1;min-width:0">
               <div style="font-weight:600;font-size:13px">${prod?.nombre||'—'}</div>
               <div class="text-light">${prod?.unidad||''} · ${m.motivo||'entrada'}</div>
             </div>
             <span style="font-size:11px;color:var(--text-light);flex-shrink:0">Stock: ${prod?.stock||0}</span>
           </div>`;}).join('')}</div>`
-        : `<div class="empty-state" style="padding:28px 0"><div class="empty-icon" style="font-size:28px">📦</div><p>Sin compras registradas hoy</p></div>`}
+        : `<div class="empty-state" style="padding:28px 0"><div class="empty-icon">${ico('package')}</div><p>Sin compras registradas hoy</p></div>`}
       </div>
     </div>
 
     <div class="grid-2">
       <!-- Transacciones del día -->
       <div class="card">
-        <div class="card-header"><h3>🔄 Todas las Transacciones de Hoy</h3></div>
+        <div class="card-header"><h3>${ico('arrows-exchange')} Todas las Transacciones de Hoy</h3></div>
         ${ingresosHoy.length||egresosHoy.length ? `<div>${[...ingresosHoy,...egresosHoy].sort((a,b)=>a.tipo.localeCompare(b.tipo)).slice(0,10).map(v=>`
           <div class="search-result-item" style="cursor:default">
-            <div style="font-size:18px;flex-shrink:0">${v.tipo==='ingreso'?'💰':'📤'}</div>
+            <div style="font-size:18px;flex-shrink:0">${v.tipo==='ingreso'?ico('arrow-down-circle'):ico('arrow-up-circle')}</div>
             <div style="flex:1;min-width:0">
               <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${v.descripcion||v.categoria}</div>
               <div class="text-light">${v.metodoPago||'—'} · ${v.categoria}</div>
             </div>
             <span style="font-weight:700;color:${v.tipo==='ingreso'?'#15803D':'#e53e3e'};flex-shrink:0">${v.tipo==='ingreso'?'+':'−'}${fmtC(v.monto)}</span>
           </div>`).join('')}</div>`
-        : `<div class="empty-state" style="padding:28px 0"><div class="empty-icon" style="font-size:28px">💳</div><p>Sin transacciones hoy</p></div>`}
+        : `<div class="empty-state" style="padding:28px 0"><div class="empty-icon">${ico('credit-card')}</div><p>Sin transacciones hoy</p></div>`}
       </div>
 
       <!-- Alertas de stock -->
       <div class="card">
-        <div class="card-header"><h3>⚠️ Alertas de Inventario</h3><button class="btn btn-secondary btn-sm" onclick="navigate('farmacia');setTimeout(()=>switchFarmaTab('alertas'),200)">Ver alertas</button></div>
+        <div class="card-header"><h3>${ico('alert-triangle')} Alertas de Inventario</h3><button class="btn btn-secondary btn-sm" onclick="navigate('farmacia');setTimeout(()=>switchFarmaTab('alertas'),200)">Ver alertas</button></div>
         ${(()=>{
           const sinStock = C.inv.filter(x=>x.stock<=0);
           const bajStock = C.inv.filter(x=>x.stock>0&&x.stockMin>0&&x.stock<=x.stockMin);
           const todos = [...sinStock,...bajStock];
-          if(!todos.length) return `<div class="empty-state" style="padding:28px 0"><div class="empty-icon" style="font-size:28px">✅</div><p>Todo el stock en orden</p></div>`;
+          if(!todos.length) return `<div class="empty-state" style="padding:28px 0"><div class="empty-icon">${ico('circle-check')}</div><p>Todo el stock en orden</p></div>`;
           return `<div>${todos.slice(0,8).map(p=>`
             <div class="search-result-item" style="cursor:default">
               <span class="tag ${p.stock<=0?'tag-red':'tag-orange'}" style="flex-shrink:0">${p.stock<=0?'Sin stock':'Stock bajo'}</span>
@@ -1157,7 +1160,7 @@ function renderRecientes() {
           <div class="text-light">${formatFecha(p.fechaRegistro)} · ${p.telefono||'Sin tel.'}</div>
         </div>
         <span class="tag ${p.estado==='activo'?'tag-green':'tag-gray'}" style="flex-shrink:0">${p.estado}</span>
-      </div>`).join('') : empty('👥<br><small>Sin pacientes aún</small>');
+      </div>`).join('') : empty(`${ico('users')}<br><small>Sin pacientes aún</small>`);
 
   } else if(recTab === 'citas') {
     const items = [...C.c].sort((a,b)=>b.fecha.localeCompare(a.fecha)||(b.id-a.id)).slice(0,10);
@@ -1170,33 +1173,33 @@ function renderRecientes() {
           <div class="text-light">${formatFecha(c.fecha)} · ${c.motivo}</div>
         </div>
         ${estadoTag(c.estado)}
-      </div>`;}).join('') : empty('📅<br><small>Sin citas aún</small>');
+      </div>`;}).join('') : empty(`${ico('calendar')}<br><small>Sin citas aún</small>`);
 
   } else if(recTab === 'meds') {
     const items = [...C.m].reverse().slice(0,10);
     el.innerHTML = items.length ? items.map(m=>{
       const p=C.p.find(x=>x.id===m.pacienteId);
       return `<div class="search-result-item" style="cursor:default">
-        <div style="font-size:22px;flex-shrink:0">💊</div>
+        <div style="font-size:22px;flex-shrink:0">${ico('pill')}</div>
         <div style="flex:1;min-width:0">
           <div style="font-weight:700;font-size:13px">${m.nombre}</div>
           <div class="text-light">${p?p.nombre+' '+p.apellidos:'—'} · ${m.dosis} ${m.frecuencia}</div>
         </div>
         <span class="tag ${m.estado==='activa'?'tag-green':m.estado==='suspendida'?'tag-red':'tag-gray'}" style="flex-shrink:0">${m.estado}</span>
-      </div>`;}).join('') : empty('💊<br><small>Sin medicaciones aún</small>');
+      </div>`;}).join('') : empty(`${ico('pill')}<br><small>Sin medicaciones aún</small>`);
 
   } else {
     const items = [...C.mov].slice(0,10);
     el.innerHTML = items.length ? items.map(m=>{
       const p=C.inv.find(x=>x.id===m.invId);
       return `<div class="search-result-item" style="cursor:default">
-        <span class="inv-badge-${m.tipo}" style="flex-shrink:0">${m.tipo==='entrada'?'📥':'📤'}</span>
+        <span class="inv-badge-${m.tipo}" style="flex-shrink:0">${m.tipo==='entrada'?ico('arrow-down-circle'):ico('arrow-up-circle')}</span>
         <div style="flex:1;min-width:0">
           <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p?p.nombre:'—'}</div>
           <div class="text-light">${formatFecha(m.fecha)} · Cant: ${m.cantidad} ${p?p.unidad:''}</div>
         </div>
         <span style="font-size:12px;color:var(--text-light);flex-shrink:0">${m.motivo||''}</span>
-      </div>`;}).join('') : empty('📦<br><small>Sin movimientos aún</small>');
+      </div>`;}).join('') : empty(`${ico('package')}<br><small>Sin movimientos aún</small>`);
   }
 }
 
@@ -1233,16 +1236,16 @@ function renderPacientesList(lista){
     <td>${x.identificacion||'—'}</td><td>${calcEdad(x.fechaNac)}</td><td>${x.telefono||'—'}</td>
     <td>${estadoTag(x.estado||'activo')}</td>
     <td><div class="actions-cell">
-      <button class="btn btn-sm btn-acudio" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff" onclick="registrarAcudidoPaciente(${x.id})">✅ <span class="acudio-text">Acudió</span></button>
-      <button class="btn btn-secondary btn-sm" onclick="navigate('paciente-detalle',${x.id})">👁️</button>
-      <button class="btn btn-secondary btn-sm" onclick="openModalPaciente(${x.id})">✏️</button>
-      <button class="btn btn-danger btn-sm" onclick="eliminarPaciente(${x.id})">🗑️</button>
+      <button class="btn btn-sm btn-acudio" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff" onclick="registrarAcudidoPaciente(${x.id})">${ico('check')} <span class="acudio-text">Acudió</span></button>
+      <button class="btn btn-secondary btn-sm" onclick="navigate('paciente-detalle',${x.id})">${ico('eye')}</button>
+      <button class="btn btn-secondary btn-sm" onclick="openModalPaciente(${x.id})">${ico('pencil')}</button>
+      <button class="btn btn-danger btn-sm" onclick="eliminarPaciente(${x.id})">${ico('trash')}</button>
     </div></td></tr>`).join('');
 }
 
 function openModalPaciente(id){
   editingId=id||null;
-  document.getElementById('modal-paciente-title').textContent=id?'✏️ Editar Paciente':'👤 Nuevo Paciente';
+  document.getElementById('modal-paciente-title').innerHTML=id?`${ico('pencil')} Editar Paciente`:`${ico('user')} Nuevo Paciente`;
   ['nombre','apellidos','id','sexo','sangre','telefono','email','direccion','alergias','estado','emergencia','observaciones'].forEach(f=>{ const e=document.getElementById('p-'+f); if(e) e.value=''; });
   const idTipoEl = document.getElementById('p-id-tipo'); if(idTipoEl) idTipoEl.value = 'Cédula';
   // Poblar select de edad (0–120) si está vacío
@@ -1341,7 +1344,7 @@ async function guardarPaciente(irExpediente=false, irCita=false){
   }
   setLoading(false);
   _unlockSubmit('paciente', null);
-  toast(editingId?'Paciente actualizado':'Paciente registrado ✅');
+  toast(editingId?'Paciente actualizado':'Paciente registrado');
   if(!editingId) logActivity('paciente');
   const btnCitar = document.getElementById('btn-guardar-y-citar');
   if(btnCitar) btnCitar.style.display = 'none';
@@ -1357,7 +1360,7 @@ async function guardarPaciente(irExpediente=false, irCita=false){
 
 async function eliminarPaciente(id){
   const x=C.p.find(p=>p.id===id);
-  const ok=await customConfirm({icon:'🗑️',title:'Eliminar paciente',msg:`¿Eliminar a <strong>${x.nombre} ${x.apellidos}</strong>?<br><br>También se eliminarán sus citas, medicaciones y notas.`,okText:'Eliminar'});
+  const ok=await customConfirm({icon:ico('trash'),title:'Eliminar paciente',msg:`¿Eliminar a <strong>${x.nombre} ${x.apellidos}</strong>?<br><br>También se eliminarán sus citas, medicaciones y notas.`,okText:'Eliminar'});
   if(!ok) return;
   setLoading(true);
   const {error}=await sb.from('pacientes').delete().eq('id',id);
@@ -1382,25 +1385,25 @@ function renderDetalleP(pid){
         <h2>${p.nombre} ${p.apellidos}</h2>
         <div style="margin-bottom:6px"><code style="background:rgba(255,255,255,.2);color:#fff;padding:2px 10px;border-radius:6px;font-size:12px;font-weight:700;letter-spacing:.5px">Exp. ${getExpedienteNum(p.id)}</code></div>
         <div class="meta">
-          <span>🎂 ${calcEdad(p.fechaNac)}</span>
+          <span>${ico('cake')} ${calcEdad(p.fechaNac)}</span>
           ${p.sexo?`<span>${p.sexo==='M'?'♂ Masculino':p.sexo==='F'?'♀ Femenino':p.sexo}</span>`:''}
-          ${p.sangre?`<span>🩸 ${p.sangre}</span>`:''}
-          ${p.telefono?`<span>📞 ${p.telefono}</span>`:''}
+          ${p.sangre?`<span>${ico('droplet')} ${p.sangre}</span>`:''}
+          ${p.telefono?`<span>${ico('phone')} ${p.telefono}</span>`:''}
         </div>
       </div>
       <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn" style="background:rgba(255,255,255,.15);color:#fff" onclick="imprimirExpedienteCompleto(${p.id})">🖨️ Imprimir</button>
-        <button class="btn" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff" onclick="registrarAcudidoPaciente(${p.id})">✅ Paciente acudió</button>
-        <button class="btn" style="background:rgba(255,255,255,.15);color:#fff" onclick="openModalPaciente(${p.id})">✏️ Editar</button>
+        <button class="btn" style="background:rgba(255,255,255,.15);color:#fff" onclick="imprimirExpedienteCompleto(${p.id})">${ico('printer')} Imprimir</button>
+        <button class="btn" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff" onclick="registrarAcudidoPaciente(${p.id})">${ico('check')} Paciente acudió</button>
+        <button class="btn" style="background:rgba(255,255,255,.15);color:#fff" onclick="openModalPaciente(${p.id})">${ico('pencil')} Editar</button>
       </div>
     </div>`;
 
   document.getElementById('tab-info').innerHTML=`
     <div class="grid-2">
-      <div class="card"><h3 style="margin-bottom:14px;font-size:14px">📋 Datos Personales</h3>
+      <div class="card"><h3 style="margin-bottom:14px;font-size:14px">${ico('clipboard-list')} Datos Personales</h3>
         <table style="width:100%">${[['N° Expediente',`<code style="background:var(--primary-light);color:var(--primary);padding:2px 8px;border-radius:6px;font-size:12px;font-weight:700">${getExpedienteNum(p.id)}</code>`],['Identificación',p.identificacion||'—'],['Fecha Nacimiento',formatFecha(p.fechaNac)],['Dirección',p.direccion||'—'],['Emergencia',p.emergencia||'—'],['Registro',formatFecha(p.fechaRegistro)]].map(([k,v])=>`<tr><td class="text-light" style="padding:6px 0;width:140px">${k}</td><td style="padding:6px 0;font-weight:600;font-size:13px">${v}</td></tr>`).join('')}</table>
       </div>
-      <div class="card"><h3 style="margin-bottom:14px;font-size:14px">🏥 Datos Clínicos</h3>
+      <div class="card"><h3 style="margin-bottom:14px;font-size:14px">${ico('building-hospital')} Datos Clínicos</h3>
         <p class="text-light" style="margin-bottom:8px">Alergias: <strong style="color:var(--text)">${p.alergias||'Ninguna conocida'}</strong></p>
         <p class="text-light" style="margin-bottom:8px">Tipo de Sangre: <strong style="color:var(--text)">${p.sangre||'Desconocido'}</strong></p>
         <p class="text-light">Estado: ${estadoTag(p.estado||'activo')}</p>
@@ -1408,25 +1411,25 @@ function renderDetalleP(pid){
       </div>
     </div>
     <div class="grid-2" style="margin-top:16px">
-      <div class="card"><div class="card-header"><h3>📅 Citas</h3><button class="btn btn-primary btn-sm" onclick="openModalCitaP(${p.id})">+ Cita</button></div>
+      <div class="card"><div class="card-header"><h3>${ico('calendar')} Citas</h3><button class="btn btn-primary btn-sm" onclick="openModalCitaP(${p.id})">+ Cita</button></div>
         <p class="text-light">Total: <strong>${citas.length}</strong> · Pendientes: <strong>${citas.filter(c=>c.estado==='pendiente').length}</strong></p></div>
-      <div class="card"><div class="card-header"><h3>💊 Medicaciones</h3><button class="btn btn-primary btn-sm" onclick="openModalMedP(${p.id})">+ Medicación</button></div>
+      <div class="card"><div class="card-header"><h3>${ico('pill')} Medicaciones</h3><button class="btn btn-primary btn-sm" onclick="openModalMedP(${p.id})">+ Medicación</button></div>
         <p class="text-light">Total: <strong>${meds.length}</strong> · Activas: <strong>${meds.filter(m=>m.estado==='activa').length}</strong></p></div>
     </div>`;
 
   document.getElementById('tab-citas-p').innerHTML=`<div class="card">
-    <div class="card-header"><h3>📅 Citas</h3><button class="btn btn-primary btn-sm" onclick="openModalCitaP(${p.id})">+ Nueva</button></div>
-    ${citas.length?`<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Motivo</th><th>Tipo</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>${citas.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(c=>`<tr><td>${formatFecha(c.fecha)}</td><td>${c.hora}</td><td>${c.motivo}</td><td><span class="tag tag-cyan">${c.tipo}</span></td><td>${estadoTag(c.estado)}</td><td><div class="actions-cell">${c.estado!=='completada'&&c.estado!=='cancelada'?`<button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;white-space:nowrap" onclick="marcarCitaCompletada(${c.id})">✅ Acudió</button>`:''}<button class="btn btn-primary btn-sm" onclick="verResumenCita(${c.id})" title="Ver hoja">📄</button><button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">✏️</button><button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">🗑️</button></div></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty-state"><div class="empty-icon">📅</div><p>Sin citas</p></div>'}
+    <div class="card-header"><h3>${ico('calendar')} Citas</h3><button class="btn btn-primary btn-sm" onclick="openModalCitaP(${p.id})">+ Nueva</button></div>
+    ${citas.length?`<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Motivo</th><th>Tipo</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>${citas.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(c=>`<tr><td>${formatFecha(c.fecha)}</td><td>${c.hora}</td><td>${c.motivo}</td><td><span class="tag tag-cyan">${c.tipo}</span></td><td>${estadoTag(c.estado)}</td><td><div class="actions-cell">${c.estado!=='completada'&&c.estado!=='cancelada'?`<button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;white-space:nowrap" onclick="marcarCitaCompletada(${c.id})">${ico('check')} Acudió</button>`:''}<button class="btn btn-primary btn-sm" onclick="verResumenCita(${c.id})" title="Ver hoja">${ico('file-text')}</button><button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">${ico('pencil')}</button><button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">${ico('trash')}</button></div></td></tr>`).join('')}</tbody></table></div>`:`<div class="empty-state"><div class="empty-icon">${ico('calendar')}</div><p>Sin citas</p></div>`}
   </div>`;
 
   document.getElementById('tab-meds-p').innerHTML=`<div class="card">
-    <div class="card-header"><h3>💊 Medicaciones</h3><div style="display:flex;gap:8px">${meds.length?`<button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirRecetaPaciente(${p.id})">🖨️ Receta</button>`:''}<button class="btn btn-primary btn-sm" onclick="openModalMedP(${p.id})">+ Nueva</button></div></div>
-    ${meds.length?meds.map(m=>`<div class="med-item"><span style="font-size:22px">💊</span><div class="med-info" style="flex:1"><h4>${m.nombre}</h4><div class="med-dosis">${m.dosis} — ${m.frecuencia} (${m.via})</div><p>${m.inicio?`Del ${formatFecha(m.inicio)} al ${m.fin?formatFecha(m.fin):'indefinido'}`:''}${m.indicaciones?' · '+m.indicaciones:''}</p></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">${estadoTag(m.estado)}<div class="actions-cell"><button class="btn btn-secondary btn-sm" onclick="openModalMedicacion(${m.id})">✏️</button><button class="btn btn-danger btn-sm" onclick="eliminarMedicacion(${m.id})">🗑️</button></div></div></div>`).join(''):'<div class="empty-state"><div class="empty-icon">💊</div><p>Sin medicaciones</p></div>'}
+    <div class="card-header"><h3>${ico('pill')} Medicaciones</h3><div style="display:flex;gap:8px">${meds.length?`<button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirRecetaPaciente(${p.id})">${ico('printer')} Receta</button>`:''}<button class="btn btn-primary btn-sm" onclick="openModalMedP(${p.id})">+ Nueva</button></div></div>
+    ${meds.length?meds.map(m=>`<div class="med-item"><span style="font-size:22px">${ico('pill')}</span><div class="med-info" style="flex:1"><h4>${m.nombre}</h4><div class="med-dosis">${m.dosis} — ${m.frecuencia} (${m.via})</div><p>${m.inicio?`Del ${formatFecha(m.inicio)} al ${m.fin?formatFecha(m.fin):'indefinido'}`:''}${m.indicaciones?' · '+m.indicaciones:''}</p></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">${estadoTag(m.estado)}<div class="actions-cell"><button class="btn btn-secondary btn-sm" onclick="openModalMedicacion(${m.id})">${ico('pencil')}</button><button class="btn btn-danger btn-sm" onclick="eliminarMedicacion(${m.id})">${ico('trash')}</button></div></div></div>`).join(''):`<div class="empty-state"><div class="empty-icon">${ico('pill')}</div><p>Sin medicaciones</p></div>`}
   </div>`;
 
   document.getElementById('tab-notas-p').innerHTML=`<div class="card">
-    <div class="card-header"><h3>📝 Notas Clínicas</h3><button class="btn btn-primary btn-sm" onclick="openModalNotaP(${p.id})">+ Nueva</button></div>
-    ${notas.length?`<div class="timeline">${notas.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(n=>`<div class="timeline-item"><div class="timeline-date">${formatFecha(n.fecha)} · <span class="tag tag-blue" style="font-size:10px">${n.tipo}</span></div><div class="timeline-content">${n.titulo?`<strong style="display:block;margin-bottom:5px">${n.titulo}</strong>`:''}<p style="white-space:pre-wrap;line-height:1.7">${n.contenido}</p><div style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-secondary btn-sm" onclick="verNota(${n.id})">👁️ Ver</button><button class="btn btn-secondary btn-sm" onclick="openModalNota(${n.id})">✏️ Editar</button><button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})">🖨️</button><button class="btn btn-danger btn-sm" onclick="eliminarNota(${n.id})">🗑️</button></div></div></div>`).join('')}</div>`:'<div class="empty-state"><div class="empty-icon">📝</div><p>Sin notas</p></div>'}
+    <div class="card-header"><h3>${ico('notes')} Notas Clínicas</h3><button class="btn btn-primary btn-sm" onclick="openModalNotaP(${p.id})">+ Nueva</button></div>
+    ${notas.length?`<div class="timeline">${notas.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(n=>`<div class="timeline-item"><div class="timeline-date">${formatFecha(n.fecha)} · <span class="tag tag-blue" style="font-size:10px">${n.tipo}</span></div><div class="timeline-content">${n.titulo?`<strong style="display:block;margin-bottom:5px">${n.titulo}</strong>`:''}<p style="white-space:pre-wrap;line-height:1.7">${n.contenido}</p><div style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-secondary btn-sm" onclick="verNota(${n.id})">${ico('eye')} Ver</button><button class="btn btn-secondary btn-sm" onclick="openModalNota(${n.id})">${ico('pencil')} Editar</button><button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})">${ico('printer')}</button><button class="btn btn-danger btn-sm" onclick="eliminarNota(${n.id})">${ico('trash')}</button></div></div></div>`).join('')}`:`<div class="empty-state"><div class="empty-icon">${ico('notes')}</div><p>Sin notas</p></div>`}
   </div>`;
 
   // Pestañas odontológicas — solo visibles para odontólogo / superadmin
@@ -1444,15 +1447,15 @@ function renderDetalleP(pid){
   const imc=(exp.peso&&exp.talla)?(exp.peso/((exp.talla/100)**2)).toFixed(1):null;
   document.getElementById('tab-expediente').innerHTML=`
   <div class="card">
-    <div class="card-header"><h3>📁 Expediente Médico</h3>
+    <div class="card-header"><h3>${ico('folder-open')} Expediente Médico</h3>
       <div style="display:flex;gap:8px">
-        ${(currentClinica?.tipo==='optica'||isSuperAdmin())?`<button class="btn btn-secondary btn-sm" onclick="abrirExamenVisual(${pid})">👁️ Examen Visual</button>`:''}
-        <button class="btn btn-primary btn-sm" onclick="guardarExpediente(${pid})">💾 Guardar</button>
+        ${(currentClinica?.tipo==='optica'||isSuperAdmin())?`<button class="btn btn-secondary btn-sm" onclick="abrirExamenVisual(${pid})">${ico('eye')} Examen Visual</button>`:''}
+        <button class="btn btn-primary btn-sm" onclick="guardarExpediente(${pid})">${ico('device-floppy')} Guardar</button>
       </div>
     </div>
 
     <div class="exp-section">
-      <div class="exp-section-title">⚡ Signos Vitales</div>
+      <div class="exp-section-title">${ico('activity-heartbeat')} Signos Vitales</div>
       <div class="vitales-grid">
         <div class="vital-card"><div class="v-val">${exp.peso||'—'}</div><div class="v-lbl">Peso kg</div></div>
         <div class="vital-card"><div class="v-val">${exp.talla||'—'}</div><div class="v-lbl">Talla cm</div></div>
@@ -1469,7 +1472,7 @@ function renderDetalleP(pid){
     </div>
 
     <div class="exp-section">
-      <div class="exp-section-title">👤 Datos Socioeconómicos</div>
+      <div class="exp-section-title">${ico('user')} Datos Socioeconómicos</div>
       <div class="form-grid">
         <div class="form-group"><label>Ocupación</label><input type="text" id="exp-ocupacion" value="${exp.ocupacion||''}" placeholder="Empleado, estudiante..."></div>
         <div class="form-group"><label>Estado Civil</label><select id="exp-estadoCivil">
@@ -1489,7 +1492,7 @@ function renderDetalleP(pid){
     </div>
 
     <div class="exp-section">
-      <div class="exp-section-title">🏥 Antecedentes Clínicos</div>
+      <div class="exp-section-title">${ico('building-hospital')} Antecedentes Clínicos</div>
       <div class="form-grid cols-1">
         <div class="form-group"><label>Enfermedades Crónicas</label><textarea id="exp-enfermedadesCronicas" placeholder="Hipertensión, diabetes tipo 2, asma...">${exp.enfermedadesCronicas||''}</textarea></div>
         <div class="form-group"><label>Cirugías Previas</label><textarea id="exp-cirugias" placeholder="Apendicectomía 2018, cesárea...">${exp.cirugias||''}</textarea></div>
@@ -1502,7 +1505,7 @@ function renderDetalleP(pid){
       <div class="form-grid cols-1">
         <div class="form-group"><label>Alergias conocidas (del perfil del paciente)</label>
           <div style="padding:10px 14px;background:${p.alergias?'#FEF2F2':'var(--bg)'};border:1.5px solid ${p.alergias?'#FECACA':'var(--border)'};border-radius:10px;font-size:13px;color:${p.alergias?'#DC2626':'var(--text-light)'}">
-            ${p.alergias?'⚠️ '+p.alergias:'Sin alergias registradas — edita el perfil del paciente para agregar'}
+            ${p.alergias?ico('alert-triangle')+' '+p.alergias:'Sin alergias registradas — edita el perfil del paciente para agregar'}
           </div>
         </div>
         <div class="form-group"><label>Esquema de Vacunas</label><textarea id="exp-vacunas" placeholder="COVID-19 ✓, Influenza ✓, Hepatitis B ✓...">${exp.vacunas||''}</textarea></div>
@@ -1788,13 +1791,13 @@ function renderCitasParaFecha(fecha) {
         <div class="cita-paciente">${p?p.nombre+' '+p.apellidos:'Desconocido'}</div>
         <div class="cita-motivo">${c.motivo}${c.tipo?` · <span class="tag tag-cyan" style="font-size:10px">${c.tipo}</span>`:''}</div>
       </div>
-      ${esCompletada ? '<span class="acudio-badge">✅ Atendido</span>' : estadoTag(c.estado)}
+      ${esCompletada ? `<span class="acudio-badge">${ico('check')} Atendido</span>` : estadoTag(c.estado)}
       <div class="actions-cell" style="gap:6px;flex-wrap:wrap">
         <button class="btn btn-sm" style="background:var(--primary);color:#fff;font-size:15px;font-weight:800;padding:4px 10px;line-height:1" onclick="openModalCitaP(${c.pacienteId})" title="Nueva cita">+</button>
-        ${!esCompletada&&!esCancelada?`<button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;font-size:11px;font-weight:700;white-space:nowrap" onclick="marcarCitaCompletada(${c.id})">✅ Atendido</button>`:''}
-        <button class="btn btn-primary btn-sm" onclick="verResumenCita(${c.id})" title="Ver hoja">📄</button>
-        <button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">✏️</button>
-        <button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">🗑️</button>
+        ${!esCompletada&&!esCancelada?`<button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;font-size:11px;font-weight:700;white-space:nowrap" onclick="marcarCitaCompletada(${c.id})">${ico('check')} Atendido</button>`:''}
+        <button class="btn btn-primary btn-sm" onclick="verResumenCita(${c.id})" title="Ver hoja">${ico('file-text')}</button>
+        <button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">${ico('pencil')}</button>
+        <button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">${ico('trash')}</button>
       </div>
     </div>`;
   }).join('');
@@ -1846,11 +1849,11 @@ function renderCitas(){
         <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p?p.nombre+' '+p.apellidos:'Desconocido'}</div>
         <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.motivo||'—'}</div>
       </div>
-      ${esComp?'<span class="acudio-badge" style="flex-shrink:0">✅</span>':`<span style="flex-shrink:0">${estadoTag(c.estado)}</span>`}
+      ${esComp?`<span class="acudio-badge" style="flex-shrink:0">${ico('check')}</span>`:`<span style="flex-shrink:0">${estadoTag(c.estado)}</span>`}
       <div class="actions-cell" style="flex-shrink:0;gap:3px;flex-wrap:nowrap">
-        <button class="btn btn-primary btn-sm" onclick="verResumenCita(${c.id})" title="Ver hoja">📄</button>
-        <button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">✏️</button>
-        <button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">🗑️</button>
+        <button class="btn btn-primary btn-sm" onclick="verResumenCita(${c.id})" title="Ver hoja">${ico('file-text')}</button>
+        <button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">${ico('pencil')}</button>
+        <button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">${ico('trash')}</button>
       </div>
     </div>`;
   }).join('');
@@ -1906,7 +1909,7 @@ function formatHora12(h24) {
 function openModalCita(id){
   const isMedico = currentUser?.key === 'medico';
   editingCitaId=id||null;
-  document.getElementById('modal-cita-title').textContent=id?'✏️ Editar Cita':'📅 Nueva Cita';
+  document.getElementById('modal-cita-title').innerHTML=id?`${ico('pencil')} Editar Cita`:`${ico('calendar')} Nueva Cita`;
   fillSelect('c-paciente');
   fillMedicoSelect('c-medico');
   const fechaEl = document.getElementById('c-fecha');
@@ -1984,7 +1987,7 @@ async function guardarCita(){
   else { const r=await sb.from('citas').insert([toC(obj)]); err=r.error; }
   setLoading(false);
   if(err){ toast('Error: '+err.message,'error'); return; }
-  toast(editingCitaId?'Cita actualizada':'Cita registrada ✅');
+  toast(editingCitaId?'Cita actualizada':'Cita registrada');
   if(!editingCitaId) logActivity('cita');
   closeModal('modal-cita');
   await loadAll();
@@ -1993,7 +1996,7 @@ async function guardarCita(){
 }
 
 async function eliminarCita(id){
-  const ok=await customConfirm({icon:'📅',title:'Eliminar cita',msg:'¿Eliminar esta cita? Esta acción no se puede deshacer.',okText:'Eliminar'});
+  const ok=await customConfirm({icon:ico('calendar'),title:'Eliminar cita',msg:'¿Eliminar esta cita? Esta acción no se puede deshacer.',okText:'Eliminar'});
   if(!ok) return;
   setLoading(true);
   const {error}=await sb.from('citas').delete().eq('id',id);
@@ -2015,13 +2018,13 @@ function registrarAcudidoPaciente(pid){
     return;
   }
   if(citasHoy.length===1){ marcarCitaCompletada(citasHoy[0].id); return; }
-  document.getElementById('acudio-picker-title').textContent=`✅ Citas de ${p?.nombre||'Paciente'} hoy`;
+  document.getElementById('acudio-picker-title').innerHTML=`${ico('check')} Citas de ${p?.nombre||'Paciente'} hoy`;
   document.getElementById('acudio-picker-lista').innerHTML=citasHoy.map(c=>`
     <div class="cita-item ${c.estado}" style="cursor:pointer;margin-bottom:8px" onclick="closeModal('modal-acudio-picker');marcarCitaCompletada(${c.id})">
       <div class="cita-time">${c.hora}</div>
       <div class="cita-info"><div class="cita-paciente">${c.motivo}</div><div class="cita-motivo">${c.tipo}</div></div>
       ${estadoTag(c.estado)}
-      <span style="color:var(--success);font-size:20px;flex-shrink:0">✅</span>
+      <span style="color:var(--success);font-size:20px;flex-shrink:0">${ico('check')}</span>
     </div>`).join('');
   document.getElementById('modal-acudio-picker').classList.add('open');
 }
@@ -2030,14 +2033,14 @@ async function marcarCitaCompletada(id){
   const c=C.c.find(x=>x.id===id); if(!c) return;
   const p=C.p.find(x=>x.id===c.pacienteId);
   const nombre=p?p.nombre+' '+p.apellidos:'el paciente';
-  const ok=await customConfirm({icon:'✅',title:'Confirmar asistencia',msg:`¿Confirmar que <strong>${nombre}</strong> acudió a la cita correctamente?`,okText:'Confirmar asistencia',danger:false});
+  const ok=await customConfirm({icon:ico('check'),title:'Confirmar asistencia',msg:`¿Confirmar que <strong>${nombre}</strong> acudió a la cita correctamente?`,okText:'Confirmar asistencia',danger:false});
   if(!ok) return;
   setLoading(true);
   const {error}=await sb.from('citas').update({estado:'completada'}).eq('id',id);
   setLoading(false);
   if(error){ toast('Error: '+error.message,'error'); return; }
   atendidosFecha=c.fecha;
-  toast(`Cita de ${nombre} marcada como completada ✅`,'success');
+  toast(`Cita de ${nombre} marcada como completada`,'success');
   await loadAll(); renderView(currentView); updateBadges();
   // Abrir nota de evolución automáticamente
   setTimeout(() => abrirNotaEvolucion(c.pacienteId, c), 400);
@@ -2045,7 +2048,7 @@ async function marcarCitaCompletada(id){
 
 function abrirNotaEvolucion(pacienteId, cita) {
   editingNotaId = null;
-  document.getElementById('modal-nota-title').textContent = '📝 Nota de Evolución';
+  document.getElementById('modal-nota-title').innerHTML = `${ico('notes')} Nota de Evolución`;
   fillSelect('n-paciente');
   setPacienteSelect('n-paciente', pacienteId);
   document.getElementById('n-tipo').value = 'evolucion';
@@ -2079,9 +2082,9 @@ function renderMedicaciones(){
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
         ${estadoTag(x.estado)}
         <div class="actions-cell" style="gap:3px;flex-wrap:nowrap">
-          <button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirRecetaPaciente(${x.pacienteId})" title="Imprimir receta">🖨️</button>
-          <button class="btn btn-secondary btn-sm" onclick="openModalMedicacion(${x.id})">✏️</button>
-          <button class="btn btn-danger btn-sm" onclick="eliminarMedicacion(${x.id})">🗑️</button>
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirRecetaPaciente(${x.pacienteId})" title="Imprimir receta">${ico('printer')}</button>
+          <button class="btn btn-secondary btn-sm" onclick="openModalMedicacion(${x.id})">${ico('pencil')}</button>
+          <button class="btn btn-danger btn-sm" onclick="eliminarMedicacion(${x.id})">${ico('trash')}</button>
         </div>
       </div>
     </div>`;
@@ -2121,7 +2124,7 @@ let medItems = [];
 
 function openModalMedicacion(id) {
   editingMedId = id || null;
-  document.getElementById('modal-med-title').textContent = id ? '✏️ Editar Medicación' : '💊 Nueva Receta';
+  document.getElementById('modal-med-title').innerHTML = id ? `${ico('pencil')} Editar Medicación` : `${ico('pill')} Nueva Receta`;
   fillSelect('m-paciente');
   document.getElementById('m-estado').value = 'activa';
   document.getElementById('m-inicio').value = hoy();
@@ -2244,7 +2247,7 @@ async function guardarMedicacion() {
     const {error} = await sb.from('medicaciones').insert(rows);
     setLoading(false);
     if(error) { toast('Error: '+error.message,'error'); return; }
-    toast(rows.length > 1 ? rows.length+' medicamentos registrados ✅' : 'Medicación registrada ✅');
+    toast(rows.length > 1 ? rows.length+' medicamentos registrados' : 'Medicación registrada');
     logActivity('medicacion');
   }
   closeModal('modal-medicacion');
@@ -2253,7 +2256,7 @@ async function guardarMedicacion() {
 }
 
 async function eliminarMedicacion(id){
-  const ok=await customConfirm({icon:'💊',title:'Eliminar medicación',msg:'¿Eliminar esta medicación? Se perderá el registro permanentemente.',okText:'Eliminar'});
+  const ok=await customConfirm({icon:ico('pill'),title:'Eliminar medicación',msg:'¿Eliminar esta medicación? Se perderá el registro permanentemente.',okText:'Eliminar'});
   if(!ok) return;
   setLoading(true);
   const {error}=await sb.from('medicaciones').delete().eq('id',id);
@@ -2266,16 +2269,17 @@ async function eliminarMedicacion(id){
 
 // ════════════════════ NOTAS ════════════════════
 const NOTA_TIPO_ICON = {
-  evolucion:'📋', diagnostico:'🔬', tratamiento:'💊', laboratorio:'🧪',
-  imagen:'🩻', cirugia:'🔪', alta:'🏠', examen_visual:'👁️',
-  odontologia:'🦷', receta:'📄', interconsulta:'🔄', otro:'📌'
+  evolucion: ico('clipboard-list'), diagnostico: ico('stethoscope'), tratamiento: ico('pill'),
+  laboratorio: ico('flask'), imagen: ico('scan'), cirugia: ico('scalpel'),
+  alta: ico('home'), examen_visual: ico('eye'), odontologia: ico('tooth'),
+  receta: ico('file-text'), interconsulta: ico('arrows-exchange'), otro: ico('bookmark')
 };
 
 function renderNotas(){
   // Badge de clínica
   const badgeEl = document.getElementById('notas-clinic-badge-container');
   if(badgeEl && currentClinica) {
-    badgeEl.innerHTML = `<span class="notas-clinic-badge">🏥 ${currentClinica.nombre}</span>`;
+    badgeEl.innerHTML = `<span class="notas-clinic-badge">${ico('building-hospital')} ${currentClinica.nombre}</span>`;
   }
 
   const el=document.getElementById('tabla-notas'), empty=document.getElementById('notas-empty');
@@ -2285,7 +2289,7 @@ function renderNotas(){
   el.innerHTML=[...C.n].sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(n=>{
     const p=C.p.find(x=>x.id===n.pacienteId);
     const prev=n.contenido.length>60?n.contenido.substring(0,60)+'…':n.contenido;
-    const tipoIcon = NOTA_TIPO_ICON[n.tipo] || '📝';
+    const tipoIcon = NOTA_TIPO_ICON[n.tipo] || ico('notes');
     const [,mm,dd]=(n.fecha||hoy()).split('-');
     return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)">
       <div style="width:36px;flex-shrink:0;text-align:center;background:var(--primary-light);border-radius:8px;padding:5px 2px">
@@ -2300,10 +2304,10 @@ function renderNotas(){
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
         <span class="tag tag-blue" style="font-size:10px">${tipoIcon} ${n.tipo}</span>
         <div class="actions-cell" style="gap:3px;flex-wrap:nowrap">
-          <button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})">🖨️</button>
-          <button class="btn btn-secondary btn-sm" onclick="verNota(${n.id})">👁️</button>
-          <button class="btn btn-secondary btn-sm" onclick="openModalNota(${n.id})">✏️</button>
-          <button class="btn btn-danger btn-sm" onclick="eliminarNota(${n.id})">🗑️</button>
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})">${ico('printer')}</button>
+          <button class="btn btn-secondary btn-sm" onclick="verNota(${n.id})">${ico('eye')}</button>
+          <button class="btn btn-secondary btn-sm" onclick="openModalNota(${n.id})">${ico('pencil')}</button>
+          <button class="btn btn-danger btn-sm" onclick="eliminarNota(${n.id})">${ico('trash')}</button>
         </div>
       </div>
     </div>`;
@@ -2312,7 +2316,7 @@ function renderNotas(){
 
 function openModalNota(id){
   editingNotaId=id||null;
-  document.getElementById('modal-nota-title').textContent=id?'✏️ Editar Nota':'📝 Nueva Nota Clínica';
+  document.getElementById('modal-nota-title').innerHTML=id?`${ico('pencil')} Editar Nota`:`${ico('notes')} Nueva Nota Clínica`;
   fillSelect('n-paciente');
   document.getElementById('n-tipo').value='evolucion'; document.getElementById('n-fecha').value=hoy(); document.getElementById('n-titulo').value=''; document.getElementById('n-contenido').value='';
   if(id){
@@ -2335,7 +2339,7 @@ async function guardarNota(){
   else { const r=await sb.from('notas').insert([toN(obj)]); err=r.error; }
   setLoading(false);
   if(err){ toast('Error: '+err.message,'error'); return; }
-  toast(editingNotaId?'Nota actualizada':'Nota guardada ✅');
+  toast(editingNotaId?'Nota actualizada':'Nota guardada');
   if(!editingNotaId) logActivity('nota');
   closeModal('modal-nota');
   await loadAll(); renderNotas();
@@ -2343,7 +2347,7 @@ async function guardarNota(){
 }
 
 async function eliminarNota(id){
-  const ok=await customConfirm({icon:'📝',title:'Eliminar nota clínica',msg:'¿Eliminar esta nota clínica? Esta acción no se puede deshacer.',okText:'Eliminar'});
+  const ok=await customConfirm({icon:ico('notes'),title:'Eliminar nota clínica',msg:'¿Eliminar esta nota clínica? Esta acción no se puede deshacer.',okText:'Eliminar'});
   if(!ok) return;
   setLoading(true);
   const {error}=await sb.from('notas').delete().eq('id',id);
@@ -2357,7 +2361,7 @@ async function eliminarNota(id){
 function verNota(id){
   currentNotaId = id;
   const n=C.n.find(x=>x.id===id), p=C.p.find(x=>x.id===n.pacienteId);
-  document.getElementById('ver-nota-title').textContent=`📝 ${n.titulo||'Nota Clínica'}`;
+  document.getElementById('ver-nota-title').innerHTML=`${ico('notes')} ${n.titulo||'Nota Clínica'}`;
   document.getElementById('ver-nota-content').innerHTML=`
     <div style="margin-bottom:14px"><span class="tag tag-blue">${n.tipo}</span><span style="margin-left:8px;font-size:12px;color:var(--text-light)">${formatFecha(n.fecha)}</span></div>
     ${p?`<p class="text-light" style="margin-bottom:12px">Paciente: <strong style="color:var(--text)">${p.nombre} ${p.apellidos}</strong></p>`:''}
@@ -2374,7 +2378,7 @@ function imprimirNota(id) {
   const tipoColor = {evolucion:'#1D4ED8',diagnostico:'#7C3AED',tratamiento:'#059669',laboratorio:'#D97706',imagen:'#0891B2',cirugia:'#DC2626',alta:'#065F46',otro:'#475569'}[n.tipo]||'#1D4ED8';
 
   const ini2 = (a,b) => ((a||'')[0]||'').toUpperCase()+((b||'')[0]||'').toUpperCase();
-  const body = '<div class="badge-tipo" style="background:'+tipoColor+'">📝 '+n.tipo.toUpperCase()+'</div>'
+  const body = '<div class="badge-tipo" style="background:'+tipoColor+'"><i class="ti ti-notes"></i> '+n.tipo.toUpperCase()+'</div>'
     + (n.titulo?'<div style="font-size:20px;font-weight:900;color:#0F172A;margin-bottom:6px">'+n.titulo+'</div>':'')
     + '<div class="patient-box" style="margin-bottom:20px">'
     +   '<div class="patient-av">'+(p?ini2(p.nombre,p.apellidos):'?')+'</div>'
@@ -2529,7 +2533,7 @@ async function guardarExpediente(pid) {
   else { const r = await sb.from('expediente').insert([toE(obj)]); err = r.error; }
   setLoading(false);
   if(err) { toast('Error: ' + err.message, 'error'); return; }
-  toast('Expediente guardado ✅');
+  toast('Expediente guardado');
   await loadAll();
   renderDetalleP(pid);
   setTimeout(() => { switchTab('tab-expediente', document.querySelectorAll('.tab')[4]); }, 50);
@@ -2577,7 +2581,7 @@ function setConfigLogoPreview(src) {
     box.innerHTML = `<img src="${src}" alt="logo">`;
     if(btn) btn.style.display = 'inline-flex';
   } else {
-    box.innerHTML = '🏥';
+    box.innerHTML = ico('building-hospital');
     if(btn) btn.style.display = 'none';
     document.getElementById('config-logo-url').value = '';
   }
@@ -2614,7 +2618,7 @@ function guardarConfigClinica() {
   if(!cfg.nombreClinica) { toast('El nombre de la clínica es obligatorio', 'error'); return; }
   const key = 'lumeamed_clinica' + (currentClinicaId ? '_' + currentClinicaId : '');
   localStorage.setItem(key, JSON.stringify(cfg));
-  toast('Configuración guardada ✅');
+  toast('Configuración guardada');
   actualizarPreviewConfig(cfg);
 }
 
@@ -2623,12 +2627,12 @@ function actualizarPreviewConfig(cfg) {
   if(!el) return;
   el.innerHTML = `
     <div style="display:flex;align-items:flex-start;gap:12px;border-bottom:2px solid var(--primary);padding-bottom:12px;margin-bottom:12px">
-      <div style="width:52px;height:52px;border-radius:10px;background:linear-gradient(135deg,var(--primary),var(--accent));display:flex;align-items:center;justify-content:center;font-size:22px;overflow:hidden;flex-shrink:0">${cfg.logoUrl?`<img src="${cfg.logoUrl}" style="width:100%;height:100%;object-fit:contain">` : '🏥'}</div>
+      <div style="width:52px;height:52px;border-radius:10px;background:linear-gradient(135deg,var(--primary),var(--accent));display:flex;align-items:center;justify-content:center;font-size:22px;overflow:hidden;flex-shrink:0">${cfg.logoUrl?`<img src="${cfg.logoUrl}" style="width:100%;height:100%;object-fit:contain">`:ico('building-hospital')}</div>
       <div>
         <div style="font-size:16px;font-weight:800;color:var(--primary)">${cfg.nombreClinica||'Lumea Med Clínica'}</div>
         ${cfg.nombreDoctor?`<div style="font-size:12px;font-weight:600">${cfg.nombreDoctor}${cfg.especialidad?' · '+cfg.especialidad:''}</div>`:''}
-        ${cfg.direccion?`<div style="font-size:11px;color:var(--text-light)">📍 ${cfg.direccion}</div>`:''}
-        ${cfg.telefono?`<div style="font-size:11px;color:var(--text-light)">📞 ${cfg.telefono}</div>`:''}
+        ${cfg.direccion?`<div style="font-size:11px;color:var(--text-light)">${ico('map-pin')} ${cfg.direccion}</div>`:''}
+        ${cfg.telefono?`<div style="font-size:11px;color:var(--text-light)">${ico('phone')} ${cfg.telefono}</div>`:''}
       </div>
     </div>
     <p style="font-size:11px;color:var(--text-light);text-align:center">Así aparecerá el encabezado en tus notas de consulta</p>`;
@@ -2723,15 +2727,15 @@ function renderAtendidos(fecha) {
 
   const statsEl = document.getElementById('atendidos-stats');
   if(statsEl) statsEl.innerHTML =
-    `<span class="tag tag-green">✅ ${completadas.length} completadas</span>` +
-    `<span class="tag tag-orange">⏳ ${pendientes.length} pendientes</span>` +
-    (canceladas.length ? `<span class="tag tag-red">❌ ${canceladas.length} canceladas</span>` : '') +
-    `<span class="tag tag-gray">📋 ${citas.length} total del día</span>`;
+    `<span class="tag tag-green">${ico('check')} ${completadas.length} completadas</span>` +
+    `<span class="tag tag-orange">${ico('clock')} ${pendientes.length} pendientes</span>` +
+    (canceladas.length ? `<span class="tag tag-red">${ico('x')} ${canceladas.length} canceladas</span>` : '') +
+    `<span class="tag tag-gray">${ico('list')} ${citas.length} total del día</span>`;
 
   const lista = document.getElementById('atendidos-lista');
   if(!lista) return;
   if(!citas.length) {
-    lista.innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div><p>Sin citas registradas para esta fecha</p></div>';
+    lista.innerHTML = `<div class="empty-state"><div class="empty-icon">${ico('calendar')}</div><p>Sin citas registradas para esta fecha</p></div>`;
     return;
   }
   lista.innerHTML = citas.map(c => {
@@ -2745,9 +2749,9 @@ function renderAtendidos(fecha) {
       </div>
       ${estadoTag(c.estado)}
       <div class="actions-cell">
-        <button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff;white-space:nowrap" onclick="imprimirNotaConsulta(${c.id})">🖨️ Nota</button>
-        <button class="btn btn-primary btn-sm" onclick="verResumenCita(${c.id})">📄 Hoja</button>
-        <button class="btn btn-secondary btn-sm" onclick="navigate('paciente-detalle',${c.pacienteId})">👁️</button>
+        <button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff;white-space:nowrap" onclick="imprimirNotaConsulta(${c.id})">${ico('printer')} Nota</button>
+        <button class="btn btn-primary btn-sm" onclick="verResumenCita(${c.id})">${ico('file-text')} Hoja</button>
+        <button class="btn btn-secondary btn-sm" onclick="navigate('paciente-detalle',${c.pacienteId})">${ico('eye')}</button>
       </div>
     </div>`;
   }).join('');
@@ -2762,13 +2766,13 @@ function verResumenCita(citaId) {
   const meds = C.m.filter(m => m.pacienteId === c.pacienteId && m.estado === 'activa');
   const notasDia = C.n.filter(n => n.pacienteId === c.pacienteId && n.fecha === c.fecha).sort((a,b) => b.id - a.id);
   const notasOtras = C.n.filter(n => n.pacienteId === c.pacienteId && n.fecha !== c.fecha).sort((a,b) => b.fecha.localeCompare(a.fecha));
-  const estadoIcon = {completada:'✅',pendiente:'⏳',confirmada:'🔵',cancelada:'❌'}[c.estado]||'📋';
+  const estadoIcon = {completada:ico('circle-check'),pendiente:ico('clock'),confirmada:ico('circle-dot'),cancelada:ico('circle-x')}[c.estado]||ico('clipboard-list');
 
   document.getElementById('resumen-cita-content').innerHTML = `
     <div class="rc-header">
       <div style="display:flex;align-items:center;gap:12px;flex:1">
         <div style="width:46px;height:46px;border-radius:10px;background:linear-gradient(135deg,var(--primary),var(--accent));display:flex;align-items:center;justify-content:center;font-size:20px;overflow:hidden;flex-shrink:0">
-          ${cfg.logoUrl?`<img src="${cfg.logoUrl}" style="width:100%;height:100%;object-fit:contain;border-radius:10px" alt="logo">`:'🏥'}
+          ${cfg.logoUrl?`<img src="${cfg.logoUrl}" style="width:100%;height:100%;object-fit:contain;border-radius:10px" alt="logo">`:`${ico('building-hospital')}`}
         </div>
         <div>
           <div class="rc-logo" style="font-size:15px">${cfg.nombreClinica||'Lumea Med'}</div>
@@ -2783,21 +2787,21 @@ function verResumenCita(citaId) {
       <div class="rc-patient-info" style="flex:1">
         <h2>${p?p.nombre+' '+p.apellidos:'Paciente no encontrado'}</h2>
         <div class="rc-meta">
-          ${p?.fechaNac?`<span>🎂 ${calcEdad(p.fechaNac)}</span>`:''}
+          ${p?.fechaNac?`<span>${ico('cake')} ${calcEdad(p.fechaNac)}</span>`:''}
           ${p?.sexo?`<span>${p.sexo==='M'?'♂ Masculino':p.sexo==='F'?'♀ Femenino':p.sexo}</span>`:''}
-          ${p?.sangre?`<span>🩸 ${p.sangre}</span>`:''}
-          ${p?.telefono?`<span>📞 ${p.telefono}</span>`:''}
-          ${p?.identificacion?`<span>🪪 ${p.identificacion}</span>`:''}
-          ${p?.email?`<span>✉️ ${p.email}</span>`:''}
+          ${p?.sangre?`<span>${ico('droplet')} ${p.sangre}</span>`:''}
+          ${p?.telefono?`<span>${ico('phone')} ${p.telefono}</span>`:''}
+          ${p?.identificacion?`<span>${ico('id-badge')} ${p.identificacion}</span>`:''}
+          ${p?.email?`<span>${ico('mail')} ${p.email}</span>`:''}
         </div>
-        ${p?.alergias?`<div class="rc-alergias">⚠️ Alergias: <strong>${p.alergias}</strong></div>`:''}
-        ${p?.emergencia?`<div style="font-size:12px;color:rgba(255,255,255,.65);margin-top:6px">🆘 Emergencia: ${p.emergencia}</div>`:''}
-        ${p?.direccion?`<div style="font-size:12px;color:rgba(255,255,255,.55);margin-top:3px">📍 ${p.direccion}</div>`:''}
+        ${p?.alergias?`<div class="rc-alergias">${ico('alert-triangle')} Alergias: <strong>${p.alergias}</strong></div>`:''}
+        ${p?.emergencia?`<div style="font-size:12px;color:rgba(255,255,255,.65);margin-top:6px">${ico('sos')} Emergencia: ${p.emergencia}</div>`:''}
+        ${p?.direccion?`<div style="font-size:12px;color:rgba(255,255,255,.55);margin-top:3px">${ico('map-pin')} ${p.direccion}</div>`:''}
       </div>
     </div>
 
     <div class="rc-section">
-      <div class="rc-section-title">📅 Datos de la Consulta</div>
+      <div class="rc-section-title">${ico('calendar')} Datos de la Consulta</div>
       <div class="rc-fields">
         <div class="rc-field"><span>Fecha</span><strong>${formatFecha(c.fecha)}</strong></div>
         <div class="rc-field"><span>Hora</span><strong>${c.hora}</strong></div>
@@ -2809,17 +2813,17 @@ function verResumenCita(citaId) {
     </div>
 
     ${meds.length?`<div class="rc-section">
-      <div class="rc-section-title">💊 Medicaciones Activas del Paciente</div>
+      <div class="rc-section-title">${ico('pill')} Medicaciones Activas del Paciente</div>
       ${meds.map(m=>`<div class="rc-med-item">
         <strong>${m.nombre}</strong> · ${m.dosis} · ${m.frecuencia} · vía ${m.via}
         ${m.inicio?`<span style="font-size:11px;color:var(--text-light);margin-left:6px">(desde ${formatFecha(m.inicio)}${m.fin?' hasta '+formatFecha(m.fin):''})</span>`:''}
-        ${m.indicaciones?`<div style="font-size:12px;color:var(--text-light);margin-top:4px">📌 ${m.indicaciones}</div>`:''}
+        ${m.indicaciones?`<div style="font-size:12px;color:var(--text-light);margin-top:4px">${ico('bookmark')} ${m.indicaciones}</div>`:''}
       </div>`).join('')}
     </div>`:
-    `<div class="rc-section"><div class="rc-section-title">💊 Medicaciones Activas</div><p style="font-size:13px;color:var(--text-light)">Sin medicaciones activas registradas</p></div>`}
+    `<div class="rc-section"><div class="rc-section-title">${ico('pill')} Medicaciones Activas</div><p style="font-size:13px;color:var(--text-light)">Sin medicaciones activas registradas</p></div>`}
 
     ${notasDia.length?`<div class="rc-section">
-      <div class="rc-section-title">📝 Notas Clínicas — Esta Consulta (${formatFecha(c.fecha)})</div>
+      <div class="rc-section-title">${ico('notes')} Notas Clínicas — Esta Consulta (${formatFecha(c.fecha)})</div>
       ${notasDia.map(n=>`<div class="rc-nota">
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
           <span class="tag tag-blue">${n.tipo}</span>
@@ -2830,7 +2834,7 @@ function verResumenCita(citaId) {
     </div>`:''}
 
     ${notasOtras.length?`<div class="rc-section">
-      <div class="rc-section-title">📋 Historial de Notas Anteriores</div>
+      <div class="rc-section-title">${ico('clipboard-list')} Historial de Notas Anteriores</div>
       ${notasOtras.slice(0,4).map(n=>`<div class="rc-nota">
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
           <span class="tag tag-blue">${n.tipo}</span>
@@ -2842,10 +2846,10 @@ function verResumenCita(citaId) {
       ${notasOtras.length>4?`<p style="font-size:12px;color:var(--text-light);text-align:center;margin-top:6px">+${notasOtras.length-4} notas más en el expediente</p>`:''}
     </div>`:''}
 
-    ${!notasDia.length&&!notasOtras.length?`<div class="rc-section"><div class="rc-section-title">📝 Notas Clínicas</div><p style="font-size:13px;color:var(--text-light)">Sin notas clínicas registradas para este paciente</p></div>`:''}
+    ${!notasDia.length&&!notasOtras.length?`<div class="rc-section"><div class="rc-section-title">${ico('notes')} Notas Clínicas</div><p style="font-size:13px;color:var(--text-light)">Sin notas clínicas registradas para este paciente</p></div>`:''}
 
     ${p?.observaciones?`<div class="rc-section">
-      <div class="rc-section-title">🗂️ Antecedentes y Observaciones Generales</div>
+      <div class="rc-section-title">${ico('folder')} Antecedentes y Observaciones Generales</div>
       <div style="white-space:pre-wrap;line-height:1.75;font-size:13px">${p.observaciones}</div>
     </div>`:''}
 
@@ -2873,9 +2877,9 @@ function imprimirResumen() {
 function renderExportar(){
   document.getElementById('resumen-exportar').innerHTML=`
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
-      ${[['👥','Pacientes',C.p.length],['📅','Citas',C.c.length],['💊','Medicaciones',C.m.length],['📝','Notas',C.n.length]].map(([ic,lb,v])=>`
+      ${[['ti-users','Pacientes',C.p.length],['ti-calendar','Citas',C.c.length],['ti-pill','Medicaciones',C.m.length],['ti-notes','Notas',C.n.length]].map(([ic,lb,v])=>`
         <div style="background:var(--bg);border-radius:12px;padding:16px;text-align:center;border:1px solid var(--border)">
-          <div style="font-size:28px">${ic}</div><div style="font-size:22px;font-weight:800;margin:4px 0">${v}</div><div class="text-light">${lb}</div>
+          <div style="font-size:28px"><i class="ti ${ic}"></i></div><div style="font-size:22px;font-weight:800;margin:4px 0">${v}</div><div class="text-light">${lb}</div>
         </div>`).join('')}
     </div>
     <div class="divider"></div>
@@ -2969,7 +2973,7 @@ function importarJSON(e){
   r.onload=async ev=>{
     try{
       const d=JSON.parse(ev.target.result);
-      const ok=await customConfirm({icon:'📥',title:'Importar backup',msg:'Esto insertará los datos del archivo en Supabase.<br><small style="color:var(--text-light)">No se borran los registros existentes.</small>',okText:'Importar',danger:false});
+      const ok=await customConfirm({icon:ico('arrow-down-circle'),title:'Importar backup',msg:'Esto insertará los datos del archivo en Supabase.<br><small style="color:var(--text-light)">No se borran los registros existentes.</small>',okText:'Importar',danger:false});
       if(!ok) return;
       setLoading(true);
       if(d.pacientes?.length) await sb.from('pacientes').upsert(d.pacientes.map(toP));
@@ -2977,7 +2981,7 @@ function importarJSON(e){
       if(d.medicaciones?.length) await sb.from('medicaciones').upsert(d.medicaciones.map(toM));
       if(d.notas?.length) await sb.from('notas').upsert(d.notas.map(toN));
       setLoading(false);
-      toast('Datos importados correctamente ✅');
+      toast('Datos importados correctamente');
       await loadAll(); renderView(currentView); updateBadges();
     }catch(err){ setLoading(false); toast('Error al leer el archivo','error'); console.error(err); }
   };
@@ -3414,7 +3418,7 @@ async function setNewPassword() {
   sessionStorage.removeItem('lm_user');
   window.location.hash = '';
   document.getElementById('recovery-overlay').style.display = 'none';
-  toast('Contraseña actualizada ✅ — inicia sesión con tu nueva clave', 'success');
+  toast('Contraseña actualizada — inicia sesión con tu nueva clave', 'success');
   setTimeout(() => window.location.reload(), 1800);
 }
 
@@ -3444,7 +3448,7 @@ function renderAgendasDoctors() {
   if(!el) return;
   const staff = C.prof.length ? C.prof : [];
   if(!staff.length) {
-    el.innerHTML = `<div class="empty-state" style="padding:20px"><div class="empty-icon" style="font-size:28px">👥</div><p style="font-size:12px">No hay personal registrado.<br>Agrega desde el panel Admin.</p></div>`;
+    el.innerHTML = `<div class="empty-state" style="padding:20px"><div class="empty-icon">${ico('users')}</div><p style="font-size:12px">No hay personal registrado.<br>Agrega desde el panel Admin.</p></div>`;
     return;
   }
   const today = hoy();
@@ -3520,7 +3524,7 @@ function renderAgendasRight() {
       <!-- Citas del día seleccionado -->
       <div class="card">
         <div class="card-header" style="margin-bottom:14px">
-          <h3>📋 ${formatFecha(selAgendasDate)}</h3>
+          <h3>${ico('clipboard-list')} ${formatFecha(selAgendasDate)}</h3>
           ${(isSuperAdmin() || currentUser?.key !== 'medico' || currentUser?.id == prof.id)
             ? `<button class="btn btn-primary btn-sm" onclick="nuevaCitaParaDoctor('${prof.id}')">+ Nueva Cita</button>`
             : ''}
@@ -3646,10 +3650,10 @@ function renderInventario() {
   const sinStock  = C.inv.filter(p=>p.stock===0).length;
   const statsEl = document.getElementById('inv-stats-row');
   if(statsEl) statsEl.innerHTML=`
-    <div class="stat-card"><div class="stat-icon si-blue">📦</div><div class="stat-info"><h3>${C.inv.length}</h3><p>Productos</p></div></div>
-    <div class="stat-card"><div class="stat-icon si-green">📥</div><div class="stat-info"><h3>${entHoy}</h3><p>Unidades entrada hoy</p></div></div>
-    <div class="stat-card"><div class="stat-icon si-orange">📤</div><div class="stat-info"><h3>${salHoy}</h3><p>Unidades salida hoy</p></div></div>
-    <div class="stat-card"><div class="stat-icon" style="background:linear-gradient(135deg,#FEF2F2,#FEE2E2)">⚠️</div><div class="stat-info"><h3>${bajoStock}</h3><p>Bajo stock / sin stock (${sinStock})</p></div></div>`;
+    <div class="stat-card"><div class="stat-icon si-blue">${ico('package')}</div><div class="stat-info"><h3>${C.inv.length}</h3><p>Productos</p></div></div>
+    <div class="stat-card"><div class="stat-icon si-green">${ico('arrow-down-circle')}</div><div class="stat-info"><h3>${entHoy}</h3><p>Unidades entrada hoy</p></div></div>
+    <div class="stat-card"><div class="stat-icon si-orange">${ico('arrow-up-circle')}</div><div class="stat-info"><h3>${salHoy}</h3><p>Unidades salida hoy</p></div></div>
+    <div class="stat-card"><div class="stat-icon" style="background:linear-gradient(135deg,#FEF2F2,#FEE2E2)">${ico('alert-triangle')}</div><div class="stat-info"><h3>${bajoStock}</h3><p>Bajo stock / sin stock (${sinStock})</p></div></div>`;
   const btnBorrar = document.getElementById('btn-borrar-inventario');
   if(btnBorrar) btnBorrar.style.display = isSuperAdmin() ? '' : 'none';
   switchInvTab(invTab);
@@ -3675,7 +3679,7 @@ function renderProductos(filtro) {
   if(search) { const q=search.toLowerCase(); items=items.filter(p=>p.nombre.toLowerCase().includes(q)||(p.descripcion||'').toLowerCase().includes(q)||(p.codigoMinsa||'').includes(q)); }
   if(!items.length){ el.innerHTML=''; empty.style.display='block'; return; }
   empty.style.display='none';
-  const catIcon = c=>({medicamento:'💊',material:'🩺',equipo:'🔬',insumo:'🧹',papeleria:'📄',general:'📦'}[c]||'📦');
+  const catIcon = c=>({medicamento:ico('pill'),material:ico('stethoscope'),equipo:ico('microscope'),insumo:ico('tools'),papeleria:ico('file'),general:ico('package')}[c]||ico('package'));
   el.innerHTML = items.map(p=>{
     const stCls = p.stock===0?'tag-red':p.stockMin>0&&p.stock<=p.stockMin?'tag-orange':'tag-green';
     const stLbl = p.stock===0?'Sin stock':p.stockMin>0&&p.stock<=p.stockMin?'Stock bajo':'OK';
@@ -3688,11 +3692,11 @@ function renderProductos(filtro) {
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
         <span class="tag ${stCls}">${stLbl} · <strong>${p.stock}</strong></span>
         <div class="actions-cell" style="gap:3px;flex-wrap:nowrap">
-          <button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff" onclick="openModalEntrada(${p.id})" title="Entrada">📥</button>
-          <button class="btn btn-sm btn-danger" onclick="openModalSalida(${p.id})" title="Salida">📤</button>
-          <button class="btn btn-secondary btn-sm" onclick="abrirKardex(${p.id})" title="Kardex">📋</button>
-          <button class="btn btn-secondary btn-sm" onclick="openModalProducto(${p.id})">✏️</button>
-          <button class="btn btn-danger btn-sm" onclick="eliminarProducto(${p.id})">🗑️</button>
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff" onclick="openModalEntrada(${p.id})" title="Entrada">${ico('arrow-down-circle')}</button>
+          <button class="btn btn-sm btn-danger" onclick="openModalSalida(${p.id})" title="Salida">${ico('arrow-up-circle')}</button>
+          <button class="btn btn-secondary btn-sm" onclick="abrirKardex(${p.id})" title="Kardex">${ico('list-details')}</button>
+          <button class="btn btn-secondary btn-sm" onclick="openModalProducto(${p.id})">${ico('pencil')}</button>
+          <button class="btn btn-danger btn-sm" onclick="eliminarProducto(${p.id})">${ico('trash')}</button>
         </div>
       </div>
     </div>`;
@@ -3702,7 +3706,7 @@ function renderProductos(filtro) {
 function abrirKardex(prodId) {
   const prod = C.inv.find(p=>p.id===prodId);
   if(!prod) return;
-  document.getElementById('kardex-title').textContent = `📋 Kardex — ${prod.nombre}`;
+  document.getElementById('kardex-title').innerHTML = `${ico('list-details')} Kardex — ${prod.nombre}`;
   const stColor = prod.stock===0?'var(--danger)':prod.stockMin>0&&prod.stock<=prod.stockMin?'var(--warning)':'var(--success)';
   document.getElementById('kardex-product-info').innerHTML = `
     <div style="background:var(--bg);border-radius:10px;padding:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:14px">
@@ -3721,7 +3725,7 @@ function abrirKardex(prodId) {
   } else {
     tbody.innerHTML = rows.map(r => `<tr>
       <td>${formatFecha(r.fecha)}</td>
-      <td><span class="inv-badge-${r.tipo}">${r.tipo==='entrada'?'📥 Entrada':'📤 Salida'}</span></td>
+      <td><span class="inv-badge-${r.tipo}">${r.tipo==='entrada'?ico('arrow-down-circle')+' Entrada':ico('arrow-up-circle')+' Salida'}</span></td>
       <td style="font-weight:700;font-size:15px;color:${r.tipo==='entrada'?'var(--success)':'var(--danger)'}">${r.tipo==='entrada'?'+':'−'}${r.cantidad}</td>
       <td style="font-size:12px;color:var(--text-light)">${r.motivo||'—'}</td>
       <td style="font-weight:700">${r.saldo} <span style="font-size:11px;color:var(--text-light)">${prod.unidad}</span></td>
@@ -3759,7 +3763,7 @@ function renderMovimientos() {
         <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.motivo||'Sin motivo'}${prod?' · '+prod.unidad:''}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
-        <span class="inv-badge-${m.tipo}">${esEntrada?'📥 Entrada':'📤 Salida'}</span>
+        <span class="inv-badge-${m.tipo}">${esEntrada?ico('arrow-down-circle')+' Entrada':ico('arrow-up-circle')+' Salida'}</span>
         <span style="font-size:15px;font-weight:800;color:${esEntrada?'var(--success)':'var(--danger)'}">${esEntrada?'+':'−'}${m.cantidad}</span>
       </div>
     </div>`;
@@ -3816,10 +3820,10 @@ function renderReportesInv(){
   el.innerHTML=`
     <h3 style="font-size:14px;font-weight:700;color:var(--text-light);margin-bottom:14px">${titulo}</h3>
     <div class="stats-grid" style="margin-bottom:18px">
-      <div class="stat-card"><div class="stat-icon si-green">📥</div><div class="stat-info"><h3>${totEnt}</h3><p>Total entradas</p></div></div>
-      <div class="stat-card"><div class="stat-icon si-orange">📤</div><div class="stat-info"><h3>${totSal}</h3><p>Total salidas</p></div></div>
-      <div class="stat-card"><div class="stat-icon si-blue">🔄</div><div class="stat-info"><h3>${movsFiltro.length}</h3><p>Movimientos</p></div></div>
-      <div class="stat-card"><div class="stat-icon" style="background:linear-gradient(135deg,#FEF2F2,#FEE2E2)">⚠️</div><div class="stat-info"><h3>${C.inv.filter(p=>p.stock<=p.stockMin&&p.stockMin>0).length}</h3><p>Bajo stock ahora</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-green">${ico('arrow-down-circle')}</div><div class="stat-info"><h3>${totEnt}</h3><p>Total entradas</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-orange">${ico('arrow-up-circle')}</div><div class="stat-info"><h3>${totSal}</h3><p>Total salidas</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-blue">${ico('arrows-exchange')}</div><div class="stat-info"><h3>${movsFiltro.length}</h3><p>Movimientos</p></div></div>
+      <div class="stat-card"><div class="stat-icon" style="background:linear-gradient(135deg,#FEF2F2,#FEE2E2)">${ico('alert-triangle')}</div><div class="stat-info"><h3>${C.inv.filter(p=>p.stock<=p.stockMin&&p.stockMin>0).length}</h3><p>Bajo stock ahora</p></div></div>
     </div>
     ${topProds.length?`<div class="card" style="margin-bottom:14px">
       <div class="card-header"><h3>🏆 Productos con más movimiento</h3></div>
@@ -3835,13 +3839,13 @@ function renderReportesInv(){
         </div>`).join('')}
       </div>
     </div>`:''}
-    ${!movsFiltro.length?`<div class="empty-state"><div class="empty-icon">📊</div><p>Sin movimientos en este período</p></div>`:''}`;
+    ${!movsFiltro.length?`<div class="empty-state"><div class="empty-icon">${ico('chart-bar')}</div><p>Sin movimientos en este período</p></div>`:''}`;
 }
 
 // ── Modal Producto ──
 function openModalProducto(id){
   editingProdId=id||null;
-  document.getElementById('modal-producto-title').textContent=id?'✏️ Editar Producto':'📦 Nuevo Producto';
+  document.getElementById('modal-producto-title').innerHTML=id?`${ico('pencil')} Editar Producto`:`${ico('package')} Nuevo Producto`;
   const stockWrap = document.getElementById('prod-stock-wrap');
   if(id){
     const p=C.inv.find(x=>x.id===id); if(!p) return;
@@ -3902,7 +3906,7 @@ async function guardarProducto(){
 
 async function eliminarProducto(id){
   const p=C.inv.find(x=>x.id===id);
-  const ok=await customConfirm({icon:'📦',title:'Eliminar producto',msg:`¿Eliminar <strong>${p?.nombre}</strong>?<br><br>También se eliminarán todos sus movimientos de inventario.`,okText:'Eliminar'});
+  const ok=await customConfirm({icon:ico('package'),title:'Eliminar producto',msg:`¿Eliminar <strong>${p?.nombre}</strong>?<br><br>También se eliminarán todos sus movimientos de inventario.`,okText:'Eliminar'});
   if(!ok) return;
   setLoading(true);
   const{error}=await sb.from('inventario').delete().eq('id',id);
@@ -3916,7 +3920,7 @@ async function eliminarTodoInventario() {
   const total = C.inv.length;
   if(!total) { toast('El inventario ya está vacío','info'); return; }
   const ok = await customConfirm({
-    icon: '🗑️',
+    icon: ico('trash'),
     title: 'Borrar todo el inventario',
     msg: `¿Estás seguro? Se eliminarán <strong>${total} producto${total!==1?'s':''}</strong> y todos sus movimientos de esta clínica.<br><br>Esta acción <strong>no se puede deshacer</strong>.`,
     okText: 'Sí, borrar todo',
@@ -3946,10 +3950,10 @@ function openModalCompra() {
   document.getElementById('mov-fecha').value = hoy();
   document.getElementById('mov-motivo').value = '';
   document.getElementById('mov-search').value = '';
-  document.getElementById('mov-masivo-title').textContent = '🛒 Compra Grupal';
+  document.getElementById('mov-masivo-title').innerHTML = `${ico('shopping-cart')} Compra Grupal`;
   document.getElementById('mov-tabs-row').style.display = 'none';
   document.getElementById('mov-motivo').placeholder = 'Ej: Farmacéutica López, MINSA, proveedor...';
-  document.getElementById('mov-confirm-btn').textContent = '🛒 Confirmar Compra';
+  document.getElementById('mov-confirm-btn').innerHTML = `${ico('shopping-cart')} Confirmar Compra`;
   document.getElementById('mov-confirm-btn').style.background = 'linear-gradient(135deg,var(--success),#059669)';
   filtrarInventarioMov('');
   document.getElementById('modal-mov-masivo').classList.add('open');
@@ -3979,10 +3983,10 @@ function abrirModalMov(tipo, prodId) {
 function switchMovTab(tipo) {
   _movTipo = tipo;
   const esEntrada = tipo === 'entrada';
-  document.getElementById('mov-masivo-title').textContent = esEntrada ? '📥 Registrar Entrada' : '📤 Registrar Salida';
+  document.getElementById('mov-masivo-title').innerHTML = esEntrada ? `${ico('arrow-down-circle')} Registrar Entrada` : `${ico('arrow-up-circle')} Registrar Salida`;
   document.getElementById('mov-tab-entrada').className = 'btn btn-sm ' + (esEntrada ? 'btn-primary' : 'btn-secondary');
   document.getElementById('mov-tab-salida').className  = 'btn btn-sm ' + (!esEntrada ? 'btn-danger' : 'btn-secondary');
-  document.getElementById('mov-confirm-btn').textContent = esEntrada ? '📥 Confirmar Entrada' : '📤 Confirmar Salida';
+  document.getElementById('mov-confirm-btn').innerHTML = esEntrada ? `${ico('arrow-down-circle')} Confirmar Entrada` : `${ico('arrow-up-circle')} Confirmar Salida`;
   document.getElementById('mov-confirm-btn').style.background = esEntrada
     ? 'linear-gradient(135deg,var(--success),#059669)'
     : 'linear-gradient(135deg,#EF4444,#B91C1C)';
@@ -3991,7 +3995,7 @@ function switchMovTab(tipo) {
 
 function filtrarInventarioMov(q) {
   const q2 = (q||'').toLowerCase();
-  const catIcon = c=>({medicamento:'💊',material:'🩺',equipo:'🔬',insumo:'🧹',papeleria:'📄',general:'📦'}[c]||'📦');
+  const catIcon = c=>({medicamento:ico('pill'),material:ico('stethoscope'),equipo:ico('microscope'),insumo:ico('tools'),papeleria:ico('file'),general:ico('package')}[c]||ico('package'));
   let items = C.inv;
   if(q2) items = items.filter(p=>p.nombre.toLowerCase().includes(q2)||(p.descripcion||'').toLowerCase().includes(q2));
   const grid = document.getElementById('mov-inv-grid');
@@ -4059,7 +4063,7 @@ async function confirmarMovMasivo() {
     const prod = C.inv.find(p=>p.id===Number(id));
     if(!prod) continue;
     if(tipo==='salida' && qty > prod.stock){
-      const ok = await customConfirm({icon:'⚠️',title:'Stock insuficiente',
+      const ok = await customConfirm({icon:ico('alert-triangle'),title:'Stock insuficiente',
         msg:`<strong>${prod.nombre}</strong>: stock ${prod.stock} ${prod.unidad}, salida ${qty}.<br>¿Registrar de todas formas?`,
         okText:'Registrar igual',danger:true});
       if(!ok) continue;
@@ -4077,7 +4081,7 @@ async function confirmarMovMasivo() {
       });
     }
   }
-  toast(tipo==='entrada'?`📥 ${entries.length} entrada${entries.length!==1?'s':''} registrada${entries.length!==1?'s':''}`:`📤 ${entries.length} salida${entries.length!==1?'s':''} registrada${entries.length!==1?'s':''}`);
+  toast(tipo==='entrada'?`${entries.length} entrada${entries.length!==1?'s':''} registrada${entries.length!==1?'s':''}`:`${entries.length} salida${entries.length!==1?'s':''} registrada${entries.length!==1?'s':''}`);
   closeModal('modal-mov-masivo');
   await loadAll(); renderInventario(); setLoading(false);
 }
@@ -4740,7 +4744,7 @@ async function confirmarImportMINSA() {
   }
   closeModal('modal-minsa-selector');
   await loadAll(); renderInventario(); setLoading(false);
-  toast(`✅ ${inserted} medicamentos agregados${errors?` (${errors} con error)`:''}`, inserted>0?'success':'error');
+  toast(`${inserted} medicamentos agregados${errors?` (${errors} con error)`:''}`, inserted>0?'success':'error');
 }
 
 async function importarCatalogoMINSA() { abrirSelectorMINSA(); }
@@ -4751,7 +4755,7 @@ function buscarProductoInv(q) {
   const box = document.getElementById('prod-sug');
   if(!q || q.length < 2) { box.style.display='none'; prodSugIdx=-1; return; }
   const q2 = q.toLowerCase();
-  const catIcon = c=>({medicamento:'💊',material:'🩺',equipo:'🔬',insumo:'🧹',papeleria:'📄',general:'📦'}[c]||'📦');
+  const catIcon = c=>({medicamento:ico('pill'),material:ico('stethoscope'),equipo:ico('microscope'),insumo:ico('tools'),papeleria:ico('file'),general:ico('package')}[c]||ico('package'));
   const gen = INV_CATALOG.filter(p => p.n.toLowerCase().includes(q2)).slice(0,5);
   const seenNames = new Set(gen.map(p=>p.n.toLowerCase()));
   const minsa = MINSA_CATALOG.filter(p =>
@@ -4954,10 +4958,10 @@ function renderHistorialDental(pid) {
   const fi = (id, val='', type='text') => `<input type="${type}" id="hd-${id}" value="${escAttr(val)}" style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:13px;background:var(--card);color:var(--text)">`;
   el.innerHTML = `<div class="card">
     <div class="card-header"><h3>🦷 Historia Clínica Dental</h3>
-      <button class="btn btn-primary btn-sm" onclick="guardarHistorialDental(${pid})">💾 Guardar</button>
+      <button class="btn btn-primary btn-sm" onclick="guardarHistorialDental(${pid})">${ico('device-floppy')} Guardar</button>
     </div>
     <div class="exp-section">
-      <div class="exp-section-title">📋 Motivo de Consulta y Antecedentes</div>
+      <div class="exp-section-title">${ico('clipboard-list')} Motivo de Consulta y Antecedentes</div>
       <div class="form-grid">
         <div class="form-group full"><label>Motivo de consulta</label>${f('motivoConsulta', hd.motivoConsulta)}</div>
         <div class="form-group"><label>Última visita dental</label>${fi('ultimaVisitaDental', hd.ultimaVisitaDental, 'date')}</div>
@@ -5093,8 +5097,8 @@ function renderOdontograma(pid) {
     <div class="card-header">
       <h3>🦷 Odontograma${tipoLabel}</h3>
       <div style="display:flex;gap:8px">
-        <button class="btn btn-secondary btn-sm" onclick="imprimirOdontograma(${pid})">🖨️ Imprimir</button>
-        <button class="btn btn-primary btn-sm" onclick="abrirModalOdontograma(${pid})">✏️ Editar</button>
+        <button class="btn btn-secondary btn-sm" onclick="imprimirOdontograma(${pid})">${ico('printer')} Imprimir</button>
+        <button class="btn btn-primary btn-sm" onclick="abrirModalOdontograma(${pid})">${ico('pencil')} Editar</button>
       </div>
     </div>
     <div style="padding:12px 16px">
@@ -5467,8 +5471,8 @@ function renderPeriodontograma(pid) {
   el.innerHTML = `<div class="card">
     <div class="card-header"><h3>📏 Periodontograma</h3>
       <div style="display:flex;gap:8px">
-        <button class="btn btn-secondary btn-sm" onclick="imprimirPeriodontograma(${pid})">🖨️ Imprimir</button>
-        <button class="btn btn-primary btn-sm" onclick="guardarPeriodontograma(${pid})">💾 Guardar</button>
+        <button class="btn btn-secondary btn-sm" onclick="imprimirPeriodontograma(${pid})">${ico('printer')} Imprimir</button>
+        <button class="btn btn-primary btn-sm" onclick="guardarPeriodontograma(${pid})">${ico('device-floppy')} Guardar</button>
       </div>
     </div>
     <div style="font-size:12px;color:var(--text-light);margin-bottom:14px">PB = Profundidad de bolsa. Sangrado al sondaje. Movilidad y furcación: 0–3.</div>
@@ -5643,14 +5647,14 @@ function renderProcedimientosView() {
   el.innerHTML = `
     <div class="stats-grid" style="margin-bottom:20px">
       <div class="stat-card"><div class="stat-icon" style="background:linear-gradient(135deg,#e0f2fe,#bae6fd)">🦷</div><div class="stat-info"><h3>${total}</h3><p>Total procedimientos</p></div></div>
-      <div class="stat-card"><div class="stat-icon si-green">✅</div><div class="stat-info"><h3>${finalizados}</h3><p>Finalizados</p></div></div>
-      <div class="stat-card"><div class="stat-icon si-blue">📋</div><div class="stat-info"><h3>${pendientes}</h3><p>Pendientes</p></div></div>
-      <div class="stat-card"><div class="stat-icon si-orange">🔄</div><div class="stat-info"><h3>${iniciados}</h3><p>Iniciados</p></div></div>
-      ${totalPres>0?`<div class="stat-card"><div class="stat-icon" style="background:linear-gradient(135deg,#d1fae5,#a7f3d0)">💰</div><div class="stat-info"><h3>$${totalPres.toLocaleString()}</h3><p>Presupuesto total</p></div></div>`:''}
+      <div class="stat-card"><div class="stat-icon si-green">${ico('circle-check')}</div><div class="stat-info"><h3>${finalizados}</h3><p>Finalizados</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-blue">${ico('clipboard-list')}</div><div class="stat-info"><h3>${pendientes}</h3><p>Pendientes</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-orange">${ico('arrows-exchange')}</div><div class="stat-info"><h3>${iniciados}</h3><p>Iniciados</p></div></div>
+      ${totalPres>0?`<div class="stat-card"><div class="stat-icon" style="background:linear-gradient(135deg,#d1fae5,#a7f3d0)">${ico('coins')}</div><div class="stat-info"><h3>$${totalPres.toLocaleString()}</h3><p>Presupuesto total</p></div></div>`:''}
     </div>
     <div class="card">
       <div class="card-header">
-        <h3>📋 Plan de Tratamiento</h3>
+        <h3>${ico('clipboard-list')} Plan de Tratamiento</h3>
         <button class="btn btn-primary btn-sm" onclick="openModalProcedimiento()">+ Nuevo</button>
       </div>
       ${!allProc.length ? '<div class="empty-state"><div class="empty-icon">🦷</div><p>Sin procedimientos registrados</p></div>' :
@@ -5667,8 +5671,8 @@ function renderProcedimientosView() {
               <td>${proc.presupuesto!=null?`$${Number(proc.presupuesto).toLocaleString()}`:'—'}</td>
               <td>${formatFecha(proc.fecha)}</td>
               <td><div class="actions-cell">
-                <button class="btn btn-secondary btn-sm" onclick="openModalProcedimiento(${proc.id})">✏️</button>
-                <button class="btn btn-danger btn-sm" onclick="eliminarProcedimiento(${proc.id})">🗑️</button>
+                <button class="btn btn-secondary btn-sm" onclick="openModalProcedimiento(${proc.id})">${ico('pencil')}</button>
+                <button class="btn btn-danger btn-sm" onclick="eliminarProcedimiento(${proc.id})">${ico('trash')}</button>
               </div></td>
             </tr>`;
           }).join('')}</tbody>
@@ -6270,7 +6274,7 @@ function renderAdminUsuarios() {
     const perms = (u.permisos && u.permisos.length) ? u.permisos : (PERMISOS_DEFECTO[u.rol] || []);
     const permIcons = perms.map(id => {
       const p = ALL_PERMISOS.find(x=>x.id===id);
-      return p ? `<span title="${p.label}" style="font-size:15px">${p.icon}</span>` : '';
+      return p ? `<span title="${p.label}"><i class="ti ${p.icon}" style="font-size:15px"></i></span>` : '';
     }).join('');
     const permSrc = (u.permisos && u.permisos.length) ? '' : '<span style="font-size:10px;color:var(--text-light);margin-left:4px">(por rol)</span>';
     return `<div class="admin-item-card">
@@ -6285,7 +6289,7 @@ function renderAdminUsuarios() {
         <span class="tag ${rolTag(u.rol)}" style="flex-shrink:0">${rolLabel(u.rol)}</span>
       </div>
       <div class="admin-item-card-meta">
-        <span>🏥 ${clinica?clinica.nombre:'Sin clínica asignada'}</span>
+        <span>${ico('building-hospital')} ${clinica?clinica.nombre:'Sin clínica asignada'}</span>
       </div>
       <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;padding:6px 0 2px;border-top:1px solid var(--border);margin-top:6px">
         ${permIcons}${permSrc}
@@ -6544,7 +6548,7 @@ function setAdminLogoPreview(src) {
     box.innerHTML = `<img src="${src}" style="width:100%;height:100%;object-fit:contain;border-radius:12px" alt="logo">`;
     if(btn) btn.style.display = 'inline-flex';
   } else {
-    box.innerHTML = '🏥';
+    box.innerHTML = ico('building-hospital');
     if(btn) btn.style.display = 'none';
     document.getElementById('cl-logo-url').value = '';
   }
@@ -6868,7 +6872,7 @@ function renderPermisosModal(checked = []) {
     const on = checked.includes(p.id);
     return `<label id="perm-label-${p.id}" style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg);border:1.5px solid ${on?'var(--primary)':'var(--border)'};border-radius:8px;cursor:pointer;font-size:13px;transition:border .15s;user-select:none">
       <input type="checkbox" id="perm-${p.id}" value="${p.id}" ${on?'checked':''} onchange="togglePermLabel('${p.id}')">
-      <span>${p.icon}</span>
+      <i class="ti ${p.icon}"></i>
       <span>${p.label}</span>
     </label>`;
   }).join('');
@@ -6884,7 +6888,7 @@ function onRolChange() {
 }
 
 function openModalUsuario() {
-  document.getElementById('modal-usuario-title').textContent = '👤 Nuevo Usuario';
+  document.getElementById('modal-usuario-title').innerHTML = `${ico('user-plus')} Nuevo Usuario`;
   document.getElementById('u-nombre').value = '';
   document.getElementById('u-email').value = '';
   document.getElementById('u-rol').value = 'medico';
@@ -6902,7 +6906,7 @@ function openModalUsuario() {
 function openModalUsuarioEditById(id) {
   const u = adminUsuarios.find(x=>x.id===id);
   if(!u) return;
-  document.getElementById('modal-usuario-title').textContent = '✏️ Editar Usuario';
+  document.getElementById('modal-usuario-title').innerHTML = `${ico('pencil')} Editar Usuario`;
   document.getElementById('u-nombre').value = u.nombre;
   document.getElementById('u-email').value = u.email||'';
   document.getElementById('u-rol').value = u.rol;
@@ -7069,7 +7073,7 @@ function descargarPDFInventario() {
   const totSalYear = movYear.filter(m=>m.tipo==='salida').reduce((s,m)=>s+m.cantidad,0);
   const bajoStock = C.inv.filter(p=>p.stockMin>0&&p.stock<=p.stockMin);
   const sinStock  = C.inv.filter(p=>p.stock===0);
-  const catIcon   = c=>({medicamento:'💊',material:'🩺',equipo:'🔬',insumo:'🧹',papeleria:'📄',general:'📦'}[c]||'📦');
+  const catIcon   = c=>({medicamento:ico('pill'),material:ico('stethoscope'),equipo:ico('microscope'),insumo:ico('tools'),papeleria:ico('file'),general:ico('package')}[c]||ico('package'));
   const nomMes = now.toLocaleDateString('es-ES',{month:'long',year:'numeric'});
 
   const body=`
@@ -7453,7 +7457,7 @@ function renderTransacciones() {
   data.sort((a,b)=>b.fecha.localeCompare(a.fecha));
   const el = document.getElementById('fin-trans-list');
   if(!el) return;
-  if(!data.length) { el.innerHTML='<div class="empty-state" style="padding:40px"><div class="empty-icon">📋</div><p>No hay transacciones en este período</p></div>'; return; }
+  if(!data.length) { el.innerHTML=`<div class="empty-state" style="padding:40px"><div class="empty-icon">${ico('receipt')}</div><p>No hay transacciones en este período</p></div>`; return; }
   const MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
   el.innerHTML=data.map(f=>{
     const esI=f.tipo==='ingreso';
@@ -7468,9 +7472,9 @@ function renderTransacciones() {
         <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.categoria||'general'} · ${f.metodoPago}${f.referencia?' · Ref: '+f.referencia:''}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
-        ${esI?'<span class="tag tag-green" style="font-size:10px">💰 Ingreso</span>':'<span class="tag tag-red" style="font-size:10px">📤 Gasto</span>'}
+        ${esI?`<span class="tag tag-green" style="font-size:10px">${ico('arrow-down-circle')} Ingreso</span>`:`<span class="tag tag-red" style="font-size:10px">${ico('arrow-up-circle')} Gasto</span>`}
         <span style="font-size:13px;font-weight:800;color:${esI?'var(--success)':'var(--danger)'}">${esI?'+':'−'}${fmtC(f.monto)}</span>
-        <button class="btn btn-sm btn-danger" onclick="eliminarTransaccion(${f.id})">🗑️</button>
+        <button class="btn btn-sm btn-danger" onclick="eliminarTransaccion(${f.id})">${ico('trash')}</button>
       </div>
     </div>`;
   }).join('');
@@ -7495,7 +7499,7 @@ function renderFacturasList() {
   const estadoTag = e => ({pagada:'tag-green',pendiente:'tag-orange',cancelada:'tag-red',anulada:'tag-gray'})[e]||'tag-gray';
   const el = document.getElementById('fin-fact-list');
   if(!el) return;
-  if(!data.length) { el.innerHTML='<div class="empty-state" style="padding:40px"><div class="empty-icon">🧾</div><p>No hay facturas en este período.<br>Usa <strong>+ Nueva Factura</strong> para comenzar.</p></div>'; return; }
+  if(!data.length) { el.innerHTML=`<div class="empty-state" style="padding:40px"><div class="empty-icon">${ico('receipt')}</div><p>No hay facturas en este período.<br>Usa <strong>+ Nueva Factura</strong> para comenzar.</p></div>`; return; }
   const MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
   el.innerHTML=data.map(f=>{
     const [,mm,dd]=(f.fecha||hoy()).split('-');
@@ -7512,9 +7516,9 @@ function renderFacturasList() {
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
         <span class="tag ${estadoTag(f.estado)}">${f.estado}</span>
         <div class="actions-cell" style="gap:3px;flex-wrap:nowrap">
-          ${esPend?`<button class="btn btn-sm btn-primary" onclick="pagarFactura(${f.id})">✅</button>`:''}
-          <button class="btn btn-sm btn-secondary" onclick="verFacturaPDF(${f.id})" title="PDF">🖨️</button>
-          ${esPend?`<button class="btn btn-sm btn-danger" onclick="anularFactura(${f.id})">❌</button>`:''}
+          ${esPend?`<button class="btn btn-sm btn-primary" onclick="pagarFactura(${f.id})">${ico('check')}</button>`:''}
+          <button class="btn btn-sm btn-secondary" onclick="verFacturaPDF(${f.id})" title="PDF">${ico('printer')}</button>
+          ${esPend?`<button class="btn btn-sm btn-danger" onclick="anularFactura(${f.id})">${ico('x')}</button>`:''}
         </div>
       </div>
     </div>`;
@@ -7593,7 +7597,7 @@ function renderModalInvLista() {
   const lista = document.getElementById('sinv-lista');
   if(!lista) return;
   const q = (document.getElementById('sinv-buscar')?.value || '').toLowerCase();
-  const catIcon = { medicamento:'💊', material:'🩺', insumo:'🧹', equipo:'🔬', papeleria:'📄', general:'📦' };
+  const catIcon = { medicamento:ico('pill'), material:ico('stethoscope'), insumo:ico('tools'), equipo:ico('microscope'), papeleria:ico('file'), general:ico('package') };
   const catLabel = { medicamento:'Medicamento', material:'Material', insumo:'Insumo', equipo:'Equipo', papeleria:'Papelería', general:'General' };
   const catColor = { medicamento:'#EFF6FF', material:'#F0FDF4', insumo:'#FFFBEB', equipo:'#F5F3FF', general:'#F1F5F9' };
 
@@ -7614,7 +7618,7 @@ function renderModalInvLista() {
     return `
     <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:12px;border:1.5px solid ${checked?'var(--primary)':'var(--border)'};background:${checked?'var(--primary-light)':'var(--card)'};transition:all .15s" id="sinv-row-${p.id}">
       <input type="checkbox" data-id="${p.id}" ${checked?'checked':''} style="width:18px;height:18px;accent-color:var(--primary);cursor:pointer;flex-shrink:0" onchange="onSinvCheck(this)">
-      <div style="width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;background:${catColor[p.categoria]||'#F1F5F9'}">${catIcon[p.categoria]||'📦'}</div>
+      <div style="width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;background:${catColor[p.categoria]||'#F1F5F9'}">${catIcon[p.categoria]||ico('package')}</div>
       <div style="flex:1;min-width:0">
         <div style="font-size:14px;font-weight:700">${p.nombre}</div>
         <div style="font-size:11px;color:var(--text-light);margin-top:2px">
@@ -8422,7 +8426,7 @@ function renderFarmaDespacho() {
   );
   const grid = document.getElementById('farma-productos-grid');
   if(!grid) return;
-  const catIcon = { medicamento:'💊', material:'🩺', insumo:'🧹', equipo:'🔬', papeleria:'📄', general:'📦' };
+  const catIcon = { medicamento:ico('pill'), material:ico('stethoscope'), insumo:ico('tools'), equipo:ico('microscope'), papeleria:ico('file'), general:ico('package') };
   grid.innerHTML = !productos.length
     ? '<div style="color:var(--text-light);text-align:center;padding:30px;grid-column:1/-1">No se encontraron productos</div>'
     : productos.map(p => {
@@ -8769,7 +8773,7 @@ function renderFarmaRecetas() {
 function renderFarmaAlertas() {
   const sinStock = C.inv.filter(x => x.stock <= 0);
   const bajStock = C.inv.filter(x => x.stock > 0 && x.stockMin > 0 && x.stock <= x.stockMin);
-  const catIcon = { medicamento:'💊', material:'🩺', insumo:'🧹', equipo:'🔬', papeleria:'📄', general:'📦' };
+  const catIcon = { medicamento:ico('pill'), material:ico('stethoscope'), insumo:ico('tools'), equipo:ico('microscope'), papeleria:ico('file'), general:ico('package') };
   const renderItem = p => `
     <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
       <div>
@@ -8923,7 +8927,7 @@ function descargarPDFFarmacia() {
   const recetas   = C.mov.filter(x => fn(x) && x.motivo === 'receta');
   const entradas  = C.mov.filter(x => fn(x) && x.tipo === 'entrada');
   const totalVentas = ventas.reduce((s, x) => s + Number(x.monto || 0), 0);
-  const catIcon = c => ({ medicamento:'💊', material:'🩺', equipo:'🔬', insumo:'🧹', papeleria:'📄', general:'📦' }[c] || '📦');
+  const catIcon = c => ({ medicamento:ico('pill'), material:ico('stethoscope'), equipo:ico('microscope'), insumo:ico('tools'), papeleria:ico('file'), general:ico('package') }[c] || ico('package'));
   const metIcon = { efectivo:'Efectivo', tarjeta:'Tarjeta', transferencia:'Transferencia', otro:'Otro' };
 
   // Agrupar ventas por día
