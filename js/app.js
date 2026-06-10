@@ -2059,13 +2059,33 @@ function abrirNotaEvolucion(pacienteId, cita) {
 
 // ════════════════════ MEDICACIONES ════════════════════
 function renderMedicaciones(){
-  const tbody=document.getElementById('tabla-medicaciones'), empty=document.getElementById('meds-empty');
-  if(!C.m.length){ tbody.innerHTML=''; empty.style.display='block'; return; }
+  const el=document.getElementById('tabla-medicaciones'), empty=document.getElementById('meds-empty');
+  if(!C.m.length){ el.innerHTML=''; empty.style.display='block'; return; }
   empty.style.display='none';
-  tbody.innerHTML=[...C.m].sort((a,b)=>(b.inicio||'').localeCompare(a.inicio||'')).map(x=>{ const p=C.p.find(q=>q.id===x.pacienteId); return `<tr>
-    <td><div class="patient-name-cell"><div class="patient-avatar" style="background:${colAvatar(x.pacienteId||0)};width:28px;height:28px;font-size:10px">${p?ini(p.nombre,p.apellidos):'?'}</div><div>${p?p.nombre+' '+p.apellidos:'Desconocido'}</div></div></td>
-    <td><strong>${x.nombre}</strong></td><td>${x.dosis}</td><td>${x.frecuencia}</td><td>${formatFecha(x.inicio)}</td><td>${x.fin?formatFecha(x.fin):'—'}</td><td>${estadoTag(x.estado)}</td>
-    <td><div class="actions-cell"><button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirRecetaPaciente(${x.pacienteId})" title="Imprimir receta del paciente">🖨️</button><button class="btn btn-secondary btn-sm" onclick="openModalMedicacion(${x.id})">✏️</button><button class="btn btn-danger btn-sm" onclick="eliminarMedicacion(${x.id})">🗑️</button></div></td></tr>`; }).join('');
+  const MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  el.innerHTML=[...C.m].sort((a,b)=>(b.inicio||'').localeCompare(a.inicio||'')).map(x=>{
+    const p=C.p.find(q=>q.id===x.pacienteId);
+    const [,mm,dd]=(x.inicio||hoy()).split('-');
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)">
+      <div style="width:36px;flex-shrink:0;text-align:center;background:var(--primary-light);border-radius:8px;padding:5px 2px">
+        <div style="font-size:13px;font-weight:800;color:var(--primary);line-height:1">${dd}</div>
+        <div style="font-size:10px;color:var(--primary);text-transform:uppercase;font-weight:600">${MESES[parseInt(mm)-1]}</div>
+      </div>
+      <div class="patient-avatar" style="background:${colAvatar(x.pacienteId||0)};width:32px;height:32px;font-size:11px;flex-shrink:0">${p?ini(p.nombre,p.apellidos):'?'}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.nombre}</div>
+        <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p?p.nombre+' '+p.apellidos:'Desconocido'} · ${x.frecuencia}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+        ${estadoTag(x.estado)}
+        <div class="actions-cell" style="gap:3px;flex-wrap:nowrap">
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirRecetaPaciente(${x.pacienteId})" title="Imprimir receta">🖨️</button>
+          <button class="btn btn-secondary btn-sm" onclick="openModalMedicacion(${x.id})">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="eliminarMedicacion(${x.id})">🗑️</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 const DOSIS_UNIDADES = ['tableta(s)','cápsula(s)','mg','g','mcg','ml','oz','gota(s)','UI','sobre(s)','ampolleta(s)','supositorio(s)','parche(s)','inhalación(es)','aplicación(es)'];
@@ -2258,23 +2278,35 @@ function renderNotas(){
     badgeEl.innerHTML = `<span class="notas-clinic-badge">🏥 ${currentClinica.nombre}</span>`;
   }
 
-  const tbody=document.getElementById('tabla-notas'), empty=document.getElementById('notas-empty');
-  if(!C.n.length){ tbody.innerHTML=''; empty.style.display='block'; return; }
+  const el=document.getElementById('tabla-notas'), empty=document.getElementById('notas-empty');
+  if(!C.n.length){ el.innerHTML=''; empty.style.display='block'; return; }
   empty.style.display='none';
-  tbody.innerHTML=[...C.n].sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(n=>{
+  const MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  el.innerHTML=[...C.n].sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(n=>{
     const p=C.p.find(x=>x.id===n.pacienteId);
-    const prev=n.contenido.length>80?n.contenido.substring(0,80)+'…':n.contenido;
+    const prev=n.contenido.length>60?n.contenido.substring(0,60)+'…':n.contenido;
     const tipoIcon = NOTA_TIPO_ICON[n.tipo] || '📝';
-    return `<tr><td>${formatFecha(n.fecha)}</td>
-      <td><div class="patient-name-cell"><div class="patient-avatar" style="background:${colAvatar(n.pacienteId||0)};width:28px;height:28px;font-size:10px">${p?ini(p.nombre,p.apellidos):'?'}</div><div>${p?p.nombre+' '+p.apellidos:'Desconocido'}</div></div></td>
-      <td><span class="tag tag-blue">${tipoIcon} ${n.tipo}</span></td>
-      <td style="max-width:280px">${n.titulo?`<strong>${n.titulo}</strong><br>`:''}${prev}</td>
-      <td><div class="actions-cell">
-        <button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})">🖨️</button>
-        <button class="btn btn-secondary btn-sm" onclick="verNota(${n.id})">👁️</button>
-        <button class="btn btn-secondary btn-sm" onclick="openModalNota(${n.id})">✏️</button>
-        <button class="btn btn-danger btn-sm" onclick="eliminarNota(${n.id})">🗑️</button>
-      </div></td></tr>`;
+    const [,mm,dd]=(n.fecha||hoy()).split('-');
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)">
+      <div style="width:36px;flex-shrink:0;text-align:center;background:var(--primary-light);border-radius:8px;padding:5px 2px">
+        <div style="font-size:13px;font-weight:800;color:var(--primary);line-height:1">${dd}</div>
+        <div style="font-size:10px;color:var(--primary);text-transform:uppercase;font-weight:600">${MESES[parseInt(mm)-1]}</div>
+      </div>
+      <div class="patient-avatar" style="background:${colAvatar(n.pacienteId||0)};width:32px;height:32px;font-size:11px;flex-shrink:0">${p?ini(p.nombre,p.apellidos):'?'}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p?p.nombre+' '+p.apellidos:'Desconocido'}</div>
+        <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${n.titulo||prev}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+        <span class="tag tag-blue" style="font-size:10px">${tipoIcon} ${n.tipo}</span>
+        <div class="actions-cell" style="gap:3px;flex-wrap:nowrap">
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})">🖨️</button>
+          <button class="btn btn-secondary btn-sm" onclick="verNota(${n.id})">👁️</button>
+          <button class="btn btn-secondary btn-sm" onclick="openModalNota(${n.id})">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="eliminarNota(${n.id})">🗑️</button>
+        </div>
+      </div>
+    </div>`;
   }).join('');
 }
 
@@ -3636,32 +3668,34 @@ function switchInvTab(tab) {
 
 function renderProductos(filtro) {
   const search = filtro !== undefined ? filtro : (document.getElementById('inv-search')?.value||'');
-  const tbody = document.getElementById('tabla-inventario');
+  const el = document.getElementById('tabla-inventario');
   const empty = document.getElementById('inv-empty');
   let items = C.inv;
   if(invCatFiltro) items = items.filter(p=>p.categoria===invCatFiltro);
   if(search) { const q=search.toLowerCase(); items=items.filter(p=>p.nombre.toLowerCase().includes(q)||(p.descripcion||'').toLowerCase().includes(q)||(p.codigoMinsa||'').includes(q)); }
-  if(!items.length){ tbody.innerHTML=''; empty.style.display='block'; return; }
+  if(!items.length){ el.innerHTML=''; empty.style.display='block'; return; }
   empty.style.display='none';
   const catIcon = c=>({medicamento:'💊',material:'🩺',equipo:'🔬',insumo:'🧹',papeleria:'📄',general:'📦'}[c]||'📦');
-  tbody.innerHTML = items.map(p=>{
-    const stCls = p.stock===0?'inv-stock-out':p.stockMin>0&&p.stock<=p.stockMin?'inv-stock-low':'inv-stock-ok';
+  el.innerHTML = items.map(p=>{
+    const stCls = p.stock===0?'tag-red':p.stockMin>0&&p.stock<=p.stockMin?'tag-orange':'tag-green';
     const stLbl = p.stock===0?'Sin stock':p.stockMin>0&&p.stock<=p.stockMin?'Stock bajo':'OK';
-    return `<tr>
-      <td><strong>${p.nombre}</strong>${p.codigoMinsa?`<span style="font-size:10px;color:var(--text-light);background:var(--bg);padding:1px 5px;border-radius:4px;margin-left:5px;font-family:monospace;border:1px solid var(--border)">${p.codigoMinsa}</span>`:''} ${p.descripcion?`<div style="font-size:11px;color:var(--text-light)">${p.descripcion}</div>`:''}</td>
-      <td>${catIcon(p.categoria)} ${p.categoria}</td>
-      <td>${p.unidad}</td>
-      <td><span class="${stCls}">${p.stock}</span></td>
-      <td style="color:var(--text-light)">${p.stockMin}</td>
-      <td>${p.precio!=null?'C$ '+p.precio.toFixed(2):'—'}</td>
-      <td><span class="tag ${p.stock===0?'tag-red':p.stockMin>0&&p.stock<=p.stockMin?'tag-orange':'tag-green'}">${stLbl}</span></td>
-      <td><div class="actions-cell">
-        <button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff" onclick="openModalEntrada(${p.id})" title="Entrada">📥</button>
-        <button class="btn btn-sm btn-danger" onclick="openModalSalida(${p.id})" title="Salida">📤</button>
-        <button class="btn btn-secondary btn-sm" onclick="abrirKardex(${p.id})" title="Kardex">📋</button>
-        <button class="btn btn-secondary btn-sm" onclick="openModalProducto(${p.id})">✏️</button>
-        <button class="btn btn-danger btn-sm" onclick="eliminarProducto(${p.id})">🗑️</button>
-      </div></td></tr>`;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)">
+      <div style="width:38px;height:38px;border-radius:10px;background:var(--primary-light);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${catIcon(p.categoria)}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.nombre}${p.codigoMinsa?` <span style="font-size:10px;color:var(--text-light);font-family:monospace">${p.codigoMinsa}</span>`:''}</div>
+        <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.unidad}${p.precio!=null?' · C$ '+p.precio.toFixed(2):''}${p.descripcion?' · '+p.descripcion:''}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+        <span class="tag ${stCls}">${stLbl} · <strong>${p.stock}</strong></span>
+        <div class="actions-cell" style="gap:3px;flex-wrap:nowrap">
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff" onclick="openModalEntrada(${p.id})" title="Entrada">📥</button>
+          <button class="btn btn-sm btn-danger" onclick="openModalSalida(${p.id})" title="Salida">📤</button>
+          <button class="btn btn-secondary btn-sm" onclick="abrirKardex(${p.id})" title="Kardex">📋</button>
+          <button class="btn btn-secondary btn-sm" onclick="openModalProducto(${p.id})">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="eliminarProducto(${p.id})">🗑️</button>
+        </div>
+      </div>
+    </div>`;
   }).join('');
 }
 
@@ -3702,22 +3736,33 @@ function setMovTipo(tipo,el){ invMovTipo=tipo; document.querySelectorAll('#inv-p
 
 function renderMovimientos() {
   const fecha = document.getElementById('inv-mov-fecha')?.value||'';
-  const tbody = document.getElementById('tabla-movimientos');
+  const el = document.getElementById('tabla-movimientos');
   const empty = document.getElementById('mov-empty');
   let movs = [...C.mov];
   if(fecha) movs = movs.filter(m=>m.fecha===fecha);
   if(invMovTipo) movs = movs.filter(m=>m.tipo===invMovTipo);
-  if(!movs.length){ tbody.innerHTML=''; empty.style.display='block'; return; }
+  movs.sort((a,b)=>b.fecha.localeCompare(a.fecha)||b.id-a.id);
+  if(!movs.length){ el.innerHTML=''; empty.style.display='block'; return; }
   empty.style.display='none';
-  tbody.innerHTML = movs.map(m=>{
+  const MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  el.innerHTML = movs.map(m=>{
     const prod = C.inv.find(p=>p.id===m.invId);
-    return `<tr>
-      <td>${formatFecha(m.fecha)}</td>
-      <td><strong>${prod?prod.nombre:'—'}</strong>${prod?`<span style="font-size:11px;color:var(--text-light);margin-left:6px">${prod.unidad}</span>`:''}</td>
-      <td><span class="inv-badge-${m.tipo}">${m.tipo==='entrada'?'📥 Entrada':'📤 Salida'}</span></td>
-      <td><strong style="font-size:15px">${m.cantidad}</strong></td>
-      <td style="color:var(--text-light);font-size:12px">${m.motivo||'—'}</td>
-    </tr>`;
+    const [,mm,dd]=(m.fecha||hoy()).split('-');
+    const esEntrada = m.tipo==='entrada';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)">
+      <div style="width:36px;flex-shrink:0;text-align:center;background:${esEntrada?'#F0FDF4':'#FEF2F2'};border-radius:8px;padding:5px 2px">
+        <div style="font-size:13px;font-weight:800;color:${esEntrada?'var(--success)':'var(--danger)'};line-height:1">${dd}</div>
+        <div style="font-size:10px;color:${esEntrada?'var(--success)':'var(--danger)'};text-transform:uppercase;font-weight:600">${MESES[parseInt(mm)-1]}</div>
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${prod?prod.nombre:'—'}</div>
+        <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.motivo||'Sin motivo'}${prod?' · '+prod.unidad:''}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+        <span class="inv-badge-${m.tipo}">${esEntrada?'📥 Entrada':'📤 Salida'}</span>
+        <span style="font-size:15px;font-weight:800;color:${esEntrada?'var(--success)':'var(--danger)'}">${esEntrada?'+':'−'}${m.cantidad}</span>
+      </div>
+    </div>`;
   }).join('');
 }
 
@@ -7409,20 +7454,26 @@ function renderTransacciones() {
   const el = document.getElementById('fin-trans-list');
   if(!el) return;
   if(!data.length) { el.innerHTML='<div class="empty-state" style="padding:40px"><div class="empty-icon">📋</div><p>No hay transacciones en este período</p></div>'; return; }
-  el.innerHTML=`<div class="table-wrap"><table>
-    <thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Método</th><th>Tipo</th><th>Monto</th><th>Acciones</th></tr></thead>
-    <tbody>${data.map(f=>`<tr>
-      <td>${formatFecha(f.fecha)}</td>
-      <td><strong>${f.descripcion}</strong>${f.referencia?`<div style="font-size:10px;color:var(--text-light)">Ref: ${f.referencia}</div>`:''}</td>
-      <td><span class="tag tag-gray" style="font-size:10px">${f.categoria||'general'}</span></td>
-      <td style="font-size:11px;color:var(--text-light)">${f.metodoPago}</td>
-      <td>${f.tipo==='ingreso'?'<span class="tag tag-green">💰 Ingreso</span>':'<span class="tag tag-red">📤 Gasto</span>'}</td>
-      <td style="font-weight:700;color:${f.tipo==='ingreso'?'var(--success)':'var(--danger)'}">
-        ${f.tipo==='ingreso'?'+':'−'} ${fmtC(f.monto)}</td>
-      <td class="actions-cell">
+  const MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  el.innerHTML=data.map(f=>{
+    const esI=f.tipo==='ingreso';
+    const [,mm,dd]=(f.fecha||hoy()).split('-');
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)">
+      <div style="width:36px;flex-shrink:0;text-align:center;background:${esI?'#F0FDF4':'#FEF2F2'};border-radius:8px;padding:5px 2px">
+        <div style="font-size:13px;font-weight:800;color:${esI?'var(--success)':'var(--danger)'};line-height:1">${dd}</div>
+        <div style="font-size:10px;color:${esI?'var(--success)':'var(--danger)'};text-transform:uppercase;font-weight:600">${MESES[parseInt(mm)-1]}</div>
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.descripcion}</div>
+        <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.categoria||'general'} · ${f.metodoPago}${f.referencia?' · Ref: '+f.referencia:''}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+        ${esI?'<span class="tag tag-green" style="font-size:10px">💰 Ingreso</span>':'<span class="tag tag-red" style="font-size:10px">📤 Gasto</span>'}
+        <span style="font-size:13px;font-weight:800;color:${esI?'var(--success)':'var(--danger)'}">${esI?'+':'−'}${fmtC(f.monto)}</span>
         <button class="btn btn-sm btn-danger" onclick="eliminarTransaccion(${f.id})">🗑️</button>
-      </td>
-    </tr>`).join('')}</tbody></table></div>`;
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function setFactEstadoChip(el, estado) {
@@ -7445,20 +7496,29 @@ function renderFacturasList() {
   const el = document.getElementById('fin-fact-list');
   if(!el) return;
   if(!data.length) { el.innerHTML='<div class="empty-state" style="padding:40px"><div class="empty-icon">🧾</div><p>No hay facturas en este período.<br>Usa <strong>+ Nueva Factura</strong> para comenzar.</p></div>'; return; }
-  el.innerHTML=`<div class="table-wrap"><table>
-    <thead><tr><th>N° Factura</th><th>Paciente</th><th>Fecha</th><th>Estado</th><th>Total</th><th>Acciones</th></tr></thead>
-    <tbody>${data.map(f=>`<tr>
-      <td><code style="background:var(--bg);padding:2px 8px;border-radius:6px;font-size:11px">${f.numero||'—'}</code></td>
-      <td><strong>${f.pacienteNombre}</strong></td>
-      <td>${formatFecha(f.fecha)}</td>
-      <td><span class="tag ${estadoTag(f.estado)}">${f.estado}</span></td>
-      <td style="font-weight:700">${fmtC(f.total)}</td>
-      <td class="actions-cell">
-        ${f.estado==='pendiente'?`<button class="btn btn-sm btn-primary" onclick="pagarFactura(${f.id})">✅ Pagar</button>`:''}
-        <button class="btn btn-sm btn-secondary" onclick="verFacturaPDF(${f.id})">🖨️ PDF</button>
-        ${f.estado==='pendiente'?`<button class="btn btn-sm btn-danger" onclick="anularFactura(${f.id})">❌</button>`:''}
-      </td>
-    </tr>`).join('')}</tbody></table></div>`;
+  const MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  el.innerHTML=data.map(f=>{
+    const [,mm,dd]=(f.fecha||hoy()).split('-');
+    const esPend=f.estado==='pendiente';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)">
+      <div style="width:36px;flex-shrink:0;text-align:center;background:var(--primary-light);border-radius:8px;padding:5px 2px">
+        <div style="font-size:13px;font-weight:800;color:var(--primary);line-height:1">${dd}</div>
+        <div style="font-size:10px;color:var(--primary);text-transform:uppercase;font-weight:600">${MESES[parseInt(mm)-1]}</div>
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.pacienteNombre}</div>
+        <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.numero||'—'} · <strong style="color:var(--text)">${fmtC(f.total)}</strong></div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+        <span class="tag ${estadoTag(f.estado)}">${f.estado}</span>
+        <div class="actions-cell" style="gap:3px;flex-wrap:nowrap">
+          ${esPend?`<button class="btn btn-sm btn-primary" onclick="pagarFactura(${f.id})">✅</button>`:''}
+          <button class="btn btn-sm btn-secondary" onclick="verFacturaPDF(${f.id})" title="PDF">🖨️</button>
+          ${esPend?`<button class="btn btn-sm btn-danger" onclick="anularFactura(${f.id})">❌</button>`:''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // ── Modal Transacción ──
