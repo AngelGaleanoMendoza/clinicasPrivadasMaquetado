@@ -1023,3 +1023,17 @@ body.dark .acudio-badge{background:rgba(16,185,129,.15);color:#6EE7B7;border-col
   .farma-pos-grid{gap:12px}
   .farma-prod-grid{grid-template-columns:repeat(auto-fill,minmax(120px,1fr));max-height:180px}
 }
+
+/* ══ CITAS — calendario centrado + tarjeta del día sin desbordar (móvil) ══ */
+@media(max-width:768px){
+  /* Calendario más compacto y centrado dentro de la card */
+  #citas-tab-calendario .cal-wrap{max-width:360px;margin:0 auto}
+  /* Tarjeta de cita: tiempo + datos arriba, acciones en su propia fila */
+  #cal-day-citas .cita-item,#lista-citas-tab .cita-item{flex-wrap:wrap;gap:8px;padding:10px 12px}
+  #cal-day-citas .cita-item .actions-cell,
+  #lista-citas-tab .cita-item .actions-cell{width:100%;justify-content:flex-end;flex-wrap:wrap;gap:6px}
+}
+@media(max-width:480px){
+  #citas-tab-calendario .cal-wrap{max-width:320px}
+  #citas-tab-calendario .cal-day{min-height:28px}
+}
