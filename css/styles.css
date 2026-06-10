@@ -1024,6 +1024,17 @@ body.dark .acudio-badge{background:rgba(16,185,129,.15);color:#6EE7B7;border-col
   .farma-prod-grid{grid-template-columns:repeat(auto-fill,minmax(120px,1fr));max-height:180px}
 }
 
+/* ══ RED DE SEGURIDAD MÓVIL — consistencia en TODAS las vistas ══ */
+@media(max-width:768px){
+  /* Ninguna vista debe provocar scroll horizontal */
+  .view{overflow-x:hidden}
+  /* Los botones de acción siempre envuelven, nunca se cortan */
+  .actions-cell{flex-wrap:wrap}
+  /* Tarjetas de cita en el detalle de paciente: acciones en su propia fila */
+  #tab-citas-p .cita-item,#tab-meds-p .cita-item,#tab-notas-p .cita-item{flex-wrap:wrap;gap:8px}
+  #tab-citas-p .cita-item .actions-cell{width:100%;justify-content:flex-end}
+}
+
 /* ══ CITAS — calendario centrado + tarjeta del día sin desbordar (móvil) ══ */
 @media(max-width:768px){
   /* Calendario más compacto y centrado dentro de la card */

@@ -1431,7 +1431,28 @@ function renderDetalleP(pid){
 
   document.getElementById('tab-citas-p').innerHTML=`<div class="card">
     <div class="card-header"><h3>📅 Citas</h3><button class="btn btn-primary btn-sm" onclick="openModalCitaP(${p.id})">+ Nueva</button></div>
-    ${citas.length?`<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Motivo</th><th>Tipo</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>${citas.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(c=>`<tr><td>${formatFecha(c.fecha)}</td><td>${c.hora}</td><td>${c.motivo}</td><td><span class="tag tag-cyan">${c.tipo}</span></td><td>${estadoTag(c.estado)}</td><td><div class="actions-cell">${c.estado!=='completada'&&c.estado!=='cancelada'?`<button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;white-space:nowrap" onclick="marcarCitaCompletada(${c.id})">✅ Acudió</button>`:''}<button class="btn btn-primary btn-sm" onclick="verResumenCita(${c.id})" title="Ver hoja">📄</button><button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">✏️</button><button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">🗑️</button></div></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty-state"><div class="empty-icon">📅</div><p>Sin citas</p></div>'}
+    ${citas.length?`<div>${citas.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(c=>{
+      const esComp=c.estado==='completada', esCanc=c.estado==='cancelada';
+      const MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+      const [,mm,dd]=c.fecha.split('-');
+      return `<div class="cita-item ${c.estado}" style="gap:10px;flex-wrap:wrap">
+        <div style="width:38px;flex-shrink:0;text-align:center;background:var(--primary-light);border-radius:8px;padding:5px 2px">
+          <div style="font-size:13px;font-weight:800;color:var(--primary);line-height:1">${dd}</div>
+          <div style="font-size:10px;color:var(--primary);text-transform:uppercase;font-weight:600">${MESES[parseInt(mm)-1]}</div>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div class="cita-paciente">${c.hora} · ${c.motivo}</div>
+          ${c.tipo?`<div class="cita-motivo"><span class="tag tag-cyan" style="font-size:10px">${c.tipo}</span></div>`:''}
+        </div>
+        ${esComp?'<span class="acudio-badge">✅ Atendido</span>':estadoTag(c.estado)}
+        <div class="actions-cell" style="gap:6px;flex-wrap:wrap">
+          ${!esComp&&!esCanc?`<button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;font-size:11px;font-weight:700;white-space:nowrap" onclick="marcarCitaCompletada(${c.id})">✅ Atendido</button>`:''}
+          <button class="btn btn-primary btn-sm" onclick="verResumenCita(${c.id})" title="Ver hoja">📄</button>
+          <button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">🗑️</button>
+        </div>
+      </div>`;
+    }).join('')}</div>`:'<div class="empty-state"><div class="empty-icon">📅</div><p>Sin citas</p></div>'}
   </div>`;
 
   document.getElementById('tab-meds-p').innerHTML=`<div class="card">
