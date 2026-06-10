@@ -1839,8 +1839,8 @@ function renderCitas(){
       <td>${c.motivo}</td><td><span class="tag tag-cyan">${c.tipo}</span></td>
       <td>${esComp?'<span class="acudio-badge">✅ Atendido</span>':estadoTag(c.estado)}</td>
       <td><div class="actions-cell">
-        <button class="btn btn-sm" style="background:var(--primary);color:#fff;font-size:16px;font-weight:700;padding:2px 9px;line-height:1" onclick="openModalCitaP(${c.pacienteId})" title="Nueva cita">+</button>
-        ${!esComp&&c.estado!=='cancelada'?`<button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;white-space:nowrap;font-size:11px" onclick="marcarCitaCompletada(${c.id})">✅ Atendido</button>`:''}
+        <button class="btn btn-sm btn-cita-extra" style="background:var(--primary);color:#fff;font-size:16px;font-weight:700;padding:2px 9px;line-height:1" onclick="openModalCitaP(${c.pacienteId})" title="Nueva cita">+</button>
+        ${!esComp&&c.estado!=='cancelada'?`<button class="btn btn-sm btn-cita-extra" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;white-space:nowrap;font-size:11px" onclick="marcarCitaCompletada(${c.id})">✅ Atendido</button>`:''}
         <button class="btn btn-primary btn-sm" onclick="verResumenCita(${c.id})" title="Ver hoja">📄</button>
         <button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">✏️</button>
         <button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">🗑️</button>

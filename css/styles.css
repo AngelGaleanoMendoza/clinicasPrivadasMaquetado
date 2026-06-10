@@ -602,13 +602,15 @@ body.dark .fact-item-row input,body.dark .fact-item-row select{background:#0F172
 
   /* ── CITAS / AGENDAS ── */
   #view-citas .card-header{flex-wrap:wrap;gap:8px}
-  /* Input filtro ocupa todo el ancho */
-  #citas-filtro-paciente{max-width:100%!important;width:100%!important;box-sizing:border-box;margin-top:4px!important}
-  /* Ocultar Motivo (col4) y Tipo (col5) — se puede ver en detalle */
+  /* Ocultar Motivo(4), Tipo(5), Estado(6) — queda Fecha+Hora+Paciente+Acciones */
   #view-citas .table-wrap thead th:nth-child(4),
   #view-citas .table-wrap tbody td:nth-child(4){display:none}
   #view-citas .table-wrap thead th:nth-child(5),
   #view-citas .table-wrap tbody td:nth-child(5){display:none}
+  #view-citas .table-wrap thead th:nth-child(6),
+  #view-citas .table-wrap tbody td:nth-child(6){display:none}
+  /* Ocultar botones + y Atendido en historial, dejar sólo 📄 ✏️ 🗑️ */
+  .btn-cita-extra{display:none}
   /* Acciones compactas en citas */
   #view-citas .actions-cell{gap:3px;flex-wrap:nowrap}
   #view-citas .actions-cell .btn-sm{padding:5px 7px}
