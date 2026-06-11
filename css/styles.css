@@ -1104,3 +1104,25 @@ body.dark .acudio-badge{background:rgba(16,185,129,.15);color:#6EE7B7;border-col
   #citas-tab-calendario .cal-wrap{max-width:320px}
   #citas-tab-calendario .cal-day{min-height:28px}
 }
+
+/* ══════════ ODONTOGRAMA — lámina clásica ══════════ */
+.odo-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;background:#fff;border:1px solid var(--border);border-radius:12px;padding:10px 6px}
+.odo-lamina{display:flex;flex-direction:column;gap:10px;align-items:center;min-width:560px}
+.odo-row{display:flex;align-items:flex-end;gap:3px;justify-content:center}
+.odo-half{display:flex;gap:3px}
+.odo-mid{width:14px;border-top:2px dashed #9ca3af;align-self:center}
+.odo-cell{display:flex;flex-direction:column;align-items:center;gap:2px;width:34px}
+.odo-svg{width:30px;height:30px}
+.odo-num{font-size:10px;font-weight:800;color:#111;line-height:1}
+.odo-codes{font-size:8.5px;font-weight:800;line-height:1.1;min-height:9px;text-align:center;white-space:nowrap}
+.odo-refs{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:3px 14px}
+.odo-ref-item{font-size:11px;color:var(--text)}
+.odo-ref-item b{font-weight:800}
+.odo-hint{display:none;font-size:10px;color:var(--text-light);font-weight:600;margin-bottom:6px}
+@media(max-width:768px){
+  .odo-hint{display:block}
+  /* Círculos más grandes para tocar con el dedo */
+  .odo-svg{width:34px;height:34px}
+  .odo-cell{width:38px}
+  .odo-lamina{min-width:660px}
+}
