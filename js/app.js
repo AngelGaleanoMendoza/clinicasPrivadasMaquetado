@@ -5555,25 +5555,26 @@ function renderProcedimientosView() {
         <button class="btn btn-primary btn-sm" onclick="openModalProcedimiento()">+ Nuevo</button>
       </div>
       ${!allProc.length ? '<div class="empty-state"><div class="empty-icon">🦷</div><p>Sin procedimientos registrados</p></div>' :
-        `<div class="table-wrap"><table>
-          <thead><tr><th>Paciente</th><th>Procedimiento</th><th>Diente</th><th>Estado</th><th>Presupuesto</th><th>Fecha</th><th>Acciones</th></tr></thead>
-          <tbody>${allProc.map(proc => {
-            const pac = C.p.find(x => x.id === proc.pacienteId);
-            const nomPac = pac ? `${pac.nombre} ${pac.apellidos}` : '—';
-            return `<tr>
-              <td><a href="#" onclick="navigate('paciente-detalle',${proc.pacienteId});return false" style="color:var(--primary);font-weight:600">${nomPac}</a></td>
-              <td style="font-weight:600">${proc.procedimiento}<br><span class="tag tag-blue" style="font-size:10px">${proc.categoria}</span></td>
-              <td>${proc.diente||'—'}</td>
-              <td><span class="tag ${ECOL[proc.estado]||'tag-blue'}">${proc.estado}</span></td>
-              <td>${proc.presupuesto!=null?`$${Number(proc.presupuesto).toLocaleString()}`:'—'}</td>
-              <td>${formatFecha(proc.fecha)}</td>
-              <td><div class="actions-cell">
-                <button class="btn btn-secondary btn-sm" onclick="openModalProcedimiento(${proc.id})">✏️</button>
-                <button class="btn btn-danger btn-sm" onclick="eliminarProcedimiento(${proc.id})">🗑️</button>
-              </div></td>
-            </tr>`;
-          }).join('')}</tbody>
-        </table></div>`
+        allProc.map(proc => {
+          const pac = C.p.find(x => x.id === proc.pacienteId);
+          const nomPac = pac ? `${pac.nombre} ${pac.apellidos}` : '—';
+          return `<div class="proc-row" style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--border)">
+            <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#e0f2fe,#bae6fd);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0">🦷</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${proc.procedimiento}${proc.diente?` <span style="font-size:11px;color:var(--text-light);font-weight:400">— Diente ${proc.diente}</span>`:''}</div>
+              <div style="font-size:11px;color:var(--text-light);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+                <a href="#" onclick="navigate('paciente-detalle',${proc.pacienteId});return false" style="color:var(--primary);font-weight:600">${nomPac}</a>
+                · ${formatFecha(proc.fecha)} · <span class="tag tag-blue" style="font-size:9px;padding:1px 6px">${proc.categoria}</span>
+              </div>
+            </div>
+            ${proc.presupuesto!=null?`<span style="font-weight:700;font-size:13px;color:var(--success);white-space:nowrap;flex-shrink:0">$${Number(proc.presupuesto).toLocaleString()}</span>`:''}
+            <span class="tag ${ECOL[proc.estado]||'tag-blue'}" style="white-space:nowrap;flex-shrink:0">${proc.estado}</span>
+            <div class="actions-cell" style="gap:5px;flex-shrink:0">
+              <button class="btn btn-secondary btn-sm" onclick="openModalProcedimiento(${proc.id})">✏️</button>
+              <button class="btn btn-danger btn-sm" onclick="eliminarProcedimiento(${proc.id})">🗑️</button>
+            </div>
+          </div>`;
+        }).join('')
       }
     </div>
     <div class="card" style="margin-top:20px">
@@ -5908,13 +5909,18 @@ function estTabla(citas, titulo) {
   if (!citas.length) return `<div class="card"><div class="card-header"><h3>${titulo}</h3></div><div class="empty-state"><div class="empty-icon">📋</div><p>Sin registros</p></div></div>`;
   return `<div class="card" style="margin-bottom:16px">
     <div class="card-header"><h3>${titulo}</h3></div>
-    <div class="table-wrap"><table>
-      <thead><tr><th>Hora</th><th>Paciente</th><th>Tipo</th><th>Estado</th></tr></thead>
-      <tbody>${citas.map(c=>{
-        const p=C.p.find(x=>x.id===c.pacienteId);
-        return `<tr><td><strong>${c.hora||'—'}</strong></td><td>${p?p.nombre+' '+p.apellidos:'—'}</td><td><span class="tag tag-cyan">${c.tipo}</span></td><td>${estadoTag(c.estado)}</td></tr>`;
-      }).join('')}</tbody>
-    </table></div>
+    ${citas.map(c=>{
+      const p=C.p.find(x=>x.id===c.pacienteId);
+      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border)">
+        <div style="min-width:52px;text-align:center;background:var(--primary-light);color:var(--primary);border-radius:8px;padding:4px 6px;font-weight:800;font-size:12px;flex-shrink:0">${c.hora||'—'}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p?p.nombre+' '+p.apellidos:'—'}</div>
+          ${c.fecha?`<div style="font-size:11px;color:var(--text-light)">${formatFecha(c.fecha)}</div>`:''}
+        </div>
+        <span class="tag tag-cyan" style="flex-shrink:0;white-space:nowrap">${c.tipo}</span>
+        <span style="flex-shrink:0">${estadoTag(c.estado)}</span>
+      </div>`;
+    }).join('')}
   </div>`;
 }
 
@@ -6254,32 +6260,30 @@ function renderProductividad() {
   }
 
   const maxScore = Math.max(...usuarios.map(([,u])=>u.cita+u.paciente+u.nota+u.medicacion+u.otros),1);
-  listEl.innerHTML = `<div class="table-wrap"><table>
-    <thead><tr><th>Usuario</th><th>Clínica</th><th>Logins</th><th>Citas</th><th>Pacientes</th><th>Notas</th><th>Medicaciones</th><th>Actividad</th></tr></thead>
-    <tbody>${usuarios.map(([uid,u])=>{
-      const prof = adminUsuarios.find(p=>p.id===uid);
-      const clinica = adminClinicas.find(c=>c.id===prof?.clinica_id);
-      const score = u.cita+u.paciente+u.nota+u.medicacion+u.otros;
-      const pct = Math.round(score/maxScore*100);
-      const nivel = score===0?['tag-gray','Inactivo']:score<5?['tag-orange','Bajo']:score<15?['tag-cyan','Activo']:['tag-green','Muy activo'];
-      return `<tr>
-        <td><div class="patient-name-cell">
-          <div class="patient-avatar" style="background:linear-gradient(135deg,var(--primary),var(--accent));font-size:16px">${prof?.icono||'👤'}</div>
-          <div><strong>${u.nombre}</strong><div style="font-size:11px;color:var(--text-light)">${prof?.email||''}</div></div>
-        </div></td>
-        <td style="font-size:12px;color:var(--text-light)">${clinica?.nombre||'—'}</td>
-        <td><span style="font-weight:700;color:var(--primary)">${u.login}</span></td>
-        <td>${u.cita}</td><td>${u.paciente}</td><td>${u.nota}</td><td>${u.medicacion}</td>
-        <td style="min-width:140px">
-          <div style="display:flex;align-items:center;gap:8px">
-            <div style="flex:1;background:var(--bg);border-radius:6px;height:18px;overflow:hidden">
-              <div style="width:${pct}%;height:100%;background:linear-gradient(90deg,var(--primary),var(--accent));border-radius:6px"></div>
-            </div>
-            <span class="tag ${nivel[0]}" style="flex-shrink:0">${nivel[1]}</span>
-          </div>
-        </td>
-      </tr>`;
-    }).join('')}</tbody></table></div>`;
+  listEl.innerHTML = usuarios.map(([uid,u])=>{
+    const prof = adminUsuarios.find(p=>p.id===uid);
+    const clinica = adminClinicas.find(c=>c.id===prof?.clinica_id);
+    const score = u.cita+u.paciente+u.nota+u.medicacion+u.otros;
+    const pct = Math.round(score/maxScore*100);
+    const nivel = score===0?['tag-gray','Inactivo']:score<5?['tag-orange','Bajo']:score<15?['tag-cyan','Activo']:['tag-green','Muy activo'];
+    const mini = (lbl,val)=>`<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text-light);background:var(--bg);border-radius:8px;padding:3px 8px;white-space:nowrap">${lbl} <strong style="color:var(--text)">${val}</strong></span>`;
+    return `<div style="padding:12px 16px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
+        <div class="patient-avatar" style="background:linear-gradient(135deg,var(--primary),var(--accent));font-size:16px;flex-shrink:0">${prof?.icono||'👤'}</div>
+        <div style="flex:1;min-width:0">
+          <strong style="font-size:13px">${u.nombre}</strong>
+          <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${prof?.email||''}${clinica?` · ${clinica.nombre}`:''}</div>
+        </div>
+        <span class="tag ${nivel[0]}" style="flex-shrink:0">${nivel[1]}</span>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px">
+        ${mini('🔑 Logins',u.login)}${mini('📆 Citas',u.cita)}${mini('👥 Pacientes',u.paciente)}${mini('📝 Notas',u.nota)}${mini('💊 Medicaciones',u.medicacion)}
+      </div>
+      <div style="background:var(--bg);border-radius:6px;height:14px;overflow:hidden">
+        <div style="width:${pct}%;height:100%;background:linear-gradient(90deg,var(--primary),var(--accent));border-radius:6px"></div>
+      </div>
+    </div>`;
+  }).join('');
 
   renderTimeline(desde);
 }

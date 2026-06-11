@@ -1089,6 +1089,10 @@ body.dark .acudio-badge{background:rgba(16,185,129,.15);color:#6EE7B7;border-col
   /* Lista de Pacientes (tarjetas): acciones en su propia fila */
   #tabla-pacientes .pac-row{flex-wrap:wrap;gap:8px}
   #tabla-pacientes .pac-row .actions-cell{width:100%;justify-content:flex-end}
+  /* Plan de Tratamiento (tarjetas): acciones en su propia fila */
+  .proc-row{flex-wrap:wrap;gap:8px}
+  .proc-row .actions-cell{width:100%;justify-content:flex-end}
+  #tab-procedimientos-p .actions-cell{flex-wrap:wrap}
 }
 
 /* ══ CITAS — calendario centrado + tarjeta del día sin desbordar (móvil) ══ */
@@ -1126,3 +1130,15 @@ body.dark .acudio-badge{background:rgba(16,185,129,.15);color:#6EE7B7;border-col
   .odo-cell{width:38px}
   .odo-lamina{min-width:660px}
 }
+
+/* ══ PULIDO GLOBAL MÓVIL ══ */
+@media(max-width:600px){
+  /* Toast centrado arriba: no tapa los botones de acción inferiores */
+  .toast-container{bottom:auto;top:calc(12px + env(safe-area-inset-top,0px));right:12px;left:12px;align-items:center}
+  .toast{min-width:0;max-width:100%;width:100%}
+}
+/* Focus visible para navegación con teclado, sin ensuciar el uso táctil */
+button:focus-visible,a:focus-visible,[onclick]:focus-visible{outline:2px solid var(--primary);outline-offset:2px;border-radius:8px}
+/* Scrollbars finos y consistentes en listas internas */
+.table-wrap::-webkit-scrollbar,.farma-prod-grid::-webkit-scrollbar,.farma-carrito-items::-webkit-scrollbar{height:6px;width:6px}
+.table-wrap::-webkit-scrollbar-thumb,.farma-prod-grid::-webkit-scrollbar-thumb,.farma-carrito-items::-webkit-scrollbar-thumb{background:var(--border);border-radius:6px}
