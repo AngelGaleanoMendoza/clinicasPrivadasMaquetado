@@ -3707,20 +3707,20 @@ function renderProductos(filtro) {
   el.innerHTML = items.map(p=>{
     const stCls = p.stock===0?'tag-red':p.stockMin>0&&p.stock<=p.stockMin?'tag-orange':'tag-green';
     const stLbl = p.stock===0?'Sin stock':p.stockMin>0&&p.stock<=p.stockMin?'Stock bajo':'OK';
-    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)">
-      <div style="width:38px;height:38px;border-radius:10px;background:var(--primary-light);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${catIcon(p.categoria)}</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.nombre}${p.codigoMinsa?` <span style="font-size:10px;color:var(--text-light);font-family:monospace">${p.codigoMinsa}</span>`:''}</div>
-        <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.unidad}${p.precio!=null?' · C$ '+p.precio.toFixed(2):''}${p.descripcion?' · '+p.descripcion:''}</div>
+    return `<div class="inv-item">
+      <div class="inv-item-icon">${catIcon(p.categoria)}</div>
+      <div class="inv-item-info">
+        <div class="inv-item-name">${p.nombre}${p.codigoMinsa?` <span class="inv-item-minsa">${p.codigoMinsa}</span>`:''}</div>
+        <div class="inv-item-sub">${p.unidad}${p.precio!=null?' · C$ '+p.precio.toFixed(2):''}${p.descripcion?' · '+p.descripcion:''}</div>
       </div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+      <div class="inv-item-right">
         <span class="tag ${stCls}">${stLbl} · <strong>${p.stock}</strong></span>
-        <div class="actions-cell" style="gap:3px;flex-wrap:nowrap">
+        <div class="inv-item-actions">
           <button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff" onclick="openModalEntrada(${p.id})" title="Entrada">📥</button>
           <button class="btn btn-sm btn-danger" onclick="openModalSalida(${p.id})" title="Salida">📤</button>
           <button class="btn btn-secondary btn-sm" onclick="abrirKardex(${p.id})" title="Kardex">📋</button>
-          <button class="btn btn-secondary btn-sm" onclick="openModalProducto(${p.id})">✏️</button>
-          <button class="btn btn-danger btn-sm" onclick="eliminarProducto(${p.id})">🗑️</button>
+          <button class="btn btn-secondary btn-sm" onclick="openModalProducto(${p.id})" title="Editar">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="eliminarProducto(${p.id})" title="Eliminar">🗑️</button>
         </div>
       </div>
     </div>`;
@@ -3777,18 +3777,18 @@ function renderMovimientos() {
     const prod = C.inv.find(p=>p.id===m.invId);
     const [,mm,dd]=(m.fecha||hoy()).split('-');
     const esEntrada = m.tipo==='entrada';
-    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)">
-      <div style="width:36px;flex-shrink:0;text-align:center;background:${esEntrada?'#F0FDF4':'#FEF2F2'};border-radius:8px;padding:5px 2px">
-        <div style="font-size:13px;font-weight:800;color:${esEntrada?'var(--success)':'var(--danger)'};line-height:1">${dd}</div>
-        <div style="font-size:10px;color:${esEntrada?'var(--success)':'var(--danger)'};text-transform:uppercase;font-weight:600">${MESES[parseInt(mm)-1]}</div>
+    return `<div class="mov-item">
+      <div class="mov-pill ${m.tipo}">
+        <div class="mov-pill-day">${dd}</div>
+        <div class="mov-pill-month">${MESES[parseInt(mm)-1]}</div>
       </div>
-      <div style="flex:1;min-width:0">
-        <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${prod?prod.nombre:'—'}</div>
-        <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.motivo||'Sin motivo'}${prod?' · '+prod.unidad:''}</div>
+      <div class="inv-item-info">
+        <div class="inv-item-name">${prod?prod.nombre:'—'}</div>
+        <div class="inv-item-sub">${m.motivo||'Sin motivo'}${prod?' · '+prod.unidad:''}</div>
       </div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+      <div class="mov-item-right">
         <span class="inv-badge-${m.tipo}">${esEntrada?'📥 Entrada':'📤 Salida'}</span>
-        <span style="font-size:15px;font-weight:800;color:${esEntrada?'var(--success)':'var(--danger)'}">${esEntrada?'+':'−'}${m.cantidad}</span>
+        <span class="mov-qty ${m.tipo}">${esEntrada?'+':'−'}${m.cantidad}</span>
       </div>
     </div>`;
   }).join('');
@@ -3852,14 +3852,14 @@ function renderReportesInv(){
     ${topProds.length?`<div class="card" style="margin-bottom:14px">
       <div class="card-header"><h3>🏆 Productos con más movimiento</h3></div>
       <div style="display:flex;flex-direction:column;gap:8px">
-        ${topProds.map(d=>`<div style="display:flex;align-items:center;gap:10px">
-          <div style="min-width:160px;font-size:12px;font-weight:600;color:var(--text-light);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.k}</div>
-          <div style="flex:1;background:var(--bg);border-radius:8px;height:26px;overflow:hidden">
-            <div style="height:100%;width:${Math.round(d.v/maxV*100)}%;background:linear-gradient(90deg,var(--primary),var(--accent));border-radius:8px;display:flex;align-items:center;padding-left:8px;min-width:${d.v?'24px':'0'}">
-              ${d.v?`<span style="color:#fff;font-size:11px;font-weight:700">${d.v}</span>`:''}
+        ${topProds.map(d=>`<div class="rep-bar-row">
+          <div class="rep-bar-label">${d.k}</div>
+          <div class="rep-bar-track">
+            <div class="rep-bar-fill" style="width:${Math.round(d.v/maxV*100)}%;min-width:${d.v?'24px':'0'}">
+              ${d.v?`<span>${d.v}</span>`:''}
             </div>
           </div>
-          <div style="min-width:28px;font-size:13px;font-weight:800;color:var(--text)">${d.v}</div>
+          <div class="rep-bar-val">${d.v}</div>
         </div>`).join('')}
       </div>
     </div>`:''}
