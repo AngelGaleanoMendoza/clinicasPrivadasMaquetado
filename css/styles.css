@@ -866,6 +866,15 @@ body.dark .mov-pill.salida{background:rgba(239,68,68,.15)}
 .mov-qty.entrada{color:var(--success)}
 .mov-qty.salida{color:var(--danger)}
 
+/* Expiration state borders */
+.inv-item-vencido{border-color:#FCA5A5!important;background:rgba(254,242,242,.5)}
+.inv-item-alerta{border-color:#FCD34D!important;background:rgba(255,251,235,.5)}
+body.dark .inv-item-vencido{background:rgba(239,68,68,.08)!important}
+body.dark .inv-item-alerta{background:rgba(245,158,11,.08)!important}
+.inv-venc-tag{margin-top:4px;display:inline-block}
+.farma-alerta-item{display:flex;justify-content:space-between;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border)}
+.farma-alerta-item:last-child{border-bottom:none}
+
 /* ══ INVENTARIO — barras de reporte ══ */
 .rep-bar-row{display:flex;align-items:center;gap:10px}
 .rep-bar-label{min-width:160px;max-width:160px;font-size:12px;font-weight:600;color:var(--text-light);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
