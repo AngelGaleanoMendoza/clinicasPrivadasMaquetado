@@ -843,6 +843,15 @@ body.dark .inv-badge-salida{background:rgba(239,68,68,.15);color:#FCA5A5}
 .inv-item-sub{font-size:11px;color:var(--text-light);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .inv-item-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0}
 .inv-item-actions{display:flex;gap:4px;flex-wrap:nowrap}
+/* Expiration state highlights */
+.inv-item-vencido{border-color:#FCA5A5!important;background:rgba(254,242,242,.6)!important}
+.inv-item-alerta{border-color:#FCD34D!important;background:rgba(255,251,235,.6)!important}
+body.dark .inv-item-vencido{background:rgba(239,68,68,.1)!important;border-color:rgba(239,68,68,.5)!important}
+body.dark .inv-item-alerta{background:rgba(245,158,11,.1)!important;border-color:rgba(245,158,11,.5)!important}
+.inv-venc-tag{display:inline-block;margin-top:4px;font-size:10px!important}
+/* Farma alertas — items de vencimiento */
+.farma-alerta-item{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:10px 0;border-bottom:1px solid var(--border)}
+.farma-alerta-item:last-child{border-bottom:none}
 .mov-pill{width:40px;flex-shrink:0;text-align:center;border-radius:9px;padding:6px 2px}
 .mov-pill.entrada{background:#F0FDF4}
 .mov-pill.salida{background:#FEF2F2}

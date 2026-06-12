@@ -120,8 +120,8 @@ const fromM = r => ({ id:r.id, pacienteId:r.paciente_id, nombre:r.nombre, dosis:
 const toM   = x => ({ paciente_id:x.pacienteId, nombre:x.nombre, dosis:x.dosis, frecuencia:x.frecuencia, inicio:x.inicio||null, fin:x.fin||null, via:x.via||'oral', estado:x.estado||'activa', indicaciones:x.indicaciones||null, clinica_id:currentClinicaId });
 const fromN   = r => ({ id:r.id, pacienteId:r.paciente_id, tipo:r.tipo, fecha:r.fecha, titulo:r.titulo, contenido:r.contenido });
 const toN     = x => ({ paciente_id:x.pacienteId, tipo:x.tipo||'evolucion', fecha:x.fecha||hoy(), titulo:x.titulo||null, contenido:x.contenido, clinica_id:currentClinicaId });
-const fromInv = r => ({ id:r.id, nombre:r.nombre, categoria:r.categoria||'general', unidad:r.unidad||'unidad', stock:Number(r.stock_actual||0), stockMin:Number(r.stock_minimo||0), precio:r.precio_unitario!=null?Number(r.precio_unitario):null, descripcion:r.descripcion||null, codigoMinsa:r.codigo_minsa||null });
-const toInv   = x => ({ nombre:x.nombre, categoria:x.categoria||'general', unidad:x.unidad||'unidad', stock_actual:Number(x.stock||0), stock_minimo:Number(x.stockMin||0), precio_unitario:x.precio||null, descripcion:x.descripcion||null, clinica_id:currentClinicaId, codigo_minsa:x.codigoMinsa||null });
+const fromInv = r => ({ id:r.id, nombre:r.nombre, categoria:r.categoria||'general', unidad:r.unidad||'unidad', stock:Number(r.stock_actual||0), stockMin:Number(r.stock_minimo||0), precio:r.precio_unitario!=null?Number(r.precio_unitario):null, descripcion:r.descripcion||null, codigoMinsa:r.codigo_minsa||null, fechaVenc:r.fecha_vencimiento||null, alertaMeses:r.alerta_meses_antes!=null?Number(r.alerta_meses_antes):1 });
+const toInv   = x => ({ nombre:x.nombre, categoria:x.categoria||'general', unidad:x.unidad||'unidad', stock_actual:Number(x.stock||0), stock_minimo:Number(x.stockMin||0), precio_unitario:x.precio||null, descripcion:x.descripcion||null, clinica_id:currentClinicaId, codigo_minsa:x.codigoMinsa||null, fecha_vencimiento:x.fechaVenc||null, alerta_meses_antes:Number(x.alertaMeses||1) });
 const fromMov     = r => ({ id:r.id, invId:r.inventario_id, tipo:r.tipo, cantidad:Number(r.cantidad), motivo:r.motivo||null, fecha:r.fecha, referencia:r.referencia||null, notas:r.notas||null });
 const fromFin     = r => ({ id:r.id, tipo:r.tipo, categoria:r.categoria||'general', descripcion:r.descripcion, monto:Number(r.monto), fecha:r.fecha, metodoPago:r.metodo_pago||'efectivo', referencia:r.referencia||null, citaId:r.cita_id||null, pacienteId:r.paciente_id||null, invMovId:r.inventario_mov_id||null, creadoPor:r.creado_por||null });
 const fromProc = r => ({ id:r.id, pacienteId:r.paciente_id, procedimiento:r.procedimiento, categoria:r.categoria, estado:r.estado||'pendiente', fecha:r.fecha, notas:r.notas||null, presupuesto:r.presupuesto!=null?Number(r.presupuesto):null, diente:r.diente||null });
@@ -183,6 +183,17 @@ async function loadAll() {
       C.proc = []; C.hd = []; C.odo = []; C.perio = [];
     }
     setDbStatus(true);
+    // Notify once per session about expiring/expired products
+    if(!_vencAlertShown) {
+      _vencAlertShown = true;
+      const venc = (C.inv||[]).filter(p => p.fechaVenc && _invVencStatus(p) !== 'ok' && _invVencStatus(p) !== null);
+      if(venc.length) {
+        const exp = venc.filter(p=>_invVencStatus(p)==='vencido').length;
+        const prox = venc.filter(p=>_invVencStatus(p)==='alerta').length;
+        const msg = [exp?`${exp} producto${exp!==1?'s':''} vencido${exp!==1?'s':''}`:'', prox?`${prox} próximo${prox!==1?'s':''} a vencer`:''].filter(Boolean).join(' · ');
+        setTimeout(()=>toast(`⚠️ Inventario: ${msg}`, 'warning'), 800);
+      }
+    }
   } catch(e) {
     console.error('Supabase:', e);
     setDbStatus(false);
@@ -3722,11 +3733,18 @@ function renderProductos(filtro) {
   el.innerHTML = items.map(p=>{
     const stCls = p.stock===0?'tag-red':p.stockMin>0&&p.stock<=p.stockMin?'tag-orange':'tag-green';
     const stLbl = p.stock===0?'Sin stock':p.stockMin>0&&p.stock<=p.stockMin?'Stock bajo':'OK';
-    return `<div class="inv-item">
+    const vs = _invVencStatus(p);
+    const vencBadge = p.fechaVenc ? (
+      vs==='vencido' ? `<span class="tag tag-red inv-venc-tag">💀 Vencido ${formatFecha(p.fechaVenc)}</span>` :
+      vs==='alerta'  ? `<span class="tag tag-orange inv-venc-tag">🔔 Vence ${formatFecha(p.fechaVenc)}</span>` :
+      `<span class="tag tag-green inv-venc-tag">✅ Vence ${formatFecha(p.fechaVenc)}</span>`
+    ) : '';
+    return `<div class="inv-item${vs==='vencido'?' inv-item-vencido':vs==='alerta'?' inv-item-alerta':''}">
       <div class="inv-item-icon">${catIcon(p.categoria)}</div>
       <div class="inv-item-info">
         <div class="inv-item-name">${p.nombre}${p.codigoMinsa?` <span class="inv-item-minsa">${p.codigoMinsa}</span>`:''}</div>
         <div class="inv-item-sub">${p.unidad}${p.precio!=null?' · C$ '+p.precio.toFixed(2):''}${p.descripcion?' · '+p.descripcion:''}</div>
+        ${vencBadge}
       </div>
       <div class="inv-item-right">
         <span class="tag ${stCls}">${stLbl} · <strong>${p.stock}</strong></span>
@@ -3881,6 +3899,31 @@ function renderReportesInv(){
     ${!movsFiltro.length?`<div class="empty-state"><div class="empty-icon">📊</div><p>Sin movimientos en este período</p></div>`:''}`;
 }
 
+// Returns 'vencido' | 'alerta' | 'ok' | null (null = no expiration set)
+function _invVencStatus(p) {
+  if(!p.fechaVenc) return null;
+  const h = hoy();
+  if(p.fechaVenc <= h) return 'vencido';
+  const d = new Date(p.fechaVenc);
+  d.setMonth(d.getMonth() - (p.alertaMeses||1));
+  if(h >= d.toISOString().split('T')[0]) return 'alerta';
+  return 'ok';
+}
+
+function _onProdVencChange() {
+  const v = document.getElementById('prod-vencimiento')?.value;
+  const w = document.getElementById('prod-alerta-wrap');
+  if(w) w.style.display = v ? '' : 'none';
+  const prev = document.getElementById('prod-alerta-preview');
+  if(!prev || !v) return;
+  const meses = Number(document.getElementById('prod-alerta-meses')?.value || 1);
+  const d = new Date(v); d.setMonth(d.getMonth() - meses);
+  const alertStr = d.toISOString().split('T')[0];
+  const [y,mo,day] = alertStr.split('-');
+  const mesesLabel = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  prev.textContent = `Se alertará a partir del ${parseInt(day)} de ${mesesLabel[parseInt(mo)-1]} de ${y}`;
+}
+
 // ── Modal Producto ──
 function openModalProducto(id){
   editingProdId=id||null;
@@ -3894,12 +3937,19 @@ function openModalProducto(id){
     document.getElementById('prod-stock-min').value=p.stockMin;
     document.getElementById('prod-precio').value=p.precio!=null?p.precio:'';
     document.getElementById('prod-descripcion').value=p.descripcion||'';
+    document.getElementById('prod-vencimiento').value=p.fechaVenc||'';
+    document.getElementById('prod-alerta-meses').value=p.alertaMeses||1;
+    _onProdVencChange();
     // Ocultar stock al editar — el stock solo cambia mediante movimientos de entrada/salida
     if(stockWrap) stockWrap.style.display='none';
   } else {
     ['prod-nombre','prod-stock','prod-stock-min','prod-precio','prod-descripcion'].forEach(f=>document.getElementById(f).value='');
     document.getElementById('prod-categoria').value='medicamento';
     document.getElementById('prod-unidad').value='unidad';
+    document.getElementById('prod-vencimiento').value='';
+    document.getElementById('prod-alerta-meses').value=1;
+    const alertWrap = document.getElementById('prod-alerta-wrap');
+    if(alertWrap) alertWrap.style.display='none';
     if(stockWrap) stockWrap.style.display='';
   }
   document.getElementById('modal-producto').classList.add('open');
@@ -3920,7 +3970,9 @@ async function guardarProducto(){
       stock_minimo: Number(document.getElementById('prod-stock-min').value||0),
       precio_unitario: document.getElementById('prod-precio').value||null,
       descripcion: document.getElementById('prod-descripcion').value||null,
-      codigo_minsa: existing?.codigoMinsa||null
+      codigo_minsa: existing?.codigoMinsa||null,
+      fecha_vencimiento: document.getElementById('prod-vencimiento').value||null,
+      alerta_meses_antes: Number(document.getElementById('prod-alerta-meses').value||1)
     };
     const{error}=await sb.from('inventario').update(upd).eq('id',editingProdId);
     if(error){ toast('Error: '+error.message,'error'); setLoading(false); return; }
@@ -3933,7 +3985,9 @@ async function guardarProducto(){
       stockMin:document.getElementById('prod-stock-min').value||0,
       precio:document.getElementById('prod-precio').value||null,
       descripcion:document.getElementById('prod-descripcion').value||null,
-      codigoMinsa:null
+      codigoMinsa:null,
+      fechaVenc:document.getElementById('prod-vencimiento').value||null,
+      alertaMeses:Number(document.getElementById('prod-alerta-meses').value||1)
     });
     const{error}=await sb.from('inventario').insert(obj);
     if(error){ toast('Error: '+error.message,'error'); setLoading(false); return; }
@@ -5061,6 +5115,7 @@ async function guardarHistorialDental(pid) {
 let _odoData = { dientes:{}, observaciones:'' };
 let _odoEstadoActivo = 'sano';
 let _odoCurrentPid = null;
+let _vencAlertShown = false;
 
 // Coordenadas FDI — orientación estándar: incisivos ARRIBA, molares abajo-laterales
 // Q1: 18→11 (izq exterior→centro), Q2: 21→28 (centro→der exterior)
@@ -8706,9 +8761,11 @@ function renderFarmaRecetas() {
 function renderFarmaAlertas() {
   const sinStock = C.inv.filter(x => x.stock <= 0);
   const bajStock = C.inv.filter(x => x.stock > 0 && x.stockMin > 0 && x.stock <= x.stockMin);
+  const vencList = C.inv.filter(x => x.fechaVenc && _invVencStatus(x) !== 'ok' && _invVencStatus(x) !== null)
+    .sort((a,b) => a.fechaVenc.localeCompare(b.fechaVenc));
   const catIcon = { medicamento:'💊', material:'🩺', insumo:'🧹', equipo:'🔬', papeleria:'📄', general:'📦' };
-  const renderItem = p => `
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+  const renderStockItem = p => `
+    <div class="farma-alerta-item">
       <div>
         <span style="margin-right:6px">${catIcon[p.categoria]||'📦'}</span>
         <span style="font-weight:600;font-size:13px">${p.nombre}</span>
@@ -8719,9 +8776,30 @@ function renderFarmaAlertas() {
         <div style="font-size:11px;color:var(--text-light)">Mín: ${p.stockMin}</div>
       </div>
     </div>`;
+  const renderVencItem = p => {
+    const vs = _invVencStatus(p);
+    const esCls = vs==='vencido'?'tag-red':'tag-orange';
+    const esLbl = vs==='vencido'?'💀 VENCIDO':'🔔 Próximo';
+    const diasDiff = Math.round((new Date(p.fechaVenc)-new Date(hoy()))/(1000*60*60*24));
+    const diasLbl = vs==='vencido' ? `Venció hace ${Math.abs(diasDiff)} día${Math.abs(diasDiff)!==1?'s':''}` : `Vence en ${diasDiff} día${diasDiff!==1?'s':''}`;
+    return `<div class="farma-alerta-item">
+      <div>
+        <span style="margin-right:6px">${catIcon[p.categoria]||'📦'}</span>
+        <span style="font-weight:600;font-size:13px">${p.nombre}</span>
+        <span style="font-size:11px;color:var(--text-light);margin-left:6px">${p.unidad}</span>
+        <div style="font-size:11px;color:var(--text-light);margin-top:2px">⏰ Alerta: ${p.alertaMeses} mes${p.alertaMeses!==1?'es':''} antes</div>
+      </div>
+      <div style="text-align:right">
+        <span class="tag ${esCls}" style="font-size:10px;margin-bottom:4px;display:inline-block">${esLbl}</span>
+        <div style="font-weight:700;font-size:12px">${formatFecha(p.fechaVenc)}</div>
+        <div style="font-size:11px;color:var(--text-light)">${diasLbl}</div>
+      </div>
+    </div>`;
+  };
   const noAlert = '<div style="color:var(--text-light);font-size:13px;padding:12px 0">Sin alertas ✓</div>';
-  const elCero = document.getElementById('farma-alertas-cero'); if(elCero) elCero.innerHTML = sinStock.length ? sinStock.map(renderItem).join('') : noAlert;
-  const elBajo = document.getElementById('farma-alertas-bajo'); if(elBajo) elBajo.innerHTML = bajStock.length ? bajStock.map(renderItem).join('') : noAlert;
+  const elCero = document.getElementById('farma-alertas-cero'); if(elCero) elCero.innerHTML = sinStock.length ? sinStock.map(renderStockItem).join('') : noAlert;
+  const elBajo = document.getElementById('farma-alertas-bajo'); if(elBajo) elBajo.innerHTML = bajStock.length ? bajStock.map(renderStockItem).join('') : noAlert;
+  const elVenc = document.getElementById('farma-alertas-venc'); if(elVenc) elVenc.innerHTML = vencList.length ? vencList.map(renderVencItem).join('') : noAlert;
 }
 
 let farmaEstPeriodo = 'mes';
