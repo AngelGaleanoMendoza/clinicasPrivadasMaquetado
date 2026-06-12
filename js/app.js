@@ -5139,6 +5139,7 @@ function renderOdontograma(pid) {
     ${_odoReferenciasHTML()}
     ${existing.observaciones?`<div style="margin-top:10px;font-size:12px;color:var(--text-light)"><strong>Observaciones:</strong> ${existing.observaciones}</div>`:''}
   </div>`;
+  _centerOdoScroll(elTab);
 }
 
 function _migrateOdoData(raw) {
@@ -5171,9 +5172,8 @@ function abrirModalOdontograma(pid) {
   const bar = document.getElementById('odo-estados-bar');
   if(bar) bar.innerHTML = ESTADOS_DIENTE.map(e => {
     const ink = ODO_INK[e.ink] || '#6b7280';
-    return `<button id="odo-btn-${e.key}" onclick="setEstadoActivo('${e.key}')"
-      style="padding:4px 9px;border-radius:14px;border:1.5px solid ${e.key==='sano'?'#9ca3af':ink};background:#fff;
-             color:${e.key==='sano'?'#374151':ink};font-size:10px;font-weight:800;cursor:pointer;transition:box-shadow .12s;
+    return `<button id="odo-btn-${e.key}" class="odo-chip" onclick="setEstadoActivo('${e.key}')"
+      style="border-color:${e.key==='sano'?'#9ca3af':ink};color:${e.key==='sano'?'#374151':ink};
              ${e.key==='sano'?'box-shadow:0 0 0 3px var(--primary)':''}">
       ${e.key==='sano'?'🧽 Sano / Borrar':`${e.code} · ${e.label}`}
     </button>`;
@@ -5305,9 +5305,8 @@ function renderArcoOdontograma() {
   const container = document.getElementById('odo-arco-container');
   if(!container) return;
   const SURFS=[{k:'all',l:'Todas'},{k:'v',l:'Vest.'},{k:'o',l:'Ocl.'},{k:'l',l:'Ling.'},{k:'m',l:'Mes.'},{k:'d',l:'Dist.'}];
-  const surfBar = SURFS.map(s=>`<button id="odo-surf-${s.k}" onclick="setSuperficieActiva('${s.k}')"
-    style="padding:3px 8px;border-radius:12px;border:1.5px solid var(--border);background:${s.k==='all'?'var(--primary)':'var(--card)'};
-           color:${s.k==='all'?'#fff':'var(--text)'};font-size:10px;font-weight:700;cursor:pointer">${s.l}</button>`).join('');
+  const surfBar = SURFS.map(s=>`<button id="odo-surf-${s.k}" class="odo-surf-btn" onclick="setSuperficieActiva('${s.k}')"
+    style="background:${s.k==='all'?'var(--primary)':'var(--card)'};color:${s.k==='all'?'#fff':'var(--text)'}">${s.l}</button>`).join('');
 
   container.innerHTML = `
   <div style="margin-bottom:8px">
@@ -5317,6 +5316,14 @@ function renderArcoOdontograma() {
   <div class="odo-hint">↔ Desliza horizontalmente · elige un estado y toca la pieza</div>
   <div class="odo-scroll">${_buildLaminaHTML(_odoData.dientes, true)}</div>
   ${_odoReferenciasHTML()}`;
+  _centerOdoScroll(container);
+}
+
+// Centra la lámina horizontalmente (los dientes frontales quedan a la vista primero)
+function _centerOdoScroll(root) {
+  const sc = root && root.querySelector('.odo-scroll');
+  if(!sc) return;
+  requestAnimationFrame(() => { sc.scrollLeft = Math.max(0, (sc.scrollWidth - sc.clientWidth) / 2); });
 }
 
 function setEstadoActivo(key) {
