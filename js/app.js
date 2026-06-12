@@ -217,7 +217,7 @@ let _authEmail = ''; // email capturado en login o desde Supabase Auth
 
 async function verificarLogin() {
   const email = document.getElementById('login-email').value.trim();
-  _authEmail = email.toLowerCase(); // guardar email desde el formulario
+  _authEmail = email.toLowerCase();
   const password = document.getElementById('login-password').value;
   const errEl = document.getElementById('login-error');
   errEl.style.display = 'none';
@@ -227,6 +227,17 @@ async function verificarLogin() {
     return;
   }
   setLoading(true);
+
+  // ── PASO 0: verificar si la cuenta está bloqueada ──
+  const { data: profilePre } = await sb.from('profiles').select('id,bloqueado,intentos_fallidos').eq('email', email.toLowerCase()).maybeSingle();
+  if(profilePre?.bloqueado) {
+    setLoading(false);
+    shakeLogin();
+    errEl.innerHTML = '🔒 Tu cuenta está <strong>bloqueada</strong> por demasiados intentos fallidos.<br><small>Contacta al Super Admin para que la desbloquee.</small>';
+    errEl.style.display = 'block';
+    document.getElementById('login-password').value = '';
+    return;
+  }
 
   // ── PASO 1: login directo en Supabase Auth ──
   const { data: authData } = await sb.auth.signInWithPassword({ email, password });
@@ -272,9 +283,23 @@ async function verificarLogin() {
     return;
   }
 
+  // ── Fallo definitivo: incrementar contador de intentos ──
   setLoading(false);
   shakeLogin();
-  errEl.textContent = 'Email o contraseña incorrectos';
+  const { data: profFail } = await sb.from('profiles').select('id,intentos_fallidos').eq('email', email.toLowerCase()).maybeSingle();
+  if(profFail) {
+    const nuevosIntentos = (profFail.intentos_fallidos || 0) + 1;
+    const ahorraBloqueado = nuevosIntentos >= 3;
+    await sb.from('profiles').update({ intentos_fallidos: nuevosIntentos, bloqueado: ahorraBloqueado }).eq('id', profFail.id);
+    if(ahorraBloqueado) {
+      errEl.innerHTML = '🔒 Tu cuenta ha sido <strong>bloqueada</strong> tras 3 intentos fallidos.<br><small>Contacta al Super Admin para desbloquearla.</small>';
+    } else {
+      const restantes = 3 - nuevosIntentos;
+      errEl.textContent = `Email o contraseña incorrectos. Te quedan ${restantes} intento${restantes !== 1 ? 's' : ''}.`;
+    }
+  } else {
+    errEl.textContent = 'Email o contraseña incorrectos';
+  }
   errEl.style.display = 'block';
   document.getElementById('login-password').value = '';
 }
@@ -546,6 +571,9 @@ async function entrarConPerfil(profile) {
     key:      profile.rol,
     permisos: profile.permisos || []
   };
+  // Resetear bloqueo en login exitoso (fire-and-forget)
+  if(profile.id) sb.from('profiles').update({ intentos_fallidos: 0, bloqueado: false }).eq('id', profile.id);
+
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').classList.add('visible');
   document.getElementById('sf-name').textContent = currentUser.name;
@@ -6242,16 +6270,22 @@ function renderAdminUsuarios() {
       return p ? `<span title="${p.label}" style="font-size:15px">${p.icon}</span>` : '';
     }).join('');
     const permSrc = (u.permisos && u.permisos.length) ? '' : '<span style="font-size:10px;color:var(--text-light);margin-left:4px">(por rol)</span>';
-    return `<div class="admin-item-card">
+    const esBloqueado = u.bloqueado === true;
+    const intentos = u.intentos_fallidos || 0;
+    return `<div class="admin-item-card${esBloqueado?' admin-item-card-blocked':''}">
       <div class="admin-item-card-top">
         <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
-          <div class="patient-avatar" style="background:linear-gradient(135deg,var(--primary),var(--accent));font-size:18px;width:36px;height:36px;flex-shrink:0">${u.icono||'👤'}</div>
+          <div class="patient-avatar" style="background:${esBloqueado?'linear-gradient(135deg,#ef4444,#b91c1c)':'linear-gradient(135deg,var(--primary),var(--accent))'};font-size:18px;width:36px;height:36px;flex-shrink:0">${esBloqueado?'🔒':u.icono||'👤'}</div>
           <div style="flex:1;min-width:0">
             <div class="admin-item-card-name">${u.nombre}</div>
             <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.email||'Sin email'}</div>
           </div>
         </div>
-        <span class="tag ${rolTag(u.rol)}" style="flex-shrink:0">${rolLabel(u.rol)}</span>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+          <span class="tag ${rolTag(u.rol)}">${rolLabel(u.rol)}</span>
+          ${esBloqueado?`<span class="tag tag-red" style="font-size:10px">🔒 Bloqueado</span>`:''}
+          ${!esBloqueado&&intentos>0?`<span class="tag tag-orange" style="font-size:10px">⚠️ ${intentos}/3 intentos</span>`:''}
+        </div>
       </div>
       <div class="admin-item-card-meta">
         <span>🏥 ${clinica?clinica.nombre:'Sin clínica asignada'}</span>
@@ -6260,7 +6294,11 @@ function renderAdminUsuarios() {
         ${permIcons}${permSrc}
       </div>
       <div class="admin-item-card-actions">
-        <button class="btn btn-sm btn-secondary" data-uid="${u.id}" onclick="openModalUsuarioEditById(this.dataset.uid)">✏️ Editar</button>
+        ${esBloqueado
+          ? `<button class="btn btn-sm" style="background:var(--success);color:#fff" data-uid="${u.id}" onclick="desbloquearUsuario(this.dataset.uid)">🔓 Desbloquear</button>`
+          : `<button class="btn btn-sm btn-secondary" data-uid="${u.id}" onclick="openModalUsuarioEditById(this.dataset.uid)">✏️ Editar</button>`
+        }
+        <button class="btn btn-sm btn-secondary" data-uid="${u.id}" data-nombre="${u.nombre}" onclick="restablecerPasswordAdmin(this.dataset.uid,this.dataset.nombre)">🔑 Contraseña</button>
         <button class="btn btn-sm btn-danger" data-uid="${u.id}" onclick="eliminarUsuario(this.dataset.uid)">🗑️</button>
       </div>
     </div>`;
@@ -6948,6 +6986,46 @@ async function eliminarUsuario(id) {
   renderAdminUsuarios();
   renderAdminStats();
   setLoading(false);
+}
+
+async function desbloquearUsuario(id) {
+  const u = adminUsuarios.find(x=>x.id===id);
+  const ok = await customConfirm({
+    icon:'🔓', title:'Desbloquear usuario',
+    msg:`¿Desbloquear la cuenta de <strong>${u?.nombre}</strong>?<br><br>El contador de intentos fallidos se restablecerá a cero y el usuario podrá volver a iniciar sesión.`,
+    okText:'🔓 Desbloquear', danger:false
+  });
+  if(!ok) return;
+  setLoading(true);
+  const {error} = await sb.from('profiles').update({ bloqueado: false, intentos_fallidos: 0 }).eq('id', id);
+  if(error){ toast('Error: '+error.message,'error'); setLoading(false); return; }
+  toast(`✅ Cuenta de ${u?.nombre} desbloqueada correctamente`);
+  await loadAdminData(); renderAdminUsuarios(); renderAdminStats(); setLoading(false);
+}
+
+async function restablecerPasswordAdmin(id, nombre) {
+  const ok = await customConfirm({
+    icon:'🔑', title:`Restablecer contraseña — ${nombre}`,
+    msg:`Ingresa la nueva contraseña temporal para <strong>${nombre}</strong>:<br><br>
+      <div style="margin-top:10px">
+        <div style="position:relative">
+          <input id="_nueva-pass" type="password" placeholder="Nueva contraseña (mín. 6 caracteres)"
+            style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;background:var(--card);color:var(--text);box-sizing:border-box">
+        </div>
+        <button type="button" onclick="const i=document.getElementById('_nueva-pass');i.type=i.type==='password'?'text':'password';this.textContent=i.type==='password'?'👁 Mostrar':'🙈 Ocultar'"
+          style="margin-top:8px;font-size:12px;background:none;border:none;color:var(--primary);cursor:pointer;font-weight:600;padding:0">👁 Mostrar</button>
+        <div style="font-size:11px;color:var(--text-light);margin-top:6px">Al guardar, el usuario también quedará desbloqueado si estaba bloqueado.</div>
+      </div>`,
+    okText:'🔑 Restablecer contraseña', danger:false
+  });
+  if(!ok) return;
+  const pass = document.getElementById('_nueva-pass')?.value?.trim();
+  if(!pass || pass.length < 6){ toast('La contraseña debe tener al menos 6 caracteres','error'); return; }
+  setLoading(true);
+  const {error} = await sb.from('profiles').update({ password: pass, bloqueado: false, intentos_fallidos: 0 }).eq('id', id);
+  if(error){ toast('Error al restablecer: '+error.message,'error'); setLoading(false); return; }
+  toast(`🔑 Contraseña de ${nombre} restablecida · La cuenta quedó desbloqueada`);
+  await loadAdminData(); renderAdminUsuarios(); renderAdminStats(); setLoading(false);
 }
 
 // ════════════════════ ESTADÍSTICAS ════════════════════

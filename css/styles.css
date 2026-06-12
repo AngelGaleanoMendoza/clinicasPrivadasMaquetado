@@ -1051,7 +1051,9 @@ body.dark .acudio-badge{background:rgba(16,185,129,.15);color:#6EE7B7;border-col
 }
 
 /* ══ ADMIN PANEL RESPONSIVE ══ */
-.admin-item-card{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:10px;display:flex;flex-direction:column;gap:10px}
+.admin-item-card{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:10px;display:flex;flex-direction:column;gap:10px;transition:border-color .18s}
+.admin-item-card-blocked{border-color:#FCA5A5;background:rgba(254,242,242,.45)}
+body.dark .admin-item-card-blocked{background:rgba(239,68,68,.1);border-color:#b91c1c}
 .admin-item-card-top{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
 .admin-item-card-name{font-weight:700;font-size:14px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .admin-item-card-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--text-light)}
