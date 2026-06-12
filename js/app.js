@@ -1087,7 +1087,7 @@ function renderDashboardFarmacia() {
     <div id="panel-pendientes-sesion-farma" style="margin-bottom:18px"></div>
     <div class="stats-grid" style="margin-bottom:18px">
       <div class="stat-card"><div class="stat-icon si-green">💰</div><div class="stat-info"><h3>${fmtC(totalIng)}</h3><p>Ingresos de Hoy</p></div></div>
-      <div class="stat-card"><div class="stat-icon" style="background:#FEF2F2">📤</div><div class="stat-info"><h3 style="color:#e53e3e">${fmtC(totalEgr)}</h3><p>Gastos de Hoy</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-red">📤</div><div class="stat-info"><h3 style="color:var(--danger)">${fmtC(totalEgr)}</h3><p>Gastos de Hoy</p></div></div>
       <div class="stat-card"><div class="stat-icon si-blue">🛒</div><div class="stat-info"><h3>${despachos}</h3><p>Despachos de Hoy</p></div></div>
       <div class="stat-card"><div class="stat-icon si-cyan">📥</div><div class="stat-info"><h3>${comprasHoy.length}</h3><p>Compras / Entradas</p></div></div>
     </div>
@@ -3692,7 +3692,7 @@ function renderInventario() {
     <div class="stat-card"><div class="stat-icon si-blue">📦</div><div class="stat-info"><h3>${C.inv.length}</h3><p>Productos</p></div></div>
     <div class="stat-card"><div class="stat-icon si-green">📥</div><div class="stat-info"><h3>${entHoy}</h3><p>Unidades entrada hoy</p></div></div>
     <div class="stat-card"><div class="stat-icon si-orange">📤</div><div class="stat-info"><h3>${salHoy}</h3><p>Unidades salida hoy</p></div></div>
-    <div class="stat-card"><div class="stat-icon" style="background:linear-gradient(135deg,#FEF2F2,#FEE2E2)">⚠️</div><div class="stat-info"><h3>${bajoStock}</h3><p>Bajo stock / sin stock (${sinStock})</p></div></div>`;
+    <div class="stat-card"><div class="stat-icon si-red">⚠️</div><div class="stat-info"><h3>${bajoStock}</h3><p>Bajo stock / sin stock (${sinStock})</p></div></div>`;
   const btnBorrar = document.getElementById('btn-borrar-inventario');
   if(btnBorrar) btnBorrar.style.display = isSuperAdmin() ? '' : 'none';
   switchInvTab(invTab);
@@ -3862,7 +3862,7 @@ function renderReportesInv(){
       <div class="stat-card"><div class="stat-icon si-green">📥</div><div class="stat-info"><h3>${totEnt}</h3><p>Total entradas</p></div></div>
       <div class="stat-card"><div class="stat-icon si-orange">📤</div><div class="stat-info"><h3>${totSal}</h3><p>Total salidas</p></div></div>
       <div class="stat-card"><div class="stat-icon si-blue">🔄</div><div class="stat-info"><h3>${movsFiltro.length}</h3><p>Movimientos</p></div></div>
-      <div class="stat-card"><div class="stat-icon" style="background:linear-gradient(135deg,#FEF2F2,#FEE2E2)">⚠️</div><div class="stat-info"><h3>${C.inv.filter(p=>p.stock<=p.stockMin&&p.stockMin>0).length}</h3><p>Bajo stock ahora</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-red">⚠️</div><div class="stat-info"><h3>${C.inv.filter(p=>p.stock<=p.stockMin&&p.stockMin>0).length}</h3><p>Bajo stock ahora</p></div></div>
     </div>
     ${topProds.length?`<div class="card" style="margin-bottom:14px">
       <div class="card-header"><h3>🏆 Productos con más movimiento</h3></div>
@@ -7223,38 +7223,40 @@ function renderResumenFinanzas() {
   if(statsEl) statsEl.innerHTML = `
     <div class="stat-card"><div class="stat-icon si-green">💰</div>
       <div class="stat-info"><h3 style="color:var(--success);font-size:20px">${fmtC(ingresos)}</h3><p>Ingresos del período</p></div></div>
-    <div class="stat-card"><div class="stat-icon" style="background:#FEF2F2">📤</div>
+    <div class="stat-card"><div class="stat-icon si-red">📤</div>
       <div class="stat-info"><h3 style="color:var(--danger);font-size:20px">${fmtC(egresos)}</h3><p>Gastos del período</p></div></div>
-    <div class="stat-card"><div class="stat-icon" style="background:${utilidad>=0?'#EFF6FF':'#FEF2F2'}">📊</div>
+    <div class="stat-card"><div class="stat-icon ${utilidad>=0?'si-blue':'si-red'}">📊</div>
       <div class="stat-info"><h3 style="color:${utilidad>=0?'var(--primary)':'var(--danger)'};font-size:20px">${fmtC(utilidad)}</h3><p>Utilidad neta</p></div></div>
-    <div class="stat-card"><div class="stat-icon" style="background:#FFFBEB">🧾</div>
+    <div class="stat-card"><div class="stat-icon si-orange">🧾</div>
       <div class="stat-info"><h3 style="font-size:20px">${fEmit}</h3><p>Facturas (${fPag} pagadas)</p></div></div>`;
-  const recent = [...finData].sort((a,b)=>b.fecha.localeCompare(a.fecha)).slice(0,6);
+  const recent = [...finData].sort((a,b)=>b.fecha.localeCompare(a.fecha)).slice(0,8);
   const ultEl = document.getElementById('fin-ultimas');
   if(ultEl) {
-    if(!recent.length) { ultEl.innerHTML='<div class="empty-state" style="padding:32px"><div class="empty-icon">💰</div><p>No hay transacciones aún</p></div>'; }
+    if(!recent.length) { ultEl.innerHTML='<div class="empty-state" style="padding:32px"><div class="empty-icon">💰</div><p>No hay transacciones en este período</p></div>'; }
     else ultEl.innerHTML=`<div class="table-wrap"><table>
-      <thead><tr><th>Fecha</th><th>Descripción</th><th>Tipo</th><th>Monto</th></tr></thead>
+      <thead><tr><th>Fecha</th><th>Descripción</th><th>Tipo</th><th style="text-align:right">Monto</th></tr></thead>
       <tbody>${recent.map(f=>`<tr>
-        <td>${formatFecha(f.fecha)}</td><td>${f.descripcion}</td>
-        <td>${f.tipo==='ingreso'?'<span class="tag tag-green">💰</span>':'<span class="tag tag-red">📤</span>'}</td>
-        <td style="font-weight:700;color:${f.tipo==='ingreso'?'var(--success)':'var(--danger)'}">
-          ${f.tipo==='ingreso'?'+':'−'} ${fmtC(f.monto)}</td>
+        <td style="white-space:nowrap">${formatFecha(f.fecha)}</td>
+        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.descripcion}</td>
+        <td>${f.tipo==='ingreso'?'<span class="tag tag-green" style="font-size:10px">💰 Ingreso</span>':'<span class="tag tag-red" style="font-size:10px">📤 Gasto</span>'}</td>
+        <td style="font-weight:700;color:${f.tipo==='ingreso'?'var(--success)':'var(--danger)'};text-align:right;white-space:nowrap">
+          ${f.tipo==='ingreso'?'+':'−'}${fmtC(f.monto)}</td>
       </tr>`).join('')}</tbody></table></div>`;
   }
-  const factRecent = [...(C.fact||[])].sort((a,b)=>b.fecha.localeCompare(a.fecha)).slice(0,5);
+  // Facturas del período activo (no de todos los tiempos)
+  const factRecent = [...factData].sort((a,b)=>b.fecha.localeCompare(a.fecha)).slice(0,5);
   const fResEl = document.getElementById('fin-fact-resumen');
   if(fResEl) {
-    if(!factRecent.length) { fResEl.innerHTML='<div class="empty-state" style="padding:32px"><div class="empty-icon">🧾</div><p>No hay facturas aún</p></div>'; }
+    if(!factRecent.length) { fResEl.innerHTML='<div class="empty-state" style="padding:32px"><div class="empty-icon">🧾</div><p>No hay facturas en este período</p></div>'; }
     else {
       const estadoTag = e => ({pagada:'tag-green',pendiente:'tag-orange',cancelada:'tag-red',anulada:'tag-gray'})[e]||'tag-gray';
       fResEl.innerHTML=`<div class="table-wrap"><table>
-        <thead><tr><th>N°</th><th>Paciente</th><th>Estado</th><th>Total</th></tr></thead>
+        <thead><tr><th>N°</th><th>Paciente</th><th>Estado</th><th style="text-align:right">Total</th></tr></thead>
         <tbody>${factRecent.map(f=>`<tr>
           <td><code style="font-size:11px;background:var(--bg);padding:2px 6px;border-radius:5px">${f.numero||'—'}</code></td>
-          <td>${f.pacienteNombre}</td>
+          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.pacienteNombre||'—'}</td>
           <td><span class="tag ${estadoTag(f.estado)}">${f.estado}</span></td>
-          <td style="font-weight:700">${fmtC(f.total)}</td>
+          <td style="font-weight:700;text-align:right;white-space:nowrap">${fmtC(f.total)}</td>
         </tr>`).join('')}</tbody></table></div>`;
     }
   }
@@ -7367,25 +7369,31 @@ function renderTransacciones() {
   if(!el) return;
   if(!data.length) { el.innerHTML='<div class="empty-state" style="padding:40px"><div class="empty-icon">📋</div><p>No hay transacciones en este período</p></div>'; return; }
   const MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
-  el.innerHTML=data.map(f=>{
+  const totalIng = data.filter(x=>x.tipo==='ingreso').reduce((s,x)=>s+x.monto,0);
+  const totalEgr = data.filter(x=>x.tipo==='egreso').reduce((s,x)=>s+x.monto,0);
+  el.innerHTML = `<div class="fin-list-header">
+    <span class="fin-list-header-lbl">${data.length} transaccion${data.length!==1?'es':''}</span>
+    <span class="fin-list-header-val"><span style="color:var(--success)">+${fmtC(totalIng)}</span>&nbsp;·&nbsp;<span style="color:var(--danger)">−${fmtC(totalEgr)}</span></span>
+  </div>
+  <div class="fin-list">`+data.map(f=>{
     const esI=f.tipo==='ingreso';
     const [,mm,dd]=(f.fecha||hoy()).split('-');
-    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)">
-      <div style="width:36px;flex-shrink:0;text-align:center;background:${esI?'#F0FDF4':'#FEF2F2'};border-radius:8px;padding:5px 2px">
-        <div style="font-size:13px;font-weight:800;color:${esI?'var(--success)':'var(--danger)'};line-height:1">${dd}</div>
-        <div style="font-size:10px;color:${esI?'var(--success)':'var(--danger)'};text-transform:uppercase;font-weight:600">${MESES[parseInt(mm)-1]}</div>
+    return `<div class="fin-item">
+      <div class="fin-date-pill ${esI?'ingreso':'egreso'}">
+        <div class="fin-date-day">${dd}</div>
+        <div class="fin-date-mon">${MESES[parseInt(mm)-1]}</div>
       </div>
-      <div style="flex:1;min-width:0">
-        <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.descripcion}</div>
-        <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.categoria||'general'} · ${f.metodoPago}${f.referencia?' · Ref: '+f.referencia:''}</div>
+      <div class="fin-item-info">
+        <div class="fin-item-title">${f.descripcion}</div>
+        <div class="fin-item-meta">${f.categoria||'general'} · ${f.metodoPago||'—'}${f.referencia?' · '+f.referencia:''}</div>
       </div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
-        ${esI?'<span class="tag tag-green" style="font-size:10px">💰 Ingreso</span>':'<span class="tag tag-red" style="font-size:10px">📤 Gasto</span>'}
-        <span style="font-size:13px;font-weight:800;color:${esI?'var(--success)':'var(--danger)'}">${esI?'+':'−'}${fmtC(f.monto)}</span>
-        <button class="btn btn-sm btn-danger" onclick="eliminarTransaccion(${f.id})">🗑️</button>
+      <div class="fin-item-right">
+        <span class="tag ${esI?'tag-green':'tag-red'}" style="font-size:10px">${esI?'💰 Ingreso':'📤 Gasto'}</span>
+        <span class="fin-monto ${esI?'ingreso':'egreso'}">${esI?'+':'−'}${fmtC(f.monto)}</span>
+        <button class="btn btn-sm btn-danger" onclick="eliminarTransaccion(${f.id})" title="Eliminar transacción">🗑️</button>
       </div>
     </div>`;
-  }).join('');
+  }).join('')+'</div>';
 }
 
 function setFactEstadoChip(el, estado) {
@@ -7409,28 +7417,35 @@ function renderFacturasList() {
   if(!el) return;
   if(!data.length) { el.innerHTML='<div class="empty-state" style="padding:40px"><div class="empty-icon">🧾</div><p>No hay facturas en este período.<br>Usa <strong>+ Nueva Factura</strong> para comenzar.</p></div>'; return; }
   const MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
-  el.innerHTML=data.map(f=>{
+  const totalFact = data.reduce((s,f)=>s+f.total,0);
+  const pagadas = data.filter(f=>f.estado==='pagada').length;
+  const pendientes = data.filter(f=>f.estado==='pendiente').length;
+  el.innerHTML = `<div class="fin-list-header">
+    <span class="fin-list-header-lbl">${data.length} factura${data.length!==1?'s':''} · <span style="color:var(--success)">${pagadas} pagada${pagadas!==1?'s':''}</span>${pendientes?` · <span style="color:var(--warning)">${pendientes} pendiente${pendientes!==1?'s':''}</span>`:''}</span>
+    <span class="fin-list-header-val" style="color:var(--text)">${fmtC(totalFact)}</span>
+  </div>
+  <div class="fin-list">`+data.map(f=>{
     const [,mm,dd]=(f.fecha||hoy()).split('-');
     const esPend=f.estado==='pendiente';
-    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)">
-      <div style="width:36px;flex-shrink:0;text-align:center;background:var(--primary-light);border-radius:8px;padding:5px 2px">
-        <div style="font-size:13px;font-weight:800;color:var(--primary);line-height:1">${dd}</div>
-        <div style="font-size:10px;color:var(--primary);text-transform:uppercase;font-weight:600">${MESES[parseInt(mm)-1]}</div>
+    return `<div class="fin-item">
+      <div class="fin-date-pill factura">
+        <div class="fin-date-day">${dd}</div>
+        <div class="fin-date-mon">${MESES[parseInt(mm)-1]}</div>
       </div>
-      <div style="flex:1;min-width:0">
-        <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.pacienteNombre}</div>
-        <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.numero||'—'} · <strong style="color:var(--text)">${fmtC(f.total)}</strong></div>
+      <div class="fin-item-info">
+        <div class="fin-item-title">${f.pacienteNombre||'Consumidor Final'}</div>
+        <div class="fin-item-meta">${f.numero||'—'} · <strong style="color:var(--text);font-size:12px">${fmtC(f.total)}</strong></div>
       </div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+      <div class="fin-item-right">
         <span class="tag ${estadoTag(f.estado)}">${f.estado}</span>
-        <div class="actions-cell" style="gap:3px;flex-wrap:nowrap">
-          ${esPend?`<button class="btn btn-sm btn-primary" onclick="pagarFactura(${f.id})">✅</button>`:''}
-          <button class="btn btn-sm btn-secondary" onclick="verFacturaPDF(${f.id})" title="PDF">🖨️</button>
-          ${esPend?`<button class="btn btn-sm btn-danger" onclick="anularFactura(${f.id})">❌</button>`:''}
+        <div class="actions-cell" style="gap:4px">
+          ${esPend?`<button class="btn btn-sm btn-primary" onclick="pagarFactura(${f.id})" title="Marcar como pagada">✅</button>`:''}
+          <button class="btn btn-sm btn-secondary" onclick="verFacturaPDF(${f.id})" title="Ver PDF">🖨️</button>
+          ${esPend?`<button class="btn btn-sm btn-danger" onclick="anularFactura(${f.id})" title="Anular factura">❌</button>`:''}
         </div>
       </div>
     </div>`;
-  }).join('');
+  }).join('')+'</div>';
 }
 
 // ── Modal Transacción ──
@@ -7679,9 +7694,14 @@ async function guardarTransaccion() {
       if(sinStock.length) {
         const nombres = sinStock.map(s => {
           const prod = C.inv.find(p => p.id === s.id);
-          return `${s.nombre} (stock: ${prod?.stock||0}, pedido: ${s.cantidad})`;
-        }).join(', ');
-        toast(`Stock insuficiente: ${nombres}`, 'warning');
+          return `• ${s.nombre}: disponible ${prod?.stock||0}, solicitado ${s.cantidad}`;
+        }).join('<br>');
+        const continuar = await customConfirm({
+          icon:'⚠️', title:'Stock insuficiente',
+          msg:`Los siguientes productos no tienen stock suficiente:<br><br>${nombres}<br><br>¿Registrar el gasto de todos modos?`,
+          okText:'Registrar de todos modos', danger:false
+        });
+        if(!continuar) { setLoading(false); _unlockSubmit('trans', btn); return; }
       }
     }
     const tipoMov  = tipo === 'ingreso' ? 'entrada' : 'salida';
@@ -7843,12 +7863,15 @@ function calcFacturaTotals() {
 async function guardarFactura() {
   if(!currentClinicaId){ toast('Sin clínica asignada','error'); return; }
   if(!facturaItems.length){ toast('Agrega al menos un servicio o producto','error'); return; }
+  const sub = facturaItems.reduce((s,i)=>s+(i.cant||0)*(i.precio||0),0);
+  if(sub <= 0){ toast('El total de la factura debe ser mayor a cero','error'); return; }
+  const btn = document.querySelector('[onclick="guardarFactura()"]');
+  if(!_lockSubmit('factura', btn)) return;
   const numero  = document.getElementById('fact-numero').value.trim()||generarNumFactura();
   const fecha   = document.getElementById('fact-fecha').value||hoy();
   const pacId   = parseInt(document.getElementById('fact-paciente').value)||null;
   const citaId  = parseInt(document.getElementById('fact-cita-id').value)||null;
   const notas   = document.getElementById('fact-notas').value.trim();
-  const sub     = facturaItems.reduce((s,i)=>s+(i.cant||0)*(i.precio||0),0);
   const tot     = sub;
   const pac     = pacId ? C.p.find(p=>p.id===pacId) : null;
   const pacNom  = pac ? `${pac.nombre} ${pac.apellidos}` : 'Consumidor Final';
@@ -7858,15 +7881,17 @@ async function guardarFactura() {
     fecha, estado:'pendiente', subtotal:sub, impuesto_pct:0, impuesto:0,
     total:tot, notas:notas||null, cita_id:citaId
   }).select().single();
-  if(factErr){ toast('Error al generar factura','error'); setLoading(false); return; }
+  if(factErr){ toast('Error al generar factura','error'); setLoading(false); _unlockSubmit('factura', btn); return; }
   if(facturaItems.length) {
-    await sb.from('factura_items').insert(facturaItems.map(i=>({
+    const {error:itemsErr} = await sb.from('factura_items').insert(facturaItems.map(i=>({
       factura_id:factData.id, descripcion:i.desc, tipo:i.tipo,
       cantidad:i.cant, precio_unitario:i.precio,
       subtotal:(i.cant||0)*(i.precio||0), inventario_id:i.invId||null
     })));
+    if(itemsErr) toast('Factura creada pero error al guardar ítems: '+itemsErr.message, 'warning');
   }
   toast('Factura generada 🧾');
+  _unlockSubmit('factura', btn);
   closeModal('modal-factura');
   await loadAll(); renderFinanzas(); setLoading(false);
 }
