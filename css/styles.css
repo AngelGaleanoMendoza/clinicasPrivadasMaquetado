@@ -50,11 +50,32 @@ body.dark .theme-toggle::after{transform:translateX(20px)}
 body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);transition:background .3s,color .3s}
 
 /* LOADING */
-.loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,.88);z-index:9998;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);flex-direction:column;gap:12px}
+.loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,.88);z-index:9998;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);flex-direction:column;gap:14px}
 .loading-overlay.show{display:flex}
-.spinner{width:38px;height:38px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .7s linear infinite}
+/* Spinner de operaciones: arco degradado con los colores de la marca */
+.spinner{width:42px;height:42px;border-radius:50%;background:conic-gradient(from 0deg,transparent 12%,var(--primary) 65%,#06B6D4 100%);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3.5px));mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3.5px));animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .loading-text{color:var(--text-light);font-size:13px;font-weight:500}
+
+/* Modo boot: pantalla completa de marca (arranque y login) */
+.loading-overlay .load-brand{display:none}
+.loading-overlay.boot,body.dark .loading-overlay.boot{background:#080c18;backdrop-filter:none}
+.loading-overlay.boot .spinner,.loading-overlay.boot .load-text-op{display:none}
+.loading-overlay.boot .load-brand{display:flex;flex-direction:column;align-items:center;animation:bootIn .5s ease;position:relative;z-index:1}
+.loading-overlay.boot::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 60% 45% at 50% 42%,rgba(124,77,255,.14),transparent 70%),radial-gradient(ellipse 45% 35% at 50% 55%,rgba(0,212,255,.08),transparent 70%)}
+@keyframes bootIn{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:none}}
+.load-mark{width:84px;height:84px;margin-bottom:20px}
+.load-mark .lm-ring{animation-duration:1.6s}
+.load-mark .lm-inner{width:52px;height:52px}
+.load-mark .lm-cross{width:20px;height:20px}
+.load-letters{font-size:34px;font-weight:700;letter-spacing:.14em;background:linear-gradient(90deg,#00d4ff,#7c4dff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-family:'Outfit',sans-serif;line-height:1}
+.load-sub{font-size:9.5px;font-weight:300;letter-spacing:.24em;color:rgba(255,255,255,.35);text-transform:uppercase;margin-top:8px;font-family:'Outfit',sans-serif}
+.load-bar{width:170px;height:3px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:30px}
+.load-bar-fill{height:100%;width:45%;border-radius:99px;background:linear-gradient(90deg,#00d4ff,#7c4dff);animation:loadSlide 1.15s ease-in-out infinite}
+@keyframes loadSlide{0%{transform:translateX(-110%)}100%{transform:translateX(260%)}}
+.load-text-boot{color:rgba(255,255,255,.42);margin-top:14px;font-size:12px;letter-spacing:.04em}
+.load-dots::after{content:'';animation:loadDots 1.4s steps(4,end) infinite}
+@keyframes loadDots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}
 
 /* LOGIN */
 #login-screen{position:fixed;inset:0;z-index:9999;background:#080c18;display:none;align-items:center;justify-content:center;overflow:hidden}

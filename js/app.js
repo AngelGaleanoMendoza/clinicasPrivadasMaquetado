@@ -203,7 +203,11 @@ async function loadAll() {
 }
 
 function setLoading(on) {
-  document.getElementById('loading-overlay').classList.toggle('show', on);
+  const el = document.getElementById('loading-overlay');
+  el.classList.toggle('show', on);
+  // El modo boot (pantalla de marca) solo dura hasta que termina la primera carga;
+  // después las operaciones internas usan el spinner ligero
+  if(!on) el.classList.remove('boot');
 }
 function setDbStatus(ok) {
   document.getElementById('db-dot').className = 'db-dot' + (ok?' connected':'');
@@ -226,6 +230,8 @@ async function verificarLogin() {
     errEl.style.display = 'block';
     return;
   }
+  // Al entrar a la app se muestra la pantalla de marca completa
+  document.getElementById('loading-overlay').classList.add('boot');
   setLoading(true);
 
   // ── PASO 0: verificar si la cuenta está bloqueada ──
