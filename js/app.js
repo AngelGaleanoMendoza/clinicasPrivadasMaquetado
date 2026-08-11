@@ -234,9 +234,10 @@ async function verificarLogin() {
   document.getElementById('loading-overlay').classList.add('boot');
   setLoading(true);
 
-  // ── PASO 0: verificar si la cuenta está bloqueada ──
+  // ── PASO 0: verificar si la cuenta está bloqueada (el Super Admin nunca se bloquea) ──
+  const esSuperAdminEmail = email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
   const { data: profilePre } = await sb.from('profiles').select('id,bloqueado,intentos_fallidos').eq('email', email.toLowerCase()).maybeSingle();
-  if(profilePre?.bloqueado) {
+  if(profilePre?.bloqueado && !esSuperAdminEmail) {
     setLoading(false);
     shakeLogin();
     errEl.innerHTML = '🔒 Tu cuenta está <strong>bloqueada</strong> por demasiados intentos fallidos.<br><small>Contacta al Super Admin para que la desbloquee.</small>';
@@ -293,7 +294,10 @@ async function verificarLogin() {
   setLoading(false);
   shakeLogin();
   const { data: profFail } = await sb.from('profiles').select('id,intentos_fallidos').eq('email', email.toLowerCase()).maybeSingle();
-  if(profFail) {
+  if(profFail && esSuperAdminEmail) {
+    // El Super Admin nunca queda bloqueado: solo se le informa el error, sin contar intentos
+    errEl.textContent = 'Email o contraseña incorrectos';
+  } else if(profFail) {
     const nuevosIntentos = (profFail.intentos_fallidos || 0) + 1;
     const ahorraBloqueado = nuevosIntentos >= 3;
     await sb.from('profiles').update({ intentos_fallidos: nuevosIntentos, bloqueado: ahorraBloqueado }).eq('id', profFail.id);
