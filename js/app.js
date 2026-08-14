@@ -1347,10 +1347,9 @@ function openModalPaciente(id){
   if(buscarWrap) buscarWrap.style.display = id ? 'none' : '';
   if(buscarInput) buscarInput.value = '';
   if(buscarRes) buscarRes.innerHTML = '';
-  // Label de identificación: requerido excepto en óptica
-  const esOptica = currentClinica?.tipo === 'optica';
+  // Identificación: campo opcional para todos los tipos de clínica
   const idLabel = document.getElementById('p-id-label');
-  if(idLabel) idLabel.textContent = esOptica ? 'Número de Identificación' : 'Número de Identificación *';
+  if(idLabel) idLabel.textContent = 'Número de Identificación';
   pendingFotoFile=null; currentFotoUrl=null;
   document.getElementById('foto-img-preview').style.display='none';
   document.getElementById('foto-img-preview').src='';
@@ -1398,8 +1397,6 @@ async function guardarPaciente(irExpediente=false, irCita=false){
   const fechaNacDerived = (currentYear - edadNum) + '-01-01';
   const idTipo  = document.getElementById('p-id-tipo')?.value || 'Cédula';
   const idValor = document.getElementById('p-id').value.trim();
-  const esOptica = currentClinica?.tipo === 'optica';
-  if(!esOptica && !idValor){ _unlockSubmit('paciente',null); toast('El número de identificación es obligatorio','error'); return; }
   if(!editingId && idValor) {
     const labelBusqueda = idTipo + ': ' + idValor;
     const duplicado = C.p.find(p => p.identificacion && p.identificacion.toLowerCase() === labelBusqueda.toLowerCase());
