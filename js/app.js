@@ -6324,6 +6324,7 @@ function renderAdminUsuarios() {
       </div>
       <div class="admin-item-card-meta">
         <span>🏥 ${clinica?clinica.nombre:'Sin clínica asignada'}</span>
+        ${u.especialidad?`<span>🩺 ${u.especialidad}</span>`:''}
       </div>
       <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;padding:6px 0 2px;border-top:1px solid var(--border);margin-top:6px">
         ${permIcons}${permSrc}
@@ -6918,9 +6919,32 @@ function togglePermLabel(id) {
   const lbl = document.getElementById('perm-label-'+id);
   if(lbl) lbl.style.borderColor = cb?.checked ? 'var(--primary)' : 'var(--border)';
 }
+// Roles clínicos que ejercen una especialidad; el resto no muestra el campo.
+const ROLES_CON_ESPECIALIDAD = ['medico','medico_admin','odontologo','enfermeria'];
+
+// La columna profiles.especialidad puede no existir todavía. Si es así, se
+// guarda el resto del usuario igual en lugar de fallar el formulario entero.
+function _faltaColumnaEspecialidad(error) {
+  const m = (error?.message || '').toLowerCase();
+  return m.includes('especialidad') && (m.includes('column') || m.includes('schema') || m.includes('does not exist'));
+}
+function _avisarFaltaColumnaEspecialidad() {
+  toast('Usuario guardado, pero falta la columna "especialidad" en la tabla profiles de Supabase','warning');
+}
+
+function _syncEspecialidadUsuario() {
+  const rol  = document.getElementById('u-rol')?.value;
+  const wrap = document.getElementById('u-especialidad-wrap');
+  if(!wrap) return;
+  const aplica = ROLES_CON_ESPECIALIDAD.includes(rol);
+  wrap.style.display = aplica ? '' : 'none';
+  if(!aplica) { const inp = document.getElementById('u-especialidad'); if(inp) inp.value = ''; }
+}
+
 function onRolChange() {
   const rol = document.getElementById('u-rol').value;
   renderPermisosModal(PERMISOS_DEFECTO[rol] || []);
+  _syncEspecialidadUsuario();
 }
 
 function openModalUsuario() {
@@ -6936,6 +6960,8 @@ function openModalUsuario() {
   fillClinicaSelect(null);
   editingUsuarioId = null;
   renderPermisosModal(PERMISOS_DEFECTO['medico'] || []);
+  document.getElementById('u-especialidad').value = '';
+  _syncEspecialidadUsuario();
   document.getElementById('modal-usuario').classList.add('open');
 }
 
@@ -6960,6 +6986,8 @@ function openModalUsuarioEditById(id) {
   editingUsuarioId = u.id;
   const permsActuales = Array.isArray(u.permisos) ? u.permisos : (PERMISOS_DEFECTO[u.rol] || []);
   renderPermisosModal(permsActuales);
+  document.getElementById('u-especialidad').value = u.especialidad || '';
+  _syncEspecialidadUsuario();
   document.getElementById('modal-usuario').classList.add('open');
 }
 
@@ -6972,11 +7000,15 @@ async function guardarUsuario() {
   const clinicaVal = document.getElementById('u-clinica').value;
   const clinica_id = clinicaVal ? Number(clinicaVal) : null;
   const permisos = ALL_PERMISOS.map(p => p.id).filter(id => document.getElementById('perm-'+id)?.checked);
+  // Solo se conserva la especialidad en los roles que la ejercen
+  const especialidad = ROLES_CON_ESPECIALIDAD.includes(rol)
+    ? (document.getElementById('u-especialidad')?.value.trim() || null)
+    : null;
   if(!nombre){ toast('El nombre es obligatorio','error'); return; }
   if(!editingUsuarioId && !password){ toast('La contraseña es obligatoria','error'); return; }
   setLoading(true);
   if(editingUsuarioId) {
-    const upd = {nombre,email:email||null,rol,icono,clinica_id,permisos};
+    const upd = {nombre,email:email||null,rol,icono,clinica_id,permisos,especialidad};
     // Solo el Super Admin puede cambiar contraseñas de otros usuarios
     if(password && isSuperAdmin()) {
       const { data: { session: adminSess } } = await sb.auth.getSession();
@@ -6988,7 +7020,12 @@ async function guardarUsuario() {
       toast('Solo el Super Admin puede cambiar contraseñas de otros usuarios','error');
       setLoading(false); return;
     }
-    const {error} = await sb.from('profiles').update(upd).eq('id',editingUsuarioId);
+    let {error} = await sb.from('profiles').update(upd).eq('id',editingUsuarioId);
+    if(error && _faltaColumnaEspecialidad(error)) {
+      const {especialidad:_omitida, ...sinEsp} = upd;
+      ({error} = await sb.from('profiles').update(sinEsp).eq('id',editingUsuarioId));
+      if(!error) _avisarFaltaColumnaEspecialidad();
+    }
     if(error){ toast('Error al actualizar: '+error.message,'error'); setLoading(false); return; }
     toast('Usuario actualizado','success');
   } else {
@@ -6998,7 +7035,13 @@ async function guardarUsuario() {
     if(adminSess) await sb.auth.setSession(adminSess);
     if(authErr){ toast('Error Auth: '+authErr.message,'error'); setLoading(false); return; }
     const newId = newAuth?.user?.id || crypto.randomUUID();
-    const {error} = await sb.from('profiles').insert({id:newId,nombre,email:email||null,rol,icono,clinica_id,password,permisos});
+    const nuevo = {id:newId,nombre,email:email||null,rol,icono,clinica_id,password,permisos,especialidad};
+    let {error} = await sb.from('profiles').insert(nuevo);
+    if(error && _faltaColumnaEspecialidad(error)) {
+      const {especialidad:_omitida, ...sinEsp} = nuevo;
+      ({error} = await sb.from('profiles').insert(sinEsp));
+      if(!error) _avisarFaltaColumnaEspecialidad();
+    }
     if(error){ toast('Error al crear: '+error.message,'error'); setLoading(false); return; }
     toast('Usuario creado exitosamente','success');
   }
