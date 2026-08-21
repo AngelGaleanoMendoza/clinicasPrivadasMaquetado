@@ -1335,16 +1335,7 @@ function openModalPaciente(id){
   document.getElementById('modal-paciente-title').textContent=id?'✏️ Editar Paciente':'👤 Nuevo Paciente';
   ['nombre','apellidos','id','sexo','sangre','telefono','email','direccion','alergias','estado','emergencia','observaciones'].forEach(f=>{ const e=document.getElementById('p-'+f); if(e) e.value=''; });
   const idTipoEl = document.getElementById('p-id-tipo'); if(idTipoEl) idTipoEl.value = 'Cédula';
-  // Poblar select de edad (0–120) si está vacío
-  const edadSel = document.getElementById('p-edad');
-  if(edadSel && edadSel.options.length <= 1) {
-    for(let i = 0; i <= 120; i++) {
-      const opt = document.createElement('option');
-      opt.value = i; opt.textContent = i === 0 ? '0 años (recién nacido)' : i + ' años';
-      edadSel.appendChild(opt);
-    }
-  }
-  if(edadSel) edadSel.value = '';
+  _setFechaNacInput('');
   // Mostrar búsqueda y ajustar label solo al crear nuevo
   const buscarWrap = document.getElementById('pac-buscar-id-wrap');
   const buscarInput = document.getElementById('pac-buscar-id-input');
@@ -1370,10 +1361,7 @@ function openModalPaciente(id){
       const idMatch = idStr.match(/^(Cédula|Pasaporte|Licencia de conducir):\s*(.*)$/);
       if(idMatch){ document.getElementById('p-id-tipo').value=idMatch[1]; document.getElementById('p-id').value=idMatch[2]; }
       else { document.getElementById('p-id-tipo').value='Cédula'; document.getElementById('p-id').value=idStr; }
-      if(edadSel && x.fechaNac) {
-        const edadNum = Math.floor((Date.now() - new Date(x.fechaNac)) / (365.25*24*3600*1000));
-        edadSel.value = edadNum >= 0 ? edadNum : '';
-      }
+      _setFechaNacInput(x.fechaNac || '');
       document.getElementById('p-sexo').value=x.sexo||'';
       document.getElementById('p-sangre').value=x.sangre||'';
       document.getElementById('p-telefono').value=x.telefono||'';
@@ -1387,6 +1375,31 @@ function openModalPaciente(id){
     }
   }
   openModalOverlay('modal-paciente');
+  setTimeout(initDatePickers, 50);
+}
+
+// Escribe la fecha de nacimiento en el input y mantiene sincronizado flatpickr,
+// que ignora los cambios hechos directamente sobre .value una vez inicializado.
+function _setFechaNacInput(val) {
+  const el = document.getElementById('p-fechanac');
+  if(!el) return;
+  el.value = val || '';
+  if(el._flatpickr) {
+    if(val) el._flatpickr.setDate(val, false);
+    else    el._flatpickr.clear();
+  }
+  actualizarEdadCalculada();
+}
+
+// Muestra bajo el campo la edad que corresponde a la fecha elegida
+function actualizarEdadCalculada() {
+  const out = document.getElementById('p-edad-calc');
+  if(!out) return;
+  const val = document.getElementById('p-fechanac')?.value;
+  if(!val) { out.textContent = ''; return; }
+  const edad = _getEdadNum(val);
+  if(edad === null || edad < 0) { out.textContent = ''; return; }
+  out.textContent = edad === 0 ? '🎂 Menos de 1 año' : `🎂 ${edad} año${edad === 1 ? '' : 's'}`;
 }
 
 async function guardarPaciente(irExpediente=false, irCita=false){
@@ -1395,12 +1408,14 @@ async function guardarPaciente(irExpediente=false, irCita=false){
   const nombre=document.getElementById('p-nombre').value.trim();
   const apellidos=document.getElementById('p-apellidos').value.trim();
   if(!nombre||!apellidos){ _unlockSubmit('paciente', null); toast('Nombre y apellidos son obligatorios','error'); return; }
-  // Edad opcional: si se indica, se deriva una fecha de nacimiento aproximada
-  // (1 de enero del año correspondiente) para poder calcular la edad después.
-  const edadNum = parseInt(document.getElementById('p-edad')?.value, 10);
-  const fechaNacDerived = Number.isNaN(edadNum)
-    ? null
-    : (new Date().getFullYear() - edadNum) + '-01-01';
+  // Fecha de nacimiento opcional: se guarda tal cual y la edad se calcula
+  // siempre a partir de ella, así se mantiene correcta con el paso de los años.
+  const fechaNacVal = document.getElementById('p-fechanac')?.value || null;
+  if(fechaNacVal && fechaNacVal > hoy()){
+    _unlockSubmit('paciente', null);
+    toast('La fecha de nacimiento no puede ser futura','error');
+    return;
+  }
   const idTipo  = document.getElementById('p-id-tipo')?.value || 'Cédula';
   const idValor = document.getElementById('p-id').value.trim();
   if(!editingId && idValor) {
@@ -1409,7 +1424,7 @@ async function guardarPaciente(irExpediente=false, irCita=false){
     if(duplicado){ _unlockSubmit('paciente',null); toast(`Ya existe un paciente con esa identificación: ${duplicado.nombre} ${duplicado.apellidos}`,'error'); return; }
   }
   const identificacion = idValor ? idTipo + ': ' + idValor : '';
-  const obj={nombre,apellidos,identificacion,fechaNac:fechaNacDerived,sexo:document.getElementById('p-sexo').value,sangre:document.getElementById('p-sangre').value,telefono:document.getElementById('p-telefono').value.trim(),email:document.getElementById('p-email').value.trim(),direccion:document.getElementById('p-direccion').value.trim(),alergias:document.getElementById('p-alergias').value.trim(),estado:document.getElementById('p-estado').value,emergencia:document.getElementById('p-emergencia').value.trim(),observaciones:document.getElementById('p-observaciones').value.trim(),fechaRegistro:hoy(),fotoUrl:currentFotoUrl};
+  const obj={nombre,apellidos,identificacion,fechaNac:fechaNacVal,sexo:document.getElementById('p-sexo').value,sangre:document.getElementById('p-sangre').value,telefono:document.getElementById('p-telefono').value.trim(),email:document.getElementById('p-email').value.trim(),direccion:document.getElementById('p-direccion').value.trim(),alergias:document.getElementById('p-alergias').value.trim(),estado:document.getElementById('p-estado').value,emergencia:document.getElementById('p-emergencia').value.trim(),observaciones:document.getElementById('p-observaciones').value.trim(),fechaRegistro:hoy(),fotoUrl:currentFotoUrl};
   setLoading(true);
   let err, savedId=editingId;
   if(editingId){ const r=await sb.from('pacientes').update(toP(obj)).eq('id',editingId); err=r.error; }
@@ -1486,7 +1501,7 @@ function renderDetalleP(pid){
   document.getElementById('tab-info').innerHTML=`
     <div class="grid-2">
       <div class="card"><h3 style="margin-bottom:14px;font-size:14px">📋 Datos Personales</h3>
-        <table style="width:100%">${[['N° Expediente',`<code style="background:var(--primary-light);color:var(--primary);padding:2px 8px;border-radius:6px;font-size:12px;font-weight:700">${getExpedienteNum(p.id)}</code>`],['Identificación',p.identificacion||'—'],['Fecha Nacimiento',formatFecha(p.fechaNac)],['Dirección',p.direccion||'—'],['Emergencia',p.emergencia||'—'],['Registro',formatFecha(p.fechaRegistro)]].map(([k,v])=>`<tr><td class="text-light" style="padding:6px 0;width:140px">${k}</td><td style="padding:6px 0;font-weight:600;font-size:13px">${v}</td></tr>`).join('')}</table>
+        <table style="width:100%">${[['N° Expediente',`<code style="background:var(--primary-light);color:var(--primary);padding:2px 8px;border-radius:6px;font-size:12px;font-weight:700">${getExpedienteNum(p.id)}</code>`],['Identificación',p.identificacion||'—'],['Fecha Nacimiento',p.fechaNac?`${formatFecha(p.fechaNac)} <span class="tag tag-cyan" style="font-size:10px;margin-left:4px">${calcEdad(p.fechaNac)}</span>`:'—'],['Dirección',p.direccion||'—'],['Emergencia',p.emergencia||'—'],['Registro',formatFecha(p.fechaRegistro)]].map(([k,v])=>`<tr><td class="text-light" style="padding:6px 0;width:140px">${k}</td><td style="padding:6px 0;font-weight:600;font-size:13px">${v}</td></tr>`).join('')}</table>
       </div>
       <div class="card"><h3 style="margin-bottom:14px;font-size:14px">🏥 Datos Clínicos</h3>
         <p class="text-light" style="margin-bottom:8px">Alergias: <strong style="color:var(--text)">${p.alergias||'Ninguna conocida'}</strong></p>
@@ -1632,7 +1647,7 @@ function imprimirExpedienteCompleto(pid) {
   const otrasNotas = notas.filter(n=>n.tipo!=='examen_visual').sort((a,b)=>b.fecha.localeCompare(a.fecha));
   const cl   = currentClinica;
   const imc  = (exp.peso&&exp.talla) ? (exp.peso/((exp.talla/100)**2)).toFixed(1) : null;
-  const edad = p.fechaNac ? Math.floor((Date.now()-new Date(p.fechaNac))/(365.25*24*3600*1000)) : null;
+  const edad = _getEdadNum(p.fechaNac);
 
   const sec = (icon, title, color) =>
     `<div style="background:${color};color:#fff;padding:10px 18px;border-radius:8px;margin:22px 0 14px;font-size:14px;font-weight:700;letter-spacing:.02em">${icon} ${title}</div>`;
@@ -8202,7 +8217,7 @@ function filtrarExpedientes(q) {
       </tr></thead>
       <tbody>${list.map(p => {
         const lastCita = C.c.filter(c=>c.pacienteId===p.id).sort((a,b)=>b.fecha.localeCompare(a.fecha))[0];
-        const edad = p.fechaNac ? Math.floor((Date.now()-new Date(p.fechaNac))/(365.25*24*3600*1000)) : '—';
+        const edad = p.fechaNac ? _getEdadNum(p.fechaNac) : '—';
         const estadoTag = p.estado==='activo'
           ? '<span class="tag tag-green">Activo</span>'
           : '<span class="tag tag-gray">Inactivo</span>';
@@ -8238,7 +8253,7 @@ function renderExpedienteHistorialPDF(pacienteId) {
   const notas = C.n.filter(x=>x.pacienteId===pacienteId);
   const movs  = (C.mov||[]).filter(x=>x.pacienteId===pacienteId||x.referencia?.includes(p.nombre));
   const facts = (C.fact||[]).filter(x=>x.pacienteId===pacienteId);
-  const edad  = p.fechaNac ? Math.floor((Date.now()-new Date(p.fechaNac))/(365.25*24*3600*1000)) : null;
+  const edad  = _getEdadNum(p.fechaNac);
   const cl    = currentClinica;
 
   const sectionTitle = (icon, title, color='#0f172a') =>
