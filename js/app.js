@@ -581,6 +581,7 @@ async function entrarConPerfil(profile) {
     avatar:   profile.icono || profile.nombre[0].toUpperCase(),
     email:    emailFinal,
     key:      profile.rol,
+    especialidad: profile.especialidad || null,
     // null = nunca se configuraron (usuario antiguo) → se usa el defecto por rol.
     // [] o lista = configurados por el administrador → se respetan tal cual.
     permisos: Array.isArray(profile.permisos) ? profile.permisos : null
@@ -2508,7 +2509,7 @@ function imprimirNota(id) {
     + '<div class="note-box" style="border-left-color:'+tipoColor+'"><div class="note-body">'+n.contenido+'</div></div>'
     + '<div class="sig-wrap"><div class="sig-box"><div style="height:46px"></div><div class="sig-line"></div>'
     +   '<div class="sig-name">'+(currentUser?.name||cfg.nombreDoctor||'M&#233;dico Responsable')+'</div>'
-    +   (cfg.especialidad?'<div class="sig-role">'+cfg.especialidad+'</div>':'')
+    +   (especialidadFirma(cfg)?'<div class="sig-role">'+especialidadFirma(cfg)+'</div>':'')
     +   (cfg.registro?'<div class="sig-role">Reg. Med. '+cfg.registro+'</div>':'')
     + '</div></div>';
   pdfAbrir('Nota Clínica — '+(n.titulo||n.tipo), body, cfg);
@@ -2571,7 +2572,7 @@ function imprimirRecetaPaciente(pid) {
     +   '</tbody></table>' : '')
     + '<div class="sig-wrap"><div class="sig-box"><div style="height:46px"></div><div class="sig-line"></div>'
     +   '<div class="sig-name">'+(currentUser&&currentUser.name?currentUser.name:cfg.nombreDoctor||'M&#233;dico Responsable')+'</div>'
-    +   (cfg.especialidad?'<div class="sig-role">'+cfg.especialidad+'</div>':'')
+    +   (especialidadFirma(cfg)?'<div class="sig-role">'+especialidadFirma(cfg)+'</div>':'')
     +   (cfg.registro?'<div class="sig-role">Reg. Med. '+cfg.registro+'</div>':'')
     + '</div></div>';
 
@@ -2646,6 +2647,12 @@ async function guardarExpediente(pid) {
 }
 
 // ════════════════════ CONFIGURACIÓN CLÍNICA ════════════════════
+// Especialidad que se imprime junto al nombre de quien firma: la propia del
+// usuario en sesión y, si no tiene ninguna asignada, la configurada en la clínica.
+function especialidadFirma(cfg) {
+  return (currentUser?.especialidad || '').trim() || (cfg?.especialidad || '');
+}
+
 function getClinicaConfig() {
   const key = 'lumeamed_clinica' + (currentClinicaId ? '_' + currentClinicaId : '');
   let local = {};
@@ -2811,7 +2818,7 @@ function imprimirNotaConsulta(citaId) {
         : '')
     + '<div class="sig-wrap"><div class="sig-box"><div style="height:46px"></div><div class="sig-line"></div>'
     +   '<div class="sig-name">'+(currentUser?.name||cfg.nombreDoctor||'M&#233;dico Responsable')+'</div>'
-    +   (cfg.especialidad?'<div class="sig-role">'+cfg.especialidad+'</div>':'')
+    +   (especialidadFirma(cfg)?'<div class="sig-role">'+especialidadFirma(cfg)+'</div>':'')
     +   (cfg.registro?'<div class="sig-role">Reg. Med. '+cfg.registro+'</div>':'')
     + '</div></div>';
 
@@ -2882,7 +2889,7 @@ function verResumenCita(citaId) {
         </div>
         <div>
           <div class="rc-logo" style="font-size:15px">${cfg.nombreClinica||'Lumea Med'}</div>
-          <div style="font-size:11px;color:var(--text-light);margin-top:2px">${currentUser?.name||cfg.nombreDoctor||''}${cfg.especialidad?' · '+cfg.especialidad:''}</div>
+          <div style="font-size:11px;color:var(--text-light);margin-top:2px">${currentUser?.name||cfg.nombreDoctor||''}${especialidadFirma(cfg)?' · '+especialidadFirma(cfg):''}</div>
         </div>
       </div>
       <div class="rc-date-gen">Generado: ${new Date().toLocaleString('es-ES')}</div>
@@ -2964,7 +2971,7 @@ function verResumenCita(citaId) {
         <div style="height:44px"></div>
         <div style="border-top:1.5px solid var(--text);margin-bottom:7px"></div>
         <div style="font-size:14px;font-weight:700;color:var(--text)">${currentUser?.name||cfg.nombreDoctor||'Médico Responsable'}</div>
-        ${cfg.especialidad?`<div style="font-size:12px;color:var(--text-light);margin-top:2px">${cfg.especialidad}</div>`:''}
+        ${especialidadFirma(cfg)?`<div style="font-size:12px;color:var(--text-light);margin-top:2px">${especialidadFirma(cfg)}</div>`:''}
         ${cfg.registro?`<div style="font-size:11px;color:var(--text-light)">Reg. Med. ${cfg.registro}</div>`:''}
       </div>
     </div>
@@ -5932,7 +5939,7 @@ function pdfHeader(cfg) {
     <div class="pdf-logo">${cfg.logoUrl?`<img src="${cfg.logoUrl}" alt="logo">`:'🏥'}</div>
     <div class="pdf-clinic-info">
       <h1>${cfg.nombreClinica||'Lumea Med'}</h1>
-      <p>${currentUser?.name||cfg.nombreDoctor||''}${cfg.especialidad?' · '+cfg.especialidad:''}</p>
+      <p>${currentUser?.name||cfg.nombreDoctor||''}${especialidadFirma(cfg)?' · '+especialidadFirma(cfg):''}</p>
       ${cfg.registro?`<p>Reg. Med. ${cfg.registro}</p>`:''}
       ${cfg.direccion?`<p>${cfg.direccion}</p>`:''}
       ${cfg.telefono?`<p>${cfg.telefono}${cfg.email?' · '+cfg.email:''}</p>`:''}
