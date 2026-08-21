@@ -19,10 +19,12 @@ const ALL_PERMISOS = [
   { id:'exportar',     label:'Exportar / Enviar',   icon:'📤' },
   { id:'farmacia',     label:'Módulo Farmacia',     icon:'🏪' },
 ];
+// Inventario y Finanzas NUNCA se otorgan por rol: el administrador debe marcarlos
+// explícitamente al crear o editar el usuario.
 const PERMISOS_DEFECTO = {
   medico:       ['pacientes','citas','agendas','medicaciones','notas'],
-  medico_admin: ['pacientes','citas','agendas','medicaciones','notas','atendidos','inventario','finanzas','estadisticas','exportar'],
-  admin:        ['pacientes','citas','agendas','medicaciones','notas','atendidos','inventario','finanzas','estadisticas','exportar'],
+  medico_admin: ['pacientes','citas','agendas','medicaciones','notas','atendidos','estadisticas','exportar'],
+  admin:        ['pacientes','citas','agendas','medicaciones','notas','atendidos','estadisticas','exportar'],
   recepcion:    ['pacientes','citas'],
   enfermeria:   ['pacientes','medicaciones','notas'],
   farmaceutico: ['inventario','finanzas','farmacia'],
@@ -579,7 +581,9 @@ async function entrarConPerfil(profile) {
     avatar:   profile.icono || profile.nombre[0].toUpperCase(),
     email:    emailFinal,
     key:      profile.rol,
-    permisos: profile.permisos || []
+    // null = nunca se configuraron (usuario antiguo) → se usa el defecto por rol.
+    // [] o lista = configurados por el administrador → se respetan tal cual.
+    permisos: Array.isArray(profile.permisos) ? profile.permisos : null
   };
   // Resetear bloqueo en login exitoso (fire-and-forget)
   if(profile.id) sb.from('profiles').update({ intentos_fallidos: 0, bloqueado: false }).eq('id', profile.id);
@@ -864,6 +868,7 @@ function renderNavQuickGrid(cv) {
     { view:'atendidos',    icon:'📊', label:'Atendidos',    show: hasPermiso('atendidos') },
     { view:'estadisticas', icon:'📈', label:'Estadísticas', show: hasPermiso('estadisticas') },
     { view:'inventario',   icon:'📦', label:'Inventario',   show: hasPermiso('inventario') },
+    { view:'finanzas',     icon:'💰', label:'Finanzas',     show: hasPermiso('finanzas') },
     { view:'exportar',     icon:'📤', label:'Exportar',     show: hasPermiso('exportar') },
     { view:'configuracion',icon:'⚙️', label:'Config.',      show: sa },
   ].filter(x=>x.show);
@@ -6114,7 +6119,10 @@ function isOdontologo()   { return currentUser?.key === 'odontologo'; }
 function hasPermiso(perm) {
   if(isSuperAdmin()) return true;
   const p = currentUser?.permisos;
-  const base = (p && p.length) ? p : (PERMISOS_DEFECTO[currentUser?.key] || []);
+  // Si el administrador configuró los permisos (aunque sea una lista vacía) se
+  // respetan exactamente. El defecto por rol solo aplica a usuarios antiguos
+  // que nunca tuvieron permisos guardados.
+  const base = Array.isArray(p) ? p : (PERMISOS_DEFECTO[currentUser?.key] || []);
   return base.includes(perm);
 }
 
@@ -6157,8 +6165,10 @@ function applyRoleMenu() {
   vis('menu-procedimientos',   hasClinica && (isOdonto || sa));
 
   // ─ Sección Gestión
-  const invAccess  = hasPermiso('inventario') || esFarmacia;
-  const finAccess  = hasPermiso('finanzas')   || esFarmacia;
+  // Sin atajos por tipo de clínica: el menú refleja exactamente los permisos
+  // otorgados, igual que los guardas de navigate().
+  const invAccess  = hasPermiso('inventario');
+  const finAccess  = hasPermiso('finanzas');
   const expAccess  = hasPermiso('exportar');
   const statAccess = hasPermiso('estadisticas');
   const hasGestion = invAccess || finAccess || expAccess || statAccess;
@@ -6271,12 +6281,14 @@ function renderAdminUsuarios() {
   }
   el.innerHTML = adminUsuarios.map(u => {
     const clinica = adminClinicas.find(c=>c.id===u.clinica_id);
-    const perms = (u.permisos && u.permisos.length) ? u.permisos : (PERMISOS_DEFECTO[u.rol] || []);
+    const perms = Array.isArray(u.permisos) ? u.permisos : (PERMISOS_DEFECTO[u.rol] || []);
     const permIcons = perms.map(id => {
       const p = ALL_PERMISOS.find(x=>x.id===id);
       return p ? `<span title="${p.label}" style="font-size:15px">${p.icon}</span>` : '';
     }).join('');
-    const permSrc = (u.permisos && u.permisos.length) ? '' : '<span style="font-size:10px;color:var(--text-light);margin-left:4px">(por rol)</span>';
+    const permSrc = Array.isArray(u.permisos)
+      ? (u.permisos.length ? '' : '<span style="font-size:10px;color:var(--text-light);margin-left:4px">Sin permisos asignados</span>')
+      : '<span style="font-size:10px;color:var(--text-light);margin-left:4px">(por rol)</span>';
     const esBloqueado = u.bloqueado === true;
     const intentos = u.intentos_fallidos || 0;
     return `<div class="admin-item-card${esBloqueado?' admin-item-card-blocked':''}">
@@ -6930,7 +6942,7 @@ function openModalUsuarioEditById(id) {
   });
   fillClinicaSelect(u.clinica_id);
   editingUsuarioId = u.id;
-  const permsActuales = (u.permisos && u.permisos.length) ? u.permisos : (PERMISOS_DEFECTO[u.rol] || []);
+  const permsActuales = Array.isArray(u.permisos) ? u.permisos : (PERMISOS_DEFECTO[u.rol] || []);
   renderPermisosModal(permsActuales);
   document.getElementById('modal-usuario').classList.add('open');
 }
