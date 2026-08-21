@@ -1395,11 +1395,12 @@ async function guardarPaciente(irExpediente=false, irCita=false){
   const nombre=document.getElementById('p-nombre').value.trim();
   const apellidos=document.getElementById('p-apellidos').value.trim();
   if(!nombre||!apellidos){ _unlockSubmit('paciente', null); toast('Nombre y apellidos son obligatorios','error'); return; }
-  const edadVal = document.getElementById('p-edad')?.value;
-  if(edadVal === '' || edadVal === null || edadVal === undefined){ _unlockSubmit('paciente',null); toast('La edad es obligatoria','error'); return; }
-  const edadNum = parseInt(edadVal, 10);
-  const currentYear = new Date().getFullYear();
-  const fechaNacDerived = (currentYear - edadNum) + '-01-01';
+  // Edad opcional: si se indica, se deriva una fecha de nacimiento aproximada
+  // (1 de enero del año correspondiente) para poder calcular la edad después.
+  const edadNum = parseInt(document.getElementById('p-edad')?.value, 10);
+  const fechaNacDerived = Number.isNaN(edadNum)
+    ? null
+    : (new Date().getFullYear() - edadNum) + '-01-01';
   const idTipo  = document.getElementById('p-id-tipo')?.value || 'Cédula';
   const idValor = document.getElementById('p-id').value.trim();
   if(!editingId && idValor) {
