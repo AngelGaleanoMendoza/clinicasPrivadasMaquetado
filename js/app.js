@@ -2700,7 +2700,8 @@ function imprimirRecetaPaciente(pid) {
     +   '<div class="sig-name">'+(currentUser&&currentUser.name?currentUser.name:cfg.nombreDoctor||'M&#233;dico Responsable')+'</div>'
     +   (especialidadFirma(cfg)?'<div class="sig-role">'+especialidadFirma(cfg)+'</div>':'')
     +   (cfg.registro?'<div class="sig-role">Reg. Med. '+cfg.registro+'</div>':'')
-    + '</div></div>';
+    + '</div></div>'
+    + _padecimientosHTML(cfg);
 
   pdfAbrir('Receta Electrónica — '+pNombre, body, cfg);
 }
@@ -2789,6 +2790,21 @@ async function guardarExpediente(pid) {
 // ════════════════════ CONFIGURACIÓN CLÍNICA ════════════════════
 // Especialidad que se imprime junto al nombre de quien firma: la propia del
 // usuario en sesión y, si no tiene ninguna asignada, la configurada en la clínica.
+// Lista de padecimientos impresa al pie del recetario, como en el talonario físico.
+// Es solo texto para marcar a mano: no se guarda nada por paciente.
+function _padecimientosHTML(cfg) {
+  const items = (cfg?.padecimientos || '')
+    .split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+  if(!items.length) return '';
+  return '<div style="margin-top:22px;padding-top:12px;border-top:1.5px solid #e2e8f0">'
+    + '<div style="font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Padecimientos</div>'
+    + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px 16px">'
+    + items.map(t => '<div style="font-size:11px;color:#334155;display:flex;align-items:center;gap:6px">'
+        + '<span style="display:inline-block;width:8px;height:8px;border:1.3px solid #94a3b8;border-radius:50%;flex-shrink:0"></span>'
+        + t + '</div>').join('')
+    + '</div></div>';
+}
+
 function especialidadFirma(cfg) {
   return (currentUser?.especialidad || '').trim() || (cfg?.especialidad || '');
 }
@@ -2808,6 +2824,7 @@ function getClinicaConfig() {
     email:         local.email         || '',
     direccion:     local.direccion     || cl.direccion || '',
     notaPie:       local.notaPie       || cl.nota_pie || '',
+    padecimientos: local.padecimientos || cl.padecimientos || '',
     logoUrl:       local.logoUrl       || cl.logo_url || '',
   };
 }
@@ -2824,6 +2841,8 @@ function renderConfiguracion() {
   document.getElementById('config-email').value = cfg.email || '';
   document.getElementById('config-direccion').value = cfg.direccion || '';
   document.getElementById('config-nota-pie').value = cfg.notaPie || '';
+  const padEl = document.getElementById('config-padecimientos');
+  if(padEl) padEl.value = cfg.padecimientos || '';
   actualizarPreviewConfig(cfg);
 }
 
@@ -2866,6 +2885,7 @@ function guardarConfigClinica() {
     email:         document.getElementById('config-email').value.trim(),
     direccion:     document.getElementById('config-direccion').value.trim(),
     notaPie:       document.getElementById('config-nota-pie').value.trim(),
+    padecimientos: document.getElementById('config-padecimientos')?.value.trim() || '',
     logoUrl:       document.getElementById('config-logo-url').value.trim()
   };
   if(!cfg.nombreClinica) { toast('El nombre de la clínica es obligatorio', 'error'); return; }
@@ -6756,7 +6776,7 @@ function removeAdminLogo() {
 
 function openModalClinica() {
   document.getElementById('modal-clinica-title').textContent = '🏥 Nueva Clínica';
-  ['cl-nombre','cl-codigo','cl-logo-url','cl-nombre-doctor','cl-especialidad','cl-registro','cl-telefono','cl-direccion','cl-nota-pie'].forEach(id => { document.getElementById(id).value = ''; });
+  ['cl-nombre','cl-codigo','cl-logo-url','cl-nombre-doctor','cl-especialidad','cl-registro','cl-telefono','cl-direccion','cl-nota-pie','cl-padecimientos'].forEach(id => { document.getElementById(id).value = ''; });
   document.getElementById('cl-tipo').value = 'clinica';
   document.getElementById('cl-activa').value = 'true';
   document.getElementById('cl-max-agendas').value = '10';
@@ -6783,6 +6803,8 @@ function openModalClinicaEdit(id) {
   document.getElementById('cl-telefono').value = c.telefono || '';
   document.getElementById('cl-direccion').value = c.direccion || '';
   document.getElementById('cl-nota-pie').value = c.nota_pie || '';
+  const clPad = document.getElementById('cl-padecimientos');
+  if(clPad) clPad.value = c.padecimientos || '';
   setAdminLogoPreview(c.logo_url || null);
   editingClinicaId = id;
   document.getElementById('modal-clinica').classList.add('open');
@@ -6802,9 +6824,10 @@ async function guardarClinica() {
   const telefono      = document.getElementById('cl-telefono').value.trim() || null;
   const direccion     = document.getElementById('cl-direccion').value.trim() || null;
   const nota_pie      = document.getElementById('cl-nota-pie').value.trim() || null;
+  const padecimientos = document.getElementById('cl-padecimientos')?.value.trim() || null;
   if(!nombre||!codigo){ toast('Nombre y código son obligatorios','error'); return; }
   setLoading(true);
-  const payload = {nombre,codigo,tipo,activa,max_agendas,max_pacientes,logo_url,nombre_doctor,especialidad,registro,telefono,direccion,nota_pie};
+  const payload = {nombre,codigo,tipo,activa,max_agendas,max_pacientes,logo_url,nombre_doctor,especialidad,registro,telefono,direccion,nota_pie,padecimientos};
   if(editingClinicaId) {
     const {error} = await sb.from('clinicas').update(payload).eq('id',editingClinicaId);
     if(error){ toast('Error al actualizar: '+error.message,'error'); setLoading(false); return; }
