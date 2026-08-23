@@ -108,3 +108,10 @@ CREATE POLICY "factura_items_clinica" ON public.factura_items
 ALTER TABLE public.clinicas ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "clinicas_select" ON public.clinicas FOR SELECT USING (is_superadmin() OR id = get_my_clinica_id());
 CREATE POLICY "clinicas_admin_only" ON public.clinicas FOR ALL USING (is_superadmin());
+
+-- examenes (exámenes digitalizados del expediente)
+-- Mismo aislamiento por clínica que el resto del expediente clínico.
+ALTER TABLE public.examenes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "examenes_clinica" ON public.examenes
+  USING (is_superadmin() OR clinica_id = get_my_clinica_id())
+  WITH CHECK (is_superadmin() OR clinica_id = get_my_clinica_id());
