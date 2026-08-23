@@ -2696,10 +2696,13 @@ function imprimirRecetaPaciente(pid) {
     +   (p&&p.alergias?'<tr><td style="font-weight:700;color:#B45309;width:150px;white-space:nowrap">Alergias</td><td>'+p.alergias+'</td></tr>':'')
     +   (e&&e.enfermedadesCronicas?'<tr><td style="font-weight:700;color:#B45309;white-space:nowrap">Enf. cr&#243;nicas</td><td>'+e.enfermedadesCronicas+'</td></tr>':'')
     +   '</tbody></table>' : '')
+    + '<div class="rx-proxima">'
+    +   '<span>Pr&#243;xima cita: <span class="rx-linea"></span></span>'
+    +   (cfg.registro?'<span>C&#243;digo '+cfg.registro+'</span>':'<span></span>')
+    + '</div>'
     + '<div class="sig-wrap"><div class="sig-box">'+_firmaImgHTML(46)+'<div class="sig-line"></div>'
     +   '<div class="sig-name">'+(currentUser&&currentUser.name?currentUser.name:cfg.nombreDoctor||'M&#233;dico Responsable')+'</div>'
-    +   (especialidadFirma(cfg)?'<div class="sig-role">'+especialidadFirma(cfg)+'</div>':'')
-    +   (cfg.registro?'<div class="sig-role">Reg. Med. '+cfg.registro+'</div>':'')
+    +   especialidadFirma(cfg).split(/\r?\n/).filter(Boolean).map(l=>'<div class="sig-role">'+l+'</div>').join('')
     + '</div></div>'
     + _padecimientosHTML(cfg);
 
@@ -2825,6 +2828,7 @@ function getClinicaConfig() {
     direccion:     local.direccion     || cl.direccion || '',
     notaPie:       local.notaPie       || cl.nota_pie || '',
     padecimientos: local.padecimientos || cl.padecimientos || '',
+    institucion:   local.institucion   || cl.institucion || '',
     logoUrl:       local.logoUrl       || cl.logo_url || '',
   };
 }
@@ -2843,6 +2847,8 @@ function renderConfiguracion() {
   document.getElementById('config-nota-pie').value = cfg.notaPie || '';
   const padEl = document.getElementById('config-padecimientos');
   if(padEl) padEl.value = cfg.padecimientos || '';
+  const instEl = document.getElementById('config-institucion');
+  if(instEl) instEl.value = cfg.institucion || '';
   actualizarPreviewConfig(cfg);
 }
 
@@ -2886,6 +2892,7 @@ function guardarConfigClinica() {
     direccion:     document.getElementById('config-direccion').value.trim(),
     notaPie:       document.getElementById('config-nota-pie').value.trim(),
     padecimientos: document.getElementById('config-padecimientos')?.value.trim() || '',
+    institucion:   document.getElementById('config-institucion')?.value.trim() || '',
     logoUrl:       document.getElementById('config-logo-url').value.trim()
   };
   if(!cfg.nombreClinica) { toast('El nombre de la clínica es obligatorio', 'error'); return; }
@@ -6038,6 +6045,12 @@ async function eliminarProcedimiento(id) {
 
 // ════════════════════ PDF HELPERS ════════════════════
 const PDF_CSS = `
+.pdf-contacto{margin-top:18px;padding:7px 10px;border-top:1.5px solid #cbd5e1;border-bottom:1.5px solid #cbd5e1;
+  text-align:center;font-size:10.5px;color:#334155;font-weight:600}
+.rx-proxima{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;margin-top:24px;
+  font-size:11.5px;color:#334155;font-weight:700}
+.rx-linea{display:inline-block;width:150px;border-bottom:1px solid #94a3b8;margin-left:4px}
+
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 @page{size:auto;margin:10mm}
 *{margin:0;padding:0;box-sizing:border-box}
@@ -6099,10 +6112,10 @@ function pdfHeader(cfg) {
     <div class="pdf-logo">${cfg.logoUrl?`<img src="${cfg.logoUrl}" alt="logo">`:'🏥'}</div>
     <div class="pdf-clinic-info">
       <h1>${cfg.nombreClinica||'Lumea Med'}</h1>
-      <p>${currentUser?.name||cfg.nombreDoctor||''}${especialidadFirma(cfg)?' · '+especialidadFirma(cfg):''}</p>
+      <p>${currentUser?.name||cfg.nombreDoctor||''}</p>
+      ${especialidadFirma(cfg).split(/\r?\n/).filter(Boolean).map(l=>`<p>${l}</p>`).join('')}
+      ${cfg.institucion?`<p>${cfg.institucion}</p>`:''}
       ${cfg.registro?`<p>Reg. Med. ${cfg.registro}</p>`:''}
-      ${cfg.direccion?`<p>${cfg.direccion}</p>`:''}
-      ${cfg.telefono?`<p>${cfg.telefono}${cfg.email?' · '+cfg.email:''}</p>`:''}
     </div>
     <div class="pdf-right">
       <div class="pdf-date">${new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'})}</div>
@@ -6112,9 +6125,16 @@ function pdfHeader(cfg) {
 }
 
 function pdfFooter(cfg) {
-  return `<div class="pdf-footer">
-    <span><strong>${cfg.nombreClinica||'Lumea Med'}</strong> · ${cfg.notaPie||'Sistema de Gestión Clínica'}</span>
-    <span>Generado: ${new Date().toLocaleString('es-ES')} · Uso médico interno</span>
+  // Barra de contacto como en el talonario impreso; se omite lo que no esté configurado
+  const contacto = [
+    cfg.telefono  ? '&#128222; ' + cfg.telefono  : '',
+    cfg.email     ? '&#9993; '   + cfg.email     : '',
+    cfg.direccion ? '&#128205; ' + cfg.direccion : ''
+  ].filter(Boolean).join(' &nbsp;|&nbsp; ');
+  return `${contacto?`<div class="pdf-contacto">${contacto}</div>`:''}
+  <div class="pdf-footer">
+    <span><strong>${cfg.nombreClinica||'Lumea Med'}</strong>${cfg.notaPie?' · '+cfg.notaPie:''}</span>
+    <span>Generado: ${new Date().toLocaleString('es-ES')}</span>
   </div>`;
 }
 
@@ -6776,7 +6796,7 @@ function removeAdminLogo() {
 
 function openModalClinica() {
   document.getElementById('modal-clinica-title').textContent = '🏥 Nueva Clínica';
-  ['cl-nombre','cl-codigo','cl-logo-url','cl-nombre-doctor','cl-especialidad','cl-registro','cl-telefono','cl-direccion','cl-nota-pie','cl-padecimientos'].forEach(id => { document.getElementById(id).value = ''; });
+  ['cl-nombre','cl-codigo','cl-logo-url','cl-nombre-doctor','cl-especialidad','cl-registro','cl-telefono','cl-direccion','cl-nota-pie','cl-padecimientos','cl-institucion'].forEach(id => { document.getElementById(id).value = ''; });
   document.getElementById('cl-tipo').value = 'clinica';
   document.getElementById('cl-activa').value = 'true';
   document.getElementById('cl-max-agendas').value = '10';
@@ -6805,6 +6825,8 @@ function openModalClinicaEdit(id) {
   document.getElementById('cl-nota-pie').value = c.nota_pie || '';
   const clPad = document.getElementById('cl-padecimientos');
   if(clPad) clPad.value = c.padecimientos || '';
+  const clInst = document.getElementById('cl-institucion');
+  if(clInst) clInst.value = c.institucion || '';
   setAdminLogoPreview(c.logo_url || null);
   editingClinicaId = id;
   document.getElementById('modal-clinica').classList.add('open');
@@ -6825,9 +6847,10 @@ async function guardarClinica() {
   const direccion     = document.getElementById('cl-direccion').value.trim() || null;
   const nota_pie      = document.getElementById('cl-nota-pie').value.trim() || null;
   const padecimientos = document.getElementById('cl-padecimientos')?.value.trim() || null;
+  const institucion   = document.getElementById('cl-institucion')?.value.trim() || null;
   if(!nombre||!codigo){ toast('Nombre y código son obligatorios','error'); return; }
   setLoading(true);
-  const payload = {nombre,codigo,tipo,activa,max_agendas,max_pacientes,logo_url,nombre_doctor,especialidad,registro,telefono,direccion,nota_pie,padecimientos};
+  const payload = {nombre,codigo,tipo,activa,max_agendas,max_pacientes,logo_url,nombre_doctor,especialidad,registro,telefono,direccion,nota_pie,padecimientos,institucion};
   if(editingClinicaId) {
     const {error} = await sb.from('clinicas').update(payload).eq('id',editingClinicaId);
     if(error){ toast('Error al actualizar: '+error.message,'error'); setLoading(false); return; }
