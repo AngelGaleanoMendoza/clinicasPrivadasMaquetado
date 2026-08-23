@@ -582,6 +582,7 @@ async function entrarConPerfil(profile) {
     email:    emailFinal,
     key:      profile.rol,
     especialidad: profile.especialidad || null,
+    firmaUrl: profile.firma_url || null,
     // null = nunca se configuraron (usuario antiguo) → se usa el defecto por rol.
     // [] o lista = configurados por el administrador → se respetan tal cual.
     permisos: Array.isArray(profile.permisos) ? profile.permisos : null
@@ -2632,7 +2633,7 @@ function imprimirNota(id) {
     + _signosPrintHTML(n.signos)
     + (n.contenido ? '<div class="section-title">&#128203; Contenido de la nota</div>'
         + '<div class="note-box" style="border-left-color:'+tipoColor+'"><div class="note-body">'+n.contenido+'</div></div>' : '')
-    + '<div class="sig-wrap"><div class="sig-box"><div style="height:46px"></div><div class="sig-line"></div>'
+    + '<div class="sig-wrap"><div class="sig-box">'+_firmaImgHTML(46)+'<div class="sig-line"></div>'
     +   '<div class="sig-name">'+(currentUser?.name||cfg.nombreDoctor||'M&#233;dico Responsable')+'</div>'
     +   (especialidadFirma(cfg)?'<div class="sig-role">'+especialidadFirma(cfg)+'</div>':'')
     +   (cfg.registro?'<div class="sig-role">Reg. Med. '+cfg.registro+'</div>':'')
@@ -2695,7 +2696,7 @@ function imprimirRecetaPaciente(pid) {
     +   (p&&p.alergias?'<tr><td style="font-weight:700;color:#B45309;width:150px;white-space:nowrap">Alergias</td><td>'+p.alergias+'</td></tr>':'')
     +   (e&&e.enfermedadesCronicas?'<tr><td style="font-weight:700;color:#B45309;white-space:nowrap">Enf. cr&#243;nicas</td><td>'+e.enfermedadesCronicas+'</td></tr>':'')
     +   '</tbody></table>' : '')
-    + '<div class="sig-wrap"><div class="sig-box"><div style="height:46px"></div><div class="sig-line"></div>'
+    + '<div class="sig-wrap"><div class="sig-box">'+_firmaImgHTML(46)+'<div class="sig-line"></div>'
     +   '<div class="sig-name">'+(currentUser&&currentUser.name?currentUser.name:cfg.nombreDoctor||'M&#233;dico Responsable')+'</div>'
     +   (especialidadFirma(cfg)?'<div class="sig-role">'+especialidadFirma(cfg)+'</div>':'')
     +   (cfg.registro?'<div class="sig-role">Reg. Med. '+cfg.registro+'</div>':'')
@@ -2730,13 +2731,27 @@ function quitarFoto() {
   document.getElementById('p-foto').value = '';
 }
 
+// El nombre del bucket distingue mayúsculas: debe coincidir exactamente con Supabase
+const STORAGE_BUCKET = 'Pacientes';
+
 async function subirFotoPaciente(file, pacienteId) {
   const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
   const path = `${pacienteId}.${ext}`;
-  const { error } = await sb.storage.from('pacientes').upload(path, file, { upsert: true, contentType: file.type });
+  const { error } = await sb.storage.from(STORAGE_BUCKET).upload(path, file, { upsert: true, contentType: file.type });
   if(error) throw error;
-  const { data } = sb.storage.from('pacientes').getPublicUrl(path);
+  const { data } = sb.storage.from(STORAGE_BUCKET).getPublicUrl(path);
   return data.publicUrl;
+}
+
+// Firma manuscrita del usuario, guardada en una carpeta aparte del mismo bucket
+async function subirFirmaUsuario(file, usuarioId) {
+  const ext = (file.name.split('.').pop() || 'png').toLowerCase();
+  const path = `firmas/${usuarioId}.${ext}`;
+  const { error } = await sb.storage.from(STORAGE_BUCKET).upload(path, file, { upsert: true, contentType: file.type });
+  if(error) throw error;
+  const { data } = sb.storage.from(STORAGE_BUCKET).getPublicUrl(path);
+  // El parámetro evita que el navegador siga mostrando la firma anterior en caché
+  return data.publicUrl + '?v=' + Date.now();
 }
 
 // ════════════════════ EXPEDIENTE ════════════════════
@@ -2941,7 +2956,7 @@ function imprimirNotaConsulta(citaId) {
           + (e?.enfermedadesCronicas?'<tr><td style="font-weight:700;color:#B45309">Enf. cr&#243;nicas</td><td>'+e.enfermedadesCronicas+'</td></tr>':'')
           + '</tbody></table>'
         : '')
-    + '<div class="sig-wrap"><div class="sig-box"><div style="height:46px"></div><div class="sig-line"></div>'
+    + '<div class="sig-wrap"><div class="sig-box">'+_firmaImgHTML(46)+'<div class="sig-line"></div>'
     +   '<div class="sig-name">'+(currentUser?.name||cfg.nombreDoctor||'M&#233;dico Responsable')+'</div>'
     +   (especialidadFirma(cfg)?'<div class="sig-role">'+especialidadFirma(cfg)+'</div>':'')
     +   (cfg.registro?'<div class="sig-role">Reg. Med. '+cfg.registro+'</div>':'')
@@ -3093,7 +3108,7 @@ function verResumenCita(citaId) {
 
     <div style="display:flex;justify-content:flex-end;margin-top:36px;padding:0 4px">
       <div style="text-align:center;min-width:210px">
-        <div style="height:44px"></div>
+        ${_firmaImgHTML(44)}
         <div style="border-top:1.5px solid var(--text);margin-bottom:7px"></div>
         <div style="font-size:14px;font-weight:700;color:var(--text)">${currentUser?.name||cfg.nombreDoctor||'Médico Responsable'}</div>
         ${especialidadFirma(cfg)?`<div style="font-size:12px;color:var(--text-light);margin-top:2px">${especialidadFirma(cfg)}</div>`:''}
@@ -7051,14 +7066,76 @@ function togglePermLabel(id) {
   const lbl = document.getElementById('perm-label-'+id);
   if(lbl) lbl.style.borderColor = cb?.checked ? 'var(--primary)' : 'var(--border)';
 }
+// ── Firma manuscrita del usuario ──
+let _pendingFirmaFile = null;   // archivo elegido, se sube al guardar
+let _firmaUrlActual   = null;   // firma ya guardada del usuario en edición
+let _firmaQuitar      = false;  // el usuario pidió borrar la firma existente
+
+function _pintarFirma(url) {
+  const img = document.getElementById('u-firma-img');
+  const ph  = document.getElementById('u-firma-placeholder');
+  const del = document.getElementById('u-firma-remove');
+  if(!img || !ph) return;
+  if(url) { img.src = url; img.style.display = ''; ph.style.display = 'none'; }
+  else    { img.removeAttribute('src'); img.style.display = 'none'; ph.style.display = ''; }
+  if(del) del.style.display = url ? '' : 'none';
+}
+
+function _resetFirmaUsuario(url) {
+  _pendingFirmaFile = null;
+  _firmaQuitar = false;
+  _firmaUrlActual = url || null;
+  const f = document.getElementById('u-firma-file');
+  if(f) f.value = '';
+  _pintarFirma(_firmaUrlActual);
+}
+
+function onFirmaSeleccionada(input) {
+  const file = input.files && input.files[0];
+  if(!file) return;
+  if(!/^image\/(png|jpeg|webp)$/.test(file.type)) {
+    toast('La firma debe ser una imagen PNG, JPG o WEBP','error');
+    input.value = ''; return;
+  }
+  if(file.size > 2 * 1024 * 1024) {
+    toast('La imagen supera los 2 MB','error');
+    input.value = ''; return;
+  }
+  _pendingFirmaFile = file;
+  _firmaQuitar = false;
+  const lector = new FileReader();
+  lector.onload = e => _pintarFirma(e.target.result);
+  lector.readAsDataURL(file);
+}
+
+function quitarFirmaUsuario() {
+  _pendingFirmaFile = null;
+  _firmaQuitar = !!_firmaUrlActual;   // solo hay que borrar en BD si había una guardada
+  const f = document.getElementById('u-firma-file');
+  if(f) f.value = '';
+  _pintarFirma(null);
+}
+
+// Imagen de la firma sobre la línea; si no hay, deja el espacio en blanco de siempre
+function _firmaImgHTML(alto) {
+  const url = currentUser?.firmaUrl;
+  if(!url) return '<div style="height:'+alto+'px"></div>';
+  // Limpia la foto de la firma: multiply funde el papel con la hoja y el contraste
+  // lleva el gris del papel a blanco, dejando solo el trazo de tinta.
+  return '<div style="height:'+alto+'px;display:flex;align-items:flex-end;justify-content:center">'
+       + '<img src="'+url+'" alt="Firma" style="max-height:'+alto+'px;max-width:210px;object-fit:contain;mix-blend-mode:multiply;filter:brightness(1.25) contrast(1.7)">'
+       + '</div>';
+}
+
 // Roles clínicos que ejercen una especialidad; el resto no muestra el campo.
 const ROLES_CON_ESPECIALIDAD = ['medico','medico_admin','odontologo','enfermeria'];
 
 // La columna profiles.especialidad puede no existir todavía. Si es así, se
 // guarda el resto del usuario igual en lugar de fallar el formulario entero.
-function _faltaColumnaEspecialidad(error) {
+function _faltaColumnaEspecialidad(error) { return _faltaColumna(error, 'especialidad'); }
+function _faltaColumna(error, col) {
   const m = (error?.message || '').toLowerCase();
-  return m.includes('especialidad') && (m.includes('column') || m.includes('schema') || m.includes('does not exist'));
+  return m.includes(col) && (m.includes('column') || m.includes('schema') || m.includes('does not exist'));
 }
 function _avisarFaltaColumnaEspecialidad() {
   toast('Usuario guardado, pero falta la columna "especialidad" en la tabla profiles de Supabase','warning');
@@ -7094,6 +7171,7 @@ function openModalUsuario() {
   renderPermisosModal(PERMISOS_DEFECTO['medico'] || []);
   document.getElementById('u-especialidad').value = '';
   _syncEspecialidadUsuario();
+  _resetFirmaUsuario(null);
   document.getElementById('modal-usuario').classList.add('open');
 }
 
@@ -7120,6 +7198,7 @@ function openModalUsuarioEditById(id) {
   renderPermisosModal(permsActuales);
   document.getElementById('u-especialidad').value = u.especialidad || '';
   _syncEspecialidadUsuario();
+  _resetFirmaUsuario(u.firma_url || null);
   document.getElementById('modal-usuario').classList.add('open');
 }
 
@@ -7140,7 +7219,13 @@ async function guardarUsuario() {
   if(!editingUsuarioId && !password){ toast('La contraseña es obligatoria','error'); return; }
   setLoading(true);
   if(editingUsuarioId) {
-    const upd = {nombre,email:email||null,rol,icono,clinica_id,permisos,especialidad};
+    // Subir la firma primero: si falla, no se guarda una URL que no existe
+    let firma_url = _firmaQuitar ? null : _firmaUrlActual;
+    if(_pendingFirmaFile) {
+      try { firma_url = await subirFirmaUsuario(_pendingFirmaFile, editingUsuarioId); }
+      catch(e) { toast('No se pudo subir la firma: '+(e.message||e),'error'); setLoading(false); return; }
+    }
+    const upd = {nombre,email:email||null,rol,icono,clinica_id,permisos,especialidad,firma_url};
     // Solo el Super Admin puede cambiar contraseñas de otros usuarios
     if(password && isSuperAdmin()) {
       const { data: { session: adminSess } } = await sb.auth.getSession();
@@ -7153,12 +7238,15 @@ async function guardarUsuario() {
       setLoading(false); return;
     }
     let {error} = await sb.from('profiles').update(upd).eq('id',editingUsuarioId);
-    if(error && _faltaColumnaEspecialidad(error)) {
-      const {especialidad:_omitida, ...sinEsp} = upd;
-      ({error} = await sb.from('profiles').update(sinEsp).eq('id',editingUsuarioId));
-      if(!error) _avisarFaltaColumnaEspecialidad();
+    if(error && (_faltaColumnaEspecialidad(error) || _faltaColumna(error,'firma_url'))) {
+      const faltaFirma = _faltaColumna(error,'firma_url');
+      const {especialidad:_e, firma_url:_f, ...base} = upd;
+      const reintento = faltaFirma ? base : {...base, especialidad};
+      ({error} = await sb.from('profiles').update(reintento).eq('id',editingUsuarioId));
+      if(!error) toast('Usuario guardado, pero falta la columna "'+(faltaFirma?'firma_url':'especialidad')+'" en la tabla profiles de Supabase','warning');
     }
     if(error){ toast('Error al actualizar: '+error.message,'error'); setLoading(false); return; }
+    if(currentUser && currentUser.id === editingUsuarioId) currentUser.firmaUrl = firma_url || null;
     toast('Usuario actualizado','success');
   } else {
     // Crear en Supabase Auth y restaurar sesión del super admin

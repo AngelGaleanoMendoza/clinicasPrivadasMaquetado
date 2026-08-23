@@ -1603,6 +1603,21 @@
         </div>
         <input type="hidden" id="u-icono" value="👨‍⚕️">
       </div>
+      <div class="form-group full" id="u-firma-wrap">
+        <label>✍️ Firma manuscrita <span style="font-size:11px;color:var(--text-light);font-weight:400">— aparecerá sobre la línea de firma en recetas e impresos</span></label>
+        <div class="firma-box">
+          <div class="firma-preview" id="u-firma-preview">
+            <span id="u-firma-placeholder">Sin firma cargada</span>
+            <img id="u-firma-img" alt="Firma" style="display:none">
+          </div>
+          <div class="firma-actions">
+            <input type="file" id="u-firma-file" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="onFirmaSeleccionada(this)">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('u-firma-file').click()">📤 Subir imagen</button>
+            <button type="button" class="btn btn-danger btn-sm" id="u-firma-remove" style="display:none" onclick="quitarFirmaUsuario()">🗑️ Quitar</button>
+          </div>
+        </div>
+        <span style="font-size:11px;color:var(--text-light);margin-top:5px">Ideal: firma sobre fondo blanco o PNG con fondo transparente. Máx. 2 MB.</span>
+      </div>
       <div class="form-group full">
         <label>Módulos accesibles <span style="font-size:11px;color:var(--text-light);font-weight:400">— marca lo que puede ver este usuario</span></label>
         <div id="u-permisos-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:7px;margin-top:6px"></div>
