@@ -326,6 +326,7 @@
           <button class="tab" onclick="switchTab('tab-meds-p',this)">💊 Medicaciones</button>
           <button class="tab" onclick="switchTab('tab-notas-p',this)">📝 Notas</button>
           <button class="tab" onclick="switchTab('tab-expediente',this)">📁 Expediente</button>
+          <button class="tab" onclick="switchTab('tab-examenes',this)">🔬 Exámenes</button>
           <button class="tab" id="tab-btn-historial-dental" onclick="switchTab('tab-historial-dental',this)" style="display:none">🦷 Historia Dental</button>
           <button class="tab" id="tab-btn-odontograma" onclick="switchTab('tab-odontograma',this)" style="display:none">🗺️ Odontograma</button>
           <button class="tab" id="tab-btn-periodontograma" onclick="switchTab('tab-periodontograma',this)" style="display:none">📏 Periodontograma</button>
@@ -336,6 +337,7 @@
         <div id="tab-meds-p" style="display:none"></div>
         <div id="tab-notas-p" style="display:none"></div>
         <div id="tab-expediente" style="display:none"></div>
+        <div id="tab-examenes" style="display:none"></div>
         <div id="tab-historial-dental" style="display:none"></div>
         <div id="tab-odontograma" style="display:none"></div>
         <div id="tab-periodontograma" style="display:none"></div>
@@ -1632,6 +1634,52 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-usuario')">Cancelar</button>
       <button class="btn btn-primary" onclick="guardarUsuario()">💾 Guardar Usuario</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EXAMEN DIGITALIZADO -->
+<div class="modal-overlay" id="modal-examen">
+  <div class="modal" style="max-width:560px">
+    <button class="modal-close-btn" onclick="closeModal('modal-examen')" title="Cerrar">✕</button>
+    <h2 id="modal-examen-title">🔬 Subir Examen</h2>
+    <div class="form-grid">
+      <div class="form-group"><label>Tipo de examen</label>
+        <select id="ex-tipo">
+          <option value="laboratorio">🧪 Laboratorio</option>
+          <option value="ultrasonido">🌊 Ultrasonido</option>
+          <option value="radiografia">🩻 Radiografía</option>
+          <option value="tomografia">🧠 Tomografía</option>
+          <option value="resonancia">🧲 Resonancia</option>
+          <option value="electrocardiograma">💓 Electrocardiograma</option>
+          <option value="biopsia">🔬 Biopsia / Patología</option>
+          <option value="otro">📄 Otro</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Fecha del examen</label><input type="date" id="ex-fecha"></div>
+      <div class="form-group full"><label>Título *</label><input type="text" id="ex-titulo" placeholder="Perfil tiroideo (TSH, T3, T4)"></div>
+      <div class="form-group full"><label>Observaciones</label><textarea id="ex-notas" placeholder="Hallazgos, laboratorio de procedencia, comentarios..." style="min-height:64px"></textarea></div>
+      <div class="form-group full">
+        <label>Archivo * <span style="font-size:11px;color:var(--text-light);font-weight:400">— PDF o imagen, máx. 10 MB</span></label>
+        <input type="file" id="ex-archivo" accept="application/pdf,image/png,image/jpeg,image/webp" style="display:none" onchange="onExamenArchivo(this)">
+        <div class="ex-drop" id="ex-drop" onclick="document.getElementById('ex-archivo').click()">
+          <div id="ex-drop-vacio">
+            <div style="font-size:30px">📎</div>
+            <div style="font-size:13px;font-weight:700;margin-top:5px">Toca para elegir un archivo</div>
+            <div style="font-size:11px;color:var(--text-light);margin-top:2px">Desde la galería, la cámara o el equipo</div>
+          </div>
+          <div id="ex-drop-lleno" style="display:none">
+            <img id="ex-thumb" style="display:none">
+            <div id="ex-pdf-icon" style="display:none;font-size:36px">📕</div>
+            <div id="ex-nombre" style="font-size:12.5px;font-weight:700;margin-top:6px;word-break:break-all"></div>
+            <div id="ex-peso" style="font-size:11px;color:var(--text-light);margin-top:2px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-examen')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarExamen()">💾 Guardar examen</button>
     </div>
   </div>
 </div>

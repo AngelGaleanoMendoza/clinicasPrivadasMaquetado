@@ -1812,7 +1812,8 @@ function imprimirExpedienteCompleto(pid) {
 }
 
 function switchTab(tabId, btn){
-  ['tab-info','tab-citas-p','tab-meds-p','tab-notas-p','tab-expediente','tab-historial-dental','tab-odontograma','tab-periodontograma','tab-procedimientos-p'].forEach(id=>{ const e=document.getElementById(id); if(e) e.style.display='none'; });
+  if(tabId==='tab-examenes' && currentPatientId) renderExamenes(currentPatientId);
+  ['tab-info','tab-citas-p','tab-meds-p','tab-notas-p','tab-expediente','tab-examenes','tab-historial-dental','tab-odontograma','tab-periodontograma','tab-procedimientos-p'].forEach(id=>{ const e=document.getElementById(id); if(e) e.style.display='none'; });
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.getElementById(tabId).style.display='block';
   if(btn) btn.classList.add('active');
@@ -2707,6 +2708,234 @@ function imprimirRecetaPaciente(pid) {
     + _padecimientosHTML(cfg);
 
   pdfAbrir('Receta Electrónica — '+pNombre, body, cfg);
+}
+
+// ════════════════════ EXÁMENES DIGITALIZADOS ════════════════════
+const EXAMEN_TIPOS = {
+  laboratorio:        { lbl:'Laboratorio',        icon:'🧪' },
+  ultrasonido:        { lbl:'Ultrasonido',        icon:'🌊' },
+  radiografia:        { lbl:'Radiografía',        icon:'🩻' },
+  tomografia:         { lbl:'Tomografía',         icon:'🧠' },
+  resonancia:         { lbl:'Resonancia',         icon:'🧲' },
+  electrocardiograma: { lbl:'Electrocardiograma', icon:'💓' },
+  biopsia:            { lbl:'Biopsia / Patología',icon:'🔬' },
+  otro:               { lbl:'Otro',               icon:'📄' },
+};
+const EXAMEN_MAX_BYTES = 10 * 1024 * 1024;
+
+let _examenes        = [];     // exámenes del paciente abierto
+let _examenPacId     = null;
+let _examenArchivo   = null;   // archivo elegido, se sube al guardar
+let _examenFiltro    = '';
+
+// Subir y borrar exámenes queda reservado al personal médico
+function puedeGestionarExamenes() {
+  return isSuperAdmin() || ['medico','medico_admin','odontologo'].includes(currentUser?.key);
+}
+
+const fromExamen = r => ({
+  id:r.id, pacienteId:r.paciente_id, tipo:r.tipo||'otro', titulo:r.titulo||'',
+  notas:r.notas||'', fecha:r.fecha, url:r.archivo_url, mime:r.archivo_tipo||'',
+  nombre:r.archivo_nombre||'', tamano:Number(r.tamano||0), subidoPor:r.subido_por||''
+});
+
+function _esImagenExamen(mime) { return (mime||'').startsWith('image/'); }
+function _pesoLegible(b) {
+  if(!b) return '';
+  return b < 1024*1024 ? Math.round(b/1024)+' KB' : (b/(1024*1024)).toFixed(1)+' MB';
+}
+
+async function renderExamenes(pid) {
+  const el = document.getElementById('tab-examenes');
+  if(!el) return;
+  _examenPacId = pid;
+  el.innerHTML = '<div class="card"><p class="text-light" style="text-align:center;padding:26px">Cargando exámenes…</p></div>';
+
+  const { data, error } = await sb.from('examenes')
+    .select('*').eq('paciente_id', pid).eq('clinica_id', currentClinicaId)
+    .order('fecha', { ascending:false }).order('id', { ascending:false });
+
+  if(error) {
+    const falta = /relation .*examenes.* does not exist|could not find the table/i.test(error.message||'');
+    el.innerHTML = `<div class="card"><div class="empty-state" style="padding:34px">
+      <div class="empty-icon">${falta?'🗄️':'⚠️'}</div>
+      <p>${falta
+        ? 'Falta crear la tabla <strong>examenes</strong> en Supabase.<br><span style="font-size:12px">Ejecuta el script que te pasaron y recarga.</span>'
+        : 'No se pudieron cargar los exámenes:<br><span style="font-size:12px">'+error.message+'</span>'}</p>
+    </div></div>`;
+    return;
+  }
+  _examenes = (data||[]).map(fromExamen);
+  _pintarExamenes();
+}
+
+function _pintarExamenes() {
+  const el = document.getElementById('tab-examenes');
+  if(!el) return;
+  const puede = puedeGestionarExamenes();
+  const q = _examenFiltro.toLowerCase();
+  const lista = _examenes.filter(x => !q
+    || x.titulo.toLowerCase().includes(q)
+    || x.notas.toLowerCase().includes(q)
+    || (EXAMEN_TIPOS[x.tipo]?.lbl||'').toLowerCase().includes(q));
+
+  const chips = ['', ...Object.keys(EXAMEN_TIPOS)]
+    .filter(t => !t || _examenes.some(x => x.tipo === t))
+    .map(t => `<span class="chip${_examenFiltro===(EXAMEN_TIPOS[t]?.lbl||'')&&t?' active':(!t&&!_examenFiltro?' active':'')}"
+      onclick="filtrarExamenes('${t?EXAMEN_TIPOS[t].lbl:''}')">${t?EXAMEN_TIPOS[t].icon+' '+EXAMEN_TIPOS[t].lbl:'Todos'}</span>`).join('');
+
+  el.innerHTML = `<div class="card">
+    <div class="card-header">
+      <h3>🔬 Exámenes digitalizados ${_examenes.length?`<span class="tag tag-blue" style="font-size:11px">${_examenes.length}</span>`:''}</h3>
+      ${puede?`<button class="btn btn-primary btn-sm" onclick="openModalExamen(${_examenPacId})">+ Subir examen</button>`:''}
+    </div>
+    ${_examenes.length?`<div class="search-bar" style="margin-bottom:12px">
+      <input class="search-bar-input" type="text" placeholder="Buscar por título, tipo u observaciones..."
+        value="${_examenFiltro}" oninput="filtrarExamenes(this.value)">
+    </div>
+    <div class="filter-chips" style="margin-bottom:14px">${chips}</div>`:''}
+    ${lista.length ? `<div class="ex-grid">${lista.map(_examenCardHTML).join('')}</div>`
+      : `<div class="empty-state" style="padding:36px">
+          <div class="empty-icon">🔬</div>
+          <p>${_examenes.length ? 'Ningún examen coincide con la búsqueda'
+            : puede ? 'Sin exámenes cargados.<br>Usa <strong>+ Subir examen</strong> para agregar un PDF o una foto.'
+                    : 'Este paciente aún no tiene exámenes cargados.'}</p>
+        </div>`}
+    ${!puede&&_examenes.length?'<p style="font-size:11px;color:var(--text-light);text-align:center;margin-top:12px">Solo el personal médico puede subir o eliminar exámenes.</p>':''}
+  </div>`;
+}
+
+function _examenCardHTML(x) {
+  const t = EXAMEN_TIPOS[x.tipo] || EXAMEN_TIPOS.otro;
+  const esImg = _esImagenExamen(x.mime);
+  const puede = puedeGestionarExamenes();
+  return `<div class="ex-card">
+    <div class="ex-thumb" onclick="abrirExamen(${x.id})" title="Abrir examen">
+      ${esImg ? `<img src="${x.url}" alt="${x.titulo}" loading="lazy">` : '<span class="ex-pdf">📕</span>'}
+      <span class="ex-badge">${t.icon} ${t.lbl}</span>
+    </div>
+    <div class="ex-body">
+      <div class="ex-titulo">${x.titulo||'Sin título'}</div>
+      <div class="ex-meta">${formatFecha(x.fecha)}${x.tamano?' · '+_pesoLegible(x.tamano):''}</div>
+      ${x.notas?`<div class="ex-notas">${x.notas}</div>`:''}
+      ${x.subidoPor?`<div class="ex-meta" style="margin-top:3px">Subido por ${x.subidoPor}</div>`:''}
+      <div class="ex-acciones">
+        <button class="btn btn-secondary btn-sm" onclick="abrirExamen(${x.id})">👁️ Ver</button>
+        ${puede?`<button class="btn btn-danger btn-sm" onclick="eliminarExamen(${x.id})">🗑️</button>`:''}
+      </div>
+    </div>
+  </div>`;
+}
+
+function filtrarExamenes(v) { _examenFiltro = v || ''; _pintarExamenes(); }
+
+function abrirExamen(id) {
+  const x = _examenes.find(e => e.id === id);
+  if(x?.url) window.open(x.url, '_blank');
+}
+
+function openModalExamen(pid) {
+  if(!puedeGestionarExamenes()) { toast('Solo el personal médico puede subir exámenes','error'); return; }
+  _examenPacId = pid || _examenPacId;
+  _examenArchivo = null;
+  document.getElementById('ex-tipo').value = 'laboratorio';
+  document.getElementById('ex-fecha').value = hoy();
+  document.getElementById('ex-titulo').value = '';
+  document.getElementById('ex-notas').value = '';
+  document.getElementById('ex-archivo').value = '';
+  document.getElementById('ex-drop-vacio').style.display = '';
+  document.getElementById('ex-drop-lleno').style.display = 'none';
+  openModalOverlay('modal-examen');
+  setTimeout(initDatePickers, 50);
+}
+
+function onExamenArchivo(input) {
+  const f = input.files && input.files[0];
+  if(!f) return;
+  const ok = f.type === 'application/pdf' || /^image\/(png|jpeg|webp)$/.test(f.type);
+  if(!ok) { toast('Solo se admiten PDF o imágenes PNG, JPG y WEBP','error'); input.value=''; return; }
+  if(f.size > EXAMEN_MAX_BYTES) { toast('El archivo supera los 10 MB','error'); input.value=''; return; }
+  _examenArchivo = f;
+  document.getElementById('ex-drop-vacio').style.display = 'none';
+  document.getElementById('ex-drop-lleno').style.display = '';
+  document.getElementById('ex-nombre').textContent = f.name;
+  document.getElementById('ex-peso').textContent = _pesoLegible(f.size);
+  const img = document.getElementById('ex-thumb'), pdf = document.getElementById('ex-pdf-icon');
+  if(f.type === 'application/pdf') { img.style.display='none'; pdf.style.display=''; }
+  else {
+    pdf.style.display='none';
+    const r = new FileReader();
+    r.onload = e => { img.src = e.target.result; img.style.display=''; };
+    r.readAsDataURL(f);
+  }
+  // Sugerir un título a partir del nombre del archivo si aún está vacío
+  const tit = document.getElementById('ex-titulo');
+  if(tit && !tit.value.trim()) tit.value = f.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
+}
+
+async function subirArchivoExamen(file, pacienteId) {
+  const ext = (file.name.split('.').pop() || 'dat').toLowerCase();
+  const path = `examenes/${pacienteId}/${Date.now()}.${ext}`;
+  const { error } = await sb.storage.from(STORAGE_BUCKET).upload(path, file, { upsert:false, contentType:file.type });
+  if(error) throw error;
+  const { data } = sb.storage.from(STORAGE_BUCKET).getPublicUrl(path);
+  return { url:data.publicUrl, path };
+}
+
+async function guardarExamen() {
+  if(!puedeGestionarExamenes()) { toast('Solo el personal médico puede subir exámenes','error'); return; }
+  if(!currentClinicaId) { toast('Sin clínica asignada','error'); return; }
+  const titulo = document.getElementById('ex-titulo').value.trim();
+  if(!titulo) { toast('Ponle un título al examen','error'); return; }
+  if(!_examenArchivo) { toast('Elige el archivo del examen','error'); return; }
+  const btn = document.querySelector('[onclick="guardarExamen()"]');
+  if(!_lockSubmit('examen', btn)) return;
+  setLoading(true);
+
+  let subido;
+  try { subido = await subirArchivoExamen(_examenArchivo, _examenPacId); }
+  catch(e) {
+    setLoading(false); _unlockSubmit('examen', btn);
+    toast('No se pudo subir el archivo: '+(e.message||e),'error');
+    return;
+  }
+
+  const { error } = await sb.from('examenes').insert({
+    paciente_id:_examenPacId, clinica_id:currentClinicaId,
+    tipo:document.getElementById('ex-tipo').value,
+    titulo, notas:document.getElementById('ex-notas').value.trim() || null,
+    fecha:document.getElementById('ex-fecha').value || hoy(),
+    archivo_url:subido.url, archivo_tipo:_examenArchivo.type,
+    archivo_nombre:_examenArchivo.name, tamano:_examenArchivo.size,
+    subido_por:currentUser?.name || null
+  });
+  setLoading(false); _unlockSubmit('examen', btn);
+  if(error) { toast('Error al guardar: '+error.message,'error'); return; }
+  toast('Examen guardado 🔬');
+  closeModal('modal-examen');
+  renderExamenes(_examenPacId);
+}
+
+async function eliminarExamen(id) {
+  if(!puedeGestionarExamenes()) { toast('Solo el personal médico puede eliminar exámenes','error'); return; }
+  const x = _examenes.find(e => e.id === id);
+  const ok = await customConfirm({
+    icon:'🗑️', title:'Eliminar examen',
+    msg:`¿Eliminar <strong>${x?.titulo||'este examen'}</strong> del expediente?<br><br>El archivo también se borra y no se puede recuperar.`,
+    okText:'Eliminar', danger:true
+  });
+  if(!ok) return;
+  setLoading(true);
+  const { error } = await sb.from('examenes').delete().eq('id', id);
+  if(error) { setLoading(false); toast('Error al eliminar: '+error.message,'error'); return; }
+  // Borrar también el archivo; si falla, el registro ya se eliminó igual
+  try {
+    const m = (x?.url||'').match(/\/Pacientes\/(examenes\/.+)$/);
+    if(m) await sb.storage.from(STORAGE_BUCKET).remove([decodeURIComponent(m[1].split('?')[0])]);
+  } catch(e) {}
+  setLoading(false);
+  toast('Examen eliminado');
+  renderExamenes(_examenPacId);
 }
 
 // ════════════════════ FOTO PACIENTE ════════════════════
