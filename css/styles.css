@@ -1257,3 +1257,22 @@ button:focus-visible,a:focus-visible,[onclick]:focus-visible{outline:2px solid v
 /* Scrollbars finos y consistentes en listas internas */
 .table-wrap::-webkit-scrollbar,.farma-prod-grid::-webkit-scrollbar,.farma-carrito-items::-webkit-scrollbar{height:6px;width:6px}
 .table-wrap::-webkit-scrollbar-thumb,.farma-prod-grid::-webkit-scrollbar-thumb,.farma-carrito-items::-webkit-scrollbar-thumb{background:var(--border);border-radius:6px}
+
+/* ══════════ SIGNOS VITALES — Resumen Clínico ══════════ */
+.signos-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px;margin-top:7px}
+.signo-item{display:flex;flex-direction:column;gap:3px}
+.signo-lbl{font-size:11px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:.03em}
+.signo-lbl em{font-style:normal;font-weight:600;text-transform:none;opacity:.75}
+.signo-item input{padding:8px 10px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;background:var(--card);color:var(--text);font-family:inherit;outline:none;width:100%;box-sizing:border-box}
+.signo-item input:focus{border-color:var(--primary)}
+#n-signos-wrap{background:var(--bg);border:1.5px solid var(--border);border-radius:12px;padding:13px 14px}
+/* Signos vitales al ver o imprimir una nota */
+.sv-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.sv-chip{background:var(--bg);border:1.5px solid var(--border);border-radius:10px;padding:7px 12px;text-align:center;min-width:78px}
+.sv-chip-val{font-size:16px;font-weight:800;color:var(--text);line-height:1.15}
+.sv-chip-lbl{font-size:10px;color:var(--text-light);font-weight:600;margin-top:2px}
+@media(max-width:480px){
+  .signos-grid{grid-template-columns:1fr 1fr;gap:8px}
+  .sv-chip{min-width:68px;padding:6px 9px}
+  .sv-chip-val{font-size:14px}
+}

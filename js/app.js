@@ -120,8 +120,8 @@ const fromC = r => ({ id:r.id, pacienteId:r.paciente_id, medicoId:r.medico_id||n
 const toC   = x => ({ paciente_id:x.pacienteId, medico_id:x.medicoId||null, fecha:x.fecha, hora:x.hora, motivo:x.motivo, tipo:x.tipo||'consulta', estado:x.estado||'pendiente', notas:x.notas||null, clinica_id:currentClinicaId });
 const fromM = r => ({ id:r.id, pacienteId:r.paciente_id, nombre:r.nombre, dosis:r.dosis, frecuencia:r.frecuencia, inicio:r.inicio, fin:r.fin, via:r.via, estado:r.estado, indicaciones:r.indicaciones });
 const toM   = x => ({ paciente_id:x.pacienteId, nombre:x.nombre, dosis:x.dosis, frecuencia:x.frecuencia, inicio:x.inicio||null, fin:x.fin||null, via:x.via||'oral', estado:x.estado||'activa', indicaciones:x.indicaciones||null, clinica_id:currentClinicaId });
-const fromN   = r => ({ id:r.id, pacienteId:r.paciente_id, tipo:r.tipo, fecha:r.fecha, titulo:r.titulo, contenido:r.contenido });
-const toN     = x => ({ paciente_id:x.pacienteId, tipo:x.tipo||'evolucion', fecha:x.fecha||hoy(), titulo:x.titulo||null, contenido:x.contenido, clinica_id:currentClinicaId });
+const fromN   = r => ({ id:r.id, pacienteId:r.paciente_id, tipo:r.tipo, fecha:r.fecha, titulo:r.titulo, contenido:r.contenido, signos:r.signos||null });
+const toN     = x => ({ paciente_id:x.pacienteId, tipo:x.tipo||'evolucion', fecha:x.fecha||hoy(), titulo:x.titulo||null, contenido:x.contenido, signos:x.signos||null, clinica_id:currentClinicaId });
 const fromInv = r => ({ id:r.id, nombre:r.nombre, categoria:r.categoria||'general', unidad:r.unidad||'unidad', stock:Number(r.stock_actual||0), stockMin:Number(r.stock_minimo||0), precio:r.precio_unitario!=null?Number(r.precio_unitario):null, descripcion:r.descripcion||null, codigoMinsa:r.codigo_minsa||null, fechaVenc:r.fecha_vencimiento||null, alertaMeses:r.alerta_meses_antes!=null?Number(r.alerta_meses_antes):1 });
 const toInv   = x => ({ nombre:x.nombre, categoria:x.categoria||'general', unidad:x.unidad||'unidad', stock_actual:Number(x.stock||0), stock_minimo:Number(x.stockMin||0), precio_unitario:x.precio||null, descripcion:x.descripcion||null, clinica_id:currentClinicaId, codigo_minsa:x.codigoMinsa||null, fecha_vencimiento:x.fechaVenc||null, alerta_meses_antes:Number(x.alertaMeses||1) });
 const fromMov     = r => ({ id:r.id, invId:r.inventario_id, tipo:r.tipo, cantidad:Number(r.cantidad), motivo:r.motivo||null, fecha:r.fecha, referencia:r.referencia||null, notas:r.notas||null });
@@ -1551,7 +1551,7 @@ function renderDetalleP(pid){
 
   document.getElementById('tab-notas-p').innerHTML=`<div class="card">
     <div class="card-header"><h3>📝 Notas Clínicas</h3><button class="btn btn-primary btn-sm" onclick="openModalNotaP(${p.id})">+ Nueva</button></div>
-    ${notas.length?`<div class="timeline">${notas.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(n=>`<div class="timeline-item"><div class="timeline-date">${formatFecha(n.fecha)} · <span class="tag tag-blue" style="font-size:10px">${n.tipo}</span></div><div class="timeline-content">${n.titulo?`<strong style="display:block;margin-bottom:5px">${n.titulo}</strong>`:''}<p style="white-space:pre-wrap;line-height:1.7">${n.contenido}</p><div style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-secondary btn-sm" onclick="verNota(${n.id})">👁️ Ver</button><button class="btn btn-secondary btn-sm" onclick="openModalNota(${n.id})">✏️ Editar</button><button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})">🖨️</button><button class="btn btn-danger btn-sm" onclick="eliminarNota(${n.id})">🗑️</button></div></div></div>`).join('')}</div>`:'<div class="empty-state"><div class="empty-icon">📝</div><p>Sin notas</p></div>'}
+    ${notas.length?`<div class="timeline">${notas.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(n=>`<div class="timeline-item"><div class="timeline-date">${formatFecha(n.fecha)} · <span class="tag tag-blue" style="font-size:10px">${NOTA_TIPO_ICON[n.tipo]||'📝'} ${notaTipoLabel(n.tipo)}</span></div><div class="timeline-content">${n.titulo?`<strong style="display:block;margin-bottom:5px">${n.titulo}</strong>`:''}${_signosChipsHTML(n.signos)}${n.contenido?`<p style="white-space:pre-wrap;line-height:1.7">${n.contenido}</p>`:''}<div style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-secondary btn-sm" onclick="verNota(${n.id})">👁️ Ver</button><button class="btn btn-secondary btn-sm" onclick="openModalNota(${n.id})">✏️ Editar</button><button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})">🖨️</button><button class="btn btn-danger btn-sm" onclick="eliminarNota(${n.id})">🗑️</button></div></div></div>`).join('')}</div>`:'<div class="empty-state"><div class="empty-icon">📝</div><p>Sin notas</p></div>'}
   </div>`;
 
   // Pestañas odontológicas — solo visibles para odontólogo / superadmin
@@ -2377,10 +2377,27 @@ async function eliminarMedicacion(id){
 
 // ════════════════════ NOTAS ════════════════════
 const NOTA_TIPO_ICON = {
-  evolucion:'📋', diagnostico:'🔬', tratamiento:'💊', laboratorio:'🧪',
+  evolucion:'📋', resumen_clinico:'🩺', diagnostico:'🔬', tratamiento:'💊', laboratorio:'🧪',
   imagen:'🩻', cirugia:'🔪', alta:'🏠', examen_visual:'👁️',
   odontologia:'🦷', receta:'📄', interconsulta:'🔄', otro:'📌'
 };
+// Etiqueta legible del tipo de nota (resumen_clinico -> Resumen clínico)
+const NOTA_TIPO_LABEL = {
+  evolucion:'Evolución', resumen_clinico:'Resumen clínico', diagnostico:'Diagnóstico',
+  tratamiento:'Tratamiento', laboratorio:'Laboratorio', imagen:'Imagen / Radiología',
+  cirugia:'Cirugía', alta:'Alta médica', examen_visual:'Examen visual',
+  odontologia:'Odontología', receta:'Receta', interconsulta:'Interconsulta', otro:'Otro'
+};
+const notaTipoLabel = t => NOTA_TIPO_LABEL[t] || (t||'').replace(/_/g,' ');
+
+// Resumen de una línea de los signos vitales, para listados
+function _signosResumen(signos) {
+  if(!signos) return '';
+  return SIGNOS_VITALES
+    .filter(sv => signos[sv.k] != null && String(signos[sv.k]).trim() !== '')
+    .map(sv => `${sv.lbl} ${signos[sv.k]}${sv.uni && sv.uni !== 'mmHg' ? ' '+sv.uni : ''}`)
+    .join(' · ');
+}
 
 function renderNotas(){
   // Badge de clínica
@@ -2395,7 +2412,8 @@ function renderNotas(){
   const MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
   el.innerHTML=[...C.n].sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(n=>{
     const p=C.p.find(x=>x.id===n.pacienteId);
-    const prev=n.contenido.length>60?n.contenido.substring(0,60)+'…':n.contenido;
+    const base=(n.contenido||'').trim() || _signosResumen(n.signos);
+    const prev=base.length>60?base.substring(0,60)+'…':base;
     const tipoIcon = NOTA_TIPO_ICON[n.tipo] || '📝';
     const [,mm,dd]=(n.fecha||hoy()).split('-');
     return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)">
@@ -2421,15 +2439,110 @@ function renderNotas(){
   }).join('');
 }
 
+// ── Signos vitales del Resumen Clínico (todos opcionales) ──
+const SIGNOS_VITALES = [
+  { k:'pa',      id:'n-sv-pa',      lbl:'Presión',      uni:'mmHg'  },
+  { k:'fc',      id:'n-sv-fc',      lbl:'Frec. card.',  uni:'lpm'   },
+  { k:'fr',      id:'n-sv-fr',      lbl:'Frec. resp.',  uni:'rpm'   },
+  { k:'temp',    id:'n-sv-temp',    lbl:'Temp.',        uni:'°C'    },
+  { k:'spo2',    id:'n-sv-spo2',    lbl:'Sat. O₂',      uni:'%'     },
+  { k:'glucosa', id:'n-sv-glucosa', lbl:'Glucosa',      uni:'mg/dL' },
+  { k:'peso',    id:'n-sv-peso',    lbl:'Peso',         uni:'kg'    },
+  { k:'talla',   id:'n-sv-talla',   lbl:'Talla',        uni:'cm'    },
+];
+
+// Muestra el panel solo en el Resumen Clínico; ahí el texto deja de ser obligatorio
+function onTipoNotaChange() {
+  const esResumen = document.getElementById('n-tipo')?.value === 'resumen_clinico';
+  const wrap = document.getElementById('n-signos-wrap');
+  if(wrap) wrap.style.display = esResumen ? '' : 'none';
+  const req = document.getElementById('n-contenido-req');
+  if(req) req.style.display = esResumen ? 'none' : '';
+}
+
+function _limpiarSignosNota() {
+  SIGNOS_VITALES.forEach(sv => { const e = document.getElementById(sv.id); if(e) e.value = ''; });
+  calcIMCNota();
+}
+
+function _cargarSignosNota(signos) {
+  SIGNOS_VITALES.forEach(sv => {
+    const e = document.getElementById(sv.id);
+    if(e) e.value = (signos && signos[sv.k] != null) ? signos[sv.k] : '';
+  });
+  calcIMCNota();
+}
+
+// Devuelve solo los signos rellenados, o null si no se midió ninguno
+function _leerSignosNota() {
+  const out = {};
+  SIGNOS_VITALES.forEach(sv => {
+    const v = (document.getElementById(sv.id)?.value || '').trim();
+    if(v !== '') out[sv.k] = v;
+  });
+  return Object.keys(out).length ? out : null;
+}
+
+function calcIMCNota() {
+  const out = document.getElementById('n-sv-imc');
+  if(!out) return;
+  const peso  = parseFloat(document.getElementById('n-sv-peso')?.value);
+  const talla = parseFloat(document.getElementById('n-sv-talla')?.value);
+  if(!peso || !talla) { out.textContent = ''; return; }
+  const imc = peso / ((talla/100) ** 2);
+  if(!isFinite(imc) || imc <= 0) { out.textContent = ''; return; }
+  const cat = imc < 18.5 ? 'bajo peso' : imc < 25 ? 'normal' : imc < 30 ? 'sobrepeso' : 'obesidad';
+  out.textContent = `IMC ${imc.toFixed(1)} · ${cat}`;
+}
+
+// Tarjetas de signos vitales para ver la nota en pantalla
+function _signosChipsHTML(signos) {
+  if(!signos) return '';
+  const chips = SIGNOS_VITALES
+    .filter(sv => signos[sv.k] != null && String(signos[sv.k]).trim() !== '')
+    .map(sv => `<div class="sv-chip"><div class="sv-chip-val">${signos[sv.k]}</div><div class="sv-chip-lbl">${sv.lbl}${sv.uni?' · '+sv.uni:''}</div></div>`);
+  if(!chips.length) return '';
+  const imc = _imcDeSignos(signos);
+  if(imc) chips.push(`<div class="sv-chip"><div class="sv-chip-val">${imc.valor}</div><div class="sv-chip-lbl">IMC · ${imc.cat}</div></div>`);
+  return `<div class="sv-chips">${chips.join('')}</div>`;
+}
+
+function _imcDeSignos(signos) {
+  const peso = parseFloat(signos?.peso), talla = parseFloat(signos?.talla);
+  if(!peso || !talla) return null;
+  const imc = peso / ((talla/100) ** 2);
+  if(!isFinite(imc) || imc <= 0) return null;
+  return { valor: imc.toFixed(1), cat: imc < 18.5 ? 'bajo peso' : imc < 25 ? 'normal' : imc < 30 ? 'sobrepeso' : 'obesidad' };
+}
+
+// Versión con estilos embebidos para los PDF, que no cargan styles.css
+function _signosPrintHTML(signos) {
+  if(!signos) return '';
+  const items = SIGNOS_VITALES
+    .filter(sv => signos[sv.k] != null && String(signos[sv.k]).trim() !== '')
+    .map(sv => ({ val: signos[sv.k], lbl: sv.lbl + (sv.uni ? ' · ' + sv.uni : '') }));
+  if(!items.length) return '';
+  const imc = _imcDeSignos(signos);
+  if(imc) items.push({ val: imc.valor, lbl: 'IMC · ' + imc.cat });
+  return '<div class="section-title">&#129658; Signos vitales</div>'
+    + '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">'
+    + items.map(i => '<div style="flex:0 0 auto;min-width:84px;text-align:center;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px">'
+        + '<div style="font-size:17px;font-weight:800;color:#0f172a">'+i.val+'</div>'
+        + '<div style="font-size:10px;color:#64748b;margin-top:2px">'+i.lbl+'</div></div>').join('')
+    + '</div>';
+}
+
 function openModalNota(id){
   editingNotaId=id||null;
   document.getElementById('modal-nota-title').textContent=id?'✏️ Editar Nota':'📝 Nueva Nota Clínica';
   fillSelect('n-paciente');
   document.getElementById('n-tipo').value='evolucion'; document.getElementById('n-fecha').value=hoy(); document.getElementById('n-titulo').value=''; document.getElementById('n-contenido').value='';
+  _limpiarSignosNota();
   if(id){
     const n=C.n.find(x=>x.id===id);
-    if(n){ setPacienteSelect('n-paciente',n.pacienteId); document.getElementById('n-tipo').value=n.tipo; document.getElementById('n-fecha').value=n.fecha; document.getElementById('n-titulo').value=n.titulo||''; document.getElementById('n-contenido').value=n.contenido; }
+    if(n){ setPacienteSelect('n-paciente',n.pacienteId); document.getElementById('n-tipo').value=n.tipo; document.getElementById('n-fecha').value=n.fecha; document.getElementById('n-titulo').value=n.titulo||''; document.getElementById('n-contenido').value=n.contenido; _cargarSignosNota(n.signos); }
   }
+  onTipoNotaChange();
   openModalOverlay('modal-nota');
 }
 function openModalNotaP(pid){ openModalNota(); setPacienteSelect('n-paciente', pid); }
@@ -2438,8 +2551,17 @@ async function guardarNota(){
   if(!currentClinicaId){ toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
   const pid=parseInt(document.getElementById('n-paciente').value);
   const contenido=document.getElementById('n-contenido').value.trim();
-  if(!pid||!contenido){ toast('Completa los campos obligatorios','error'); return; }
-  const obj={pacienteId:pid,tipo:document.getElementById('n-tipo').value,fecha:document.getElementById('n-fecha').value||hoy(),titulo:document.getElementById('n-titulo').value.trim(),contenido};
+  const tipo=document.getElementById('n-tipo').value;
+  const esResumen=tipo==='resumen_clinico';
+  // Los signos solo se guardan en el Resumen Clínico, y solo los que se midieron
+  const signos=esResumen?_leerSignosNota():null;
+  if(!pid){ toast('Selecciona un paciente','error'); return; }
+  // En el Resumen Clínico basta con registrar signos vitales; en el resto el texto es obligatorio
+  if(!contenido && !(esResumen && signos)){
+    toast(esResumen?'Registra al menos un signo vital o escribe la nota':'Completa los campos obligatorios','error');
+    return;
+  }
+  const obj={pacienteId:pid,tipo,fecha:document.getElementById('n-fecha').value||hoy(),titulo:document.getElementById('n-titulo').value.trim(),contenido,signos};
   setLoading(true);
   let err;
   if(editingNotaId){ const r=await sb.from('notas').update(toN(obj)).eq('id',editingNotaId); err=r.error; }
@@ -2473,7 +2595,8 @@ function verNota(id){
     <div style="margin-bottom:14px"><span class="tag tag-blue">${n.tipo}</span><span style="margin-left:8px;font-size:12px;color:var(--text-light)">${formatFecha(n.fecha)}</span></div>
     ${p?`<p class="text-light" style="margin-bottom:12px">Paciente: <strong style="color:var(--text)">${p.nombre} ${p.apellidos}</strong></p>`:''}
     ${n.titulo?`<h3 style="margin-bottom:12px">${n.titulo}</h3>`:''}
-    <div style="white-space:pre-wrap;line-height:1.8;font-size:14px;background:var(--bg);padding:16px;border-radius:10px;border:1px solid var(--border)">${n.contenido}</div>`;
+    ${_signosChipsHTML(n.signos)}
+    ${n.contenido?`<div style="white-space:pre-wrap;line-height:1.8;font-size:14px;background:var(--bg);padding:16px;border-radius:10px;border:1px solid var(--border)">${n.contenido}</div>`:''}`;
   document.getElementById('modal-ver-nota').classList.add('open');
 }
 
@@ -2482,10 +2605,11 @@ function imprimirNota(id) {
   const p = C.p.find(x => x.id === n.pacienteId);
   const cfg = getClinicaConfig();
   const fmtF = f => { if(!f) return '—'; const d=new Date(f+'T12:00:00'); return d.toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'}); };
-  const tipoColor = {evolucion:'#1D4ED8',diagnostico:'#7C3AED',tratamiento:'#059669',laboratorio:'#D97706',imagen:'#0891B2',cirugia:'#DC2626',alta:'#065F46',otro:'#475569'}[n.tipo]||'#1D4ED8';
+  const tipoColor = {evolucion:'#1D4ED8',resumen_clinico:'#0E7490',diagnostico:'#7C3AED',tratamiento:'#059669',laboratorio:'#D97706',imagen:'#0891B2',cirugia:'#DC2626',alta:'#065F46',otro:'#475569'}[n.tipo]||'#1D4ED8';
 
   const ini2 = (a,b) => ((a||'')[0]||'').toUpperCase()+((b||'')[0]||'').toUpperCase();
-  const body = '<div class="badge-tipo" style="background:'+tipoColor+'">📝 '+n.tipo.toUpperCase()+'</div>'
+  const tipoTxt = (n.tipo||'').replace(/_/g,' ').toUpperCase();
+  const body = '<div class="badge-tipo" style="background:'+tipoColor+'">📝 '+tipoTxt+'</div>'
     + (n.titulo?'<div style="font-size:20px;font-weight:900;color:#0F172A;margin-bottom:6px">'+n.titulo+'</div>':'')
     + '<div class="patient-box" style="margin-bottom:20px">'
     +   '<div class="patient-av">'+(p?ini2(p.nombre,p.apellidos):'?')+'</div>'
@@ -2505,8 +2629,9 @@ function imprimirNota(id) {
     +   '<tr><td style="width:130px;font-weight:700;color:#475569">Fecha</td><td>'+fmtF(n.fecha)+'</td><td style="width:130px;font-weight:700;color:#475569">Tipo</td><td><span class="tag tag-blue">'+n.tipo+'</span></td></tr>'
     +   '<tr><td style="font-weight:700;color:#475569">N&deg; Nota</td><td colspan="3">NC-'+n.id+'</td></tr>'
     + '</tbody></table>'
-    + '<div class="section-title">&#128203; Contenido de la nota</div>'
-    + '<div class="note-box" style="border-left-color:'+tipoColor+'"><div class="note-body">'+n.contenido+'</div></div>'
+    + _signosPrintHTML(n.signos)
+    + (n.contenido ? '<div class="section-title">&#128203; Contenido de la nota</div>'
+        + '<div class="note-box" style="border-left-color:'+tipoColor+'"><div class="note-body">'+n.contenido+'</div></div>' : '')
     + '<div class="sig-wrap"><div class="sig-box"><div style="height:46px"></div><div class="sig-line"></div>'
     +   '<div class="sig-name">'+(currentUser?.name||cfg.nombreDoctor||'M&#233;dico Responsable')+'</div>'
     +   (especialidadFirma(cfg)?'<div class="sig-role">'+especialidadFirma(cfg)+'</div>':'')
