@@ -3041,29 +3041,124 @@ function especialidadFirma(cfg) {
   return (currentUser?.especialidad || '').trim() || (cfg?.especialidad || '');
 }
 
-function getClinicaConfig() {
-  const key = 'lumeamed_clinica' + (currentClinicaId ? '_' + currentClinicaId : '');
-  let local = {};
-  try { local = JSON.parse(localStorage.getItem(key) || '{}'); } catch { local = {}; }
-  const cl = currentClinica || {};
-  // Supabase (currentClinica) es la fuente principal; localStorage puede sobrescribir si el usuario lo configuró localmente
+// Config guardada localmente en versiones anteriores. Solo rellena los huecos que
+// la fila de Supabase todavía no tenga; la base de datos manda.
+function _configLocal(clinicaId) {
+  const key = 'lumeamed_clinica' + (clinicaId ? '_' + clinicaId : '');
+  try { return JSON.parse(localStorage.getItem(key) || '{}'); } catch { return {}; }
+}
+
+// Traduce una fila de `clinicas` a la configuración que usan impresos y vistas.
+function _configDeClinica(cl, local = {}) {
+  cl = cl || {};
   return {
-    nombreClinica: local.nombreClinica || cl.nombre || '',
-    nombreDoctor:  local.nombreDoctor  || cl.nombre_doctor || '',
-    especialidad:  local.especialidad  || cl.especialidad || '',
-    registro:      local.registro      || cl.registro || '',
-    telefono:      local.telefono      || cl.telefono || '',
-    email:         local.email         || '',
-    direccion:     local.direccion     || cl.direccion || '',
-    notaPie:       local.notaPie       || cl.nota_pie || '',
-    padecimientos: local.padecimientos || cl.padecimientos || '',
-    institucion:   local.institucion   || cl.institucion || '',
-    logoUrl:       local.logoUrl       || cl.logo_url || '',
+    id:            cl.id || null,
+    nombreClinica: cl.nombre        || local.nombreClinica || '',
+    nombreDoctor:  cl.nombre_doctor || local.nombreDoctor  || '',
+    especialidad:  cl.especialidad  || local.especialidad  || '',
+    registro:      cl.registro      || local.registro      || '',
+    telefono:      cl.telefono      || local.telefono      || '',
+    email:         cl.email         || local.email         || '',
+    direccion:     cl.direccion     || local.direccion     || '',
+    notaPie:       cl.nota_pie      || local.notaPie       || '',
+    padecimientos: cl.padecimientos || local.padecimientos || '',
+    institucion:   cl.institucion   || local.institucion   || '',
+    logoUrl:       cl.logo_url      || local.logoUrl       || '',
+    firmaUrl:      cl.firma_url     || local.firmaUrl      || '',
   };
 }
 
-function renderConfiguracion() {
-  const cfg = getClinicaConfig();
+function getClinicaConfig() {
+  return _configDeClinica(currentClinica, _configLocal(currentClinicaId));
+}
+
+// ── Selector de clínica dentro de Configuración ──
+// Solo se listan las clínicas marcadas como "en producción": son las que están
+// en uso real y las únicas que tiene sentido configurar desde aquí.
+let configClinicas  = [];    // clínicas en producción, tal cual vienen de Supabase
+let configClinicaId = null;  // la que se está editando ahora mismo
+
+async function renderConfiguracion() {
+  const cont = document.getElementById('config-clinicas');
+  const hint = document.getElementById('config-clinicas-hint');
+  if(cont) cont.innerHTML = '<p class="text-light" style="font-size:13px">Cargando clínicas…</p>';
+
+  const { data, error } = await sb.from('clinicas').select('*').order('nombre');
+  if(error) {
+    if(cont) cont.innerHTML = `<p class="text-light" style="font-size:13px">No se pudieron cargar las clínicas: ${error.message}</p>`;
+    return;
+  }
+  const todas = data || [];
+  // Si la columna todavía no existe en Supabase, ninguna fila la trae: se listan
+  // todas para no dejar la pantalla vacía y se avisa qué falta.
+  const hayColumna = todas.some(c => 'en_produccion' in c);
+  configClinicas = hayColumna ? todas.filter(c => c.en_produccion === true) : todas;
+
+  if(!configClinicas.length) {
+    configClinicaId = null;
+    if(hint) hint.textContent = '';
+    if(cont) cont.innerHTML = `<div class="empty-state" style="padding:26px">
+      <div class="empty-icon">🏥</div>
+      <p>Ninguna clínica está marcada como <strong>en producción</strong>.<br>
+      <span style="font-size:12px">Márcala en <strong>Administración → Clínicas</strong> con el botón <strong>★ Marcar en Producción</strong> y volverá a aparecer aquí.</span></p>
+    </div>`;
+    _limpiarFormConfig();
+    return;
+  }
+
+  // Se conserva la clínica elegida; si no, la del usuario en sesión; si no, la primera.
+  if(!configClinicas.some(c => c.id === configClinicaId)) {
+    configClinicaId = configClinicas.some(c => c.id === currentClinicaId)
+      ? currentClinicaId : configClinicas[0].id;
+  }
+  if(hint) {
+    hint.textContent = hayColumna
+      ? `${configClinicas.length} ${configClinicas.length === 1 ? 'clínica en producción' : 'clínicas en producción'}`
+      : 'Falta la columna en_produccion en Supabase: se listan todas';
+  }
+  _pintarSelectorClinicas();
+  cargarConfigClinica(configClinicaId);
+}
+
+function _pintarSelectorClinicas() {
+  const cont = document.getElementById('config-clinicas');
+  if(!cont) return;
+  cont.innerHTML = `<div class="cfg-clinicas">${configClinicas.map(c => `
+    <div class="cfg-clinica${c.id === configClinicaId ? ' active' : ''}" onclick="seleccionarClinicaConfig(${c.id})" title="${c.nombre}">
+      <div class="cfg-clinica-logo">${c.logo_url ? `<img src="${c.logo_url}" alt="">` : '🏥'}</div>
+      <div class="cfg-clinica-info">
+        <div class="cfg-clinica-nom">${c.nombre}</div>
+        <div class="cfg-clinica-meta">${c.codigo || '—'}${c.tipo ? ' · ' + c.tipo : ''}${c.id === currentClinicaId ? ' · tu clínica' : ''}</div>
+      </div>
+      ${c.id === configClinicaId ? '<span class="cfg-clinica-check">✓</span>' : ''}
+    </div>`).join('')}</div>`;
+}
+
+function seleccionarClinicaConfig(id) {
+  if(id === configClinicaId) return;
+  configClinicaId = id;
+  _pintarSelectorClinicas();
+  cargarConfigClinica(id);
+}
+
+function _limpiarFormConfig() {
+  ['config-nombre-clinica','config-nombre-doctor','config-especialidad','config-registro',
+   'config-telefono','config-email','config-direccion','config-nota-pie',
+   'config-padecimientos','config-institucion','config-logo-url']
+    .forEach(id => { const e = document.getElementById(id); if(e) e.value = ''; });
+  setConfigLogoPreview(null);
+  _resetFirmaClinica(null);
+  const nom = document.getElementById('config-clinica-nom');
+  if(nom) nom.textContent = '';
+  actualizarPreviewConfig(_configDeClinica(null));
+}
+
+// Carga en el formulario los datos que la clínica ya tiene guardados en Supabase.
+function cargarConfigClinica(id) {
+  const cl = configClinicas.find(c => c.id === id);
+  if(!cl) return;
+  // La config vieja en localStorage solo se usa para la clínica del usuario en sesión.
+  const cfg = _configDeClinica(cl, id === currentClinicaId ? _configLocal(id) : {});
   document.getElementById('config-logo-url').value = cfg.logoUrl || '';
   setConfigLogoPreview(cfg.logoUrl || null);
   document.getElementById('config-nombre-clinica').value = cfg.nombreClinica || '';
@@ -3078,7 +3173,70 @@ function renderConfiguracion() {
   if(padEl) padEl.value = cfg.padecimientos || '';
   const instEl = document.getElementById('config-institucion');
   if(instEl) instEl.value = cfg.institucion || '';
+  const nom = document.getElementById('config-clinica-nom');
+  if(nom) nom.textContent = cl.nombre || '';
+  _resetFirmaClinica(cfg.firmaUrl || null);
   actualizarPreviewConfig(cfg);
+}
+
+// ── Firma digital de la clínica ──
+let _configFirmaFile   = null;   // archivo elegido, se sube al guardar
+let _configFirmaUrl    = null;   // firma ya guardada de la clínica
+let _configFirmaQuitar = false;  // se pidió borrar la firma existente
+
+function _pintarFirmaClinica(url) {
+  const img = document.getElementById('config-firma-img');
+  const ph  = document.getElementById('config-firma-placeholder');
+  const del = document.getElementById('config-firma-remove');
+  if(!img || !ph) return;
+  if(url) { img.src = url; img.style.display = ''; ph.style.display = 'none'; }
+  else    { img.removeAttribute('src'); img.style.display = 'none'; ph.style.display = ''; }
+  if(del) del.style.display = url ? '' : 'none';
+}
+
+function _resetFirmaClinica(url) {
+  _configFirmaFile = null;
+  _configFirmaQuitar = false;
+  _configFirmaUrl = url || null;
+  const f = document.getElementById('config-firma-file');
+  if(f) f.value = '';
+  _pintarFirmaClinica(_configFirmaUrl);
+}
+
+function onConfigFirmaSeleccionada(input) {
+  const file = input.files && input.files[0];
+  if(!file) return;
+  if(!/^image\/(png|jpeg|webp)$/.test(file.type)) {
+    toast('La firma debe ser una imagen PNG, JPG o WEBP','error');
+    input.value = ''; return;
+  }
+  if(file.size > 2 * 1024 * 1024) {
+    toast('La imagen supera los 2 MB','error');
+    input.value = ''; return;
+  }
+  _configFirmaFile = file;
+  _configFirmaQuitar = false;
+  const lector = new FileReader();
+  lector.onload = e => _pintarFirmaClinica(e.target.result);
+  lector.readAsDataURL(file);
+}
+
+function quitarFirmaClinica() {
+  _configFirmaFile = null;
+  _configFirmaQuitar = !!_configFirmaUrl;   // solo hay que borrar en BD si había una guardada
+  const f = document.getElementById('config-firma-file');
+  if(f) f.value = '';
+  _pintarFirmaClinica(null);
+}
+
+// La firma vive en el mismo bucket que las de usuario, en su propia carpeta.
+async function subirFirmaClinica(file, clinicaId) {
+  const ext = (file.name.split('.').pop() || 'png').toLowerCase();
+  const path = `firmas/clinica-${clinicaId}.${ext}`;
+  const { error } = await sb.storage.from(STORAGE_BUCKET).upload(path, file, { upsert: true, contentType: file.type });
+  if(error) throw error;
+  const { data } = sb.storage.from(STORAGE_BUCKET).getPublicUrl(path);
+  return data.publicUrl + '?v=' + Date.now();
 }
 
 function setConfigLogoPreview(src) {
@@ -3110,25 +3268,62 @@ function removeConfigLogo() {
   setConfigLogoPreview(null);
 }
 
-function guardarConfigClinica() {
-  const cfg = {
-    nombreClinica: document.getElementById('config-nombre-clinica').value.trim(),
-    nombreDoctor:  document.getElementById('config-nombre-doctor').value.trim(),
-    especialidad:  document.getElementById('config-especialidad').value.trim(),
-    registro:      document.getElementById('config-registro').value.trim(),
-    telefono:      document.getElementById('config-telefono').value.trim(),
-    email:         document.getElementById('config-email').value.trim(),
-    direccion:     document.getElementById('config-direccion').value.trim(),
-    notaPie:       document.getElementById('config-nota-pie').value.trim(),
-    padecimientos: document.getElementById('config-padecimientos')?.value.trim() || '',
-    institucion:   document.getElementById('config-institucion')?.value.trim() || '',
-    logoUrl:       document.getElementById('config-logo-url').value.trim()
+async function guardarConfigClinica() {
+  if(!configClinicaId) { toast('Elige primero la clínica que quieres configurar', 'error'); return; }
+  const nombre = document.getElementById('config-nombre-clinica').value.trim();
+  if(!nombre) { toast('El nombre de la clínica es obligatorio', 'error'); return; }
+
+  setLoading(true);
+  let firma_url = _configFirmaQuitar ? null : _configFirmaUrl;
+  if(_configFirmaFile) {
+    try { firma_url = await subirFirmaClinica(_configFirmaFile, configClinicaId); }
+    catch(e) { setLoading(false); toast('No se pudo subir la firma: ' + e.message, 'error'); return; }
+  }
+
+  const payload = {
+    nombre,
+    nombre_doctor: document.getElementById('config-nombre-doctor').value.trim() || null,
+    especialidad:  document.getElementById('config-especialidad').value.trim() || null,
+    registro:      document.getElementById('config-registro').value.trim() || null,
+    telefono:      document.getElementById('config-telefono').value.trim() || null,
+    email:         document.getElementById('config-email').value.trim() || null,
+    direccion:     document.getElementById('config-direccion').value.trim() || null,
+    nota_pie:      document.getElementById('config-nota-pie').value.trim() || null,
+    padecimientos: document.getElementById('config-padecimientos')?.value.trim() || null,
+    institucion:   document.getElementById('config-institucion')?.value.trim() || null,
+    logo_url:      document.getElementById('config-logo-url').value.trim() || null,
+    firma_url
   };
-  if(!cfg.nombreClinica) { toast('El nombre de la clínica es obligatorio', 'error'); return; }
-  const key = 'lumeamed_clinica' + (currentClinicaId ? '_' + currentClinicaId : '');
-  localStorage.setItem(key, JSON.stringify(cfg));
-  toast('Configuración guardada ✅');
-  actualizarPreviewConfig(cfg);
+
+  // Las columnas nuevas pueden no existir todavía en Supabase: se reintenta sin
+  // ellas para no perder el resto del formulario, avisando qué quedó fuera.
+  const OPCIONALES = ['firma_url','email','institucion','padecimientos'];
+  let { error } = await sb.from('clinicas').update(payload).eq('id', configClinicaId);
+  const faltantes = [];
+  while(error && OPCIONALES.some(col => (col in payload) && _faltaColumna(error, col))) {
+    const col = OPCIONALES.find(c => (c in payload) && _faltaColumna(error, c));
+    faltantes.push(col);
+    delete payload[col];
+    ({ error } = await sb.from('clinicas').update(payload).eq('id', configClinicaId));
+  }
+  if(error) { setLoading(false); toast('Error al guardar: ' + error.message, 'error'); return; }
+
+  // Supabase pasa a ser la única fuente: se retira la copia local que la enmascaraba.
+  try { localStorage.removeItem('lumeamed_clinica_' + configClinicaId); } catch {}
+  const { data } = await sb.from('clinicas').select('*').eq('id', configClinicaId).single();
+  if(data) {
+    const i = configClinicas.findIndex(c => c.id === configClinicaId);
+    if(i >= 0) configClinicas[i] = data;
+    if(configClinicaId === currentClinicaId) currentClinica = data;
+  }
+  setLoading(false);
+  _pintarSelectorClinicas();
+  cargarConfigClinica(configClinicaId);
+  if(faltantes.length) {
+    toast('Configuración guardada, pero faltan columnas en la tabla clinicas: ' + faltantes.join(', '), 'warning');
+  } else {
+    toast('Configuración guardada ✅');
+  }
 }
 
 function actualizarPreviewConfig(cfg) {
@@ -3144,7 +3339,14 @@ function actualizarPreviewConfig(cfg) {
         ${cfg.telefono?`<div style="font-size:11px;color:var(--text-light)">📞 ${cfg.telefono}</div>`:''}
       </div>
     </div>
-    <p style="font-size:11px;color:var(--text-light);text-align:center">Así aparecerá el encabezado en tus notas de consulta</p>`;
+    ${cfg.institucion?`<div style="font-size:11px;color:var(--text-light);margin-bottom:10px">${cfg.institucion}</div>`:''}
+    ${cfg.firmaUrl?`<div style="margin-top:14px;text-align:center">
+      <img src="${cfg.firmaUrl}" alt="Firma" style="max-height:56px;max-width:190px;object-fit:contain;mix-blend-mode:multiply;filter:brightness(1.25) contrast(1.7)">
+      <div style="border-top:1.5px solid var(--text-light);width:190px;margin:2px auto 4px"></div>
+      <div style="font-size:11px;font-weight:600">${cfg.nombreDoctor||''}</div>
+      <div style="font-size:10px;color:var(--text-light)">${cfg.especialidad||''}${cfg.registro?' · Reg. '+cfg.registro:''}</div>
+    </div>`:''}
+    <p style="font-size:11px;color:var(--text-light);text-align:center;margin-top:10px">Así aparecerá el encabezado en tus notas de consulta</p>`;
 }
 
 // ════════════════════ NOTA DE CONSULTA (IMPRESIÓN) ════════════════════
@@ -7391,9 +7593,10 @@ function quitarFirmaUsuario() {
   _pintarFirma(null);
 }
 
-// Imagen de la firma sobre la línea; si no hay, deja el espacio en blanco de siempre
+// Imagen de la firma sobre la línea; si no hay, deja el espacio en blanco de siempre.
+// Prioridad: la firma del usuario en sesión y, si no tiene, la de la clínica.
 function _firmaImgHTML(alto) {
-  const url = currentUser?.firmaUrl;
+  const url = currentUser?.firmaUrl || currentClinica?.firma_url;
   if(!url) return '<div style="height:'+alto+'px"></div>';
   // Limpia la foto de la firma: multiply funde el papel con la hoja y el contraste
   // lleva el gris del papel a blanco, dejando solo el trazo de tinta.

@@ -375,9 +375,16 @@
 
       <!-- CONFIGURACIÓN CLÍNICA -->
       <div id="view-configuracion" class="view">
+        <div class="card" style="margin-bottom:18px">
+          <div class="card-header">
+            <h3>🏥 Clínica que estás editando</h3>
+            <span class="text-light" style="font-size:12px" id="config-clinicas-hint"></span>
+          </div>
+          <div id="config-clinicas"><p class="text-light" style="font-size:13px">Cargando clínicas…</p></div>
+        </div>
         <div class="grid-2">
           <div class="card">
-            <div class="card-header"><h3>⚙️ Datos de la Clínica</h3></div>
+            <div class="card-header"><h3>⚙️ Datos de la Clínica</h3><span id="config-clinica-nom" class="tag tag-blue" style="font-size:11px"></span></div>
             <div style="display:flex;gap:18px;align-items:center;margin-bottom:22px">
               <div id="config-logo-box" class="config-logo-box" onclick="document.getElementById('config-logo-file').click()" style="cursor:pointer;border:2px dashed transparent;transition:border-color .2s" onmouseenter="this.style.borderColor='var(--primary)'" onmouseleave="this.style.borderColor='transparent'" title="Haz clic para cambiar el logo">🏥</div>
               <div style="flex:1">
@@ -389,6 +396,21 @@
                 </div>
                 <p class="text-light" style="margin-top:6px;font-size:11px">PNG, JPG o SVG · Aparece en todos los PDFs e impresiones</p>
               </div>
+            </div>
+            <div class="form-group full" style="margin-bottom:20px">
+              <label>Firma digital de la clínica <span style="font-size:11px;color:var(--text-light);font-weight:400">— se imprime en recetas y notas cuando quien firma no tiene firma propia</span></label>
+              <div class="firma-box">
+                <div class="firma-preview">
+                  <img id="config-firma-img" alt="Firma de la clínica" style="display:none">
+                  <span id="config-firma-placeholder" style="font-size:12px;color:var(--text-light)">Sin firma cargada</span>
+                </div>
+                <div class="firma-actions">
+                  <input type="file" id="config-firma-file" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="onConfigFirmaSeleccionada(this)">
+                  <button class="btn btn-secondary btn-sm" onclick="document.getElementById('config-firma-file').click()">✍️ Subir / cambiar</button>
+                  <button class="btn btn-sm" id="config-firma-remove" onclick="quitarFirmaClinica()" style="display:none;background:#FEE2E2;color:#DC2626;border:1px solid #FECACA">✕ Quitar</button>
+                </div>
+              </div>
+              <p class="text-light" style="margin-top:6px;font-size:11px">PNG, JPG o WEBP · máximo 2 MB · se limpia el fondo del papel al imprimir</p>
             </div>
             <div class="form-grid">
               <div class="form-group full"><label>Nombre de la Clínica *</label><input type="text" id="config-nombre-clinica" placeholder="Clínica Lumea Med"></div>

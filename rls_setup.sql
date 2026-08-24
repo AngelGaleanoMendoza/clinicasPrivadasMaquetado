@@ -115,3 +115,12 @@ ALTER TABLE public.examenes ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "examenes_clinica" ON public.examenes
   USING (is_superadmin() OR clinica_id = get_my_clinica_id())
   WITH CHECK (is_superadmin() OR clinica_id = get_my_clinica_id());
+
+-- ============================================================
+-- PASO 3: Columnas de configuración de clínica
+-- La pantalla de Configuración guarda estos datos en Supabase (antes solo
+-- quedaban en el navegador). Si faltan, el formulario guarda el resto y avisa.
+-- ============================================================
+ALTER TABLE public.clinicas ADD COLUMN IF NOT EXISTS en_produccion BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.clinicas ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE public.clinicas ADD COLUMN IF NOT EXISTS firma_url TEXT;
