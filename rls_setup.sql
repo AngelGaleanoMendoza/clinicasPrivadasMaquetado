@@ -364,3 +364,121 @@ ALTER TABLE public.clinicas     ADD COLUMN IF NOT EXISTS horario JSONB;
 DROP POLICY IF EXISTS "profiles_select" ON public.profiles;
 CREATE POLICY "profiles_select" ON public.profiles FOR SELECT
   USING (id = auth.uid() OR is_superadmin() OR clinica_id = get_my_clinica_id());
+
+
+-- ============================================================
+-- PASO 8: Desbloqueo definitivo del login (candado circular)
+--
+-- El problema: si `profiles.id` no coincide con el UUID de Supabase Auth,
+-- ninguna de las tres ramas de la política deja leer la fila —
+--   · id = auth.uid()            → falso, los ids no coinciden
+--   · is_superadmin()            → busca por id, no encuentra fila, da falso
+--   · clinica_id = get_my_...()  → get_my_clinica_id() también busca por id
+--                                  y devuelve NULL; NULL = NULL da NULL
+-- …y la app tampoco puede repararlo sola, porque para escribir el id correcto
+-- primero tendría que poder LEER la fila. Candado circular.
+--
+-- La salida es reconocer al usuario también por el email de su token, que
+-- Supabase Auth firma y el navegador no puede falsificar.
+-- Se puede ejecutar varias veces sin error.
+-- ============================================================
+
+-- 8.1 — Los helpers reconocen al usuario por id O por email del token
+CREATE OR REPLACE FUNCTION get_my_clinica_id()
+RETURNS bigint
+LANGUAGE sql
+SECURITY DEFINER STABLE
+AS $$
+  SELECT clinica_id FROM public.profiles
+  WHERE id = auth.uid()
+     OR lower(email) = lower(nullif(auth.jwt() ->> 'email', ''))
+  ORDER BY (id = auth.uid()) DESC NULLS LAST
+  LIMIT 1;
+$$;
+
+CREATE OR REPLACE FUNCTION is_superadmin()
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE (id = auth.uid()
+        OR lower(email) = lower(nullif(auth.jwt() ->> 'email', '')))
+      AND rol = 'superadmin'
+  );
+$$;
+
+-- 8.2 — Ver el propio perfil aunque el id todavía no esté sincronizado
+DROP POLICY IF EXISTS "profiles_select" ON public.profiles;
+CREATE POLICY "profiles_select" ON public.profiles FOR SELECT
+  USING (
+    id = auth.uid()
+    OR (auth.uid() IS NOT NULL
+        AND lower(email) = lower(nullif(auth.jwt() ->> 'email', '')))
+    OR is_superadmin()
+    OR clinica_id = get_my_clinica_id()
+  );
+
+-- 8.3 — Y poder corregir el propio id (es lo que hace resolverPerfil al entrar)
+DROP POLICY IF EXISTS "profiles_update" ON public.profiles;
+CREATE POLICY "profiles_update" ON public.profiles FOR UPDATE
+  USING (
+    id = auth.uid()
+    OR (auth.uid() IS NOT NULL
+        AND lower(email) = lower(nullif(auth.jwt() ->> 'email', '')))
+    OR is_superadmin()
+    OR clinica_id = get_my_clinica_id()
+  )
+  WITH CHECK (
+    id = auth.uid()
+    OR (auth.uid() IS NOT NULL
+        AND lower(email) = lower(nullif(auth.jwt() ->> 'email', '')))
+    OR is_superadmin()
+    OR clinica_id = get_my_clinica_id()
+  );
+
+-- 8.4 — Reparación de una sola vez: alinear profiles.id con el UUID de Auth
+-- arrastrando las columnas que apuntan a él, para no dejar citas huérfanas.
+-- Solo toca filas cuyo email coincide y cuyo id NO coincide.
+DO $$
+DECLARE
+  f RECORD;
+BEGIN
+  FOR f IN
+    SELECT p.id AS viejo, u.id AS nuevo
+    FROM public.profiles p
+    JOIN auth.users u ON lower(u.email) = lower(p.email)
+    WHERE p.id IS DISTINCT FROM u.id
+      AND NOT EXISTS (SELECT 1 FROM public.profiles p2 WHERE p2.id = u.id)
+  LOOP
+    UPDATE public.profiles SET id = f.nuevo WHERE id = f.viejo;
+
+    IF to_regclass('public.citas') IS NOT NULL THEN
+      UPDATE public.citas SET medico_id = f.nuevo WHERE medico_id = f.viejo;
+    END IF;
+    IF to_regclass('public.actividad_usuarios') IS NOT NULL THEN
+      UPDATE public.actividad_usuarios SET user_id = f.nuevo WHERE user_id = f.viejo;
+    END IF;
+    IF to_regclass('public.vacunas_mascota') IS NOT NULL THEN
+      UPDATE public.vacunas_mascota SET veterinario_id = f.nuevo WHERE veterinario_id = f.viejo;
+    END IF;
+    IF to_regclass('public.desparasitaciones') IS NOT NULL THEN
+      UPDATE public.desparasitaciones SET veterinario_id = f.nuevo WHERE veterinario_id = f.viejo;
+    END IF;
+    IF to_regclass('public.hospitalizaciones') IS NOT NULL THEN
+      UPDATE public.hospitalizaciones SET veterinario_id = f.nuevo WHERE veterinario_id = f.viejo;
+    END IF;
+
+    RAISE NOTICE 'Perfil realineado: % -> %', f.viejo, f.nuevo;
+  END LOOP;
+END $$;
+
+-- 8.5 — Comprobación: no debe quedar ninguna fila con "id_desalineado" = true
+SELECT p.email, p.rol, p.clinica_id,
+       (u.id IS NULL)              AS sin_cuenta_en_auth,
+       (u.id IS NOT NULL
+        AND p.id IS DISTINCT FROM u.id) AS id_desalineado
+FROM public.profiles p
+LEFT JOIN auth.users u ON lower(u.email) = lower(p.email)
+ORDER BY p.email;

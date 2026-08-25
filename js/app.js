@@ -333,9 +333,12 @@ async function verificarLogin() {
     // incorrecta" aquí manda a buscar el problema donde no está.
     setLoading(false);
     shakeLogin();
+    const detalle = _ultimoErrorPerfil ? '<br>Detalle: <code>' + escAttr(_ultimoErrorPerfil.message || '') + '</code>' : '';
     errEl.innerHTML = 'Tu contraseña es correcta, pero <strong>no se pudo cargar tu perfil</strong>.'
-      + '<br><small>Tu usuario existe en Supabase Auth pero su fila en <code>profiles</code> no es accesible.'
-      + '<br>Id de Auth: <code>' + authData.user.id + '</code></small>';
+      + '<br><small>Tu fila en <code>profiles</code> existe pero la política RLS no la deja leer, '
+      + 'casi siempre porque su <code>id</code> no coincide con el de Auth.'
+      + '<br>Solución: ejecutar el <strong>PASO 8</strong> de <code>rls_setup.sql</code> en Supabase.'
+      + '<br>Id de Auth: <code>' + authData.user.id + '</code>' + detalle + '</small>';
     errEl.style.display = 'block';
     document.getElementById('login-password').value = '';
     await sb.auth.signOut();
@@ -366,7 +369,7 @@ async function verificarLogin() {
   }
 
   // ── PASO 3: fallback legacy (profiles con password en texto plano) ──
-  const { data: legacy } = await _consultaPerfil(cols => sb.from('profiles').select(cols).eq('email', email).eq('password', password).maybeSingle());
+  const { data: legacy } = await _consultaPerfil(cols => sb.from('profiles').select(cols).ilike('email', email).eq('password', password).limit(1).maybeSingle());
   if(legacy) {
     // Auto-registrar en Auth para futuras sesiones
     const { data: migrAuth } = await sb.auth.signInWithPassword({ email, password });
@@ -403,12 +406,23 @@ async function verificarLogin() {
 }
 
 // Busca perfil por Auth UUID; si no lo encuentra por ID, lo busca por email y sincroniza
+let _ultimoErrorPerfil = null;
+
 async function resolverPerfil(authId, email) {
-  const { data: p1 } = await _consultaPerfil(cols => sb.from('profiles').select(cols).eq('id', authId).maybeSingle());
+  _ultimoErrorPerfil = null;
+  const { data: p1, error: e1 } = await _consultaPerfil(cols => sb.from('profiles').select(cols).eq('id', authId).maybeSingle());
   if(p1) return p1;
-  const { data: p2 } = await _consultaPerfil(cols => sb.from('profiles').select(cols).eq('email', email).maybeSingle());
+  if(e1) _ultimoErrorPerfil = e1;
+  // El id de la fila no coincide con el de Auth: buscarla por email. `ilike` y no
+  // `eq` porque el email pudo guardarse con otra caja ("Ana@..." vs "ana@...") y
+  // entonces el usuario quedaba fuera sin que nada lo explicara.
+  const { data: p2, error: e2 } = await _consultaPerfil(cols => sb.from('profiles').select(cols).ilike('email', email).limit(1).maybeSingle());
+  if(e2) _ultimoErrorPerfil = e2;
   if(p2) {
-    await sb.from('profiles').update({ id: authId }).eq('email', email);
+    // Sincronizar el id para que la próxima vez entre por la vía rápida. Si la
+    // política RLS no deja escribir, se entra igual: no es motivo para bloquear.
+    const { error: errSync } = await sb.from('profiles').update({ id: authId }).eq('id', p2.id);
+    if(errSync) { console.warn('No se pudo sincronizar el id del perfil:', errSync.message); return p2; }
     return { ...p2, id: authId };
   }
   return null;
