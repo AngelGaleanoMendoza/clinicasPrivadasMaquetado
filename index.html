@@ -99,6 +99,8 @@
       <div class="menu-item" id="menu-procedimientos" onclick="navigate('procedimientos')" style="display:none"><span class="icon">🦷</span> Procedimientos</div>
       <div class="menu-item" id="menu-farmacia" onclick="navigate('farmacia')" style="display:none"><span class="icon">💊</span> Farmacia</div>
       <div class="menu-section" id="menu-clinica-section">Clínica</div>
+      <div class="menu-item" id="menu-clientes" onclick="navigate('clientes')" style="display:none"><span class="icon">🧑‍🤝‍🧑</span> Clientes <span class="badge" id="badge-clientes">0</span></div>
+      <div class="menu-item" id="menu-mascotas" onclick="navigate('mascotas')" style="display:none"><span class="icon">🐾</span> Mascotas <span class="badge" id="badge-mascotas">0</span></div>
       <div class="menu-item" id="menu-pacientes" onclick="navigate('pacientes')"><span class="icon">👥</span> Pacientes <span class="badge" id="badge-pacientes">0</span></div>
       <div class="menu-item" id="menu-citas" onclick="navigate('citas')"><span class="icon">📅</span> Citas <span class="badge" id="badge-citas">0</span></div>
       <div class="menu-item" id="menu-agendas" onclick="navigate('agendas')"><span class="icon">🗓️</span> Agendas</div>
@@ -231,6 +233,37 @@
           <div id="pacientes-count" style="font-size:12px;color:var(--text-light);margin-bottom:10px"></div>
           <div id="tabla-pacientes"></div>
           <div id="pacientes-empty" class="empty-state" style="display:none"><div class="empty-icon">👥</div><p>No hay pacientes registrados.<br>Haz clic en <strong>+ Nuevo Paciente</strong> para comenzar.</p></div>
+        </div>
+      </div>
+
+      <!-- CLIENTES (VETERINARIA) -->
+      <div id="view-clientes" class="view">
+        <div class="card">
+          <div class="card-header"><h3>🧑‍🤝‍🧑 Clientes</h3><button class="btn btn-primary" onclick="openModalCliente()">+ Nuevo Cliente</button></div>
+          <div class="search-bar">
+            <div class="search-bar-input">
+              <span style="color:var(--text-light)">🔍</span>
+              <input type="text" id="clientes-search" placeholder="Buscar por nombre, identificación, teléfono o mascota..." oninput="filtrarClientes(this.value)">
+            </div>
+          </div>
+          <div id="clientes-count" style="font-size:12px;color:var(--text-light);margin-bottom:10px"></div>
+          <div id="lista-clientes"></div>
+        </div>
+      </div>
+
+      <!-- MASCOTAS (VETERINARIA) -->
+      <div id="view-mascotas" class="view">
+        <div class="card">
+          <div class="card-header"><h3>🐾 Mascotas</h3><button class="btn btn-primary" onclick="openModalMascota()">+ Nueva Mascota</button></div>
+          <div class="search-bar">
+            <div class="search-bar-input">
+              <span style="color:var(--text-light)">🔍</span>
+              <input type="text" id="mascotas-search" placeholder="Buscar por nombre, especie, raza, microchip o dueño..." oninput="filtrarMascotas(this.value)">
+            </div>
+          </div>
+          <div class="filter-chips" id="mascotas-chips" style="margin-bottom:12px"></div>
+          <div id="mascotas-count" style="font-size:12px;color:var(--text-light);margin-bottom:10px"></div>
+          <div id="lista-mascotas"></div>
         </div>
       </div>
 
@@ -1780,6 +1813,76 @@
       <button class="btn btn-secondary" onclick="guardarPaciente(false,false)">💾 Guardar</button>
       <button class="btn btn-secondary" id="btn-guardar-y-citar" onclick="guardarPaciente(false,true)" style="display:none">📅 Guardar y citar</button>
       <button class="btn btn-primary" onclick="guardarPaciente(true,false)">📋 Guardar y abrir expediente</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CLIENTE (VETERINARIA) -->
+<div class="modal-overlay" id="modal-cliente">
+  <div class="modal" style="max-width:620px">
+    <button class="modal-close-btn" onclick="closeModal('modal-cliente')" title="Cerrar">✕</button>
+    <h2 id="modal-cliente-title">🧑‍🤝‍🧑 Nuevo Cliente</h2>
+    <div class="form-grid">
+      <div class="form-group"><label>Nombre *</label><input type="text" id="cli-nombre" placeholder="María"></div>
+      <div class="form-group"><label>Apellidos</label><input type="text" id="cli-apellidos" placeholder="López Gómez"></div>
+      <div class="form-group"><label>Identificación</label><input type="text" id="cli-identificacion" placeholder="Cédula o pasaporte"></div>
+      <div class="form-group"><label>Teléfono</label><input type="tel" id="cli-telefono" placeholder="8888-0000" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9+\-\s()]/g,'')"></div>
+      <div class="form-group"><label>Teléfono alterno</label><input type="tel" id="cli-telefono-alt" placeholder="Opcional" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9+\-\s()]/g,'')"></div>
+      <div class="form-group"><label>Correo</label><input type="email" id="cli-email" placeholder="cliente@correo.com"></div>
+      <div class="form-group full"><label>Dirección</label><input type="text" id="cli-direccion" placeholder="Barrio, ciudad"></div>
+      <div class="form-group"><label>Estado</label><select id="cli-estado"><option value="activo">Activo</option><option value="inactivo">Inactivo</option></select></div>
+      <div class="form-group full"><label>Notas</label><textarea id="cli-notas" placeholder="Preferencias de contacto, observaciones..."></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-cliente')">Cancelar</button>
+      <button class="btn btn-secondary" onclick="guardarCliente(false)">💾 Guardar</button>
+      <button class="btn btn-primary" onclick="guardarCliente(true)">🐾 Guardar y agregar mascota</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL MASCOTA (VETERINARIA) -->
+<div class="modal-overlay" id="modal-mascota">
+  <div class="modal" style="max-width:660px">
+    <button class="modal-close-btn" onclick="closeModal('modal-mascota')" title="Cerrar">✕</button>
+    <h2 id="modal-mascota-title">🐾 Nueva Mascota</h2>
+    <div style="display:flex;gap:16px;align-items:center;margin-bottom:18px;flex-wrap:wrap">
+      <div id="mas-foto-box" class="mas-foto-box" onclick="document.getElementById('mas-foto').click()" title="Haz clic para subir una foto">
+        <img id="mas-foto-preview" style="display:none" alt="">
+        <span id="mas-foto-placeholder">🐾</span>
+      </div>
+      <div style="flex:1;min-width:180px">
+        <input type="file" id="mas-foto" accept="image/*" style="display:none" onchange="previewFotoMascota(event)">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('mas-foto').click()">📁 Subir foto</button>
+          <button class="btn btn-sm" id="btn-quitar-foto-mascota" onclick="quitarFotoMascota()" style="display:none;background:#FEE2E2;color:#DC2626;border:1px solid #FECACA">✕ Quitar</button>
+        </div>
+        <p class="text-light" style="margin-top:6px;font-size:11px">JPG o PNG · se muestra en la ficha y en las listas</p>
+      </div>
+    </div>
+    <div class="form-grid">
+      <div class="form-group full"><label>Dueño *</label>
+        <select id="mas-cliente"><option value="">Selecciona el cliente...</option></select>
+      </div>
+      <div class="form-group"><label>Nombre *</label><input type="text" id="mas-nombre" placeholder="Firulais"></div>
+      <div class="form-group"><label>Especie *</label><select id="mas-especie" onchange="onEspecieMascotaChange()"><option value="">Seleccionar...</option></select></div>
+      <div class="form-group"><label>Raza</label><input type="text" id="mas-raza" list="mas-razas-lista" placeholder="Escribe o elige..."><datalist id="mas-razas-lista"></datalist></div>
+      <div class="form-group"><label>Sexo</label><select id="mas-sexo"><option value="">Seleccionar...</option><option value="M">Macho</option><option value="H">Hembra</option></select></div>
+      <div class="form-group"><label>Fecha de nacimiento</label>
+        <input type="date" id="mas-fechanac" onchange="actualizarEdadMascota()">
+        <div id="mas-edad-calc" style="font-size:11.5px;color:var(--primary);margin-top:5px;font-weight:700;min-height:15px"></div>
+      </div>
+      <div class="form-group"><label>Esterilizado</label><select id="mas-esterilizado"><option value="no">No</option><option value="si">Sí</option><option value="desconocido">Se desconoce</option></select></div>
+      <div class="form-group"><label>Color / capa</label><input type="text" id="mas-color" placeholder="Negro y fuego"></div>
+      <div class="form-group"><label>Microchip</label><input type="text" id="mas-microchip" placeholder="Número, si tiene"></div>
+      <div class="form-group"><label>Estado</label><select id="mas-estado"><option value="activo">Activo</option><option value="inactivo">Inactivo</option><option value="fallecido">Fallecido</option></select></div>
+      <div class="form-group full"><label>Señas particulares</label><input type="text" id="mas-senas" placeholder="Mancha blanca en el pecho, oreja cortada..."></div>
+      <div class="form-group full"><label>Alergias</label><input type="text" id="mas-alergias" placeholder="Vacío si no se conocen"></div>
+      <div class="form-group full"><label>Observaciones</label><textarea id="mas-observaciones" placeholder="Carácter, manejo, antecedentes..."></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-mascota')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarMascota()">💾 Guardar mascota</button>
     </div>
   </div>
 </div>

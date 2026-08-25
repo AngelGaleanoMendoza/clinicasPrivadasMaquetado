@@ -136,6 +136,11 @@ const fromPerio= r => ({ id:r.id, pacienteId:r.paciente_id, datos:r.datos||{}, o
 
 const fromFact    = r => ({ id:r.id, numero:r.numero, pacienteId:r.paciente_id, pacienteNombre:r.paciente_nombre||'Consumidor Final', fecha:r.fecha, estado:r.estado||'pendiente', subtotal:Number(r.subtotal||0), impuestoPct:Number(r.impuesto_pct||0), impuesto:Number(r.impuesto||0), total:Number(r.total||0), notas:r.notas||null, citaId:r.cita_id||null });
 const fromFactItem= r => ({ id:r.id, facturaId:r.factura_id, descripcion:r.descripcion, tipo:r.tipo||'servicio', cantidad:Number(r.cantidad||1), precioUnitario:Number(r.precio_unitario||0), subtotal:Number(r.subtotal||0), inventarioId:r.inventario_id||null });
+// Veterinaria: el cliente es el dueño y la mascota es el paciente
+const fromCli = r => ({ id:r.id, nombre:r.nombre, apellidos:r.apellidos||'', identificacion:r.identificacion, telefono:r.telefono, telefonoAlt:r.telefono_alt, email:r.email, direccion:r.direccion, notas:r.notas, estado:r.estado||'activo', fechaRegistro:r.fecha_registro });
+const toCli   = x => ({ nombre:x.nombre, apellidos:x.apellidos||null, identificacion:x.identificacion||null, telefono:x.telefono||null, telefono_alt:x.telefonoAlt||null, email:x.email||null, direccion:x.direccion||null, notas:x.notas||null, estado:x.estado||'activo', fecha_registro:x.fechaRegistro||hoy(), clinica_id:currentClinicaId });
+const fromMas = r => ({ id:r.id, clienteId:r.cliente_id, nombre:r.nombre, especie:r.especie, raza:r.raza, sexo:r.sexo, fechaNac:r.fecha_nac, color:r.color, microchip:r.microchip, esterilizado:r.esterilizado||'no', senas:r.senas_particulares, alergias:r.alergias, observaciones:r.observaciones, estado:r.estado||'activo', fotoUrl:r.foto_url||null, expediente:r.expediente||null, fechaRegistro:r.fecha_registro });
+const toMas   = x => ({ cliente_id:x.clienteId||null, nombre:x.nombre, especie:x.especie||null, raza:x.raza||null, sexo:x.sexo||null, fecha_nac:x.fechaNac||null, color:x.color||null, microchip:x.microchip||null, esterilizado:x.esterilizado||'no', senas_particulares:x.senas||null, alergias:x.alergias||null, observaciones:x.observaciones||null, estado:x.estado||'activo', foto_url:x.fotoUrl||null, fecha_registro:x.fechaRegistro||hoy(), clinica_id:currentClinicaId });
 
 // ════════════════════ LOAD DATA ════════════════════
 async function loadAll() {
@@ -184,6 +189,18 @@ async function loadAll() {
       C.perio = rperio.error ? [] : (rperio.data||[]).map(fromPerio);
     } else {
       C.proc = []; C.hd = []; C.odo = []; C.perio = [];
+    }
+    // Tablas veterinarias (opcionales, igual que las odontológicas): solo se
+    // piden en clínicas veterinarias y se toleran si aún no existen en Supabase.
+    if(esVeterinaria() || isSuperAdmin()) {
+      const [rcli, rmas] = await Promise.all([
+        sb.from('clientes').select('*').eq('clinica_id', currentClinicaId).order('nombre'),
+        sb.from('mascotas').select('*').eq('clinica_id', currentClinicaId).order('nombre'),
+      ]);
+      C.cli = rcli.error ? [] : (rcli.data||[]).map(fromCli);
+      C.mas = rmas.error ? [] : (rmas.data||[]).map(fromMas);
+    } else {
+      C.cli = []; C.mas = [];
     }
     setDbStatus(true);
     // Notify once per session about expiring/expired products
@@ -746,7 +763,7 @@ async function navigate(view, patientId) {
   if(el) el.classList.add('active');
   const mi=document.querySelector(`.menu-item[onclick*="'${view}'"]`);
   if(mi) mi.classList.add('active');
-  const titles={dashboard:'Dashboard',expedientes:'Expedientes Clínicos',pacientes:'Pacientes',citas:'Citas',agendas:'Agendas',medicaciones:'Medicaciones',notas:'Notas Clínicas',atendidos:'Atendidos por Día',estadisticas:'Estadísticas',configuracion:'Configuración Clínica',exportar:'Exportar / Enviar','paciente-detalle':'Expediente del Paciente',admin:'Administración',inventario:'Inventario',finanzas:'Finanzas',procedimientos:'Procedimientos Odontológicos'};
+  const titles={dashboard:'Dashboard',expedientes:'Expedientes Clínicos',pacientes:'Pacientes',citas:'Citas',agendas:'Agendas',medicaciones:'Medicaciones',notas:'Notas Clínicas',atendidos:'Atendidos por Día',estadisticas:'Estadísticas',configuracion:'Configuración Clínica',exportar:'Exportar / Enviar','paciente-detalle':'Expediente del Paciente',admin:'Administración',inventario:'Inventario',finanzas:'Finanzas',procedimientos:'Procedimientos Odontológicos',farmacia:'Farmacia',clientes:'Clientes',mascotas:'Mascotas'};
   document.getElementById('page-title').textContent = titles[view]||view;
   currentView=view;
   if(patientId) currentPatientId=patientId;
@@ -772,6 +789,13 @@ async function navigate(view, patientId) {
   if(view==='pacientes' && (role==='farmaceutico' || esFarmacia)) { navigate('farmacia'); return; }
   if(view==='expedientes' && (role==='farmaceutico' || esFarmacia)) { navigate('farmacia'); return; }
   if(view==='procedimientos' && !isOdontologo() && !isSuperAdmin()) { navigate('dashboard'); return; }
+  // En veterinaria el paciente es la mascota: Pacientes y Expedientes humanos
+  // no tienen sentido y se redirigen a sus equivalentes.
+  if(esVeterinaria() && view==='pacientes')   { navigate('mascotas'); return; }
+  if(esVeterinaria() && view==='expedientes') { navigate('mascotas'); return; }
+  if((view==='clientes' || view==='mascotas') && !esVeterinaria() && !sa) { navigate('dashboard'); return; }
+  if(view==='clientes' && !hasPermiso('pacientes')) { navigate('dashboard'); return; }
+  if(view==='mascotas' && !hasPermiso('pacientes')) { navigate('dashboard'); return; }
   // Rutas especiales sin loadAll
   if(view==='finanzas'){
     renderFinanzas(); if(window.innerWidth<=768) closeSidebar(); return;
@@ -804,6 +828,8 @@ function renderView(v) {
     case 'farmacia': renderFarmacia(); break;
     case 'paciente-detalle': renderDetalleP(currentPatientId); break;
     case 'procedimientos': renderProcedimientosView(); break;
+    case 'clientes': renderClientes(); break;
+    case 'mascotas': renderMascotas(); break;
   }
   updateBadges();
 }
@@ -813,6 +839,8 @@ function updateBadges() {
   const citasHoy=C.c.filter(x=>x.fecha===h&&_citaActiva(x)).length;
   document.getElementById('badge-pacientes').textContent = C.p.length;
   document.getElementById('badge-citas').textContent = citasHoy;
+  const bCli=document.getElementById('badge-clientes'); if(bCli) bCli.textContent = C.cli.length;
+  const bMas=document.getElementById('badge-mascotas'); if(bMas) bMas.textContent = C.mas.length;
   const bnBadge=document.getElementById('bn-badge-citas');
   if(bnBadge){ bnBadge.textContent=citasHoy; bnBadge.style.display=citasHoy>0?'block':'none'; }
   updateBottomNav(currentView);
@@ -900,8 +928,11 @@ function renderNavQuickGrid(cv) {
   const el = document.getElementById('nav-quick-grid');
   if(!el) return;
   const sa = isSuperAdmin();
+  const esVet = esVeterinaria();
   const all = [
-    { view:'pacientes',    icon:'👥', label:'Pacientes',    show: hasPermiso('pacientes') },
+    { view:'clientes',     icon:'🧑‍🤝‍🧑', label:'Clientes', show: esVet && hasPermiso('pacientes') },
+    { view:'mascotas',     icon:'🐾', label:'Mascotas',     show: esVet && hasPermiso('pacientes') },
+    { view:'pacientes',    icon:'👥', label:'Pacientes',    show: !esVet && hasPermiso('pacientes') },
     { view:'citas',        icon:'📅', label:'Citas',        show: hasPermiso('citas') },
     { view:'agendas',      icon:'🗓️', label:'Agendas',      show: hasPermiso('agendas') },
     { view:'medicaciones', icon:'💊', label:'Recetas',      show: hasPermiso('medicaciones') },
@@ -3804,11 +3835,32 @@ function buscarPacienteEnModal(q) {
 function globalSearch(q){
   const dd=document.getElementById('search-dropdown');
   if(!q.trim()){ dd.style.display='none'; return; }
-  const r=C.p.filter(p=>`${p.nombre} ${p.apellidos} ${p.identificacion||''} ${p.telefono||''}`.toLowerCase().includes(q.toLowerCase())).slice(0,6);
+  const t=q.toLowerCase();
+  // En veterinaria se buscan mascotas (por nombre, raza, microchip o dueño)
+  if(esVeterinaria()){
+    const r=C.mas.filter(m=>{
+      const d=C.cli.find(c=>c.id===m.clienteId);
+      return `${m.nombre} ${m.especie||''} ${m.raza||''} ${m.microchip||''} ${nombreCliente(d)}`.toLowerCase().includes(t);
+    }).slice(0,6);
+    dd.innerHTML=r.length?r.map(m=>{
+      const d=C.cli.find(c=>c.id===m.clienteId);
+      return `<div class="search-result-item" onclick="selectSearchResultMascota(${m.id})"><div class="patient-avatar" style="background:${colAvatar(m.id)};width:30px;height:30px;font-size:14px">${especieIcon(m.especie)}</div><div><div style="font-weight:600;font-size:13px">${escAttr(m.nombre)}</div><div class="text-light">${escAttr([m.especie,m.raza].filter(Boolean).join(' · '))}${d?' · '+escAttr(nombreCliente(d)):''}</div></div></div>`;
+    }).join(''):'<p style="padding:12px 16px;color:var(--text-light);font-size:13px">Sin resultados</p>';
+    dd.style.display='block';
+    return;
+  }
+  const r=C.p.filter(p=>`${p.nombre} ${p.apellidos} ${p.identificacion||''} ${p.telefono||''}`.toLowerCase().includes(t)).slice(0,6);
   dd.innerHTML=r.length?r.map(p=>`<div class="search-result-item" onclick="selectSearchResult(${p.id})"><div class="patient-avatar" style="background:${colAvatar(p.id)};width:30px;height:30px;font-size:11px">${ini(p.nombre,p.apellidos)}</div><div><div style="font-weight:600;font-size:13px">${p.nombre} ${p.apellidos}</div><div class="text-light">${p.identificacion||''} ${p.telefono||''}</div></div></div>`).join(''):'<p style="padding:12px 16px;color:var(--text-light);font-size:13px">Sin resultados</p>';
   dd.style.display='block';
 }
 function selectSearchResult(id){ document.getElementById('global-search').value=''; document.getElementById('search-dropdown').style.display='none'; navigate('paciente-detalle',id); }
+function selectSearchResultMascota(id){ document.getElementById('global-search').value=''; document.getElementById('search-dropdown').style.display='none'; navigate('mascotas'); openModalMascota(id); }
+
+// El texto del buscador de la barra superior sigue al tipo de clínica
+function _syncBuscadorGlobal(){
+  const el=document.getElementById('global-search');
+  if(el) el.placeholder = esVeterinaria() ? 'Buscar mascota...' : 'Buscar paciente...';
+}
 
 // ════════════════════ HELPERS ════════════════════
 function fillSelect(sid) {
@@ -3898,6 +3950,8 @@ function closeModal(id){
   else if(id==='modal-nota') editingNotaId=null;
   else if(id==='modal-procedimiento') editingProcId=null;
   else if(id==='modal-odontograma') _odoCurrentPid=null;
+  else if(id==='modal-cliente') editingClienteId=null;
+  else if(id==='modal-mascota') { editingMascotaId=null; _fotoMascotaFile=null; }
   else editingId=null;
   // solo quitar scroll-lock si no queda otro modal abierto
   if(!document.querySelector('.modal-overlay.open')) document.body.classList.remove('modal-open');
@@ -6823,8 +6877,13 @@ function applyRoleMenu() {
     el.style.display = show ? (el.classList.contains('menu-section') ? 'block' : 'flex') : 'none';
   };
 
-  // ─ Expedientes: oculto en modo farmacia
-  vis('menu-expedientes', !modoFarmacia);
+  // ─ En veterinaria el paciente es la mascota: se cambian los ítems humanos
+  //   por Clientes y Mascotas en lugar de duplicar el menú entero.
+  const esVet = esVeterinaria();
+  _syncBuscadorGlobal();
+
+  // ─ Expedientes: oculto en modo farmacia y en veterinaria (lo cubre Mascotas)
+  vis('menu-expedientes', !modoFarmacia && !esVet);
 
   // ─ Módulo Farmacia
   vis('menu-farmacia', modoFarmacia || sa || hasPermiso('farmacia'));
@@ -6832,7 +6891,9 @@ function applyRoleMenu() {
   // ─ Sección Clínica y sus ítems (oculta en modo farmacia)
   const hasClinica = !modoFarmacia;
   vis('menu-clinica-section', hasClinica);
-  vis('menu-pacientes',       hasClinica && hasPermiso('pacientes'));
+  vis('menu-clientes',        hasClinica && esVet && hasPermiso('pacientes'));
+  vis('menu-mascotas',        hasClinica && esVet && hasPermiso('pacientes'));
+  vis('menu-pacientes',       hasClinica && !esVet && hasPermiso('pacientes'));
   vis('menu-citas',             hasClinica && hasPermiso('citas'));
   vis('menu-agendas',          hasClinica && hasPermiso('agendas') && !isOdonto);
   vis('menu-medicaciones',     hasClinica && hasPermiso('medicaciones'));
@@ -9943,3 +10004,424 @@ function descargarPDFFarmacia() {
   pdfAbrir('Reporte Farmacia — ' + label, body, cfg);
 }
 
+
+// ════════════════════ VETERINARIA: CLIENTES Y MASCOTAS ════════════════════
+// El paciente veterinario es la mascota y su dueño es el cliente. Un cliente
+// puede tener varias mascotas; la mascota apunta a un dueño.
+
+// Catálogo en código, como PROCEDIMIENTOS_DENTALES: una tabla para esto no
+// aportaría nada y habría que mantenerla por clínica.
+const ESPECIES_RAZAS = {
+  'Canino':   ['Mestizo','Labrador','Golden Retriever','Pastor Alemán','Rottweiler','Chihuahua','Poodle','Bulldog','Pug','Schnauzer','Beagle','Boxer','Pitbull','Husky','Shih Tzu','Cocker Spaniel','Dálmata','Doberman','Gran Danés','Yorkshire'],
+  'Felino':   ['Mestizo','Siamés','Persa','Angora','Maine Coon','Bengalí','Esfinge','Británico de pelo corto','Ragdoll'],
+  'Ave':      ['Perico','Canario','Loro','Cacatúa','Agapornis','Gallina','Paloma'],
+  'Conejo':   ['Mestizo','Mini Lop','Cabeza de León','Angora','Rex','Holandés'],
+  'Roedor':   ['Hámster','Cobayo','Chinchilla','Jerbo','Ratón','Rata'],
+  'Reptil':   ['Iguana','Tortuga','Gecko','Serpiente','Camaleón'],
+  'Equino':   ['Criollo','Cuarto de Milla','Pura Sangre','Appaloosa'],
+  'Bovino':   ['Brahman','Holstein','Pardo Suizo','Criollo'],
+  'Porcino':  ['Criollo','Landrace','Duroc','Mini pig'],
+  'Otro':     []
+};
+const ESPECIE_ICON = { 'Canino':'🐕','Felino':'🐈','Ave':'🦜','Conejo':'🐇','Roedor':'🐹','Reptil':'🦎','Equino':'🐴','Bovino':'🐄','Porcino':'🐖','Otro':'🐾' };
+const especieIcon = e => ESPECIE_ICON[e] || '🐾';
+
+// La edad de una mascota se cuenta en meses o semanas cuando aún no llega al
+// año: en veterinaria la diferencia entre 2 y 10 meses cambia el manejo.
+function calcEdadMascota(fn) {
+  if(!fn) return '—';
+  const nac = new Date(fn + 'T12:00:00'), hoyD = new Date();
+  if(isNaN(nac) || nac > hoyD) return '—';
+  let meses = (hoyD.getFullYear()-nac.getFullYear())*12 + (hoyD.getMonth()-nac.getMonth());
+  if(hoyD.getDate() < nac.getDate()) meses--;
+  if(meses < 1) {
+    const dias = Math.floor((hoyD - nac) / 86400000);
+    if(dias < 7)  return dias <= 1 ? '1 día' : dias + ' días';
+    const sem = Math.floor(dias/7);
+    return sem === 1 ? '1 semana' : sem + ' semanas';
+  }
+  if(meses < 12) return meses === 1 ? '1 mes' : meses + ' meses';
+  const anios = Math.floor(meses/12), resto = meses % 12;
+  return anios + (anios===1?' año':' años') + (resto ? ` ${resto} ${resto===1?'mes':'meses'}` : '');
+}
+
+let editingClienteId  = null;
+let editingMascotaId  = null;
+let _fotoMascotaFile  = null;
+let _fotoMascotaUrl   = null;
+let _filtroClientes   = '';
+let _filtroMascotas   = '';
+let _filtroEspecie    = '';
+
+// ── CLIENTES ──
+const mascotasDe = clienteId => C.mas.filter(m => m.clienteId === clienteId);
+const nombreCliente = c => c ? `${c.nombre} ${c.apellidos||''}`.trim() : '—';
+
+function renderClientes() {
+  _filtroClientes = '';
+  const inp = document.getElementById('clientes-search');
+  if(inp) inp.value = '';
+  _pintarClientes();
+}
+
+function filtrarClientes(q) { _filtroClientes = (q||'').toLowerCase(); _pintarClientes(); }
+
+function _pintarClientes() {
+  const cont = document.getElementById('lista-clientes');
+  if(!cont) return;
+  const q = _filtroClientes;
+  const lista = C.cli.filter(c => !q
+    || nombreCliente(c).toLowerCase().includes(q)
+    || (c.identificacion||'').toLowerCase().includes(q)
+    || (c.telefono||'').toLowerCase().includes(q)
+    || mascotasDe(c.id).some(m => (m.nombre||'').toLowerCase().includes(q)));
+
+  const cnt = document.getElementById('clientes-count');
+  if(cnt) cnt.textContent = C.cli.length
+    ? `${lista.length} de ${C.cli.length} ${C.cli.length===1?'cliente':'clientes'}`
+    : '';
+
+  if(!lista.length) {
+    cont.innerHTML = `<div class="empty-state" style="padding:36px">
+      <div class="empty-icon">🧑‍🤝‍🧑</div>
+      <p>${C.cli.length ? 'Ningún cliente coincide con la búsqueda'
+        : 'Aún no hay clientes.<br>Usa <strong>+ Nuevo Cliente</strong> para registrar al primer dueño.'}</p>
+    </div>`;
+    return;
+  }
+
+  cont.innerHTML = lista.map(c => {
+    const suyas = mascotasDe(c.id);
+    return `<div class="cli-card">
+      <div class="cli-avatar" style="background:${colAvatar(c.id||0)}">${escAttr((c.nombre||'?')[0].toUpperCase())}</div>
+      <div class="cli-body">
+        <div class="cli-nombre">${escAttr(nombreCliente(c))}</div>
+        <div class="cli-meta">
+          ${c.telefono?`<span>📞 ${escAttr(c.telefono)}</span>`:''}
+          ${c.identificacion?`<span>🪪 ${escAttr(c.identificacion)}</span>`:''}
+          ${c.email?`<span>✉️ ${escAttr(c.email)}</span>`:''}
+        </div>
+        <div class="cli-mascotas">
+          ${suyas.length
+            ? suyas.map(m => `<span class="cli-pet" onclick="event.stopPropagation();openModalMascota(${m.id})" title="Editar ${escAttr(m.nombre)}">${especieIcon(m.especie)} ${escAttr(m.nombre)}</span>`).join('')
+            : '<span class="cli-pet vacio">Sin mascotas registradas</span>'}
+          <span class="cli-pet add" onclick="event.stopPropagation();openModalMascota(null,${c.id})" title="Agregar mascota a este cliente">+ Mascota</span>
+        </div>
+      </div>
+      <div class="cli-acciones">
+        <button class="btn btn-secondary btn-sm" onclick="openModalCliente(${c.id})">✏️ Editar</button>
+        <button class="btn btn-danger btn-sm" onclick="eliminarCliente(${c.id})" title="Eliminar cliente">🗑️</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openModalCliente(id) {
+  editingClienteId = id || null;
+  const c = id ? C.cli.find(x => x.id === id) : null;
+  document.getElementById('modal-cliente-title').textContent = c ? '🧑‍🤝‍🧑 Editar Cliente' : '🧑‍🤝‍🧑 Nuevo Cliente';
+  document.getElementById('cli-nombre').value        = c?.nombre || '';
+  document.getElementById('cli-apellidos').value     = c?.apellidos || '';
+  document.getElementById('cli-identificacion').value= c?.identificacion || '';
+  document.getElementById('cli-telefono').value      = c?.telefono || '';
+  document.getElementById('cli-telefono-alt').value  = c?.telefonoAlt || '';
+  document.getElementById('cli-email').value         = c?.email || '';
+  document.getElementById('cli-direccion').value     = c?.direccion || '';
+  document.getElementById('cli-estado').value        = c?.estado || 'activo';
+  document.getElementById('cli-notas').value         = c?.notas || '';
+  openModalOverlay('modal-cliente');
+}
+
+async function guardarCliente(irAMascota) {
+  if(!currentClinicaId) { toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
+  const obj = {
+    nombre:         document.getElementById('cli-nombre').value.trim(),
+    apellidos:      document.getElementById('cli-apellidos').value.trim(),
+    identificacion: document.getElementById('cli-identificacion').value.trim(),
+    telefono:       document.getElementById('cli-telefono').value.trim(),
+    telefonoAlt:    document.getElementById('cli-telefono-alt').value.trim(),
+    email:          document.getElementById('cli-email').value.trim(),
+    direccion:      document.getElementById('cli-direccion').value.trim(),
+    estado:         document.getElementById('cli-estado').value,
+    notas:          document.getElementById('cli-notas').value.trim()
+  };
+  if(!obj.nombre) { toast('El nombre del cliente es obligatorio','error'); return; }
+
+  setLoading(true);
+  let nuevoId = editingClienteId;
+  let error;
+  if(editingClienteId) {
+    ({ error } = await sb.from('clientes').update(toCli(obj)).eq('id', editingClienteId));
+  } else {
+    const r = await sb.from('clientes').insert([toCli(obj)]).select('id').single();
+    error = r.error; nuevoId = r.data?.id || null;
+  }
+  setLoading(false);
+  if(error) { toast('Error al guardar: ' + error.message, 'error'); return; }
+  toast(editingClienteId ? 'Cliente actualizado ✅' : 'Cliente registrado ✅');
+  closeModal('modal-cliente');
+  await loadAll();
+  _pintarClientes();
+  updateBadges();
+  if(irAMascota && nuevoId) openModalMascota(null, nuevoId);
+}
+
+async function eliminarCliente(id) {
+  const c = C.cli.find(x => x.id === id);
+  const suyas = mascotasDe(id);
+  const ok = await customConfirm({
+    icon: '🗑️', title: 'Eliminar cliente',
+    msg: suyas.length
+      ? `<strong>${escAttr(nombreCliente(c))}</strong> tiene ${suyas.length} ${suyas.length===1?'mascota registrada':'mascotas registradas'}.<br><small style="color:var(--text-light)">Las mascotas se conservan, pero quedarán sin dueño asignado.</small>`
+      : `¿Eliminar a <strong>${escAttr(nombreCliente(c))}</strong>?`,
+    okText: 'Eliminar', danger: true
+  });
+  if(!ok) return;
+  setLoading(true);
+  const { error } = await sb.from('clientes').delete().eq('id', id);
+  setLoading(false);
+  if(error) { toast('Error al eliminar: ' + error.message, 'error'); return; }
+  toast('Cliente eliminado');
+  await loadAll();
+  _pintarClientes();
+  updateBadges();
+}
+
+// ── MASCOTAS ──
+function renderMascotas() {
+  _filtroMascotas = ''; _filtroEspecie = '';
+  const inp = document.getElementById('mascotas-search');
+  if(inp) inp.value = '';
+  _pintarMascotas();
+}
+
+function filtrarMascotas(q) { _filtroMascotas = (q||'').toLowerCase(); _pintarMascotas(); }
+function setFiltroEspecie(esp) { _filtroEspecie = esp || ''; _pintarMascotas(); }
+
+function _pintarMascotas() {
+  const cont = document.getElementById('lista-mascotas');
+  if(!cont) return;
+  const q = _filtroMascotas;
+  const lista = C.mas.filter(m => {
+    if(_filtroEspecie && m.especie !== _filtroEspecie) return false;
+    if(!q) return true;
+    const dueno = C.cli.find(c => c.id === m.clienteId);
+    return (m.nombre||'').toLowerCase().includes(q)
+      || (m.especie||'').toLowerCase().includes(q)
+      || (m.raza||'').toLowerCase().includes(q)
+      || (m.microchip||'').toLowerCase().includes(q)
+      || nombreCliente(dueno).toLowerCase().includes(q);
+  });
+
+  // Chips de especie: solo las que existen realmente
+  const especies = [...new Set(C.mas.map(m => m.especie).filter(Boolean))].sort();
+  const chips = document.getElementById('mascotas-chips');
+  if(chips) chips.innerHTML = especies.length
+    ? `<span class="chip${!_filtroEspecie?' active':''}" onclick="setFiltroEspecie('')">Todas</span>`
+      + especies.map(e => `<span class="chip${_filtroEspecie===e?' active':''}" onclick="setFiltroEspecie('${escAttr(e)}')">${especieIcon(e)} ${escAttr(e)}</span>`).join('')
+    : '';
+
+  const cnt = document.getElementById('mascotas-count');
+  if(cnt) cnt.textContent = C.mas.length
+    ? `${lista.length} de ${C.mas.length} ${C.mas.length===1?'mascota':'mascotas'}`
+    : '';
+
+  if(!lista.length) {
+    cont.innerHTML = `<div class="empty-state" style="padding:36px">
+      <div class="empty-icon">🐾</div>
+      <p>${C.mas.length ? 'Ninguna mascota coincide con la búsqueda'
+        : C.cli.length ? 'Aún no hay mascotas.<br>Usa <strong>+ Nueva Mascota</strong> para registrar la primera.'
+                       : 'Primero registra un cliente en <strong>Clientes</strong>, y después su mascota.'}</p>
+    </div>`;
+    return;
+  }
+
+  cont.innerHTML = `<div class="mas-grid">${lista.map(m => {
+    const dueno = C.cli.find(c => c.id === m.clienteId);
+    return `<div class="mas-card">
+      <div class="mas-thumb" style="background:${colAvatar(m.id||0)}">
+        ${m.fotoUrl ? `<img src="${escAttr(m.fotoUrl)}" alt="${escAttr(m.nombre)}" loading="lazy">`
+                    : `<span>${especieIcon(m.especie)}</span>`}
+        ${m.estado !== 'activo' ? `<span class="mas-badge-estado">${escAttr(m.estado)}</span>` : ''}
+      </div>
+      <div class="mas-body">
+        <div class="mas-nombre">${escAttr(m.nombre)}</div>
+        <div class="mas-meta">${[m.especie, m.raza].filter(Boolean).map(escAttr).join(' · ') || 'Sin especie'}</div>
+        <div class="mas-meta">${m.sexo==='M'?'♂ Macho':m.sexo==='H'?'♀ Hembra':'Sexo sin registrar'} · ${calcEdadMascota(m.fechaNac)}</div>
+        ${dueno ? `<div class="mas-dueno" onclick="event.stopPropagation();openModalCliente(${dueno.id})" title="Ver dueño">🧑 ${escAttr(nombreCliente(dueno))}</div>`
+                : '<div class="mas-dueno sin">🧑 Sin dueño asignado</div>'}
+        ${m.alergias ? `<div class="mas-alerta">⚠ ${escAttr(m.alergias)}</div>` : ''}
+        <div class="mas-acciones">
+          <button class="btn btn-secondary btn-sm" onclick="openModalMascota(${m.id})">✏️ Editar</button>
+          <button class="btn btn-danger btn-sm" onclick="eliminarMascota(${m.id})" title="Eliminar mascota">🗑️</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function fillClienteSelect(selectedId) {
+  const sel = document.getElementById('mas-cliente');
+  if(!sel) return;
+  sel.innerHTML = '<option value="">Selecciona el cliente...</option>'
+    + C.cli.slice().sort((a,b) => nombreCliente(a).localeCompare(nombreCliente(b)))
+        .map(c => `<option value="${c.id}"${c.id===selectedId?' selected':''}>${escAttr(nombreCliente(c))}${c.telefono?' — '+escAttr(c.telefono):''}</option>`).join('');
+}
+
+function fillEspecieSelect(selected) {
+  const sel = document.getElementById('mas-especie');
+  if(!sel) return;
+  sel.innerHTML = '<option value="">Seleccionar...</option>'
+    + Object.keys(ESPECIES_RAZAS).map(e => `<option value="${e}"${e===selected?' selected':''}>${especieIcon(e)} ${e}</option>`).join('');
+}
+
+function onEspecieMascotaChange() {
+  const esp = document.getElementById('mas-especie').value;
+  const dl  = document.getElementById('mas-razas-lista');
+  if(dl) dl.innerHTML = (ESPECIES_RAZAS[esp] || []).map(r => `<option value="${escAttr(r)}">`).join('');
+}
+
+function actualizarEdadMascota() {
+  const el = document.getElementById('mas-edad-calc');
+  const v  = document.getElementById('mas-fechanac').value;
+  if(!el) return;
+  el.textContent = v ? '🎂 ' + calcEdadMascota(v) : '';
+}
+
+function previewFotoMascota(event) {
+  const file = event.target.files[0];
+  if(!file) return;
+  if(!/^image\//.test(file.type)) { toast('La foto debe ser una imagen','error'); event.target.value=''; return; }
+  if(file.size > 5 * 1024 * 1024) { toast('La imagen supera los 5 MB','error'); event.target.value=''; return; }
+  _fotoMascotaFile = file;
+  const lector = new FileReader();
+  lector.onload = e => _pintarFotoMascota(e.target.result);
+  lector.readAsDataURL(file);
+}
+
+function _pintarFotoMascota(src) {
+  const img = document.getElementById('mas-foto-preview');
+  const ph  = document.getElementById('mas-foto-placeholder');
+  const btn = document.getElementById('btn-quitar-foto-mascota');
+  if(!img || !ph) return;
+  if(src) { img.src = src; img.style.display = ''; ph.style.display = 'none'; }
+  else    { img.removeAttribute('src'); img.style.display = 'none'; ph.style.display = ''; }
+  if(btn) btn.style.display = src ? '' : 'none';
+}
+
+function quitarFotoMascota() {
+  _fotoMascotaFile = null;
+  _fotoMascotaUrl = null;
+  const f = document.getElementById('mas-foto');
+  if(f) f.value = '';
+  _pintarFotoMascota(null);
+}
+
+async function subirFotoMascota(file, mascotaId) {
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  const path = `mascotas/${mascotaId}.${ext}`;
+  const { error } = await sb.storage.from(STORAGE_BUCKET).upload(path, file, { upsert:true, contentType:file.type });
+  if(error) throw error;
+  const { data } = sb.storage.from(STORAGE_BUCKET).getPublicUrl(path);
+  return data.publicUrl + '?v=' + Date.now();
+}
+
+function openModalMascota(id, clienteId) {
+  editingMascotaId = id || null;
+  const m = id ? C.mas.find(x => x.id === id) : null;
+  document.getElementById('modal-mascota-title').textContent = m ? '🐾 Editar Mascota' : '🐾 Nueva Mascota';
+  fillClienteSelect(m ? m.clienteId : (clienteId || null));
+  fillEspecieSelect(m?.especie || '');
+  document.getElementById('mas-nombre').value        = m?.nombre || '';
+  document.getElementById('mas-raza').value          = m?.raza || '';
+  document.getElementById('mas-sexo').value          = m?.sexo || '';
+  document.getElementById('mas-fechanac').value      = m?.fechaNac || '';
+  document.getElementById('mas-esterilizado').value  = m?.esterilizado || 'no';
+  document.getElementById('mas-color').value         = m?.color || '';
+  document.getElementById('mas-microchip').value     = m?.microchip || '';
+  document.getElementById('mas-estado').value        = m?.estado || 'activo';
+  document.getElementById('mas-senas').value         = m?.senas || '';
+  document.getElementById('mas-alergias').value      = m?.alergias || '';
+  document.getElementById('mas-observaciones').value = m?.observaciones || '';
+  document.getElementById('mas-foto').value          = '';
+  _fotoMascotaFile = null;
+  _fotoMascotaUrl  = m?.fotoUrl || null;
+  _pintarFotoMascota(_fotoMascotaUrl);
+  onEspecieMascotaChange();
+  actualizarEdadMascota();
+  openModalOverlay('modal-mascota');
+}
+
+async function guardarMascota() {
+  if(!currentClinicaId) { toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
+  const obj = {
+    clienteId:     parseInt(document.getElementById('mas-cliente').value) || null,
+    nombre:        document.getElementById('mas-nombre').value.trim(),
+    especie:       document.getElementById('mas-especie').value,
+    raza:          document.getElementById('mas-raza').value.trim(),
+    sexo:          document.getElementById('mas-sexo').value,
+    fechaNac:      document.getElementById('mas-fechanac').value || null,
+    esterilizado:  document.getElementById('mas-esterilizado').value,
+    color:         document.getElementById('mas-color').value.trim(),
+    microchip:     document.getElementById('mas-microchip').value.trim(),
+    estado:        document.getElementById('mas-estado').value,
+    senas:         document.getElementById('mas-senas').value.trim(),
+    alergias:      document.getElementById('mas-alergias').value.trim(),
+    observaciones: document.getElementById('mas-observaciones').value.trim(),
+    fotoUrl:       _fotoMascotaUrl
+  };
+  if(!obj.nombre)    { toast('El nombre de la mascota es obligatorio','error'); return; }
+  if(!obj.clienteId) { toast('Elige el dueño de la mascota','error'); return; }
+  if(!obj.especie)   { toast('Elige la especie','error'); return; }
+  if(obj.fechaNac && obj.fechaNac > hoy()) { toast('La fecha de nacimiento no puede ser futura','error'); return; }
+
+  setLoading(true);
+  let mascotaId = editingMascotaId, error;
+  if(editingMascotaId) {
+    ({ error } = await sb.from('mascotas').update(toMas(obj)).eq('id', editingMascotaId));
+  } else {
+    const r = await sb.from('mascotas').insert([toMas(obj)]).select('id').single();
+    error = r.error; mascotaId = r.data?.id || null;
+  }
+  if(error) { setLoading(false); toast('Error al guardar: ' + error.message, 'error'); return; }
+
+  // La foto se sube después para poder nombrar el archivo con el id definitivo
+  if(_fotoMascotaFile && mascotaId) {
+    try {
+      const url = await subirFotoMascota(_fotoMascotaFile, mascotaId);
+      await sb.from('mascotas').update({ foto_url: url }).eq('id', mascotaId);
+    } catch(e) {
+      setLoading(false);
+      toast('Mascota guardada, pero la foto no se pudo subir: ' + e.message, 'warning');
+      closeModal('modal-mascota');
+      await loadAll(); _pintarMascotas(); updateBadges();
+      return;
+    }
+  }
+  setLoading(false);
+  toast(editingMascotaId ? 'Mascota actualizada 🐾' : 'Mascota registrada 🐾');
+  closeModal('modal-mascota');
+  await loadAll();
+  _pintarMascotas();
+  if(currentView === 'clientes') _pintarClientes();
+  updateBadges();
+}
+
+async function eliminarMascota(id) {
+  const m = C.mas.find(x => x.id === id);
+  const ok = await customConfirm({
+    icon: '🗑️', title: 'Eliminar mascota',
+    msg: `¿Eliminar a <strong>${escAttr(m?.nombre||'')}</strong>?<br><small style="color:var(--text-light)">Se borrará también su expediente, citas y registros clínicos.</small>`,
+    okText: 'Eliminar', danger: true
+  });
+  if(!ok) return;
+  setLoading(true);
+  const { error } = await sb.from('mascotas').delete().eq('id', id);
+  setLoading(false);
+  if(error) { toast('Error al eliminar: ' + error.message, 'error'); return; }
+  toast('Mascota eliminada');
+  await loadAll();
+  _pintarMascotas();
+  if(currentView === 'clientes') _pintarClientes();
+  updateBadges();
+}
