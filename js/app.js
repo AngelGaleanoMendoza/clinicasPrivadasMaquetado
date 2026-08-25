@@ -156,7 +156,7 @@ async function loadAll() {
       sb.from('medicaciones').select('*').eq('clinica_id', currentClinicaId).order('id'),
       sb.from('notas').select('*').eq('clinica_id', currentClinicaId).order('id'),
       sb.from('expediente').select('*').eq('clinica_id', currentClinicaId).order('id'),
-      sb.from('profiles').select('id,nombre,rol,email,icono,clinica_id').eq('clinica_id', currentClinicaId),
+      sb.from('profiles').select('id,nombre,rol,email,icono,clinica_id,horario').eq('clinica_id', currentClinicaId),
       sb.from('inventario').select('*').eq('clinica_id', currentClinicaId).order('nombre'),
       sb.from('inventario_movimientos').select('*').eq('clinica_id', currentClinicaId).order('fecha', {ascending:false}).limit(500),
       sb.from('finanzas').select('*').eq('clinica_id', currentClinicaId).order('fecha', {ascending:false}).limit(1000),
@@ -171,7 +171,14 @@ async function loadAll() {
     C.m = (rm.data||[]).map(fromM);
     C.n = (rn.data||[]).map(fromN);
     C.e = re.error ? [] : (re.data||[]).map(fromE);
-    C.prof = rpf.error ? [] : (rpf.data||[]);
+    // La columna horario puede no existir todavía: se reintenta sin ella para no
+    // quedarnos sin profesionales (rompería los selects de médico y las agendas).
+    if(rpf.error && _faltaColumna(rpf.error, 'horario')) {
+      const r2 = await sb.from('profiles').select('id,nombre,rol,email,icono,clinica_id').eq('clinica_id', currentClinicaId);
+      C.prof = r2.error ? [] : (r2.data||[]);
+    } else {
+      C.prof = rpf.error ? [] : (rpf.data||[]);
+    }
     C.inv = ri.error ? [] : (ri.data||[]).map(fromInv);
     C.mov = rmov.error ? [] : (rmov.data||[]).map(fromMov);
     C.fin = rfin.error ? [] : (rfin.data||[]).map(fromFin);
@@ -854,39 +861,60 @@ function updateBadges() {
 }
 
 // ════════════════════ CALENDARIO ════════════════════
-function renderCalendar(containerId, interactive) {
-  const d=new Date(selCalDate+'T12:00:00'), year=d.getFullYear(), month=d.getMonth();
-  const citaCount={};
-  C.c.forEach(c=>{ if(_citaActiva(c)) citaCount[c.fecha]=(citaCount[c.fecha]||0)+1; });
-  const today2=hoy();
-  const first=new Date(year,month,1).getDay(), days=new Date(year,month+1,0).getDate();
-  const months=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  const dow=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
-  let html=`<div class="cal-nav">
+// ════════════════════ MOTOR DE CALENDARIO ════════════════════
+// Un único generador de rejilla mensual: antes renderCalendar y
+// renderAgendaCalendar eran copias casi literales y ya se habían
+// desincronizado (una contaba las citas canceladas y la otra no).
+const CAL_MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const CAL_DOW   = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+
+// Devuelve string y no toca el DOM, para poder componerlo desde cualquier vista.
+function _calMesHTML({ ancla, seleccionada, conteo, onNav, onDay }) {
+  const d = new Date(ancla+'T12:00:00'), year = d.getFullYear(), month = d.getMonth();
+  const today2 = hoy();
+  const first = new Date(year,month,1).getDay(), days = new Date(year,month+1,0).getDate();
+  let html = `<div class="cal-nav">
     <div class="cal-nav-btns">
-      <button class="btn-ghost" onclick="calNav(-1,'${containerId}',${interactive?1:0})">‹</button>
-      <button class="btn-ghost" onclick="calNav(0,'${containerId}',${interactive?1:0})" style="font-size:11px;padding:5px 8px">Hoy</button>
-      <button class="btn-ghost" onclick="calNav(1,'${containerId}',${interactive?1:0})">›</button>
+      <button class="btn-ghost" onclick="${onNav(-1)}">‹</button>
+      <button class="btn-ghost" onclick="${onNav(0)}" style="font-size:11px;padding:5px 8px">Hoy</button>
+      <button class="btn-ghost" onclick="${onNav(1)}">›</button>
     </div>
-    <h4>${months[month]} <span style="color:var(--text-light);font-weight:500">${year}</span></h4>
+    <h4>${CAL_MESES[month]} <span style="color:var(--text-light);font-weight:500">${year}</span></h4>
   </div>
   <div class="cal-grid">`;
-  dow.forEach((dw,i)=>html+=`<div class="cal-dow${i===0||i===6?' weekend-dow':''}">${dw}</div>`);
-  for(let i=0;i<first;i++) html+=`<div class="cal-day empty"></div>`;
+  CAL_DOW.forEach((dw,i) => html += `<div class="cal-dow${i===0||i===6?' weekend-dow':''}">${dw}</div>`);
+  for(let i=0;i<first;i++) html += `<div class="cal-day empty"></div>`;
   for(let i=1;i<=days;i++){
-    const ds=`${year}-${String(month+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
-    const dow2=new Date(ds+'T12:00:00').getDay();
-    const isToday=ds===today2, isSelected=ds===selCalDate&&!isToday;
-    const cnt=citaCount[ds]||0;
-    const isWeekend=dow2===0||dow2===6;
-    const cls=['cal-day',isToday?'today':isSelected?'selected':'',cnt?'has-event':'',isWeekend&&!isToday&&!isSelected?'weekend':''].filter(Boolean).join(' ');
-    const click=interactive?`onclick="selectCalDay('${ds}','${containerId}')"`:'' ;
-    const dots=cnt?`<div class="cal-dots">${Array.from({length:Math.min(cnt,3)},()=>`<div class="cal-dot-pip"></div>`).join('')}</div>`:`<div style="height:5px"></div>`;
-    html+=`<div class="${cls}" ${click} title="${cnt?cnt+' cita'+(cnt>1?'s':''):''}"><span>${i}</span>${dots}</div>`;
+    const ds = `${year}-${String(month+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
+    const dow2 = new Date(ds+'T12:00:00').getDay();
+    const isToday = ds===today2, isSel = ds===seleccionada && !isToday;
+    const cnt = conteo[ds]||0;
+    const isWeekend = dow2===0||dow2===6;
+    const cls = ['cal-day',isToday?'today':isSel?'selected':'',cnt?'has-event':'',isWeekend&&!isToday&&!isSel?'weekend':''].filter(Boolean).join(' ');
+    const click = onDay ? `onclick="${onDay(ds)}"` : '';
+    const dots = cnt ? `<div class="cal-dots">${Array.from({length:Math.min(cnt,3)},()=>`<div class="cal-dot-pip"></div>`).join('')}</div>` : `<div style="height:5px"></div>`;
+    html += `<div class="${cls}" ${click} title="${cnt?cnt+' cita'+(cnt>1?'s':''):''}"><span>${i}</span>${dots}</div>`;
   }
-  html+='</div>';
-  const el=document.getElementById(containerId);
-  if(el) el.innerHTML=html;
+  return html + '</div>';
+}
+
+// Cuenta de citas vivas por fecha; sin filtro de profesional cuenta todas.
+function _conteoCitas(citas) {
+  const conteo = {};
+  (citas||C.c).forEach(c => { if(_citaActiva(c)) conteo[c.fecha] = (conteo[c.fecha]||0)+1; });
+  return conteo;
+}
+
+function renderCalendar(containerId, interactive) {
+  const el = document.getElementById(containerId);
+  if(!el) return;
+  el.innerHTML = _calMesHTML({
+    ancla: selCalDate,
+    seleccionada: selCalDate,
+    conteo: _conteoCitas(),
+    onNav: dir => `calNav(${dir},'${containerId}',${interactive?1:0})`,
+    onDay: interactive ? (ds => `selectCalDay('${ds}','${containerId}')`) : null
+  });
 }
 
 function calNav(dir,c,inter){
@@ -2118,33 +2146,121 @@ function fillMedicoSelect(selId, selectedId) {
   else if (['medico','medico_admin','admin'].includes(currentUser?.key)) sel.value = currentUser.id;
 }
 
+// ════════════════════ HORARIOS Y DISPONIBILIDAD ════════════════════
+// Jornada por profesional en profiles.horario (JSONB). Mientras nadie configure
+// nada, HORARIO_DEFECTO reproduce exactamente el 6:00–22:00 cada 30 min que
+// tenía el sistema, así que las clínicas existentes no notan ningún cambio.
+// El fin es 22:30 exclusivo para que el último slot sea 22:00... en realidad el
+// sistema anterior ofrecía hasta las 22:30 inclusive (bucle h<=22 con m 0 y 30),
+// así que el tramo llega a 23:00 y produce los mismos 34 slots de siempre.
+const HORARIO_DEFECTO = {
+  paso: 30,
+  duracionDefecto: 30,
+  dias: { '0':[['06:00','23:00']], '1':[['06:00','23:00']], '2':[['06:00','23:00']],
+          '3':[['06:00','23:00']], '4':[['06:00','23:00']], '5':[['06:00','23:00']],
+          '6':[['06:00','23:00']] }
+};
+const _minutos = hhmm => { const [h,m] = (hhmm||'0:0').split(':').map(Number); return h*60 + (m||0); };
+const _hhmm    = min => `${String(Math.floor(min/60)).padStart(2,'0')}:${String(min%60).padStart(2,'0')}`;
+
+// Cascada: horario del profesional → de la clínica → el de siempre.
+function _horarioDe(medicoId) {
+  const prof = medicoId ? C.prof.find(p => p.id == medicoId) : null;
+  return prof?.horario || currentClinica?.horario || HORARIO_DEFECTO;
+}
+// Tramos del día (permite dos por día, que resuelve el almuerzo sin bloqueos)
+function _tramosDia(medicoId, fecha) {
+  const h = _horarioDe(medicoId);
+  const dow = String(new Date(fecha+'T12:00:00').getDay());
+  return (h.dias && h.dias[dow]) || [];
+}
+// Slots agendables de un día concreto, según la jornada configurada
+function _slotsDelDia(medicoId, fecha) {
+  const h = _horarioDe(medicoId);
+  const paso = h.paso || 30;
+  const slots = [];
+  _tramosDia(medicoId, fecha).forEach(([ini, fin]) => {
+    for(let m = _minutos(ini); m < _minutos(fin); m += paso) slots.push(_hhmm(m));
+  });
+  return slots;
+}
+
+// Intervalos ocupados por un profesional ese día (solo citas vivas)
+function _ocupacion(medicoId, fecha, excluirId) {
+  return C.c
+    .filter(c => c.fecha === fecha && _citaActiva(c) && c.id !== excluirId
+                 && (medicoId ? c.medicoId == medicoId : !c.medicoId))
+    .map(c => ({ ini: _minutos(c.hora), fin: _minutos(c.hora) + (c.duracionMin||30), cita: c }));
+}
+// Devuelve la LISTA de citas en conflicto, no un booleano: el aviso al usuario
+// necesita decir con qué choca.
+function _haySolape(medicoId, fecha, hora, duracion, excluirId) {
+  const ini = _minutos(hora), fin = ini + (duracion||30);
+  return _ocupacion(medicoId, fecha, excluirId)
+    .filter(o => ini < o.fin && fin > o.ini)
+    .map(o => o.cita);
+}
+// Una emergencia nunca debe costar clics extra: se agenda sobre lo que sea.
+const _esEmergencia = tipo => tipo === 'emergencia' || tipo === 'urgencia';
+
 function _getMinHoraHoy() {
   const now = new Date();
   let h = now.getHours(), m = now.getMinutes();
   if(m === 0) { /* exact hour */ }
   else if(m <= 30) { m = 30; }
   else { m = 0; h += 1; }
-  if(h > 22) return null;
   return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
 }
 
-function fillHoraSelect(selectedValue, minHora = null) {
+function fillHoraSelect(selectedValue, minHora = null, opts = {}) {
   const sel = document.getElementById('c-hora');
+  if(!sel) return;
+  const { medicoId = null, fecha = null, duracion = 30, excluirId = null } = opts;
+  const dia = fecha || document.getElementById('c-fecha')?.value || hoy();
+  const slots = _slotsDelDia(medicoId, dia);
   sel.innerHTML = '<option value="">Seleccionar hora...</option>';
-  for(let h = 6; h <= 22; h++) {
-    for(let m = 0; m < 60; m += 30) {
-      const h24 = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
-      const isPast = minHora && h24 < minHora;
-      const period = h < 12 ? 'AM' : 'PM';
-      const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-      const opt = document.createElement('option');
-      opt.value = h24;
-      opt.textContent = `${h12}:${String(m).padStart(2,'0')} ${period}${isPast?' ⛔':''}`;
-      if(h24 === selectedValue && !isPast) opt.selected = true;
-      if(isPast) opt.disabled = true;
-      sel.appendChild(opt);
-    }
+  if(!slots.length) {
+    sel.innerHTML = '<option value="">No atiende este día</option>';
+    _pintarHintHorario(medicoId, dia);
+    return;
   }
+  const ocupacion = _ocupacion(medicoId, dia, excluirId);
+  slots.forEach(h24 => {
+    const isPast = minHora && h24 < minHora;
+    const ini = _minutos(h24), fin = ini + duracion;
+    const choca = ocupacion.some(o => ini < o.fin && fin > o.ini);
+    const opt = document.createElement('option');
+    opt.value = h24;
+    opt.textContent = formatHora12(h24) + (isPast ? ' ⛔' : choca ? ' 🔴 ocupado' : '');
+    if(h24 === selectedValue && !isPast) opt.selected = true;
+    if(isPast) opt.disabled = true;
+    if(choca) opt.style.color = 'var(--danger)';
+    sel.appendChild(opt);
+  });
+  _pintarHintHorario(medicoId, dia);
+}
+
+// Deja ver la jornada real en vez de ofrecer 34 horas que quizá no existen
+function _pintarHintHorario(medicoId, fecha) {
+  const el = document.getElementById('c-hora-hint');
+  if(!el) return;
+  const tramos = _tramosDia(medicoId, fecha);
+  if(!tramos.length) { el.textContent = 'Sin atención este día'; return; }
+  const prof = medicoId ? C.prof.find(p => p.id == medicoId) : null;
+  const dias = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+  const dow = dias[new Date(fecha+'T12:00:00').getDay()];
+  const rangos = tramos.map(([a,b]) => `${formatHora12(a)}–${formatHora12(b)}`).join(' y ');
+  el.textContent = `${prof ? prof.nombre + ', ' : ''}${dow}: ${rangos}`;
+}
+
+// Recalcula las horas cuando cambia médico, fecha o duración
+function onCitaHorarioChange() {
+  const medicoId = document.getElementById('c-medico')?.value || null;
+  const fecha = document.getElementById('c-fecha')?.value || hoy();
+  const duracion = parseInt(document.getElementById('c-duracion')?.value) || 30;
+  const actual = document.getElementById('c-hora')?.value || '';
+  const minH = (!editingCitaId && fecha === hoy()) ? _getMinHoraHoy() : null;
+  fillHoraSelect(actual, minH, { medicoId, fecha, duracion, excluirId: editingCitaId });
 }
 
 function formatHora12(h24) {
@@ -2168,7 +2284,6 @@ function openModalCita(id){
   fechaEl.value = hoy();
   fechaEl.min   = hoy();
   if(fechaEl._flatpickr) { fechaEl._flatpickr.set('minDate', 'today'); fechaEl._flatpickr.setDate(hoy(), false); }
-  fillHoraSelect('', _getMinHoraHoy());
   ['motivo','notas'].forEach(f=>document.getElementById('c-'+f).value='');
   dxElegidos=[]; renderDxElegidos(); ocultarSugerenciasDx();
   document.getElementById('c-estado').value='pendiente';
@@ -2215,14 +2330,17 @@ function openModalCita(id){
       if(esVet) setMascotaSelect(c.mascotaId); else setPacienteSelect('c-paciente', c.pacienteId);
       fechaEl.value=c.fecha;
       if(fechaEl._flatpickr) fechaEl._flatpickr.setDate(c.fecha, false);
-      fillHoraSelect(c.hora, null);
+      document.getElementById('c-duracion').value=c.duracionMin||30;
+      if(c.medicoId) medicoSel.value=c.medicoId;
+      fillHoraSelect(c.hora, null, { medicoId:c.medicoId, fecha:c.fecha, duracion:c.duracionMin||30, excluirId:id });
       document.getElementById('c-motivo').value=c.motivo;
       if(esVet) fillServicioSelect(c.tipo); else document.getElementById('c-tipo').value=c.tipo;
       document.getElementById('c-estado').value=c.estado;
       document.getElementById('c-notas').value=c.notas||'';
-      document.getElementById('c-duracion').value=c.duracionMin||30;
-      if(c.medicoId) medicoSel.value=c.medicoId;
     }
+  } else {
+    // Alta: las horas dependen del médico preseleccionado y del día de hoy
+    onCitaHorarioChange();
   }
   openModalOverlay('modal-cita');
 }
@@ -2248,7 +2366,26 @@ async function guardarCita(){
   const isMedico = currentUser?.key === 'medico';
   const medicoId = (isMedico && !isSuperAdmin()) ? currentUser.id : (document.getElementById('c-medico').value||null);
   const duracionMin = esVet ? (parseInt(document.getElementById('c-duracion').value) || 30) : 30;
-  const obj={pacienteId:pid,mascotaId:mid,medicoId,fecha,hora,duracionMin,motivo,tipo:document.getElementById('c-tipo').value,estado:document.getElementById('c-estado').value,notas:document.getElementById('c-notas').value.trim()};
+  const tipoCita = document.getElementById('c-tipo').value;
+
+  // Doble reserva: se avisa y se deja decidir. Una emergencia pasa sin fricción.
+  const choques = _haySolape(medicoId, fecha, hora, duracionMin, editingCitaId);
+  if(choques.length) {
+    if(_esEmergencia(tipoCita)) {
+      toast('Emergencia agendada sobre una cita existente','warning');
+    } else {
+      const otra = choques[0];
+      const suj = _sujetoCita(otra);
+      const ok = await customConfirm({
+        icon:'⚠️', title:'Horario ocupado',
+        msg:`Ya hay una cita a las <strong>${formatHora12(otra.hora)}</strong>${suj?` con <strong>${escAttr(suj.titulo)}</strong>`:''}${choques.length>1?` y ${choques.length-1} más`:''}.<br><small style="color:var(--text-light)">Puedes agendar igual si es intencional.</small>`,
+        okText:'Agendar de todos modos', danger:true
+      });
+      if(!ok) return;
+    }
+  }
+
+  const obj={pacienteId:pid,mascotaId:mid,medicoId,fecha,hora,duracionMin,motivo,tipo:tipoCita,estado:document.getElementById('c-estado').value,notas:document.getElementById('c-notas').value.trim()};
   setLoading(true);
   const payload = toC(obj);
   let err;
@@ -4449,38 +4586,19 @@ function renderAgendasRight() {
 
   // Renderizar calendario de este doctor
   renderAgendaCalendar(`agenda-cal-${prof.id}`, citaCount, prof.id);
-  renderAgendaDayCitas(`agenda-day-${prof.id}`, citasDelDia);
+  renderAgendaDayCitas(`agenda-day-${prof.id}`, citasDelDia, prof.id);
 }
 
 function renderAgendaCalendar(containerId, citaCount, profId) {
-  const d = new Date(selAgendasDate+'T12:00:00'), year=d.getFullYear(), month=d.getMonth();
-  const today2 = hoy();
-  const first = new Date(year,month,1).getDay(), days = new Date(year,month+1,0).getDate();
-  const months = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  const dow = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
-  let html = `<div class="cal-nav">
-    <div class="cal-nav-btns">
-      <button class="btn-ghost" onclick="agendaCalNav(-1,'${profId}')">‹</button>
-      <button class="btn-ghost" onclick="agendaCalNav(0,'${profId}')" style="font-size:11px;padding:5px 8px">Hoy</button>
-      <button class="btn-ghost" onclick="agendaCalNav(1,'${profId}')">›</button>
-    </div>
-    <h4>${months[month]} <span style="color:var(--text-light);font-weight:500">${year}</span></h4>
-  </div><div class="cal-grid">`;
-  dow.forEach((dw,i)=>html+=`<div class="cal-dow${i===0||i===6?' weekend-dow':''}">${dw}</div>`);
-  for(let i=0;i<first;i++) html+=`<div class="cal-day empty"></div>`;
-  for(let i=1;i<=days;i++){
-    const ds=`${year}-${String(month+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
-    const dow2=new Date(ds+'T12:00:00').getDay();
-    const isToday=ds===today2, isSel=ds===selAgendasDate&&!isToday;
-    const cnt=citaCount[ds]||0;
-    const isWeekend=dow2===0||dow2===6;
-    const cls=['cal-day',isToday?'today':isSel?'selected':'',cnt?'has-event':'',isWeekend&&!isToday&&!isSel?'weekend':''].filter(Boolean).join(' ');
-    const dots=cnt?`<div class="cal-dots">${Array.from({length:Math.min(cnt,3)},()=>`<div class="cal-dot-pip"></div>`).join('')}</div>`:`<div style="height:5px"></div>`;
-    html+=`<div class="${cls}" onclick="selectAgendaDay('${ds}','${profId}')" title="${cnt?cnt+' cita'+(cnt>1?'s':''):''}"><span>${i}</span>${dots}</div>`;
-  }
-  html+='</div>';
-  const el=document.getElementById(containerId);
-  if(el) el.innerHTML=html;
+  const el = document.getElementById(containerId);
+  if(!el) return;
+  el.innerHTML = _calMesHTML({
+    ancla: selAgendasDate,
+    seleccionada: selAgendasDate,
+    conteo: citaCount,
+    onNav: dir => `agendaCalNav(${dir},'${profId}')`,
+    onDay: ds => `selectAgendaDay('${ds}','${profId}')`
+  });
 }
 
 function agendaCalNav(dir, profId) {
@@ -4495,18 +4613,23 @@ function selectAgendaDay(date, profId) {
   renderAgendasRight();
 }
 
-function renderAgendaDayCitas(containerId, citas) {
+function renderAgendaDayCitas(containerId, citas, profId) {
   const el = document.getElementById(containerId);
   if(!el) return;
   if(!citas.length) {
     el.innerHTML=`<div class="empty-state" style="padding:24px 12px">
       <div class="empty-icon" style="font-size:28px">📭</div>
       <p style="margin-bottom:8px">Sin citas agendadas</p>
-      <div style="font-size:11px;color:var(--text-light)">Horario disponible: 6:00 AM – 10:00 PM</div>
+      <div style="font-size:11px;color:var(--text-light)">${(() => {
+        const t = _tramosDia(profId, selAgendasDate);
+        return t.length ? 'Horario: ' + t.map(([a,b]) => formatHora12(a)+' – '+formatHora12(b)).join(' y ') : 'Sin atención este día';
+      })()}</div>
     </div>`;
     return;
   }
   const ocupadas = citas.filter(_citaActiva).length;
+  const totalSlots = _slotsDelDia(profId, selAgendasDate).length;
+  const libres = Math.max(0, totalSlots - ocupadas);
   el.innerHTML = citas.map(c=>{
     const p=_sujetoCita(c);
     return `<div class="agenda-slot ${c.estado}" onclick="verResumenCita(${c.id})">
@@ -4520,36 +4643,21 @@ function renderAgendaDayCitas(containerId, citas) {
   }).join('') +
   `<div style="margin-top:10px;padding:8px 10px;background:var(--bg);border-radius:8px;font-size:11px;color:var(--text-light);display:flex;justify-content:space-between">
     <span>🔴 <strong>${ocupadas}</strong> ocupada${ocupadas!==1?'s':''}</span>
-    <span>🟢 <strong>${34-ocupadas}</strong> disponible${34-ocupadas!==1?'s':''}</span>
+    <span>🟢 <strong>${libres}</strong> disponible${libres!==1?'s':''}</span>
   </div>`;
 }
 
 function nuevaCitaParaDoctor(profId) {
   openModalCita();
-  setTimeout(()=>{
-    const sel=document.getElementById('c-medico');
-    if(sel) sel.value=profId;
-    const safeDate = selAgendasDate >= hoy() ? selAgendasDate : hoy();
-    const fechaEl = document.getElementById('c-fecha');
-    fechaEl.value = safeDate;
-    fechaEl.min   = hoy();
-    // Marcar horas ya ocupadas por este médico ese día
-    marcarHorasOcupadas(profId, safeDate);
-  },80);
-}
-
-function marcarHorasOcupadas(profId, fecha) {
-  const ocupadas = new Set(
-    C.c.filter(c=>c.medicoId==profId&&c.fecha===fecha&&_citaActiva(c)).map(c=>c.hora)
-  );
-  const sel = document.getElementById('c-hora');
-  if(!sel) return;
-  Array.from(sel.options).forEach(opt=>{
-    if(opt.value && ocupadas.has(opt.value)) {
-      opt.textContent = opt.textContent.replace(' 🔴','') + ' 🔴';
-      opt.style.color = 'var(--danger)';
-    }
-  });
+  const sel = document.getElementById('c-medico');
+  if(sel) sel.value = profId;
+  const safeDate = selAgendasDate >= hoy() ? selAgendasDate : hoy();
+  const fechaEl = document.getElementById('c-fecha');
+  fechaEl.value = safeDate;
+  fechaEl.min   = hoy();
+  if(fechaEl._flatpickr) fechaEl._flatpickr.setDate(safeDate, false);
+  // Las horas ocupadas se marcan y deshabilitan solas al recalcular
+  onCitaHorarioChange();
 }
 
 // ════════════════════ INVENTARIO ════════════════════
@@ -8267,11 +8375,9 @@ function initDatePickers() {
       onReady(_, __, fp) {
         fp.calendarContainer.style.fontFamily = "'Inter', sans-serif";
       },
-      onChange: isCitaDate ? function(_, dateStr) {
-        const minH = dateStr === hoy() ? _getMinHoraHoy() : null;
-        const curVal = document.getElementById('c-hora').value;
-        fillHoraSelect(minH && curVal < minH ? '' : curVal, minH);
-        marcarHorasOcupadas();
+      onChange: isCitaDate ? function() {
+        // Un solo camino para recalcular horas: médico + fecha + duración
+        onCitaHorarioChange();
       } : undefined
     });
   });

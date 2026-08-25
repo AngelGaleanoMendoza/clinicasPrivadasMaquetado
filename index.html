@@ -1923,10 +1923,12 @@
           <div id="c-mas-sug" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;z-index:300;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.15);margin-top:4px"></div>
         </div>
       </div>
-      <div class="form-group full"><label>Médico</label><select id="c-medico"><option value="">Sin asignar</option></select></div>
-      <div class="form-group"><label>Fecha *</label><input type="date" id="c-fecha"></div>
-      <div class="form-group"><label>Hora *</label><select id="c-hora"><option value="">Seleccionar hora...</option></select></div>
-      <div class="form-group" id="c-duracion-wrap" style="display:none"><label>Duración</label><select id="c-duracion">
+      <div class="form-group full"><label>Médico</label><select id="c-medico" onchange="onCitaHorarioChange()"><option value="">Sin asignar</option></select></div>
+      <div class="form-group"><label>Fecha *</label><input type="date" id="c-fecha" onchange="onCitaHorarioChange()"></div>
+      <div class="form-group"><label>Hora *</label><select id="c-hora"><option value="">Seleccionar hora...</option></select>
+        <div id="c-hora-hint" style="font-size:11px;color:var(--text-light);margin-top:5px;min-height:14px"></div>
+      </div>
+      <div class="form-group" id="c-duracion-wrap" style="display:none"><label>Duración</label><select id="c-duracion" onchange="onCitaHorarioChange()">
         <option value="15">15 min</option>
         <option value="30" selected>30 min</option>
         <option value="45">45 min</option>
