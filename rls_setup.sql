@@ -33,7 +33,11 @@ $$;
 
 -- profiles
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "profiles_select" ON public.profiles FOR SELECT USING (is_superadmin() OR clinica_id = get_my_clinica_id());
+-- id = auth.uid() va PRIMERO y es lo que salva el arranque: sin esta condición,
+-- un usuario cuya fila tenga clinica_id NULL no puede leer ni su propio perfil
+-- (en SQL, NULL = NULL da NULL, no verdadero), el login se queda sin perfil y la
+-- app responde "contraseña incorrecta" aunque la contraseña sea correcta.
+CREATE POLICY "profiles_select" ON public.profiles FOR SELECT USING (id = auth.uid() OR is_superadmin() OR clinica_id = get_my_clinica_id());
 CREATE POLICY "profiles_insert" ON public.profiles FOR INSERT WITH CHECK (is_superadmin() OR clinica_id = get_my_clinica_id());
 CREATE POLICY "profiles_update" ON public.profiles FOR UPDATE USING (is_superadmin() OR clinica_id = get_my_clinica_id());
 CREATE POLICY "profiles_delete" ON public.profiles FOR DELETE USING (is_superadmin() OR clinica_id = get_my_clinica_id());
@@ -351,3 +355,12 @@ ALTER TABLE public.clinicas     ADD COLUMN IF NOT EXISTS horario JSONB;
 --       tsrange(fecha + hora, fecha + hora + (duracion_min||' min')::interval) WITH &&)
 --     WHERE (estado NOT IN ('cancelada','no_asistio'));
 -- Queda fuera de v1 porque el error de constraint llega sin traducir al formulario.
+
+
+-- ============================================================
+-- PASO 7: Acceso al propio perfil (arreglo de bloqueo de login)
+-- Se puede ejecutar varias veces sin error.
+-- ============================================================
+DROP POLICY IF EXISTS "profiles_select" ON public.profiles;
+CREATE POLICY "profiles_select" ON public.profiles FOR SELECT
+  USING (id = auth.uid() OR is_superadmin() OR clinica_id = get_my_clinica_id());

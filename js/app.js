@@ -327,7 +327,19 @@ async function verificarLogin() {
   if(authData?.user) {
     const profile = await resolverPerfil(authData.user.id, email);
     if(profile) { await entrarConPerfil(profile); return; }
+    // La contraseña ERA correcta: Auth la aceptó. Lo que falló es leer el perfil,
+    // casi siempre porque profiles.id no coincide con el id de Auth y entonces
+    // la política RLS no deja ver ni la propia fila. Decir "contraseña
+    // incorrecta" aquí manda a buscar el problema donde no está.
+    setLoading(false);
+    shakeLogin();
+    errEl.innerHTML = 'Tu contraseña es correcta, pero <strong>no se pudo cargar tu perfil</strong>.'
+      + '<br><small>Tu usuario existe en Supabase Auth pero su fila en <code>profiles</code> no es accesible.'
+      + '<br>Id de Auth: <code>' + authData.user.id + '</code></small>';
+    errEl.style.display = 'block';
+    document.getElementById('login-password').value = '';
     await sb.auth.signOut();
+    return;
   }
 
   // ── PASO 2: usuario no está en Auth → intentar registrarlo (auto-migración) ──
