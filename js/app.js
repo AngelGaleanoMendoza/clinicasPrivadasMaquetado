@@ -119,8 +119,8 @@ const fromE = r => ({ id:r.id, pacienteId:r.paciente_id, peso:r.peso, talla:r.ta
 const toE   = x => ({ paciente_id:x.pacienteId, peso:x.peso?Number(x.peso):null, talla:x.talla?Number(x.talla):null, presion:x.presion||null, temperatura:x.temperatura?Number(x.temperatura):null, enfermedades_cronicas:x.enfermedadesCronicas||null, cirugias_previas:x.cirugias||null, antecedentes_familiares:x.antecedentesFamiliares||null, vacunas:x.vacunas||null, habito_tabaco:x.tabaco||'no', habito_alcohol:x.alcohol||'no', actividad_fisica:x.actividadFisica||'sedentario', ocupacion:x.ocupacion||null, estado_civil:x.estadoCivil||null, observaciones_medicas:x.observacionesMedicas||null, clinica_id:currentClinicaId });
 const fromC = r => ({ id:r.id, pacienteId:r.paciente_id, mascotaId:r.mascota_id||null, medicoId:r.medico_id||null, fecha:r.fecha, hora:(r.hora||'').slice(0,5), duracionMin:r.duracion_min||30, motivo:r.motivo, tipo:r.tipo, estado:r.estado, notas:r.notas, motivoCancelacion:r.motivo_cancelacion||null });
 const toC   = x => ({ paciente_id:x.pacienteId||null, mascota_id:x.mascotaId||null, medico_id:x.medicoId||null, fecha:x.fecha, hora:x.hora, duracion_min:x.duracionMin||30, motivo:x.motivo, tipo:x.tipo||'consulta', estado:x.estado||'pendiente', notas:x.notas||null, motivo_cancelacion:x.motivoCancelacion||null, clinica_id:currentClinicaId });
-const fromM = r => ({ id:r.id, pacienteId:r.paciente_id, nombre:r.nombre, dosis:r.dosis, frecuencia:r.frecuencia, inicio:r.inicio, fin:r.fin, via:r.via, estado:r.estado, indicaciones:r.indicaciones });
-const toM   = x => ({ paciente_id:x.pacienteId, nombre:x.nombre, dosis:x.dosis, frecuencia:x.frecuencia, inicio:x.inicio||null, fin:x.fin||null, via:x.via||'oral', estado:x.estado||'activa', indicaciones:x.indicaciones||null, clinica_id:currentClinicaId });
+const fromM = r => ({ id:r.id, pacienteId:r.paciente_id, mascotaId:r.mascota_id||null, nombre:r.nombre, dosis:r.dosis, frecuencia:r.frecuencia, inicio:r.inicio, fin:r.fin, via:r.via, estado:r.estado, indicaciones:r.indicaciones });
+const toM   = x => ({ paciente_id:x.pacienteId||null, mascota_id:x.mascotaId||null, nombre:x.nombre, dosis:x.dosis, frecuencia:x.frecuencia, inicio:x.inicio||null, fin:x.fin||null, via:x.via||'oral', estado:x.estado||'activa', indicaciones:x.indicaciones||null, clinica_id:currentClinicaId });
 const fromN   = r => ({ id:r.id, pacienteId:r.paciente_id, mascotaId:r.mascota_id||null, tipo:r.tipo, fecha:r.fecha, titulo:r.titulo, contenido:r.contenido, signos:r.signos||null });
 const toN     = x => ({ paciente_id:x.pacienteId||null, mascota_id:x.mascotaId||null, tipo:x.tipo||'evolucion', fecha:x.fecha||hoy(), titulo:x.titulo||null, contenido:x.contenido, signos:x.signos||null, clinica_id:currentClinicaId });
 const fromInv = r => ({ id:r.id, nombre:r.nombre, categoria:r.categoria||'general', unidad:r.unidad||'unidad', stock:Number(r.stock_actual||0), stockMin:Number(r.stock_minimo||0), precio:r.precio_unitario!=null?Number(r.precio_unitario):null, descripcion:r.descripcion||null, codigoMinsa:r.codigo_minsa||null, fechaVenc:r.fecha_vencimiento||null, alertaMeses:r.alerta_meses_antes!=null?Number(r.alerta_meses_antes):1 });
@@ -721,6 +721,15 @@ function _sujetoCita(c) {
     if(m) return _sujetoMascota(m);
   }
   const p = C.p.find(x => x.id === c.pacienteId);
+  return p ? _sujetoPaciente(p) : null;
+}
+
+
+// Sujeto de una medicación: paciente o mascota
+function _sujetoMed(m) {
+  if(!m) return null;
+  if(m.mascotaId) { const x = C.mas.find(y => y.id === m.mascotaId); if(x) return _sujetoMascota(x); }
+  const p = C.p.find(x => x.id === m.pacienteId);
   return p ? _sujetoPaciente(p) : null;
 }
 
@@ -1372,12 +1381,12 @@ function renderRecientes() {
   } else if(recTab === 'meds') {
     const items = [...C.m].reverse().slice(0,10);
     el.innerHTML = items.length ? items.map(m=>{
-      const p=C.p.find(x=>x.id===m.pacienteId);
+      const p=_sujetoMed(m);
       return `<div class="search-result-item" style="cursor:default">
         <div style="font-size:22px;flex-shrink:0">💊</div>
         <div style="flex:1;min-width:0">
           <div style="font-weight:700;font-size:13px">${m.nombre}</div>
-          <div class="text-light">${p?p.nombre+' '+p.apellidos:'—'} · ${m.dosis} ${m.frecuencia}</div>
+          <div class="text-light">${p?escAttr(p.titulo):'—'} · ${m.dosis} ${m.frecuencia}</div>
         </div>
         <span class="tag ${m.estado==='activa'?'tag-green':m.estado==='suspendida'?'tag-red':'tag-gray'}" style="flex-shrink:0">${m.estado}</span>
       </div>`;}).join('') : empty('💊<br><small>Sin medicaciones aún</small>');
@@ -2528,17 +2537,17 @@ function renderMedicaciones(){
   empty.style.display='none';
   const MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
   el.innerHTML=[...C.m].sort((a,b)=>(b.inicio||'').localeCompare(a.inicio||'')).map(x=>{
-    const p=C.p.find(q=>q.id===x.pacienteId);
+    const p=_sujetoMed(x);
     const [,mm,dd]=(x.inicio||hoy()).split('-');
     return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)">
       <div style="width:36px;flex-shrink:0;text-align:center;background:var(--primary-light);border-radius:8px;padding:5px 2px">
         <div style="font-size:13px;font-weight:800;color:var(--primary);line-height:1">${dd}</div>
         <div style="font-size:10px;color:var(--primary);text-transform:uppercase;font-weight:600">${MESES[parseInt(mm)-1]}</div>
       </div>
-      <div class="patient-avatar" style="background:${colAvatar(x.pacienteId||0)};width:32px;height:32px;font-size:11px;flex-shrink:0">${p?ini(p.nombre,p.apellidos):'?'}</div>
+      <div class="patient-avatar" style="background:${colAvatar(x.mascotaId||x.pacienteId||0)};width:32px;height:32px;font-size:11px;flex-shrink:0">${p?p.iniciales:'?'}</div>
       <div style="flex:1;min-width:0">
         <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.nombre}</div>
-        <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p?p.nombre+' '+p.apellidos:'Desconocido'} · ${x.frecuencia}</div>
+        <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p?escAttr(p.titulo):'Desconocido'} · ${x.frecuencia}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
         ${estadoTag(x.estado)}
@@ -2553,6 +2562,10 @@ function renderMedicaciones(){
 }
 
 const DOSIS_UNIDADES = ['tableta(s)','cápsula(s)','mg','g','mcg','ml','oz','gota(s)','UI','sobre(s)','ampolleta(s)','supositorio(s)','parche(s)','inhalación(es)','aplicación(es)'];
+const FRECUENCIAS_HUMANO = ['Cada 4 horas','Cada 8 horas','Cada 12 horas','Cada 24 horas','Cada 2 días','Cada 3 días','1 vez al día','Una vez con alimentos','En ayunas','Al almorzar','Al cenar','Antes de dormir'];
+// Antiparasitarios y pipetas se dosifican por semanas o meses, no por horas
+const FRECUENCIAS_VET = ['Cada 8 horas','Cada 12 horas','Cada 24 horas','Cada 48 horas','Cada 3 días','Cada 7 días','Cada 15 días','Cada 30 días','Cada 12 semanas','Dosis única','Según deshidratación','Con el alimento'];
+function _frecuenciasActivas() { return esVeterinaria() ? FRECUENCIAS_VET : FRECUENCIAS_HUMANO; }
 
 function parseDosisStr(d) {
   if(!d) return {qty:'1', unit:'tableta(s)'};
@@ -2583,17 +2596,111 @@ function parseDosisStr(d) {
 
 let medItems = [];
 
+
+// ── Recetas veterinarias ──
+// Catálogo de uso corriente en pequeños animales, con dosis de referencia en
+// mg/kg para poder calcular sobre el peso de la mascota. Es una AYUDA al
+// escribir: el veterinario siempre puede corregir la cifra a mano.
+const MEDICAMENTOS_VET = [
+  { n:'Amoxicilina + Ác. clavulánico', p:'Comprimidos 250/500 mg', mgkg:12.5, freq:'Cada 12 horas', v:'oral' },
+  { n:'Amoxicilina', p:'Comprimidos 250/500 mg', mgkg:15, freq:'Cada 12 horas', v:'oral' },
+  { n:'Cefalexina', p:'Comprimidos 300/600 mg', mgkg:22, freq:'Cada 12 horas', v:'oral' },
+  { n:'Enrofloxacina', p:'Comprimidos 50/150 mg', mgkg:5, freq:'Cada 24 horas', v:'oral' },
+  { n:'Doxiciclina', p:'Comprimidos 100 mg', mgkg:5, freq:'Cada 12 horas', v:'oral' },
+  { n:'Metronidazol', p:'Comprimidos 250/500 mg', mgkg:15, freq:'Cada 12 horas', v:'oral' },
+  { n:'Meloxicam', p:'Suspensión 1,5 mg/ml', mgkg:0.1, freq:'Cada 24 horas', v:'oral' },
+  { n:'Carprofeno', p:'Comprimidos 25/75 mg', mgkg:2.2, freq:'Cada 12 horas', v:'oral' },
+  { n:'Firocoxib', p:'Comprimidos 57/227 mg', mgkg:5, freq:'Cada 24 horas', v:'oral' },
+  { n:'Tramadol', p:'Comprimidos 50 mg', mgkg:3, freq:'Cada 8 horas', v:'oral' },
+  { n:'Gabapentina', p:'Cápsulas 100/300 mg', mgkg:10, freq:'Cada 12 horas', v:'oral' },
+  { n:'Prednisolona', p:'Comprimidos 5/20 mg', mgkg:0.5, freq:'Cada 24 horas', v:'oral' },
+  { n:'Dexametasona', p:'Inyectable 2 mg/ml', mgkg:0.2, freq:'Dosis única', v:'inyectable' },
+  { n:'Maropitant', p:'Comprimidos 16/24 mg', mgkg:2, freq:'Cada 24 horas', v:'oral' },
+  { n:'Metoclopramida', p:'Comprimidos 10 mg', mgkg:0.5, freq:'Cada 8 horas', v:'oral' },
+  { n:'Omeprazol', p:'Cápsulas 10/20 mg', mgkg:1, freq:'Cada 24 horas', v:'oral' },
+  { n:'Ranitidina', p:'Comprimidos 150 mg', mgkg:2, freq:'Cada 12 horas', v:'oral' },
+  { n:'Furosemida', p:'Comprimidos 40 mg', mgkg:2, freq:'Cada 12 horas', v:'oral' },
+  { n:'Pimobendán', p:'Comprimidos 1,25/5 mg', mgkg:0.25, freq:'Cada 12 horas', v:'oral' },
+  { n:'Enalapril', p:'Comprimidos 5/20 mg', mgkg:0.5, freq:'Cada 24 horas', v:'oral' },
+  { n:'Fenobarbital', p:'Comprimidos 15/100 mg', mgkg:2.5, freq:'Cada 12 horas', v:'oral' },
+  { n:'Ivermectina', p:'Inyectable 1%', mgkg:0.2, freq:'Dosis única', v:'inyectable' },
+  { n:'Fenbendazol', p:'Suspensión 100 mg/ml', mgkg:50, freq:'Cada 24 horas', v:'oral' },
+  { n:'Praziquantel', p:'Comprimidos 50 mg', mgkg:5, freq:'Dosis única', v:'oral' },
+  { n:'Pirantel', p:'Suspensión 50 mg/ml', mgkg:5, freq:'Dosis única', v:'oral' },
+  { n:'Milbemicina oxima', p:'Comprimidos', mgkg:0.5, freq:'Cada 30 días', v:'oral' },
+  { n:'Fluralaner', p:'Comprimidos masticables', mgkg:25, freq:'Cada 12 semanas', v:'oral' },
+  { n:'Afoxolaner', p:'Comprimidos masticables', mgkg:2.5, freq:'Cada 30 días', v:'oral' },
+  { n:'Ketoconazol', p:'Comprimidos 200 mg', mgkg:5, freq:'Cada 24 horas', v:'oral' },
+  { n:'Itraconazol', p:'Cápsulas 100 mg', mgkg:5, freq:'Cada 24 horas', v:'oral' },
+  { n:'Apoquel (oclacitinib)', p:'Comprimidos 3,6/5,4/16 mg', mgkg:0.5, freq:'Cada 12 horas', v:'oral' },
+  { n:'Clorfeniramina', p:'Comprimidos 4 mg', mgkg:0.5, freq:'Cada 12 horas', v:'oral' },
+  { n:'Vitamina K1', p:'Comprimidos 25 mg', mgkg:2.5, freq:'Cada 12 horas', v:'oral' },
+  { n:'Suero fisiológico 0,9%', p:'Bolsa 500/1000 ml', mgkg:null, freq:'Según deshidratación', v:'inyectable' },
+  { n:'Ringer lactato', p:'Bolsa 500/1000 ml', mgkg:null, freq:'Según deshidratación', v:'inyectable' },
+  { n:'Colirio de gentamicina', p:'Solución oftálmica', mgkg:null, freq:'Cada 8 horas', v:'topica' },
+  { n:'Otológico con enrofloxacina', p:'Gotas óticas', mgkg:null, freq:'Cada 12 horas', v:'topica' },
+];
+
+// Peso de la mascota: el último medido en consulta, o el del expediente
+function _pesoMascota(mid) {
+  const consultas = C.n
+    .filter(n => n.mascotaId === mid && n.signos && n.signos.peso)
+    .sort((a,b) => b.fecha.localeCompare(a.fecha));
+  if(consultas.length) return { kg: parseFloat(consultas[0].signos.peso), origen: 'última consulta' };
+  const exp = C.expMas.find(x => x.mascotaId === mid);
+  if(exp && exp.peso) return { kg: parseFloat(exp.peso), origen: 'expediente' };
+  return null;
+}
+
+function _pintarPesoHint(mid) {
+  const el = document.getElementById('m-peso-hint');
+  if(!el) return;
+  const peso = mid ? _pesoMascota(mid) : null;
+  el.textContent = peso ? `⚖️ ${peso.kg} kg (${peso.origen}) — las dosis se calculan sobre este peso`
+                        : (mid ? 'Sin peso registrado: registra una consulta con peso para calcular dosis' : '');
+}
+
+// Dosis total sugerida a partir de mg/kg × peso
+function _dosisPorPeso(mgkg, kg) {
+  if(!mgkg || !kg) return null;
+  const total = mgkg * kg;
+  return total < 1 ? total.toFixed(2) : total < 10 ? total.toFixed(1) : Math.round(total);
+}
+
+function filterMasSugMed(q) { _filterMasSugEn('m-mas-sug', q, 'selectMasMed'); }
+function hideMasSugMed() { const s = document.getElementById('m-mas-sug'); if(s) s.style.display = 'none'; }
+function selectMasMed(mid, nombre) {
+  document.getElementById('m-mascota').value = mid;
+  document.getElementById('m-mas-txt').value = nombre;
+  hideMasSugMed();
+  _pintarPesoHint(mid);
+  renderMedItems();   // recalcula las dosis sugeridas con el peso nuevo
+}
+function setMascotaSelectMed(mid) {
+  const m = C.mas.find(x => x.id === mid);
+  document.getElementById('m-mascota').value = mid || '';
+  document.getElementById('m-mas-txt').value = m ? m.nombre : '';
+  _pintarPesoHint(mid);
+}
+
 function openModalMedicacion(id) {
   editingMedId = id || null;
   document.getElementById('modal-med-title').textContent = id ? '✏️ Editar Medicación' : '💊 Nueva Receta';
   fillSelect('m-paciente');
+  // En veterinaria la receta es de una mascota, y las dosis salen de su peso
+  const esVet = esVeterinaria();
+  document.getElementById('m-mascota').value=''; document.getElementById('m-mas-txt').value='';
+  const pw = document.getElementById('m-paciente-wrap'), mw = document.getElementById('m-mascota-wrap');
+  if(pw) pw.style.display = esVet ? 'none' : '';
+  if(mw) mw.style.display = esVet ? '' : 'none';
+  _pintarPesoHint(null);
   document.getElementById('m-estado').value = 'activa';
   document.getElementById('m-inicio').value = hoy();
   document.getElementById('m-fin').value = '';
   if(id) {
     const m = C.m.find(x => x.id === id);
     if(m) {
-      setPacienteSelect('m-paciente', m.pacienteId);
+      if(esVet) setMascotaSelectMed(m.mascotaId); else setPacienteSelect('m-paciente', m.pacienteId);
       document.getElementById('m-inicio').value = m.inicio || '';
       document.getElementById('m-fin').value = m.fin || '';
       document.getElementById('m-estado').value = m.estado;
@@ -2601,13 +2708,14 @@ function openModalMedicacion(id) {
       medItems = [{nombre:m.nombre, dosisQty:dp.qty, dosisUnit:dp.unit, frecuencia:m.frecuencia, via:m.via||'oral', indicaciones:m.indicaciones||''}];
     }
   } else {
-    medItems = [{nombre:'', dosisQty:'1', dosisUnit:'tableta(s)', frecuencia:'Cada 8 horas', via:'oral', indicaciones:''}];
+    medItems = [{nombre:'', dosisQty:'1', dosisUnit:'tableta(s)', frecuencia:_frecuenciasActivas()[esVeterinaria()?1:1], via:'oral', indicaciones:''}];
   }
   document.getElementById('btn-add-med-item').style.display = editingMedId ? 'none' : 'inline-flex';
   renderMedItems();
   openModalOverlay('modal-medicacion');
 }
 function openModalMedP(pid) { openModalMedicacion(); setPacienteSelect('m-paciente', pid); }
+function openModalMedMascota(mid) { openModalMedicacion(); setMascotaSelectMed(mid); }
 
 function renderMedItems() {
   const container = document.getElementById('med-items-list');
@@ -2627,7 +2735,10 @@ function renderMedItems() {
     +     '<select id="mi-dosis-unit-'+i+'" style="flex:1" onchange="medItems['+i+'].dosisUnit=this.value">'+DOSIS_UNIDADES.map(u=>'<option value="'+u+'"'+((item.dosisUnit||'tableta(s)')===u?' selected':'')+'>'+u+'</option>').join('')+'</select>'
     +   '</div></div>'
     +   '<div class="form-group"><label>Frecuencia *</label><select id="mi-freq-'+i+'" onchange="medItems['+i+'].frecuencia=this.value">'
-    +     ['Cada 4 horas','Cada 8 horas','Cada 12 horas','Cada 24 horas','Cada 2 días','Cada 3 días','1 vez al día','Una vez con alimentos','En ayunas','Al almorzar','Al cenar','Antes de dormir'].map(f=>'<option value="'+f+'"'+(item.frecuencia===f?' selected':'')+'>'+f+'</option>').join('')
+    +     (function(){ const lista=_frecuenciasActivas().slice();
+        // Si el catálogo sugirió una frecuencia que no está en la lista, se añade
+        if(item.frecuencia && !lista.includes(item.frecuencia)) lista.unshift(item.frecuencia);
+        return lista.map(f=>'<option value="'+f+'"'+(item.frecuencia===f?' selected':'')+'>'+f+'</option>').join(''); })()
     +     '</select></div>'
     +   '<div class="form-group"><label>Vía</label><select id="mi-via-'+i+'" onchange="medItems['+i+'].via=this.value">'+vias.map(([v,l])=>'<option value="'+v+'"'+(item.via===v?' selected':'')+'>'+l+'</option>').join('')+'</select></div>'
     +   '<div class="form-group full"><label>Indicaciones</label><input type="text" id="mi-ind-'+i+'" value="'+escAttr(item.indicaciones)+'" placeholder="Tomar con alimentos..." oninput="medItems['+i+'].indicaciones=this.value"></div>'
@@ -2636,7 +2747,7 @@ function renderMedItems() {
 }
 
 function addMedItem() {
-  medItems.push({nombre:'', dosisQty:'1', dosisUnit:'tableta(s)', frecuencia:'Cada 8 horas', via:'oral', indicaciones:''});
+  medItems.push({nombre:'', dosisQty:'1', dosisUnit:'tableta(s)', frecuencia:_frecuenciasActivas()[1], via:'oral', indicaciones:''});
   renderMedItems();
 }
 
@@ -2651,12 +2762,28 @@ function buscarMedItem(q, idx) {
   if(!box) return;
   if(!q || q.length < 2) { box.style.display='none'; return; }
   const q2 = q.toLowerCase();
-  const base = MEDICAMENTOS_NI.filter(m => m.n.toLowerCase().includes(q2) || m.p.toLowerCase().includes(q2)).slice(0, 6);
-  const matches = _mergeConMinsa(base, q2);
+  let matches;
+  if(esVeterinaria()) {
+    // Catálogo veterinario: la dosis se sugiere con el peso de la mascota
+    const mid = parseInt(document.getElementById('m-mascota')?.value) || null;
+    const peso = mid ? _pesoMascota(mid) : null;
+    matches = MEDICAMENTOS_VET
+      .filter(m => m.n.toLowerCase().includes(q2) || m.p.toLowerCase().includes(q2))
+      .slice(0, 8)
+      .map(m => {
+        const total = peso ? _dosisPorPeso(m.mgkg, peso.kg) : null;
+        return { n:m.n, p:m.p, v:m.v, freq:m.freq, mgkg:m.mgkg,
+                 d: total ? `${total} mg` : (m.mgkg ? `${m.mgkg} mg/kg` : ''),
+                 nota: total ? `${m.mgkg} mg/kg × ${peso.kg} kg` : (m.mgkg ? 'Sin peso registrado' : '') };
+      });
+  } else {
+    const base = MEDICAMENTOS_NI.filter(m => m.n.toLowerCase().includes(q2) || m.p.toLowerCase().includes(q2)).slice(0, 6);
+    matches = _mergeConMinsa(base, q2);
+  }
   if(!matches.length) { box.style.display='none'; return; }
   box.innerHTML = matches.map(m => {
     const codBadge = m.cod ? `<span style="font-family:monospace;font-size:10px;background:var(--bg);padding:0 3px;border-radius:3px;border:1px solid var(--border);margin-right:4px">${m.cod}</span>` : '';
-    const sub = codBadge + m.p + (m.d ? ' · ' + m.d : '');
+    const sub = codBadge + m.p + (m.d ? ' · ' + m.d : '') + (m.nota ? ' · ' + m.nota : '');
     return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s" onmouseenter="this.style.background=\'var(--primary-light)\'" onmouseleave="this.style.background=\'\'" onmousedown="seleccionarMedItem('+JSON.stringify(m).replace(/"/g,'&quot;')+','+idx+')">'
       + '<div><div style="font-size:13px;font-weight:600;color:var(--text)">'+m.n+'</div><div style="font-size:11px;color:var(--text-light);margin-top:1px">'+sub+'</div></div>'
       + '<span class="tag tag-gray" style="font-size:10px;flex-shrink:0;margin-left:10px">'+m.v+'</span>'
@@ -2677,6 +2804,9 @@ function seleccionarMedItem(m, idx) {
   medItems[idx].dosisUnit = dp.unit;
   const viaMap = {oral:'oral',inyectable:'inyectable',topica:'topica',inhalada:'inhalada',sublingual:'sublingual'};
   medItems[idx].via = viaMap[m.v] || 'oral';
+  // El catálogo veterinario trae también la frecuencia habitual
+  if(m.freq) medItems[idx].frecuencia = m.freq;
+  if(m.mgkg) medItems[idx].mgkg = m.mgkg;
   hideMedItemSug(idx);
   renderMedItems();
   setTimeout(() => { const el = document.getElementById('mi-freq-'+idx); if(el) el.focus(); }, 50);
@@ -2684,8 +2814,10 @@ function seleccionarMedItem(m, idx) {
 
 async function guardarMedicacion() {
   if(!currentClinicaId) { toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
-  const pid = parseInt(document.getElementById('m-paciente').value);
-  if(!pid) { toast('Selecciona un paciente','error'); return; }
+  const esVet = esVeterinaria();
+  const pid = esVet ? null : (parseInt(document.getElementById('m-paciente').value) || null);
+  const mid = esVet ? (parseInt(document.getElementById('m-mascota').value) || null) : null;
+  if(esVet ? !mid : !pid) { toast(esVet ? 'Selecciona una mascota' : 'Selecciona un paciente','error'); return; }
   const inicio = document.getElementById('m-inicio').value;
   const fin = document.getElementById('m-fin').value;
   const estado = document.getElementById('m-estado').value;
@@ -2693,7 +2825,7 @@ async function guardarMedicacion() {
   if(editingMedId) {
     const item = medItems[0];
     if(!item.nombre||!item.dosisQty||!item.frecuencia) { toast('Completa nombre, dosificación y frecuencia','error'); return; }
-    const obj = {pacienteId:pid,nombre:item.nombre,dosis:buildDosis(item),frecuencia:item.frecuencia,inicio,fin,via:item.via,estado,indicaciones:item.indicaciones};
+    const obj = {pacienteId:pid,mascotaId:mid,nombre:item.nombre,dosis:buildDosis(item),frecuencia:item.frecuencia,inicio,fin,via:item.via,estado,indicaciones:item.indicaciones};
     setLoading(true);
     const {error} = await sb.from('medicaciones').update(toM(obj)).eq('id',editingMedId);
     setLoading(false);
@@ -2703,7 +2835,7 @@ async function guardarMedicacion() {
   } else {
     const valid = medItems.filter(item => item.nombre && item.dosisQty && item.frecuencia);
     if(!valid.length) { toast('Agrega al menos un medicamento con nombre, dosificación y frecuencia','error'); return; }
-    const rows = valid.map(item => toM({pacienteId:pid,nombre:item.nombre,dosis:buildDosis(item),frecuencia:item.frecuencia,inicio,fin,via:item.via,estado,indicaciones:item.indicaciones}));
+    const rows = valid.map(item => toM({pacienteId:pid,mascotaId:mid,nombre:item.nombre,dosis:buildDosis(item),frecuencia:item.frecuencia,inicio,fin,via:item.via,estado,indicaciones:item.indicaciones}));
     setLoading(true);
     const {error} = await sb.from('medicaciones').insert(rows);
     setLoading(false);
@@ -2714,6 +2846,7 @@ async function guardarMedicacion() {
   closeModal('modal-medicacion');
   await loadAll(); renderMedicaciones();
   if(currentView==='paciente-detalle') renderDetalleP(currentPatientId);
+  if(currentView==='mascota-detalle') renderDetalleMascota(currentMascotaId);
 }
 
 async function eliminarMedicacion(id){
@@ -3136,6 +3269,71 @@ function imprimirRecetaPaciente(pid) {
     + _padecimientosHTML(cfg);
 
   pdfAbrir('Receta Electrónica — '+pNombre, body, cfg);
+}
+
+
+// Receta veterinaria: mismo talonario y firma que la humana, pero la cabecera
+// identifica a la mascota y a su dueño, y añade el peso con el que se dosificó.
+function imprimirRecetaMascota(mid) {
+  const m = C.mas.find(x => x.id === mid);
+  if(!m) return;
+  const dueno = C.cli.find(c => c.id === m.clienteId);
+  const meds = C.m.filter(x => x.mascotaId === mid && x.estado === 'activa')
+    .sort((a,b) => (a.nombre||'').localeCompare(b.nombre||''));
+  if(!meds.length) { toast('Esta mascota no tiene medicaciones activas','info'); return; }
+  const cfg = getClinicaConfig();
+  const peso = _pesoMascota(mid);
+  const fmtF = f => { if(!f) return '—'; const d=new Date(f+'T12:00:00'); return d.toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'}); };
+  const viaLabel = v => ({oral:'Oral',inyectable:'Inyectable',topica:'Tópica',inhalada:'Inhalada',sublingual:'Sublingual',otra:'Otra'})[v||'oral'] || v || 'Oral';
+  const expMas = C.expMas.find(x => x.mascotaId === mid);
+
+  const body = '<div class="badge-tipo" style="background:#059669">&#128062; RECETA VETERINARIA</div>'
+    + '<div style="font-size:11px;color:#64748B;font-weight:600;margin-bottom:18px">Fecha de emisi&#243;n: '+fmtF(hoy())+' &middot; N&deg; RX-'+Date.now().toString().slice(-6)+'</div>'
+    + '<div class="patient-box">'
+    +   '<div class="patient-av">'+(m.fotoUrl?'<img src="'+m.fotoUrl+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">':especieIcon(m.especie))+'</div>'
+    +   '<div style="flex:1">'
+    +     '<div class="patient-name">'+escAttr(m.nombre)+'</div>'
+    +     '<div class="patient-meta">'
+    +       (m.especie ? '<span>'+escAttr(m.especie)+(m.raza?' &middot; '+escAttr(m.raza):'')+'</span>' : '')
+    +       (m.fechaNac ? '<span>'+calcEdadMascota(m.fechaNac)+'</span>' : '')
+    +       (m.sexo ? '<span>'+(m.sexo==='M'?'&#9794; Macho':'&#9792; Hembra')+'</span>' : '')
+    +       (peso ? '<span><strong>'+peso.kg+' kg</strong></span>' : '')
+    +       (m.microchip ? '<span>Chip '+escAttr(m.microchip)+'</span>' : '')
+    +     '</div>'
+    +     (dueno ? '<div style="margin-top:6px;font-size:12px;color:#475569"><strong>Propietario:</strong> '+escAttr(nombreCliente(dueno))+(dueno.telefono?' &middot; '+escAttr(dueno.telefono):'')+'</div>' : '')
+    +     (m.alergias ? '<div style="margin-top:6px;background:#FEF2F2;border:1px solid #FECACA;border-radius:6px;padding:5px 10px;font-size:11px;color:#DC2626;font-weight:600">&#9888; Alergias: '+escAttr(m.alergias)+'</div>' : '')
+    +   '</div>'
+    + '</div>'
+    + '<div class="section-title">&#128138; Prescripci&#243;n</div>'
+    + '<table><thead><tr><th>#</th><th>Medicamento / Indicaciones</th><th>Dosis</th><th>Frecuencia</th><th>V&#237;a</th><th>Duraci&#243;n</th></tr></thead><tbody>'
+    + meds.map((x, i) =>
+        '<tr>'
+        + '<td style="font-weight:800;color:#1D4ED8;text-align:center">' + (i+1) + '</td>'
+        + '<td><strong>Rx. '+escAttr(x.nombre)+'</strong>'+(x.indicaciones?'<br><span style="font-size:11px;color:#64748B;font-style:italic">'+escAttr(x.indicaciones)+'</span>':'')+'</td>'
+        + '<td><strong>'+escAttr(x.dosis||'')+'</strong></td>'
+        + '<td>'+escAttr(x.frecuencia||'')+'</td>'
+        + '<td>'+viaLabel(x.via)+'</td>'
+        + '<td style="font-size:11px;white-space:nowrap">'+(x.inicio?fmtF(x.inicio):'—')+(x.fin?'<br>&rarr; '+fmtF(x.fin):'')+'</td>'
+        + '</tr>'
+      ).join('')
+    + '</tbody></table>'
+    + (peso ? '<div style="font-size:11px;color:#64748B;margin-top:-8px;margin-bottom:14px">Dosis calculadas sobre un peso de <strong>'+peso.kg+' kg</strong> ('+peso.origen+').</div>' : '')
+    + ((m.alergias || expMas?.enfermedadesCronicas) ? '<div class="section-title">&#9888; Antecedentes relevantes</div>'
+    +   '<table><tbody>'
+    +   (m.alergias?'<tr><td style="font-weight:700;color:#B45309;width:150px;white-space:nowrap">Alergias</td><td>'+escAttr(m.alergias)+'</td></tr>':'')
+    +   (expMas?.enfermedadesCronicas?'<tr><td style="font-weight:700;color:#B45309;white-space:nowrap">Enf. cr&#243;nicas</td><td>'+escAttr(expMas.enfermedadesCronicas)+'</td></tr>':'')
+    +   '</tbody></table>' : '')
+    + '<div class="rx-proxima">'
+    +   '<span>Pr&#243;xima cita: <span class="rx-linea"></span></span>'
+    +   (cfg.registro?'<span>C&#243;digo '+cfg.registro+'</span>':'<span></span>')
+    + '</div>'
+    + '<div class="sig-wrap"><div class="sig-box">'+_firmaImgHTML(46)+'<div class="sig-line"></div>'
+    +   '<div class="sig-name">'+(currentUser&&currentUser.name?currentUser.name:cfg.nombreDoctor||'M&#233;dico Veterinario')+'</div>'
+    +   especialidadFirma(cfg).split(/\r?\n/).filter(Boolean).map(l=>'<div class="sig-role">'+l+'</div>').join('')
+    + '</div></div>'
+    + _padecimientosHTML(cfg);
+
+  pdfAbrir('Receta Veterinaria — '+m.nombre, body, cfg);
 }
 
 // ════════════════════ EXÁMENES DIGITALIZADOS ════════════════════
@@ -4481,8 +4679,24 @@ function buscarMedicamento(q) {
   const box = document.getElementById('med-sugerencias');
   if(!q || q.length < 2) { box.style.display='none'; medSugIdx=-1; return; }
   const q2 = q.toLowerCase();
-  const base = MEDICAMENTOS_NI.filter(m => m.n.toLowerCase().includes(q2) || m.p.toLowerCase().includes(q2)).slice(0, 6);
-  const matches = _mergeConMinsa(base, q2);
+  let matches;
+  if(esVeterinaria()) {
+    // Catálogo veterinario: la dosis se sugiere con el peso de la mascota
+    const mid = parseInt(document.getElementById('m-mascota')?.value) || null;
+    const peso = mid ? _pesoMascota(mid) : null;
+    matches = MEDICAMENTOS_VET
+      .filter(m => m.n.toLowerCase().includes(q2) || m.p.toLowerCase().includes(q2))
+      .slice(0, 8)
+      .map(m => {
+        const total = peso ? _dosisPorPeso(m.mgkg, peso.kg) : null;
+        return { n:m.n, p:m.p, v:m.v, freq:m.freq, mgkg:m.mgkg,
+                 d: total ? `${total} mg` : (m.mgkg ? `${m.mgkg} mg/kg` : ''),
+                 nota: total ? `${m.mgkg} mg/kg × ${peso.kg} kg` : (m.mgkg ? 'Sin peso registrado' : '') };
+      });
+  } else {
+    const base = MEDICAMENTOS_NI.filter(m => m.n.toLowerCase().includes(q2) || m.p.toLowerCase().includes(q2)).slice(0, 6);
+    matches = _mergeConMinsa(base, q2);
+  }
   if(!matches.length) { box.style.display='none'; return; }
   box.innerHTML = matches.map((m, i) => `
     <div class="med-sug-item" data-idx="${i}"
@@ -6030,19 +6244,69 @@ const DX_MAP = {
   'gastro':['Gastritis aguda','Gastroenteritis','Colitis','Reflujo gastroesofágico','Úlcera péptica'],
 };
 
+
+// Sugerencias de diagnóstico veterinario, mismo molde que DX_MAP. Es texto
+// libre con ayuda al escribir, no una codificación: no existe un CIE-10
+// veterinario de uso corriente en clínica de pequeños animales.
+const DX_MAP_VET = {
+  'vomito':['Gastroenteritis aguda','Cuerpo extraño gastrointestinal','Indiscreción alimentaria','Pancreatitis','Insuficiencia renal','Parvovirosis','Obstrucción intestinal','Gastritis'],
+  'vomita':['Gastroenteritis aguda','Cuerpo extraño gastrointestinal','Indiscreción alimentaria','Pancreatitis','Gastritis'],
+  'diarrea':['Gastroenteritis aguda','Parasitosis intestinal','Giardiasis','Parvovirosis','Coccidiosis','Disbiosis intestinal','Colitis'],
+  'no come':['Anorexia','Gastroenteritis','Enfermedad periodontal','Insuficiencia renal','Cuerpo extraño','Dolor abdominal','Fiebre de origen desconocido'],
+  'anorexia':['Anorexia','Gastroenteritis','Enfermedad periodontal','Insuficiencia renal','Neoplasia'],
+  'decaido':['Fiebre de origen desconocido','Anemia','Insuficiencia renal','Ehrlichiosis','Hipoglucemia','Dolor'],
+  'fiebre':['Fiebre de origen desconocido','Infección bacteriana','Ehrlichiosis','Anaplasmosis','Absceso','Piometra'],
+  'tos':['Traqueobronquitis infecciosa (tos de perrera)','Colapso traqueal','Bronquitis crónica','Insuficiencia cardíaca','Dirofilariosis','Neumonía'],
+  'estornuda':['Rinotraqueítis viral felina','Calicivirosis','Rinitis alérgica','Cuerpo extraño nasal','Infección respiratoria alta'],
+  'dificultad respiratoria':['Edema pulmonar','Insuficiencia cardíaca congestiva','Efusión pleural','Asma felino','Neumonía','Colapso traqueal'],
+  'pulgas':['Dermatitis alérgica por picadura de pulga','Infestación por pulgas','Anemia por parasitosis externa'],
+  'garrapatas':['Infestación por garrapatas','Ehrlichiosis','Anaplasmosis','Babesiosis','Hepatozoonosis'],
+  'rasca':['Dermatitis alérgica por picadura de pulga','Dermatitis atópica','Sarna sarcóptica','Dermatitis por Malassezia','Alergia alimentaria','Piodermia superficial'],
+  'piel':['Dermatitis atópica','Piodermia superficial','Dermatofitosis (tiña)','Sarna demodécica','Dermatitis por Malassezia','Alergia alimentaria'],
+  'caida de pelo':['Dermatofitosis (tiña)','Sarna demodécica','Hipotiroidismo','Alopecia por dermatitis','Síndrome de Cushing'],
+  'oido':['Otitis externa','Otitis media','Otohematoma','Ácaros del oído (Otodectes)'],
+  'ojo':['Conjuntivitis','Úlcera corneal','Queratoconjuntivitis seca','Glaucoma','Cataratas','Uveítis'],
+  'cojea':['Ruptura de ligamento cruzado','Luxación de rótula','Displasia de cadera','Osteoartritis','Fractura','Esguince'],
+  'cojera':['Ruptura de ligamento cruzado','Luxación de rótula','Displasia de cadera','Osteoartritis','Fractura'],
+  'orina':['Infección del tracto urinario','Urolitiasis','Enfermedad del tracto urinario inferior felino','Insuficiencia renal','Cistitis idiopática'],
+  'no orina':['Obstrucción uretral','Urolitiasis','Enfermedad del tracto urinario inferior felino'],
+  'toma mucha agua':['Insuficiencia renal crónica','Diabetes mellitus','Síndrome de Cushing','Piometra','Diabetes insípida'],
+  'convulsion':['Epilepsia idiopática','Hipoglucemia','Intoxicación','Encefalitis','Neoplasia intracraneal','Distemper'],
+  'moquillo':['Distemper canino','Infección respiratoria viral','Encefalitis'],
+  'parvovirus':['Parvovirosis','Gastroenteritis hemorrágica','Deshidratación severa'],
+  'atropello':['Politraumatismo','Fractura','Trauma torácico','Hemoabdomen','Shock hipovolémico'],
+  'parto':['Distocia','Parto normal','Eclampsia puerperal','Retención placentaria'],
+  'castracion':['Orquiectomía electiva','Ovariohisterectomía electiva'],
+  'esterilizacion':['Ovariohisterectomía electiva','Orquiectomía electiva'],
+  'vacuna':['Vacunación de rutina','Refuerzo vacunal','Protocolo de cachorro'],
+  'desparasitacion':['Desparasitación interna','Desparasitación externa','Parasitosis intestinal'],
+  'chequeo':['Examen clínico de rutina','Control geriátrico','Control de peso','Chequeo prequirúrgico'],
+  'control':['Examen clínico de rutina','Control postoperatorio','Control de tratamiento'],
+  'dental':['Enfermedad periodontal','Sarro dental','Gingivitis','Fractura dentaria','Profilaxis dental'],
+  'boca':['Enfermedad periodontal','Gingivoestomatitis felina','Sarro dental','Úlcera oral'],
+  'obeso':['Obesidad','Sobrepeso','Hipotiroidismo'],
+  'delgado':['Bajo peso','Parasitosis intestinal','Malabsorción','Hipertiroidismo felino','Neoplasia'],
+  'bulto':['Lipoma','Neoplasia cutánea','Absceso','Mastocitoma','Quiste sebáceo'],
+  'sangra':['Coagulopatía','Trauma','Ehrlichiosis','Intoxicación por rodenticida','Hemoabdomen'],
+};
+
+// El catálogo depende del tipo de clínica
+function _dxMapActivo() { return esVeterinaria() ? DX_MAP_VET : DX_MAP; }
+
 const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
 
 function buscarDiagnosticos(query) {
   if(!query || query.length < 3) return [];
   const q = norm(query);
   const found = new Set();
-  Object.entries(DX_MAP).forEach(([key, dxs]) => {
+  const mapa = _dxMapActivo();
+  Object.entries(mapa).forEach(([key, dxs]) => {
     if(norm(key).includes(q) || q.includes(norm(key))) dxs.forEach(d => found.add(d));
   });
   // También buscar palabra suelta
   const words = q.split(' ').filter(w => w.length > 3);
   words.forEach(w => {
-    Object.entries(DX_MAP).forEach(([key, dxs]) => {
+    Object.entries(mapa).forEach(([key, dxs]) => {
       if(norm(key).includes(w)) dxs.forEach(d => found.add(d));
     });
   });
@@ -10758,7 +11022,7 @@ async function eliminarMascota(id) {
 // Información y Expediente. Citas, notas y recetas veterinarias llegan cuando
 // esos módulos se adapten a mascota_id (no duplican esta ficha).
 function switchTabMascota(tabId, btn) {
-  ['mtab-info', 'mtab-citas', 'mtab-consultas', 'mtab-expediente'].forEach(id => { const e = document.getElementById(id); if(e) e.style.display = 'none'; });
+  ['mtab-info', 'mtab-citas', 'mtab-consultas', 'mtab-recetas', 'mtab-expediente'].forEach(id => { const e = document.getElementById(id); if(e) e.style.display = 'none'; });
   document.querySelectorAll('#view-mascota-detalle .tab').forEach(t => t.classList.remove('active'));
   document.getElementById(tabId).style.display = 'block';
   if(btn) btn.classList.add('active');
@@ -10872,6 +11136,34 @@ function renderDetalleMascota(mid) {
         </div>
       </div>`).join('')}</div>`
       : '<div class="empty-state"><div class="empty-icon">📝</div><p>Sin consultas registradas</p></div>'}
+  </div>`;
+
+  const medsMascota = C.m.filter(x => x.mascotaId === mid);
+  const activas = medsMascota.filter(x => x.estado === 'activa');
+  document.getElementById('mtab-recetas').innerHTML = `<div class="card">
+    <div class="card-header"><h3>💊 Medicaciones</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${activas.length?`<button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirRecetaMascota(${mid})">🖨️ Receta</button>`:''}
+        <button class="btn btn-primary btn-sm" onclick="openModalMedMascota(${mid})">+ Nueva</button>
+      </div>
+    </div>
+    ${medsMascota.length ? medsMascota.map(x => `
+      <div class="med-item">
+        <span style="font-size:22px">💊</span>
+        <div class="med-info" style="flex:1">
+          <h4>${escAttr(x.nombre)}</h4>
+          <div class="med-dosis">${escAttr(x.dosis||'')} — ${escAttr(x.frecuencia||'')} (${escAttr(x.via||'oral')})</div>
+          <p>${x.inicio?`Del ${formatFecha(x.inicio)} al ${x.fin?formatFecha(x.fin):'indefinido'}`:''}${x.indicaciones?' · '+escAttr(x.indicaciones):''}</p>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+          ${estadoTag(x.estado)}
+          <div class="actions-cell">
+            <button class="btn btn-secondary btn-sm" onclick="openModalMedicacion(${x.id})">✏️</button>
+            <button class="btn btn-danger btn-sm" onclick="eliminarMedicacion(${x.id})">🗑️</button>
+          </div>
+        </div>
+      </div>`).join('')
+      : '<div class="empty-state"><div class="empty-icon">💊</div><p>Sin medicaciones registradas</p></div>'}
   </div>`;
 
   document.getElementById('mtab-expediente').innerHTML = `

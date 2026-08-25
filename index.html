@@ -275,11 +275,13 @@
           <button class="tab active" id="mtab-btn-info" onclick="switchTabMascota('mtab-info',this)">📋 Información</button>
           <button class="tab" id="mtab-btn-citas" onclick="switchTabMascota('mtab-citas',this)">📅 Citas</button>
           <button class="tab" id="mtab-btn-consultas" onclick="switchTabMascota('mtab-consultas',this)">📝 Consultas</button>
+          <button class="tab" id="mtab-btn-recetas" onclick="switchTabMascota('mtab-recetas',this)">💊 Recetas</button>
           <button class="tab" id="mtab-btn-expediente" onclick="switchTabMascota('mtab-expediente',this)">📁 Expediente</button>
         </div>
         <div id="mtab-info"></div>
         <div id="mtab-citas" style="display:none"></div>
         <div id="mtab-consultas" style="display:none"></div>
+        <div id="mtab-recetas" style="display:none"></div>
         <div id="mtab-expediente" style="display:none"></div>
       </div>
 
@@ -2007,13 +2009,22 @@
     <button class="modal-close-btn" onclick="closeModal('modal-medicacion')" title="Cerrar">✕</button>
     <h2 id="modal-med-title">💊 Nueva Receta</h2>
     <div class="form-grid" style="margin-bottom:16px">
-      <div class="form-group full"><label>Paciente *</label>
+      <div class="form-group full" id="m-paciente-wrap"><label>Paciente *</label>
         <div style="position:relative">
           <input type="text" id="m-pac-txt" placeholder="Buscar paciente por nombre..." autocomplete="off"
             oninput="filterPacSug(this.value,'m')" onfocus="filterPacSug(this.value,'m')" onblur="setTimeout(()=>hidePacSug('m'),200)">
           <input type="hidden" id="m-paciente">
           <div id="m-pac-sug" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;z-index:300;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.15);margin-top:4px"></div>
         </div>
+      </div>
+      <div class="form-group full" id="m-mascota-wrap" style="display:none"><label>Mascota *</label>
+        <div style="position:relative">
+          <input type="text" id="m-mas-txt" placeholder="Buscar mascota por nombre, raza o dueño..." autocomplete="off"
+            oninput="filterMasSugMed(this.value)" onfocus="filterMasSugMed(this.value)" onblur="setTimeout(()=>hideMasSugMed(),200)">
+          <input type="hidden" id="m-mascota">
+          <div id="m-mas-sug" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;z-index:300;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.15);margin-top:4px"></div>
+        </div>
+        <div id="m-peso-hint" style="font-size:11.5px;color:var(--primary);font-weight:700;margin-top:6px;min-height:15px"></div>
       </div>
       <div class="form-group"><label>Fecha Inicio</label><input type="date" id="m-inicio"></div>
       <div class="form-group"><label>Fecha Fin</label><input type="date" id="m-fin"></div>
