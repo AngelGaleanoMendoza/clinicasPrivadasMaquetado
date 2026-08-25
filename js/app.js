@@ -116,7 +116,31 @@ let currentClinica   = null;
 // columna `password` heredada del login antiguo: NUNCA debe viajar al navegador,
 // porque cualquier usuario puede leer los perfiles de su clínica (política RLS)
 // y la vería en texto plano desde las herramientas de desarrollo.
-const PROFILE_COLS = 'id,nombre,rol,email,icono,clinica_id,permisos,especialidad,firma_url,bloqueado,intentos_fallidos,horario';
+// Núcleo: columnas que existen desde siempre. Sin ellas la app no funciona.
+const PROFILE_COLS_BASE = ['id','nombre','rol','email','icono','clinica_id','permisos'];
+// Opcionales: se fueron agregando con el tiempo y pueden no existir todavía en
+// una base que no haya corrido los scripts. Si falta alguna, se pide sin ella:
+// una columna ausente NO puede dejar a nadie fuera del sistema.
+const PROFILE_COLS_OPC = ['especialidad','firma_url','bloqueado','intentos_fallidos','horario'];
+let _profileColsOK = null;   // se recuerda la lista válida tras el primer intento
+
+function _profileCols() {
+  return (_profileColsOK || PROFILE_COLS_BASE.concat(PROFILE_COLS_OPC)).join(',');
+}
+
+// Ejecuta una consulta a profiles y, si Supabase se queja de una columna que no
+// existe, la descarta y reintenta. Devuelve { data, error } como cualquier otra.
+async function _consultaPerfil(construir) {
+  let cols = _profileColsOK || PROFILE_COLS_BASE.concat(PROFILE_COLS_OPC);
+  for(let intento = 0; intento <= PROFILE_COLS_OPC.length; intento++) {
+    const r = await construir(cols.join(','));
+    if(!r.error) { _profileColsOK = cols; return r; }
+    const falta = PROFILE_COLS_OPC.find(c => cols.includes(c) && _faltaColumna(r.error, c));
+    if(!falta) return r;
+    cols = cols.filter(c => c !== falta);
+  }
+  return await construir(PROFILE_COLS_BASE.join(','));
+}
 
 // ════════════════════ MAPPERS DB ↔ JS ════════════════════
 const fromP = r => ({ id:r.id, nombre:r.nombre, apellidos:r.apellidos, identificacion:r.identificacion, fechaNac:r.fecha_nac, sexo:r.sexo, sangre:r.sangre, telefono:r.telefono, email:r.email, direccion:r.direccion, alergias:r.alergias, estado:r.estado||'activo', emergencia:r.emergencia, observaciones:r.observaciones, fechaRegistro:r.fecha_registro, fotoUrl:r.foto_url||null, expediente:r.expediente||null });
@@ -330,7 +354,7 @@ async function verificarLogin() {
   }
 
   // ── PASO 3: fallback legacy (profiles con password en texto plano) ──
-  const { data: legacy } = await sb.from('profiles').select(PROFILE_COLS).eq('email', email).eq('password', password).maybeSingle();
+  const { data: legacy } = await _consultaPerfil(cols => sb.from('profiles').select(cols).eq('email', email).eq('password', password).maybeSingle());
   if(legacy) {
     // Auto-registrar en Auth para futuras sesiones
     const { data: migrAuth } = await sb.auth.signInWithPassword({ email, password });
@@ -368,9 +392,9 @@ async function verificarLogin() {
 
 // Busca perfil por Auth UUID; si no lo encuentra por ID, lo busca por email y sincroniza
 async function resolverPerfil(authId, email) {
-  const { data: p1 } = await sb.from('profiles').select(PROFILE_COLS).eq('id', authId).maybeSingle();
+  const { data: p1 } = await _consultaPerfil(cols => sb.from('profiles').select(cols).eq('id', authId).maybeSingle());
   if(p1) return p1;
-  const { data: p2 } = await sb.from('profiles').select(PROFILE_COLS).eq('email', email).maybeSingle();
+  const { data: p2 } = await _consultaPerfil(cols => sb.from('profiles').select(cols).eq('email', email).maybeSingle());
   if(p2) {
     await sb.from('profiles').update({ id: authId }).eq('email', email);
     return { ...p2, id: authId };
@@ -4865,7 +4889,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if(session?.user) {
       // Guardar email del auth para isSuperAdmin()
       if(session.user.email) _authEmail = session.user.email.trim().toLowerCase();
-      const { data: profile } = await sb.from('profiles').select(PROFILE_COLS).eq('id', session.user.id).single();
+      const { data: profile } = await _consultaPerfil(cols => sb.from('profiles').select(cols).eq('id', session.user.id).maybeSingle());
       if(profile) {
         if(!profile.email && session.user.email) profile.email = session.user.email;
         await entrarConPerfil(profile); return;
@@ -7628,7 +7652,7 @@ async function loadAdminData() {
   setLoading(true);
   const [rc, ru, ra] = await Promise.all([
     sb.from('clinicas').select('*').order('id'),
-    sb.from('profiles').select(PROFILE_COLS).order('nombre'),
+    _consultaPerfil(cols => sb.from('profiles').select(cols).order('nombre')),
     sb.from('actividad_usuarios').select('*').order('created_at', {ascending:false}).limit(2000)
   ]);
   adminClinicas = rc.data || [];
