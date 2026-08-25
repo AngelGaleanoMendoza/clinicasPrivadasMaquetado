@@ -950,10 +950,7 @@ function renderCalDayCitas(date){
       ${esCompletada ? '<span class="acudio-badge">✅ Atendido</span>' : estadoTag(c.estado)}
       <div class="actions-cell" style="gap:6px;flex-wrap:wrap">
         <button class="btn btn-sm" style="background:var(--primary);color:#fff;font-size:15px;font-weight:800;padding:4px 10px;line-height:1" onclick="openModalCitaP(${c.pacienteId})" title="Nueva cita">+</button>
-        ${!esCompletada&&!esCancelada?`<button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;font-size:11px;font-weight:700;white-space:nowrap" onclick="marcarCitaCompletada(${c.id})">✅ Atendido</button>`:''}
-        <button class="btn btn-primary btn-sm" onclick="verResumenCita(${c.id})" title="Ver hoja">📄</button>
-        <button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">✏️</button>
-        <button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">🗑️</button>
+        ${_accionesCitaHTML(c)}
       </div>
     </div>`; }).join('');
 }
@@ -1641,10 +1638,7 @@ function renderDetalleP(pid){
         </div>
         ${esComp?'<span class="acudio-badge">✅ Atendido</span>':estadoTag(c.estado)}
         <div class="actions-cell" style="gap:6px;flex-wrap:wrap">
-          ${!esComp&&!esCanc?`<button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;font-size:11px;font-weight:700;white-space:nowrap" onclick="marcarCitaCompletada(${c.id})">✅ Atendido</button>`:''}
-          <button class="btn btn-primary btn-sm" onclick="verResumenCita(${c.id})" title="Ver hoja">📄</button>
-          <button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">✏️</button>
-          <button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">🗑️</button>
+          ${_accionesCitaHTML(c)}
         </div>
       </div>`;
     }).join('')}</div>`:'<div class="empty-state"><div class="empty-icon">📅</div><p>Sin citas</p></div>'}
@@ -2023,10 +2017,7 @@ function renderCitasParaFecha(fecha) {
       ${esCompletada ? '<span class="acudio-badge">✅ Atendido</span>' : estadoTag(c.estado)}
       <div class="actions-cell" style="gap:6px;flex-wrap:wrap">
         <button class="btn btn-sm" style="background:var(--primary);color:#fff;font-size:15px;font-weight:800;padding:4px 10px;line-height:1" onclick="openModalCitaP(${c.pacienteId})" title="Nueva cita">+</button>
-        ${!esCompletada&&!esCancelada?`<button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;font-size:11px;font-weight:700;white-space:nowrap" onclick="marcarCitaCompletada(${c.id})">✅ Atendido</button>`:''}
-        <button class="btn btn-primary btn-sm" onclick="verResumenCita(${c.id})" title="Ver hoja">📄</button>
-        <button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">✏️</button>
-        <button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">🗑️</button>
+        ${_accionesCitaHTML(c)}
       </div>
     </div>`;
   }).join('');
@@ -2068,9 +2059,7 @@ function renderCitas(){
       </div>
       ${esComp?'<span class="acudio-badge" style="flex-shrink:0">✅</span>':`<span style="flex-shrink:0">${estadoTag(c.estado)}</span>`}
       <div class="actions-cell" style="flex-shrink:0;gap:3px;flex-wrap:nowrap">
-        <button class="btn btn-primary btn-sm" onclick="verResumenCita(${c.id})" title="Ver hoja">📄</button>
-        <button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">✏️</button>
-        <button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">🗑️</button>
+        ${_accionesCitaHTML(c)}
       </div>
     </div>`;
   }).join('');
@@ -2387,7 +2376,13 @@ async function guardarCita(){
     }
   }
 
-  const obj={pacienteId:pid,mascotaId:mid,medicoId,fecha,hora,duracionMin,motivo,tipo:tipoCita,estado:document.getElementById('c-estado').value,notas:document.getElementById('c-notas').value.trim()};
+  let notasCita = document.getElementById('c-notas').value.trim();
+  // Reprogramación: el valor está en el rastro, no en una pantalla nueva
+  if(_reprogramandoDesde && (_reprogramandoDesde.fecha !== fecha || _reprogramandoDesde.hora !== hora)) {
+    const linea = `Reprogramada: ${formatFecha(_reprogramandoDesde.fecha)} ${formatHora12(_reprogramandoDesde.hora)} → ${formatFecha(fecha)} ${formatHora12(hora)}`;
+    notasCita = notasCita ? linea + '\n' + notasCita : linea;
+  }
+  const obj={pacienteId:pid,mascotaId:mid,medicoId,fecha,hora,duracionMin,motivo,tipo:tipoCita,estado:document.getElementById('c-estado').value,notas:notasCita};
   setLoading(true);
   const payload = toC(obj);
   let err;
@@ -4194,7 +4189,7 @@ function setPacienteSelect(sid, pid) {
 function openModalOverlay(id){ document.getElementById(id).classList.add('open'); document.body.classList.add('modal-open'); }
 function closeModal(id){
   document.getElementById(id).classList.remove('open');
-  if(id==='modal-cita') editingCitaId=null;
+  if(id==='modal-cita') { editingCitaId=null; _reprogramandoDesde=null; }
   else if(id==='modal-medicacion') editingMedId=null;
   else if(id==='modal-nota') editingNotaId=null;
   else if(id==='modal-procedimiento') editingProcId=null;
@@ -10738,9 +10733,7 @@ function renderDetalleMascota(mid) {
         </div>
         ${estadoTag(c.estado)}
         <div class="actions-cell" style="gap:6px;flex-wrap:wrap">
-          ${abierta ? `<button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;font-size:11px;font-weight:700;white-space:nowrap" onclick="marcarCitaCompletada(${c.id})">✅ Atendida</button>` : ''}
-          <button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">✏️</button>
-          <button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">🗑️</button>
+          ${_accionesCitaHTML(c, { conHoja:false })}
         </div>
       </div>`;
     }).join('') : '<div class="empty-state"><div class="empty-icon">📅</div><p>Sin citas registradas</p></div>'}
@@ -11081,4 +11074,110 @@ function navSemana(dir) {
   if(dir === 0) selCalDate = hoy();
   else { const d = new Date(selCalDate+'T12:00:00'); d.setDate(d.getDate() + dir*7); selCalDate = d.toISOString().split('T')[0]; }
   renderVistaSemana();
+}
+
+
+// Acciones de una cita en las listas. Cancelar sustituye a eliminar: borrar la
+// fila destruía el historial y hacía inútil cualquier estadística de asistencia.
+// Eliminar de verdad queda reservado al Super Admin.
+function _accionesCitaHTML(c, { conHoja = true } = {}) {
+  const abierta = _citaAbierta(c);
+  const esPasada = c.fecha < hoy() || (c.fecha === hoy() && c.hora < _getMinHoraHoy());
+  return [
+    abierta ? `<button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;font-size:11px;font-weight:700;white-space:nowrap" onclick="event.stopPropagation();marcarCitaCompletada(${c.id})">✅ Atendido</button>` : '',
+    (abierta && esPasada) ? `<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();marcarNoAsistio(${c.id})" title="No asistió">🚷</button>` : '',
+    conHoja ? `<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();verResumenCita(${c.id})" title="Ver hoja">📄</button>` : '',
+    abierta ? `<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();reprogramarCita(${c.id})" title="Reprogramar">🔄</button>` : '',
+    `<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openModalCita(${c.id})" title="Editar">✏️</button>`,
+    abierta ? `<button class="btn btn-danger btn-sm" onclick="event.stopPropagation();cancelarCita(${c.id})" title="Cancelar cita">🚫</button>` : '',
+    isSuperAdmin() ? `<button class="btn btn-danger btn-sm" onclick="event.stopPropagation();eliminarCita(${c.id})" title="Eliminar del historial">🗑️</button>` : ''
+  ].filter(Boolean).join('');
+}
+
+// ════════════════════ CANCELAR / NO ASISTIÓ / REPROGRAMAR ════════════════════
+// Hasta ahora la única salida de una cita era eliminarla, lo que destruía el
+// historial y hacía inútil cualquier estadística de asistencia.
+const MOTIVOS_CANCELACION = [
+  'El cliente canceló', 'Reprogramada por el cliente', 'Emergencia de la clínica',
+  'El profesional no está disponible', 'Duplicada', 'Otro'
+];
+let _cancelandoCitaId = null;
+
+function cancelarCita(id) {
+  const c = C.c.find(x => x.id === id);
+  if(!c) return;
+  _cancelandoCitaId = id;
+  const s = _sujetoCita(c);
+  document.getElementById('cc-resumen').innerHTML =
+    `${formatFecha(c.fecha)} a las <strong>${formatHora12(c.hora)}</strong>${s?` · ${escAttr(s.titulo)}`:''}`;
+  document.getElementById('cc-motivo').value = '';
+  document.getElementById('cc-motivos').innerHTML = MOTIVOS_CANCELACION
+    .map(m => `<span class="chip" onclick="document.getElementById('cc-motivo').value='${escAttr(m)}'">${escAttr(m)}</span>`).join('');
+  openModalOverlay('modal-cancelar-cita');
+}
+
+async function confirmarCancelarCita() {
+  const id = _cancelandoCitaId;
+  if(!id) return;
+  const motivo = document.getElementById('cc-motivo').value.trim() || null;
+  setLoading(true);
+  const payload = { estado: 'cancelada', motivo_cancelacion: motivo };
+  let { error } = await sb.from('citas').update(payload).eq('id', id);
+  // La columna puede no existir todavía: se cancela igual, sin el motivo.
+  if(error && _faltaColumna(error, 'motivo_cancelacion')) {
+    ({ error } = await sb.from('citas').update({ estado:'cancelada' }).eq('id', id));
+    if(!error) toast('Cita cancelada, pero falta la columna motivo_cancelacion en Supabase','warning');
+  }
+  setLoading(false);
+  if(error) { toast('Error al cancelar: ' + error.message, 'error'); return; }
+  toast('Cita cancelada');
+  closeModal('modal-cancelar-cita');
+  _cancelandoCitaId = null;
+  await loadAll();
+  _refrescarVistaCitas();
+}
+
+async function marcarNoAsistio(id) {
+  const c = C.c.find(x => x.id === id);
+  if(!c) return;
+  const s = _sujetoCita(c);
+  const ok = await customConfirm({
+    icon: '🚷', title: 'Marcar como no asistió',
+    msg: `¿Registrar que <strong>${escAttr(s?s.titulo:'el paciente')}</strong> no acudió a la cita de las ${formatHora12(c.hora)}?<br><small style="color:var(--text-light)">El horario queda libre y la cita se conserva en el historial.</small>`,
+    okText: 'Marcar no asistió', danger: true
+  });
+  if(!ok) return;
+  setLoading(true);
+  const { error } = await sb.from('citas').update({ estado:'no_asistio' }).eq('id', id);
+  setLoading(false);
+  if(error) { toast('Error: ' + error.message, 'error'); return; }
+  toast('Registrado como no asistió');
+  await loadAll();
+  _refrescarVistaCitas();
+}
+
+// Reprogramar reutiliza el modal de cita: no hace falta una pantalla nueva,
+// solo dejar rastro del cambio en las notas.
+function reprogramarCita(id) {
+  const c = C.c.find(x => x.id === id);
+  if(!c) return;
+  _reprogramandoDesde = { fecha: c.fecha, hora: c.hora };
+  openModalCita(id);
+  const titulo = document.getElementById('modal-cita-title');
+  if(titulo) titulo.textContent = '🔄 Reprogramar Cita';
+}
+let _reprogramandoDesde = null;
+
+function _refrescarVistaCitas() {
+  if(currentView === 'mascota-detalle') { renderDetalleMascota(currentMascotaId); return; }
+  if(currentView === 'paciente-detalle') { renderDetalleP(currentPatientId); return; }
+  if(currentView === 'citas') {
+    if(citasTab === 'dia') renderVistaDia();
+    else if(citasTab === 'semana') renderVistaSemana();
+    else if(citasTab === 'calendario') { renderCalendar('citas-cal', true); renderCalDayCitas(selCalDate); }
+    else renderCitas();
+    return;
+  }
+  renderView(currentView);
+  updateBadges();
 }

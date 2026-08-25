@@ -1917,6 +1917,26 @@
   </div>
 </div>
 
+<!-- MODAL CANCELAR CITA -->
+<div class="modal-overlay" id="modal-cancelar-cita">
+  <div class="modal" style="max-width:460px">
+    <button class="modal-close-btn" onclick="closeModal('modal-cancelar-cita')" title="Cerrar">✕</button>
+    <h2>🚫 Cancelar cita</h2>
+    <p class="text-light" style="font-size:13px;margin-bottom:14px" id="cc-resumen"></p>
+    <div class="form-grid">
+      <div class="form-group full"><label>Motivo</label>
+        <div class="filter-chips" id="cc-motivos" style="margin-bottom:8px"></div>
+        <input type="text" id="cc-motivo" placeholder="O escribe el motivo...">
+      </div>
+    </div>
+    <p class="text-light" style="font-size:11px;margin-top:10px">La cita se conserva en el historial con su motivo, en vez de borrarse.</p>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-cancelar-cita')">Volver</button>
+      <button class="btn btn-danger" onclick="confirmarCancelarCita()">🚫 Cancelar cita</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL CITA -->
 <div class="modal-overlay" id="modal-cita">
   <div class="modal">
@@ -1969,7 +1989,7 @@
         <option value="optometria">Optometría / Examen visual</option>
         <option value="odontologia">Odontología</option>
       </select></div>
-      <div class="form-group"><label>Estado</label><select id="c-estado"><option value="pendiente">Pendiente</option><option value="confirmada">Confirmada</option><option value="completada">Completada</option><option value="cancelada">Cancelada</option></select></div>
+      <div class="form-group"><label>Estado</label><select id="c-estado"><option value="pendiente">Pendiente</option><option value="confirmada">Confirmada</option><option value="completada">Completada</option><option value="cancelada">Cancelada</option><option value="no_asistio">No asistió</option></select></div>
       <div class="form-group full"><label>Notas / Diagnóstico</label><textarea id="c-notas" placeholder="Observaciones, diagnóstico... (los diagnósticos sugeridos se agregan aquí)"></textarea></div>
     </div>
     <div class="modal-footer">
