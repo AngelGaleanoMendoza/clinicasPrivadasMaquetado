@@ -107,7 +107,8 @@ window.addEventListener('DOMContentLoaded', () => {
 }, { once: true });
 
 // ════════════════════ CACHE LOCAL ════════════════════
-const C = { p:[], c:[], m:[], n:[], e:[], prof:[], inv:[], mov:[], fin:[], fact:[], factItems:[], proc:[], hd:[], odo:[], perio:[] };
+// cli/mas/expMas/vac/desp/hosp son las tablas veterinarias; quedan vacías en clínicas humanas
+const C = { p:[], c:[], m:[], n:[], e:[], prof:[], inv:[], mov:[], fin:[], fact:[], factItems:[], proc:[], hd:[], odo:[], perio:[], cli:[], mas:[], expMas:[], vac:[], desp:[], hosp:[] };
 let currentClinicaId = null;
 let currentClinica   = null;
 
@@ -667,8 +668,46 @@ function _getEdadNum(fn) {
 function ini(a,b){ return ((a||'')[0]||'').toUpperCase()+((b||'')[0]||'').toUpperCase(); }
 function colAvatar(id) { const c=['#2563EB','#06B6D4','#10B981','#F59E0B','#8B5CF6','#EF4444','#0891B2','#4F46E5']; return c[id%c.length]; }
 function estadoTag(e) {
-  const m={activo:'tag-green',inactivo:'tag-gray',pendiente:'tag-orange',confirmada:'tag-cyan',completada:'tag-green',cancelada:'tag-red',activa:'tag-green',finalizada:'tag-gray',suspendida:'tag-red'};
-  return `<span class="tag ${m[e]||'tag-gray'}">${e}</span>`;
+  const m={activo:'tag-green',inactivo:'tag-gray',pendiente:'tag-orange',confirmada:'tag-cyan',completada:'tag-green',cancelada:'tag-red',no_asistio:'tag-red',activa:'tag-green',finalizada:'tag-gray',suspendida:'tag-red'};
+  return `<span class="tag ${m[e]||'tag-gray'}">${ESTADO_CITA_LABEL[e]||e}</span>`;
+}
+
+// ════════════════════ CITAS: ESTADO Y SUJETO ════════════════════
+// Una cita "muerta" no ocupa hueco ni cuenta en los totales. Tener la lista en un
+// solo sitio evita que al añadir un estado nuevo haya que perseguir cada
+// comparación suelta con 'cancelada' repartida por el archivo.
+const ESTADOS_CITA_MUERTA = ['cancelada','no_asistio'];
+const ESTADO_CITA_LABEL   = { no_asistio:'no asistió' };
+function _citaActiva(c)    { return !ESTADOS_CITA_MUERTA.includes(c?.estado); }
+// Cita que todavía puede atenderse hoy
+function _citaAbierta(c)   { return c?.estado === 'pendiente' || c?.estado === 'confirmada'; }
+
+// Sujeto de una cita: el paciente en clínicas humanas, la mascota en veterinarias.
+// Es el ÚNICO punto donde el resto del sistema resuelve "de quién es esta cita",
+// así que el calendario no necesita saber nada del modelo veterinario.
+function _sujetoCita(c) {
+  if(!c) return null;
+  if(c.mascotaId) {
+    const m = C.mas.find(x => x.id === c.mascotaId);
+    if(m) return _sujetoMascota(m);
+  }
+  const p = C.p.find(x => x.id === c.pacienteId);
+  return p ? _sujetoPaciente(p) : null;
+}
+function _sujetoPaciente(p) {
+  return { id:p.id, tipo:'paciente', ref:p,
+    titulo:    `${p.nombre} ${p.apellidos}`.trim(),
+    subtitulo: calcEdad(p.fechaNac),
+    iniciales: ((p.nombre||'')[0]||'').toUpperCase() + ((p.apellidos||'')[0]||'').toUpperCase(),
+    fotoUrl:   p.fotoUrl || null };
+}
+function _sujetoMascota(m) {
+  const dueno = C.cli.find(x => x.id === m.clienteId);
+  return { id:m.id, tipo:'mascota', ref:m,
+    titulo:    m.nombre,
+    subtitulo: [m.especie, m.raza, dueno ? `${dueno.nombre} ${dueno.apellidos||''}`.trim() : null].filter(Boolean).join(' · '),
+    iniciales: (m.nombre || '?')[0].toUpperCase(),
+    fotoUrl:   m.fotoUrl || null };
 }
 function toast(msg, type='success') {
   const icons = {success:'✅',error:'❌',info:'ℹ️',warning:'⚠️'};
@@ -771,7 +810,7 @@ function renderView(v) {
 
 function updateBadges() {
   const h=hoy();
-  const citasHoy=C.c.filter(x=>x.fecha===h&&x.estado!=='cancelada').length;
+  const citasHoy=C.c.filter(x=>x.fecha===h&&_citaActiva(x)).length;
   document.getElementById('badge-pacientes').textContent = C.p.length;
   document.getElementById('badge-citas').textContent = citasHoy;
   const bnBadge=document.getElementById('bn-badge-citas');
@@ -783,7 +822,7 @@ function updateBadges() {
 function renderCalendar(containerId, interactive) {
   const d=new Date(selCalDate+'T12:00:00'), year=d.getFullYear(), month=d.getMonth();
   const citaCount={};
-  C.c.forEach(c=>{ citaCount[c.fecha]=(citaCount[c.fecha]||0)+1; });
+  C.c.forEach(c=>{ if(_citaActiva(c)) citaCount[c.fecha]=(citaCount[c.fecha]||0)+1; });
   const today2=hoy();
   const first=new Date(year,month,1).getDay(), days=new Date(year,month+1,0).getDate();
   const months=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -836,13 +875,13 @@ function renderCalDayCitas(date){
   if(!citas.length){ el.innerHTML=`<p class="text-light" style="text-align:center;padding:12px">Sin citas el ${formatFecha(date)}</p>`; return; }
   el.innerHTML=`<p style="font-size:11px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${formatFecha(date)}</p>`+
     citas.map(c=>{
-      const p=C.p.find(x=>x.id===c.pacienteId);
+      const p=_sujetoCita(c);
       const esCompletada=c.estado==='completada';
       const esCancelada=c.estado==='cancelada';
       return `<div class="cita-item ${c.estado}" style="gap:10px;flex-wrap:wrap">
       <div class="cita-time">${c.hora}</div>
       <div style="flex:1;min-width:0">
-        <div class="cita-paciente">${p?p.nombre+' '+p.apellidos:'Desconocido'}</div>
+        <div class="cita-paciente">${p?p.titulo:'Desconocido'}</div>
         <div class="cita-motivo">${c.motivo}${c.tipo?` · <span class="tag tag-cyan" style="font-size:10px">${c.tipo}</span>`:''}</div>
       </div>
       ${esCompletada ? '<span class="acudio-badge">✅ Atendido</span>' : estadoTag(c.estado)}
@@ -952,15 +991,15 @@ function renderDashboardSA() {
           </div>
           <div class="sa-panel-body">
             ${citasHoy.length ? citasHoy.map(c=>{
-              const p=C.p.find(x=>x.id===c.pacienteId);
+              const p=_sujetoCita(c);
               return `<div class="sa-agenda-item" onclick="navigate('paciente-detalle',${c.pacienteId})">
                 <div class="sa-agenda-time">${c.hora}</div>
-                <div class="patient-avatar" style="background:${colAvatar(c.pacienteId||0)};width:30px;height:30px;font-size:11px;flex-shrink:0">${p?ini(p.nombre,p.apellidos):'?'}</div>
+                <div class="patient-avatar" style="background:${colAvatar(c.pacienteId||0)};width:30px;height:30px;font-size:11px;flex-shrink:0">${p?p.iniciales:'?'}</div>
                 <div style="flex:1;min-width:0">
-                  <div class="sa-agenda-name">${p?p.nombre+' '+p.apellidos:'Desconocido'}</div>
+                  <div class="sa-agenda-name">${p?p.titulo:'Desconocido'}</div>
                   <div class="sa-agenda-sub">${c.motivo} · <span style="color:${c.estado==='completada'?'#15803D':c.estado==='cancelada'?'#e53e3e':'#d69e2e'}">${c.estado}</span></div>
                 </div>
-                ${c.estado!=='completada'&&c.estado!=='cancelada'?`<button class="btn btn-sm" style="background:var(--success);color:#fff;padding:3px 8px;font-size:11px;flex-shrink:0" onclick="event.stopPropagation();marcarCitaCompletada(${c.id})">✅</button>`:''}
+                ${_citaAbierta(c)?`<button class="btn btn-sm" style="background:var(--success);color:#fff;padding:3px 8px;font-size:11px;flex-shrink:0" onclick="event.stopPropagation();marcarCitaCompletada(${c.id})">✅</button>`:''}
               </div>`;
             }).join('') : `<div class="empty-state" style="padding:32px 0"><div class="empty-icon">📅</div><p>Sin citas hoy</p></div>`}
           </div>
@@ -1062,17 +1101,17 @@ function renderDashboardClinica(){
 
   const citasHoy=C.c.filter(c=>c.fecha===h).sort((a,b)=>a.hora.localeCompare(b.hora));
   document.getElementById('agenda-hoy').innerHTML=citasHoy.length?citasHoy.map(c=>{
-    const p=C.p.find(x=>x.id===c.pacienteId);
-    const edad=p?calcEdad(p.fechaNac):'';
+    const p=_sujetoCita(c);
+    const edad=p?p.subtitulo:'';
     return `<div class="dia-item" onclick="navigate('paciente-detalle',${c.pacienteId})">
       <div class="dia-time">${c.hora}</div>
-      <div class="patient-avatar" style="background:${colAvatar(c.pacienteId||0)};width:36px;height:36px;font-size:12px;flex-shrink:0">${p?ini(p.nombre,p.apellidos):'?'}</div>
+      <div class="patient-avatar" style="background:${colAvatar(c.pacienteId||0)};width:36px;height:36px;font-size:12px;flex-shrink:0">${p?p.iniciales:'?'}</div>
       <div class="dia-info">
-        <div class="dia-name">${p?p.nombre+' '+p.apellidos:'Desconocido'}</div>
+        <div class="dia-name">${p?p.titulo:'Desconocido'}</div>
         <div class="dia-sub">${c.motivo}${edad?' · '+edad:''}</div>
       </div>
       ${estadoTag(c.estado)}
-      ${c.estado!=='completada'&&c.estado!=='cancelada'?`<button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;flex-shrink:0" onclick="event.stopPropagation();marcarCitaCompletada(${c.id})" title="Marcar que acudió">✅</button>`:''}
+      ${_citaAbierta(c)?`<button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;flex-shrink:0" onclick="event.stopPropagation();marcarCitaCompletada(${c.id})" title="Marcar que acudió">✅</button>`:''}
       </div>`;
   }).join(''):`<div class="empty-state" style="padding:28px 0"><div class="empty-icon" style="font-size:32px">📅</div><p>Sin citas para hoy</p></div>`;
 
@@ -1248,11 +1287,11 @@ function renderRecientes() {
   } else if(recTab === 'citas') {
     const items = [...C.c].sort((a,b)=>b.fecha.localeCompare(a.fecha)||(b.id-a.id)).slice(0,10);
     el.innerHTML = items.length ? items.map(c=>{
-      const p=C.p.find(x=>x.id===c.pacienteId);
+      const p=_sujetoCita(c);
       return `<div class="search-result-item" style="cursor:default">
         <div style="min-width:70px;font-size:12px;font-weight:700;color:var(--primary)">${formatHora12(c.hora)}</div>
         <div style="flex:1;min-width:0">
-          <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p?p.nombre+' '+p.apellidos:'—'}</div>
+          <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p?p.titulo:'—'}</div>
           <div class="text-light">${formatFecha(c.fecha)} · ${c.motivo}</div>
         </div>
         ${estadoTag(c.estado)}
@@ -1904,13 +1943,13 @@ function renderCitasParaFecha(fecha) {
   }
   if(emptyEl) emptyEl.style.display='none';
   listaEl.innerHTML = citas.map(c => {
-    const p = C.p.find(x=>x.id===c.pacienteId);
+    const p = _sujetoCita(c);
     const esCompletada = c.estado==='completada';
     const esCancelada  = c.estado==='cancelada';
     return `<div class="cita-item ${c.estado}" style="gap:10px;flex-wrap:wrap">
       <div class="cita-time">${c.hora}</div>
       <div style="flex:1;min-width:0">
-        <div class="cita-paciente">${p?p.nombre+' '+p.apellidos:'Desconocido'}</div>
+        <div class="cita-paciente">${p?p.titulo:'Desconocido'}</div>
         <div class="cita-motivo">${c.motivo}${c.tipo?` · <span class="tag tag-cyan" style="font-size:10px">${c.tipo}</span>`:''}</div>
       </div>
       ${esCompletada ? '<span class="acudio-badge">✅ Atendido</span>' : estadoTag(c.estado)}
@@ -1945,18 +1984,18 @@ function renderCitas(){
   if(empty) empty.style.display='none';
   const MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
   if(listaH) listaH.innerHTML = [...C.c].sort((a,b)=>b.fecha.localeCompare(a.fecha)||a.hora.localeCompare(b.hora)).map(c=>{
-    const p = C.p.find(x=>x.id===c.pacienteId);
+    const p = _sujetoCita(c);
     const esComp = c.estado==='completada';
     const [,mm,dd] = c.fecha.split('-');
-    const search = ((p?p.nombre+' '+p.apellidos:'')+' '+c.motivo+' '+c.fecha).toLowerCase();
+    const search = ((p?p.titulo:'')+' '+c.motivo+' '+c.fecha).toLowerCase();
     return `<div class="cita-historial-item" data-search="${search}" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)">
       <div style="width:36px;flex-shrink:0;text-align:center;background:var(--primary-light);border-radius:8px;padding:5px 2px">
         <div style="font-size:13px;font-weight:800;color:var(--primary);line-height:1">${dd}</div>
         <div style="font-size:10px;color:var(--primary);text-transform:uppercase;font-weight:600">${MESES[parseInt(mm)-1]}</div>
       </div>
-      <div class="patient-avatar" style="background:${colAvatar(c.pacienteId||0)};width:32px;height:32px;font-size:11px;flex-shrink:0">${p?ini(p.nombre,p.apellidos):'?'}</div>
+      <div class="patient-avatar" style="background:${colAvatar(c.pacienteId||0)};width:32px;height:32px;font-size:11px;flex-shrink:0">${p?p.iniciales:'?'}</div>
       <div style="flex:1;min-width:0">
-        <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p?p.nombre+' '+p.apellidos:'Desconocido'}</div>
+        <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p?p.titulo:'Desconocido'}</div>
         <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.motivo||'—'}</div>
       </div>
       ${esComp?'<span class="acudio-badge" style="flex-shrink:0">✅</span>':`<span style="flex-shrink:0">${estadoTag(c.estado)}</span>`}
@@ -2122,7 +2161,7 @@ function registrarAcudidoPaciente(pid){
   const h=hoy();
   const p=C.p.find(x=>x.id===pid);
   const nombre=p?p.nombre+' '+p.apellidos:'El paciente';
-  const citasHoy=C.c.filter(c=>c.pacienteId===pid&&c.fecha===h&&c.estado!=='completada'&&c.estado!=='cancelada');
+  const citasHoy=C.c.filter(c=>c.pacienteId===pid&&c.fecha===h&&_citaAbierta(c));
   if(!citasHoy.length){
     toast(`${p?.nombre||'El paciente'} no tiene citas pendientes hoy`,'info');
     return;
@@ -2141,8 +2180,8 @@ function registrarAcudidoPaciente(pid){
 
 async function marcarCitaCompletada(id){
   const c=C.c.find(x=>x.id===id); if(!c) return;
-  const p=C.p.find(x=>x.id===c.pacienteId);
-  const nombre=p?p.nombre+' '+p.apellidos:'el paciente';
+  const p=_sujetoCita(c);
+  const nombre=p?p.titulo:'el paciente';
   const ok=await customConfirm({icon:'✅',title:'Confirmar asistencia',msg:`¿Confirmar que <strong>${nombre}</strong> acudió a la cita correctamente?`,okText:'Confirmar asistencia',danger:false});
   if(!ok) return;
   setLoading(true);
@@ -3601,7 +3640,7 @@ function renderExportar(){
 async function exportarEmail(){
   const h=hoy();
   const asunto=`Lumea Med — Reporte ${new Date().toLocaleDateString('es-ES')}`;
-  const body=`REPORTE GALESISTEM\n\nPacientes: ${C.p.length} | Citas: ${C.c.length} | Medicaciones activas: ${C.m.filter(x=>x.estado==='activa').length}\n\nPACIENTES:\n${C.p.map(x=>`• ${x.nombre} ${x.apellidos} | ${x.identificacion||'-'} | ${x.telefono||'-'}`).join('\n')||'Ninguno'}\n\nCITAS HOY:\n${C.c.filter(x=>x.fecha===h).map(x=>{const p=C.p.find(q=>q.id===x.pacienteId);return`• ${x.hora} - ${p?p.nombre+' '+p.apellidos:'N/A'} — ${x.motivo} [${x.estado}]`}).join('\n')||'Ninguna'}\n\nGenerado por Lumea Med v5.1`;
+  const body=`REPORTE GALESISTEM\n\nPacientes: ${C.p.length} | Citas: ${C.c.length} | Medicaciones activas: ${C.m.filter(x=>x.estado==='activa').length}\n\nPACIENTES:\n${C.p.map(x=>`• ${x.nombre} ${x.apellidos} | ${x.identificacion||'-'} | ${x.telefono||'-'}`).join('\n')||'Ninguno'}\n\nCITAS HOY:\n${C.c.filter(x=>x.fecha===h).map(x=>{const p=_sujetoCita(x);return`• ${x.hora} - ${p?p.titulo:'N/A'} — ${x.motivo} [${x.estado}]`}).join('\n')||'Ninguna'}\n\nGenerado por Lumea Med v5.1`;
   window.location.href=`mailto:sebasgale65@gmail.com?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(body)}`;
   toast('Abriendo cliente de correo...','info');
 }
@@ -4164,7 +4203,7 @@ function renderAgendasDoctors() {
   }
   const today = hoy();
   el.innerHTML = staff.map(p => {
-    const citasHoy = C.c.filter(c=>c.medicoId==p.id&&c.fecha===today&&c.estado!=='cancelada').length;
+    const citasHoy = C.c.filter(c=>c.medicoId==p.id&&c.fecha===today&&_citaActiva(c)).length;
     const isSelected = selAgendasDoc == p.id;
     return `<div class="doc-card${isSelected?' selected':''}" onclick="selectDoctorAgenda('${p.id}')">
       <div class="doc-emoji">${p.icono||'👤'}</div>
@@ -4192,7 +4231,7 @@ function renderAgendasRight() {
 
   const citasDoc = C.c.filter(c=>c.medicoId==selAgendasDoc);
   const citaCount = {};
-  citasDoc.forEach(c=>{ citaCount[c.fecha]=(citaCount[c.fecha]||0)+1; });
+  citasDoc.forEach(c=>{ if(_citaActiva(c)) citaCount[c.fecha]=(citaCount[c.fecha]||0)+1; });
 
   const citasDelDia = citasDoc.filter(c=>c.fecha===selAgendasDate).sort((a,b)=>(a.hora||'').localeCompare(b.hora||''));
   const pendientesTotales = citasDoc.filter(c=>c.estado==='pendiente'||c.estado==='confirmada').length;
@@ -4303,13 +4342,13 @@ function renderAgendaDayCitas(containerId, citas) {
     </div>`;
     return;
   }
-  const ocupadas = citas.filter(c=>c.estado!=='cancelada').length;
+  const ocupadas = citas.filter(_citaActiva).length;
   el.innerHTML = citas.map(c=>{
-    const p=C.p.find(x=>x.id===c.pacienteId);
+    const p=_sujetoCita(c);
     return `<div class="agenda-slot ${c.estado}" onclick="verResumenCita(${c.id})">
       <div style="font-size:12px;font-weight:800;color:var(--primary);min-width:68px;white-space:nowrap">${formatHora12(c.hora||'')}</div>
       <div style="flex:1;min-width:0">
-        <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p?p.nombre+' '+p.apellidos:'Paciente'}</div>
+        <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p?p.titulo:'Paciente'}</div>
         <div style="font-size:11px;color:var(--text-light);margin-top:2px">${c.motivo}</div>
       </div>
       ${estadoTag(c.estado)}
@@ -4337,7 +4376,7 @@ function nuevaCitaParaDoctor(profId) {
 
 function marcarHorasOcupadas(profId, fecha) {
   const ocupadas = new Set(
-    C.c.filter(c=>c.medicoId==profId&&c.fecha===fecha&&c.estado!=='cancelada').map(c=>c.hora)
+    C.c.filter(c=>c.medicoId==profId&&c.fecha===fecha&&_citaActiva(c)).map(c=>c.hora)
   );
   const sel = document.getElementById('c-hora');
   if(!sel) return;
@@ -6646,11 +6685,11 @@ function estTabla(citas, titulo) {
   return `<div class="card" style="margin-bottom:16px">
     <div class="card-header"><h3>${titulo}</h3></div>
     ${citas.map(c=>{
-      const p=C.p.find(x=>x.id===c.pacienteId);
+      const p=_sujetoCita(c);
       return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border)">
         <div style="min-width:52px;text-align:center;background:var(--primary-light);color:var(--primary);border-radius:8px;padding:4px 6px;font-weight:800;font-size:12px;flex-shrink:0">${c.hora||'—'}</div>
         <div style="flex:1;min-width:0">
-          <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p?p.nombre+' '+p.apellidos:'—'}</div>
+          <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p?p.titulo:'—'}</div>
           ${c.fecha?`<div style="font-size:11px;color:var(--text-light)">${formatFecha(c.fecha)}</div>`:''}
         </div>
         <span class="tag tag-cyan" style="flex-shrink:0;white-space:nowrap">${c.tipo}</span>
@@ -6750,6 +6789,9 @@ function isSuperAdmin() {
 }
 function isFarmaceutico() { return currentUser?.key === 'farmaceutico'; }
 function isOdontologo()   { return currentUser?.key === 'odontologo'; }
+// La clínica veterinaria trabaja con clientes y mascotas en lugar de pacientes.
+// Se distingue por el tipo de clínica, igual que farmacia y óptica.
+function esVeterinaria()  { return currentClinica?.tipo === 'veterinaria'; }
 function hasPermiso(perm) {
   if(isSuperAdmin()) return true;
   const p = currentUser?.permisos;
@@ -7869,9 +7911,9 @@ function descargarPDFEstadisticas() {
     ${citas.length?`<div class="section-title">📋 Detalle de citas</div>
     <table><thead><tr><th>Fecha</th><th>Hora</th><th>Paciente</th><th>Tipo</th><th>Estado</th></tr></thead>
     <tbody>${citas.sort((a,b)=>a.fecha.localeCompare(b.fecha)||(a.hora||'').localeCompare(b.hora||'')).map(c=>{
-      const p=C.p.find(x=>x.id===c.pacienteId);
+      const p=_sujetoCita(c);
       const stCls={completada:'tag-green',cancelada:'tag-red',pendiente:'tag-orange',confirmada:'tag-cyan'}[c.estado]||'tag-gray';
-      return `<tr><td>${formatFecha(c.fecha)}</td><td>${c.hora||'—'}</td><td>${p?p.nombre+' '+p.apellidos:'—'}</td><td><span class="tag tag-blue" style="text-transform:capitalize">${c.tipo}</span></td><td><span class="tag ${stCls}">${c.estado}</span></td></tr>`;
+      return `<tr><td>${formatFecha(c.fecha)}</td><td>${c.hora||'—'}</td><td>${p?p.titulo:'—'}</td><td><span class="tag tag-blue" style="text-transform:capitalize">${c.tipo}</span></td><td><span class="tag ${stCls}">${c.estado}</span></td></tr>`;
     }).join('')}</tbody></table>`:'<p style="color:#94A3B8;text-align:center;padding:20px">Sin citas en este período</p>'}`;
 
   pdfAbrir(titulo+' — '+periodo, body, cfg);
