@@ -11316,7 +11316,8 @@ function renderDetalleMascota(mid) {
       </div>
       <div class="form-group full"><label>Observaciones Médicas Adicionales</label><textarea id="expm-observacionesMedicas" placeholder="Notas del veterinario sobre el expediente...">${escAttr(exp.observacionesMedicas||'')}</textarea></div>
     </div>
-  </div>`;
+  </div>
+  ${_pesoHistorialHTML(mid)}`;
 }
 
 async function guardarExpedienteMascota(mid) {
@@ -11701,6 +11702,79 @@ function _refrescarVistaCitas() {
   }
   renderView(currentView);
   updateBadges();
+}
+
+
+// ════════════════════ PESO HISTÓRICO ════════════════════
+// No hace falta tabla: el peso ya se guarda en notas.signos de cada consulta,
+// más el del expediente como punto de partida. Solo hay que leerlo en orden.
+function _historialPeso(mid) {
+  const puntos = [];
+  const exp = C.expMas.find(x => x.mascotaId === mid);
+  C.n.filter(n => n.mascotaId === mid && n.signos && n.signos.peso)
+    .forEach(n => {
+      const kg = parseFloat(n.signos.peso);
+      if(kg > 0) puntos.push({ fecha: n.fecha, kg, origen: 'consulta' });
+    });
+  // El del expediente solo si no hay ninguna consulta con peso ese mismo día
+  if(exp && exp.peso && !puntos.length) puntos.push({ fecha: null, kg: parseFloat(exp.peso), origen: 'expediente' });
+  return puntos.sort((a,b) => (a.fecha||'').localeCompare(b.fecha||''));
+}
+
+// Gráfico de línea en SVG: sin librerías, como el resto del sistema
+function _graficoPesoHTML(puntos) {
+  const conFecha = puntos.filter(p => p.fecha);
+  if(conFecha.length < 2) return '';
+  const W = 100, H = 34, pad = 2;          // viewBox en unidades relativas
+  const kgs = conFecha.map(p => p.kg);
+  const min = Math.min(...kgs), max = Math.max(...kgs);
+  const rango = (max - min) || 1;
+  const x = i => pad + (i / (conFecha.length - 1)) * (W - pad*2);
+  const y = kg => H - pad - ((kg - min) / rango) * (H - pad*2);
+  const linea = conFecha.map((p,i) => `${i?'L':'M'}${x(i).toFixed(1)},${y(p.kg).toFixed(1)}`).join(' ');
+  const area = linea + ` L${x(conFecha.length-1).toFixed(1)},${H} L${x(0).toFixed(1)},${H} Z`;
+  return `<svg class="peso-grafico" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Evolución del peso">
+    <path d="${area}" fill="var(--primary-light)"></path>
+    <path d="${linea}" fill="none" stroke="var(--primary)" stroke-width="0.8" stroke-linejoin="round" stroke-linecap="round"></path>
+    ${conFecha.map((p,i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(p.kg).toFixed(1)}" r="1.1" fill="var(--primary)"><title>${formatFecha(p.fecha)}: ${p.kg} kg</title></circle>`).join('')}
+  </svg>`;
+}
+
+function _pesoHistorialHTML(mid) {
+  const puntos = _historialPeso(mid);
+  if(!puntos.length) {
+    return `<div class="card" style="margin-top:16px">
+      <div class="card-header"><h3>⚖️ Evolución del peso</h3></div>
+      <div class="empty-state" style="padding:22px"><div class="empty-icon">⚖️</div>
+      <p>Sin pesos registrados.<br><span style="font-size:12px">Se van guardando solos al anotar el peso en cada consulta.</span></p></div>
+    </div>`;
+  }
+  const ultimo = puntos[puntos.length-1];
+  const primero = puntos[0];
+  const dif = puntos.length > 1 ? +(ultimo.kg - primero.kg).toFixed(2) : 0;
+  const signo = dif > 0 ? '+' : '';
+  const colorDif = dif > 0 ? 'var(--warning)' : dif < 0 ? 'var(--primary)' : 'var(--text-light)';
+  return `<div class="card" style="margin-top:16px">
+    <div class="card-header"><h3>⚖️ Evolución del peso</h3>
+      <span class="text-light" style="font-size:12px">${puntos.length} registro${puntos.length!==1?'s':''}</span>
+    </div>
+    <div class="peso-resumen">
+      <div class="peso-actual"><div class="peso-val">${ultimo.kg} kg</div><div class="peso-lbl">Último${ultimo.fecha?' · '+formatFecha(ultimo.fecha):''}</div></div>
+      ${puntos.length > 1 ? `<div class="peso-actual"><div class="peso-val" style="color:${colorDif}">${signo}${dif} kg</div><div class="peso-lbl">Desde ${formatFecha(primero.fecha)}</div></div>` : ''}
+    </div>
+    ${_graficoPesoHTML(puntos)}
+    <div class="peso-lista">
+      ${puntos.slice().reverse().map((p,i,arr) => {
+        const prev = arr[i+1];
+        const d = prev ? +(p.kg - prev.kg).toFixed(2) : null;
+        return `<div class="peso-fila">
+          <span class="peso-fecha">${p.fecha ? formatFecha(p.fecha) : 'Expediente'}</span>
+          <span class="peso-kg">${p.kg} kg</span>
+          ${d !== null ? `<span class="peso-dif" style="color:${d>0?'var(--warning)':d<0?'var(--primary)':'var(--text-light)'}">${d>0?'+':''}${d} kg</span>` : '<span class="peso-dif"></span>'}
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
 }
 
 // ════════════════════ VACUNAS Y DESPARASITACIÓN ════════════════════
