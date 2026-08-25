@@ -121,8 +121,8 @@ const fromC = r => ({ id:r.id, pacienteId:r.paciente_id, mascotaId:r.mascota_id|
 const toC   = x => ({ paciente_id:x.pacienteId||null, mascota_id:x.mascotaId||null, medico_id:x.medicoId||null, fecha:x.fecha, hora:x.hora, duracion_min:x.duracionMin||30, motivo:x.motivo, tipo:x.tipo||'consulta', estado:x.estado||'pendiente', notas:x.notas||null, motivo_cancelacion:x.motivoCancelacion||null, clinica_id:currentClinicaId });
 const fromM = r => ({ id:r.id, pacienteId:r.paciente_id, nombre:r.nombre, dosis:r.dosis, frecuencia:r.frecuencia, inicio:r.inicio, fin:r.fin, via:r.via, estado:r.estado, indicaciones:r.indicaciones });
 const toM   = x => ({ paciente_id:x.pacienteId, nombre:x.nombre, dosis:x.dosis, frecuencia:x.frecuencia, inicio:x.inicio||null, fin:x.fin||null, via:x.via||'oral', estado:x.estado||'activa', indicaciones:x.indicaciones||null, clinica_id:currentClinicaId });
-const fromN   = r => ({ id:r.id, pacienteId:r.paciente_id, tipo:r.tipo, fecha:r.fecha, titulo:r.titulo, contenido:r.contenido, signos:r.signos||null });
-const toN     = x => ({ paciente_id:x.pacienteId, tipo:x.tipo||'evolucion', fecha:x.fecha||hoy(), titulo:x.titulo||null, contenido:x.contenido, signos:x.signos||null, clinica_id:currentClinicaId });
+const fromN   = r => ({ id:r.id, pacienteId:r.paciente_id, mascotaId:r.mascota_id||null, tipo:r.tipo, fecha:r.fecha, titulo:r.titulo, contenido:r.contenido, signos:r.signos||null });
+const toN     = x => ({ paciente_id:x.pacienteId||null, mascota_id:x.mascotaId||null, tipo:x.tipo||'evolucion', fecha:x.fecha||hoy(), titulo:x.titulo||null, contenido:x.contenido, signos:x.signos||null, clinica_id:currentClinicaId });
 const fromInv = r => ({ id:r.id, nombre:r.nombre, categoria:r.categoria||'general', unidad:r.unidad||'unidad', stock:Number(r.stock_actual||0), stockMin:Number(r.stock_minimo||0), precio:r.precio_unitario!=null?Number(r.precio_unitario):null, descripcion:r.descripcion||null, codigoMinsa:r.codigo_minsa||null, fechaVenc:r.fecha_vencimiento||null, alertaMeses:r.alerta_meses_antes!=null?Number(r.alerta_meses_antes):1 });
 const toInv   = x => ({ nombre:x.nombre, categoria:x.categoria||'general', unidad:x.unidad||'unidad', stock_actual:Number(x.stock||0), stock_minimo:Number(x.stockMin||0), precio_unitario:x.precio||null, descripcion:x.descripcion||null, clinica_id:currentClinicaId, codigo_minsa:x.codigoMinsa||null, fecha_vencimiento:x.fechaVenc||null, alerta_meses_antes:Number(x.alertaMeses||1) });
 const fromMov     = r => ({ id:r.id, invId:r.inventario_id, tipo:r.tipo, cantidad:Number(r.cantidad), motivo:r.motivo||null, fecha:r.fecha, referencia:r.referencia||null, notas:r.notas||null });
@@ -723,6 +723,15 @@ function _sujetoCita(c) {
   const p = C.p.find(x => x.id === c.pacienteId);
   return p ? _sujetoPaciente(p) : null;
 }
+
+// Sujeto de una nota clínica: paciente o mascota, según de quién sea.
+function _sujetoNota(n) {
+  if(!n) return null;
+  if(n.mascotaId) { const m = C.mas.find(x => x.id === n.mascotaId); if(m) return _sujetoMascota(m); }
+  const p = C.p.find(x => x.id === n.pacienteId);
+  return p ? _sujetoPaciente(p) : null;
+}
+
 function _sujetoPaciente(p) {
   return { id:p.id, tipo:'paciente', ref:p,
     titulo:    `${p.nombre} ${p.apellidos}`.trim(),
@@ -2089,13 +2098,29 @@ function fillServicioSelect(selected) {
 }
 
 // Buscador de mascota para el modal de cita, molde de filterPacSug/selectPac/hidePacSug
-function filterMasSug(q) {
-  const sug = document.getElementById('c-mas-sug');
+function filterMasSug(q) { _filterMasSugEn('c-mas-sug', q, 'selectMas'); }
+function filterMasSugNota(q) { _filterMasSugEn('n-mas-sug', q, 'selectMasNota'); }
+function hideMasSugNota() { const s = document.getElementById('n-mas-sug'); if(s) s.style.display = 'none'; }
+function selectMasNota(mid, nombre) {
+  document.getElementById('n-mascota').value = mid;
+  document.getElementById('n-mas-txt').value = nombre;
+  hideMasSugNota();
+}
+function setMascotaSelectNota(mid) {
+  const m = C.mas.find(x => x.id === mid);
+  document.getElementById('n-mascota').value = mid || '';
+  document.getElementById('n-mas-txt').value = m ? m.nombre : '';
+}
+
+function _filterMasSugEn(sugId, q, onPick) {
+  const sug = document.getElementById(sugId);
   if(!sug) return;
   const q2 = (q||'').toLowerCase().trim();
   const matches = (q2.length < 1 ? C.mas.slice(0, 12) : C.mas.filter(m => {
     const dueno = C.cli.find(c => c.id === m.clienteId);
     return (m.nombre||'').toLowerCase().includes(q2)
+      || (m.especie||'').toLowerCase().includes(q2)
+      || (m.raza||'').toLowerCase().includes(q2)
       || (m.microchip||'').toLowerCase().includes(q2)
       || nombreCliente(dueno).toLowerCase().includes(q2);
   }).slice(0, 10));
@@ -2106,7 +2131,7 @@ function filterMasSug(q) {
   }
   sug.innerHTML = matches.map(m => {
     const dueno = C.cli.find(c => c.id === m.clienteId);
-    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseenter="this.style.background='var(--primary-light)'" onmouseleave="this.style.background=''" onmousedown="selectMas(${m.id},'${escAttr(m.nombre)}')">
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseenter="this.style.background='var(--primary-light)'" onmouseleave="this.style.background=''" onmousedown="${onPick}(${m.id},'${escAttr(m.nombre)}')">
       <div style="width:32px;height:32px;border-radius:50%;background:${colAvatar(m.id)};display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;flex-shrink:0">${especieIcon(m.especie)}</div>
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:600;color:var(--text)">${escAttr(m.nombre)}</div>
@@ -2468,6 +2493,18 @@ async function marcarCitaCompletada(id){
   // Abrir nota de evolución automáticamente — solo para pacientes humanos;
   // la nota de consulta veterinaria llega con las notas clínicas veterinarias.
   if(c.pacienteId) setTimeout(() => abrirNotaEvolucion(c.pacienteId, c), 400);
+  else if(c.mascotaId) setTimeout(() => abrirNotaEvolucionMascota(c.mascotaId, c), 400);
+}
+
+function abrirNotaEvolucionMascota(mascotaId, cita) {
+  openModalNota();
+  document.getElementById('modal-nota-title').textContent = '📝 Consulta veterinaria';
+  setMascotaSelectNota(mascotaId);
+  document.getElementById('n-tipo').value = 'resumen_clinico';
+  document.getElementById('n-fecha').value = hoy();
+  document.getElementById('n-titulo').value = `Consulta ${formatFecha(hoy())}`;
+  document.getElementById('n-contenido').value = cita?.motivo ? `Motivo de consulta: ${cita.motivo}\n\n` : '';
+  onTipoNotaChange();
 }
 
 function abrirNotaEvolucion(pacienteId, cita) {
@@ -2709,7 +2746,7 @@ const notaTipoLabel = t => NOTA_TIPO_LABEL[t] || (t||'').replace(/_/g,' ');
 // Resumen de una línea de los signos vitales, para listados
 function _signosResumen(signos) {
   if(!signos) return '';
-  return SIGNOS_VITALES
+  return _signosActivos()
     .filter(sv => signos[sv.k] != null && String(signos[sv.k]).trim() !== '')
     .map(sv => `${sv.lbl} ${signos[sv.k]}${sv.uni && sv.uni !== 'mmHg' ? ' '+sv.uni : ''}`)
     .join(' · ');
@@ -2727,7 +2764,7 @@ function renderNotas(){
   empty.style.display='none';
   const MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
   el.innerHTML=[...C.n].sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(n=>{
-    const p=C.p.find(x=>x.id===n.pacienteId);
+    const p=_sujetoNota(n);
     const base=(n.contenido||'').trim() || _signosResumen(n.signos);
     const prev=base.length>60?base.substring(0,60)+'…':base;
     const tipoIcon = NOTA_TIPO_ICON[n.tipo] || '📝';
@@ -2737,9 +2774,9 @@ function renderNotas(){
         <div style="font-size:13px;font-weight:800;color:var(--primary);line-height:1">${dd}</div>
         <div style="font-size:10px;color:var(--primary);text-transform:uppercase;font-weight:600">${MESES[parseInt(mm)-1]}</div>
       </div>
-      <div class="patient-avatar" style="background:${colAvatar(n.pacienteId||0)};width:32px;height:32px;font-size:11px;flex-shrink:0">${p?ini(p.nombre,p.apellidos):'?'}</div>
+      <div class="patient-avatar" style="background:${colAvatar(n.mascotaId||n.pacienteId||0)};width:32px;height:32px;font-size:11px;flex-shrink:0">${p?p.iniciales:'?'}</div>
       <div style="flex:1;min-width:0">
-        <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p?p.nombre+' '+p.apellidos:'Desconocido'}</div>
+        <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p?escAttr(p.titulo):'Desconocido'}</div>
         <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${n.titulo||prev}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
@@ -2757,32 +2794,70 @@ function renderNotas(){
 
 // ── Signos vitales del Resumen Clínico (todos opcionales) ──
 const SIGNOS_VITALES = [
-  { k:'pa',      id:'n-sv-pa',      lbl:'Presión',      uni:'mmHg'  },
-  { k:'fc',      id:'n-sv-fc',      lbl:'Frec. card.',  uni:'lpm'   },
-  { k:'fr',      id:'n-sv-fr',      lbl:'Frec. resp.',  uni:'rpm'   },
-  { k:'temp',    id:'n-sv-temp',    lbl:'Temp.',        uni:'°C'    },
-  { k:'spo2',    id:'n-sv-spo2',    lbl:'Sat. O₂',      uni:'%'     },
-  { k:'glucosa', id:'n-sv-glucosa', lbl:'Glucosa',      uni:'mg/dL' },
-  { k:'peso',    id:'n-sv-peso',    lbl:'Peso',         uni:'kg'    },
-  { k:'talla',   id:'n-sv-talla',   lbl:'Talla',        uni:'cm'    },
+  { k:'pa',      id:'n-sv-pa',      lbl:'Presión',      uni:'mmHg',  campo:'Presión arterial', tipo:'text',   ph:'120/80' },
+  { k:'fc',      id:'n-sv-fc',      lbl:'Frec. card.',  uni:'lpm',   campo:'Frec. cardíaca',   tipo:'number', ph:'72',  min:0, max:300 },
+  { k:'fr',      id:'n-sv-fr',      lbl:'Frec. resp.',  uni:'rpm',   campo:'Frec. respiratoria', tipo:'number', ph:'16', min:0, max:120 },
+  { k:'temp',    id:'n-sv-temp',    lbl:'Temp.',        uni:'°C',    campo:'Temperatura',      tipo:'number', ph:'36.5', step:'0.1', min:25, max:45 },
+  { k:'spo2',    id:'n-sv-spo2',    lbl:'Sat. O₂',      uni:'%',     campo:'Saturación O₂',    tipo:'number', ph:'98',  min:0, max:100 },
+  { k:'glucosa', id:'n-sv-glucosa', lbl:'Glucosa',      uni:'mg/dL', campo:'Glucosa',          tipo:'number', ph:'90',  min:0, max:900 },
+  { k:'peso',    id:'n-sv-peso',    lbl:'Peso',         uni:'kg',    campo:'Peso',             tipo:'number', ph:'70',  step:'0.1', min:0, max:500, recalcula:true },
+  { k:'talla',   id:'n-sv-talla',   lbl:'Talla',        uni:'cm',    campo:'Talla',            tipo:'number', ph:'170', min:0, max:260, recalcula:true },
 ];
+
+// En veterinaria cambian los signos que importan: no hay presión de rutina ni
+// IMC, y sí perfusión (TLLC), mucosas, deshidratación y condición corporal.
+// La columna notas.signos es JSONB, así que esto no toca el esquema.
+const SIGNOS_VITALES_VET = [
+  { k:'fc',      id:'n-sv-fc',      lbl:'Frec. card.',  uni:'lpm',  campo:'Frec. cardíaca',   tipo:'number', ph:'90',  min:0, max:400 },
+  { k:'fr',      id:'n-sv-fr',      lbl:'Frec. resp.',  uni:'rpm',  campo:'Frec. respiratoria', tipo:'number', ph:'24', min:0, max:200 },
+  { k:'temp',    id:'n-sv-temp',    lbl:'Temp.',        uni:'°C',   campo:'Temperatura',      tipo:'number', ph:'38.5', step:'0.1', min:25, max:45 },
+  { k:'peso',    id:'n-sv-peso',    lbl:'Peso',         uni:'kg',   campo:'Peso',             tipo:'number', ph:'12.5', step:'0.01', min:0, max:1500, recalcula:true },
+  { k:'tllc',    id:'n-sv-tllc',    lbl:'TLLC',         uni:'seg',  campo:'Llenado capilar',  tipo:'number', ph:'2', step:'0.5', min:0, max:10 },
+  { k:'mucosas', id:'n-sv-mucosas', lbl:'Mucosas',      uni:'',     campo:'Mucosas',          tipo:'select', opciones:['','rosadas','pálidas','congestivas','ictéricas','cianóticas'] },
+  { k:'deshidratacion', id:'n-sv-deshidratacion', lbl:'Deshidratación', uni:'%', campo:'Deshidratación', tipo:'select', opciones:['','0','5','7','10','12'] },
+  { k:'cc',      id:'n-sv-cc',      lbl:'Cond. corporal', uni:'/9', campo:'Condición corporal', tipo:'number', ph:'5', min:1, max:9, recalcula:true },
+];
+
+// Qué signos se piden depende del tipo de clínica
+function _signosActivos() { return esVeterinaria() ? SIGNOS_VITALES_VET : SIGNOS_VITALES; }
+
+// El panel se genera para no duplicar el formulario en el HTML
+function _pintarPanelSignos() {
+  const grid = document.getElementById('n-signos-grid');
+  if(!grid) return;
+  grid.innerHTML = _signosActivos().map(sv => {
+    const etiqueta = `<span class="signo-lbl">${sv.campo}${sv.uni?` <em>${sv.uni}</em>`:''}</span>`;
+    if(sv.tipo === 'select') {
+      return `<div class="signo-item">${etiqueta}<select id="${sv.id}">${
+        sv.opciones.map(o => `<option value="${o}">${o === '' ? '—' : o}</option>`).join('')}</select></div>`;
+    }
+    const attrs = [
+      `type="${sv.tipo}"`, `id="${sv.id}"`, `placeholder="${sv.ph||''}"`,
+      sv.step ? `step="${sv.step}"` : '', sv.min != null ? `min="${sv.min}"` : '',
+      sv.max != null ? `max="${sv.max}"` : '', sv.recalcula ? 'oninput="calcIMCNota()"' : '',
+      sv.tipo === 'text' ? 'autocomplete="off"' : ''
+    ].filter(Boolean).join(' ');
+    return `<div class="signo-item">${etiqueta}<input ${attrs}></div>`;
+  }).join('');
+}
 
 // Muestra el panel solo en el Resumen Clínico; ahí el texto deja de ser obligatorio
 function onTipoNotaChange() {
   const esResumen = document.getElementById('n-tipo')?.value === 'resumen_clinico';
   const wrap = document.getElementById('n-signos-wrap');
   if(wrap) wrap.style.display = esResumen ? '' : 'none';
+  if(esResumen && !document.getElementById('n-signos-grid')?.children.length) _pintarPanelSignos();
   const req = document.getElementById('n-contenido-req');
   if(req) req.style.display = esResumen ? 'none' : '';
 }
 
 function _limpiarSignosNota() {
-  SIGNOS_VITALES.forEach(sv => { const e = document.getElementById(sv.id); if(e) e.value = ''; });
+  _signosActivos().forEach(sv => { const e = document.getElementById(sv.id); if(e) e.value = ''; });
   calcIMCNota();
 }
 
 function _cargarSignosNota(signos) {
-  SIGNOS_VITALES.forEach(sv => {
+  _signosActivos().forEach(sv => {
     const e = document.getElementById(sv.id);
     if(e) e.value = (signos && signos[sv.k] != null) ? signos[sv.k] : '';
   });
@@ -2792,16 +2867,25 @@ function _cargarSignosNota(signos) {
 // Devuelve solo los signos rellenados, o null si no se midió ninguno
 function _leerSignosNota() {
   const out = {};
-  SIGNOS_VITALES.forEach(sv => {
+  _signosActivos().forEach(sv => {
     const v = (document.getElementById(sv.id)?.value || '').trim();
     if(v !== '') out[sv.k] = v;
   });
   return Object.keys(out).length ? out : null;
 }
 
+// Escala de condición corporal 1-9, el equivalente veterinario del IMC
+const CC_CATEGORIA = cc =>
+  cc <= 3 ? 'bajo peso' : cc <= 5 ? 'ideal' : cc <= 6 ? 'sobrepeso leve' : 'sobrepeso';
+
 function calcIMCNota() {
   const out = document.getElementById('n-sv-imc');
   if(!out) return;
+  if(esVeterinaria()) {
+    const cc = parseFloat(document.getElementById('n-sv-cc')?.value);
+    out.textContent = (cc >= 1 && cc <= 9) ? `Condición corporal ${cc}/9 · ${CC_CATEGORIA(cc)}` : '';
+    return;
+  }
   const peso  = parseFloat(document.getElementById('n-sv-peso')?.value);
   const talla = parseFloat(document.getElementById('n-sv-talla')?.value);
   if(!peso || !talla) { out.textContent = ''; return; }
@@ -2814,16 +2898,21 @@ function calcIMCNota() {
 // Tarjetas de signos vitales para ver la nota en pantalla
 function _signosChipsHTML(signos) {
   if(!signos) return '';
-  const chips = SIGNOS_VITALES
+  const chips = _signosActivos()
+    .filter(sv => !(esVeterinaria() && sv.k === 'cc'))
     .filter(sv => signos[sv.k] != null && String(signos[sv.k]).trim() !== '')
     .map(sv => `<div class="sv-chip"><div class="sv-chip-val">${signos[sv.k]}</div><div class="sv-chip-lbl">${sv.lbl}${sv.uni?' · '+sv.uni:''}</div></div>`);
   if(!chips.length) return '';
   const imc = _imcDeSignos(signos);
-  if(imc) chips.push(`<div class="sv-chip"><div class="sv-chip-val">${imc.valor}</div><div class="sv-chip-lbl">IMC · ${imc.cat}</div></div>`);
+  if(imc) chips.push(`<div class="sv-chip"><div class="sv-chip-val">${imc.valor}</div><div class="sv-chip-lbl">${imc.lbl||'IMC'} · ${imc.cat}</div></div>`);
   return `<div class="sv-chips">${chips.join('')}</div>`;
 }
 
 function _imcDeSignos(signos) {
+  if(esVeterinaria()) {
+    const cc = parseFloat(signos?.cc);
+    return (cc >= 1 && cc <= 9) ? { valor: cc + '/9', cat: CC_CATEGORIA(cc), lbl: 'Cond. corporal' } : null;
+  }
   const peso = parseFloat(signos?.peso), talla = parseFloat(signos?.talla);
   if(!peso || !talla) return null;
   const imc = peso / ((talla/100) ** 2);
@@ -2834,12 +2923,13 @@ function _imcDeSignos(signos) {
 // Versión con estilos embebidos para los PDF, que no cargan styles.css
 function _signosPrintHTML(signos) {
   if(!signos) return '';
-  const items = SIGNOS_VITALES
+  const items = _signosActivos()
+    .filter(sv => !(esVeterinaria() && sv.k === 'cc'))
     .filter(sv => signos[sv.k] != null && String(signos[sv.k]).trim() !== '')
     .map(sv => ({ val: signos[sv.k], lbl: sv.lbl + (sv.uni ? ' · ' + sv.uni : '') }));
   if(!items.length) return '';
   const imc = _imcDeSignos(signos);
-  if(imc) items.push({ val: imc.valor, lbl: 'IMC · ' + imc.cat });
+  if(imc) items.push({ val: imc.valor, lbl: (imc.lbl||'IMC') + ' · ' + imc.cat });
   return '<div class="section-title">&#129658; Signos vitales</div>'
     + '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">'
     + items.map(i => '<div style="flex:0 0 auto;min-width:84px;text-align:center;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px">'
@@ -2853,35 +2943,57 @@ function openModalNota(id){
   document.getElementById('modal-nota-title').textContent=id?'✏️ Editar Nota':'📝 Nueva Nota Clínica';
   fillSelect('n-paciente');
   document.getElementById('n-tipo').value='evolucion'; document.getElementById('n-fecha').value=hoy(); document.getElementById('n-titulo').value=''; document.getElementById('n-contenido').value='';
+  // El panel se regenera cada vez: el tipo de clínica decide qué signos se piden
+  _pintarPanelSignos();
   _limpiarSignosNota();
+  // En veterinaria la nota es de una mascota, no de un paciente humano
+  const esVet = esVeterinaria();
+  document.getElementById('n-mascota').value=''; document.getElementById('n-mas-txt').value='';
+  const pw = document.getElementById('n-paciente-wrap'), mw = document.getElementById('n-mascota-wrap');
+  if(pw) pw.style.display = esVet ? 'none' : '';
+  if(mw) mw.style.display = esVet ? '' : 'none';
   if(id){
     const n=C.n.find(x=>x.id===id);
-    if(n){ setPacienteSelect('n-paciente',n.pacienteId); document.getElementById('n-tipo').value=n.tipo; document.getElementById('n-fecha').value=n.fecha; document.getElementById('n-titulo').value=n.titulo||''; document.getElementById('n-contenido').value=n.contenido; _cargarSignosNota(n.signos); }
+    if(n){
+      if(esVet) setMascotaSelectNota(n.mascotaId); else setPacienteSelect('n-paciente',n.pacienteId);
+      document.getElementById('n-tipo').value=n.tipo; document.getElementById('n-fecha').value=n.fecha; document.getElementById('n-titulo').value=n.titulo||''; document.getElementById('n-contenido').value=n.contenido; _cargarSignosNota(n.signos);
+    }
   }
   onTipoNotaChange();
   openModalOverlay('modal-nota');
 }
 function openModalNotaP(pid){ openModalNota(); setPacienteSelect('n-paciente', pid); }
+function openModalNotaMascota(mid){ openModalNota(); setMascotaSelectNota(mid); }
 
 async function guardarNota(){
   if(!currentClinicaId){ toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
-  const pid=parseInt(document.getElementById('n-paciente').value);
+  const esVet=esVeterinaria();
+  const pid=esVet?null:(parseInt(document.getElementById('n-paciente').value)||null);
+  const mid=esVet?(parseInt(document.getElementById('n-mascota').value)||null):null;
   const contenido=document.getElementById('n-contenido').value.trim();
   const tipo=document.getElementById('n-tipo').value;
   const esResumen=tipo==='resumen_clinico';
   // Los signos solo se guardan en el Resumen Clínico, y solo los que se midieron
   const signos=esResumen?_leerSignosNota():null;
-  if(!pid){ toast('Selecciona un paciente','error'); return; }
+  if(esVet ? !mid : !pid){ toast(esVet?'Selecciona una mascota':'Selecciona un paciente','error'); return; }
   // En el Resumen Clínico basta con registrar signos vitales; en el resto el texto es obligatorio
   if(!contenido && !(esResumen && signos)){
     toast(esResumen?'Registra al menos un signo vital o escribe la nota':'Completa los campos obligatorios','error');
     return;
   }
-  const obj={pacienteId:pid,tipo,fecha:document.getElementById('n-fecha').value||hoy(),titulo:document.getElementById('n-titulo').value.trim(),contenido,signos};
+  const obj={pacienteId:pid,mascotaId:mid,tipo,fecha:document.getElementById('n-fecha').value||hoy(),titulo:document.getElementById('n-titulo').value.trim(),contenido,signos};
   setLoading(true);
+  const payload=toN(obj);
   let err;
-  if(editingNotaId){ const r=await sb.from('notas').update(toN(obj)).eq('id',editingNotaId); err=r.error; }
-  else { const r=await sb.from('notas').insert([toN(obj)]); err=r.error; }
+  ({error:err} = editingNotaId
+    ? await sb.from('notas').update(payload).eq('id',editingNotaId)
+    : await sb.from('notas').insert([payload]));
+  // Sin mascota_id la nota quedaría huérfana: no se degrada, se avisa.
+  if(err && esVet && _faltaColumna(err,'mascota_id')){
+    setLoading(false);
+    toast('Falta ejecutar el script de veterinaria en Supabase (columna mascota_id de notas)','error');
+    return;
+  }
   setLoading(false);
   if(err){ toast('Error: '+err.message,'error'); return; }
   toast(editingNotaId?'Nota actualizada':'Nota guardada ✅');
@@ -2889,6 +3001,7 @@ async function guardarNota(){
   closeModal('modal-nota');
   await loadAll(); renderNotas();
   if(currentView==='paciente-detalle') renderDetalleP(currentPatientId);
+  if(currentView==='mascota-detalle') renderDetalleMascota(currentMascotaId);
 }
 
 async function eliminarNota(id){
@@ -2901,15 +3014,16 @@ async function eliminarNota(id){
   toast('Nota eliminada');
   await loadAll(); renderNotas();
   if(currentView==='paciente-detalle') renderDetalleP(currentPatientId);
+  if(currentView==='mascota-detalle') renderDetalleMascota(currentMascotaId);
 }
 
 function verNota(id){
   currentNotaId = id;
-  const n=C.n.find(x=>x.id===id), p=C.p.find(x=>x.id===n.pacienteId);
+  const n=C.n.find(x=>x.id===id), p=_sujetoNota(n);
   document.getElementById('ver-nota-title').textContent=`📝 ${n.titulo||'Nota Clínica'}`;
   document.getElementById('ver-nota-content').innerHTML=`
     <div style="margin-bottom:14px"><span class="tag tag-blue">${n.tipo}</span><span style="margin-left:8px;font-size:12px;color:var(--text-light)">${formatFecha(n.fecha)}</span></div>
-    ${p?`<p class="text-light" style="margin-bottom:12px">Paciente: <strong style="color:var(--text)">${p.nombre} ${p.apellidos}</strong></p>`:''}
+    ${p?`<p class="text-light" style="margin-bottom:12px">${esVeterinaria()?'Mascota':'Paciente'}: <strong style="color:var(--text)">${escAttr(p.titulo)}</strong>${p.subtitulo?` <span style="font-size:12px">(${escAttr(p.subtitulo)})</span>`:''}</p>`:''}
     ${n.titulo?`<h3 style="margin-bottom:12px">${n.titulo}</h3>`:''}
     ${_signosChipsHTML(n.signos)}
     ${n.contenido?`<div style="white-space:pre-wrap;line-height:1.8;font-size:14px;background:var(--bg);padding:16px;border-radius:10px;border:1px solid var(--border)">${n.contenido}</div>`:''}`;
@@ -10644,7 +10758,7 @@ async function eliminarMascota(id) {
 // Información y Expediente. Citas, notas y recetas veterinarias llegan cuando
 // esos módulos se adapten a mascota_id (no duplican esta ficha).
 function switchTabMascota(tabId, btn) {
-  ['mtab-info', 'mtab-citas', 'mtab-expediente'].forEach(id => { const e = document.getElementById(id); if(e) e.style.display = 'none'; });
+  ['mtab-info', 'mtab-citas', 'mtab-consultas', 'mtab-expediente'].forEach(id => { const e = document.getElementById(id); if(e) e.style.display = 'none'; });
   document.querySelectorAll('#view-mascota-detalle .tab').forEach(t => t.classList.remove('active'));
   document.getElementById(tabId).style.display = 'block';
   if(btn) btn.classList.add('active');
@@ -10737,6 +10851,27 @@ function renderDetalleMascota(mid) {
         </div>
       </div>`;
     }).join('') : '<div class="empty-state"><div class="empty-icon">📅</div><p>Sin citas registradas</p></div>'}
+  </div>`;
+
+  const notasMascota = C.n.filter(n => n.mascotaId === mid).sort((a,b) => b.fecha.localeCompare(a.fecha));
+  document.getElementById('mtab-consultas').innerHTML = `<div class="card">
+    <div class="card-header"><h3>📝 Consultas y notas</h3><button class="btn btn-primary btn-sm" onclick="openModalNotaMascota(${mid})">+ Nueva</button></div>
+    ${notasMascota.length ? `<div class="timeline">${notasMascota.map(n => `
+      <div class="timeline-item">
+        <div class="timeline-date">${formatFecha(n.fecha)} · <span class="tag tag-blue" style="font-size:10px">${NOTA_TIPO_ICON[n.tipo]||'📝'} ${notaTipoLabel(n.tipo)}</span></div>
+        <div class="timeline-content">
+          ${n.titulo?`<strong style="display:block;margin-bottom:5px">${escAttr(n.titulo)}</strong>`:''}
+          ${_signosChipsHTML(n.signos)}
+          ${n.contenido?`<p style="white-space:pre-wrap;line-height:1.7">${escAttr(n.contenido)}</p>`:''}
+          <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-secondary btn-sm" onclick="verNota(${n.id})">👁️ Ver</button>
+            <button class="btn btn-secondary btn-sm" onclick="openModalNota(${n.id})">✏️ Editar</button>
+            <button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})">🖨️</button>
+            <button class="btn btn-danger btn-sm" onclick="eliminarNota(${n.id})">🗑️</button>
+          </div>
+        </div>
+      </div>`).join('')}</div>`
+      : '<div class="empty-state"><div class="empty-icon">📝</div><p>Sin consultas registradas</p></div>'}
   </div>`;
 
   document.getElementById('mtab-expediente').innerHTML = `
