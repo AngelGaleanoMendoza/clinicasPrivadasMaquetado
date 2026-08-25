@@ -125,37 +125,42 @@ ALTER TABLE public.clinicas ADD COLUMN IF NOT EXISTS en_produccion BOOLEAN DEFAU
 ALTER TABLE public.clinicas ADD COLUMN IF NOT EXISTS email TEXT;
 ALTER TABLE public.clinicas ADD COLUMN IF NOT EXISTS firma_url TEXT;
 
+
 -- ============================================================
 -- PASO 4: RLS que faltaba en tablas ya en uso
--- Estas tablas se crearon sin política y quedaron abiertas entre clínicas.
--- Se cierran con la misma plantilla que el resto del expediente.
+-- Estas tablas se crearon sin política y quedaron abiertas entre clínicas:
+-- cualquier clínica podía leer el odontograma, la historia dental y la
+-- actividad de las demás. Se cierran con la misma plantilla que el resto.
 -- ============================================================
 ALTER TABLE public.procedimientos_odontologicos ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "procedimientos_odontologicos_clinica" ON public.procedimientos_odontologicos;
 CREATE POLICY "procedimientos_odontologicos_clinica" ON public.procedimientos_odontologicos
   USING (is_superadmin() OR clinica_id = get_my_clinica_id())
   WITH CHECK (is_superadmin() OR clinica_id = get_my_clinica_id());
 
 ALTER TABLE public.historial_dental ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "historial_dental_clinica" ON public.historial_dental;
 CREATE POLICY "historial_dental_clinica" ON public.historial_dental
   USING (is_superadmin() OR clinica_id = get_my_clinica_id())
   WITH CHECK (is_superadmin() OR clinica_id = get_my_clinica_id());
 
 ALTER TABLE public.odontograma ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "odontograma_clinica" ON public.odontograma;
 CREATE POLICY "odontograma_clinica" ON public.odontograma
   USING (is_superadmin() OR clinica_id = get_my_clinica_id())
   WITH CHECK (is_superadmin() OR clinica_id = get_my_clinica_id());
 
 ALTER TABLE public.periodontograma ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "periodontograma_clinica" ON public.periodontograma;
 CREATE POLICY "periodontograma_clinica" ON public.periodontograma
   USING (is_superadmin() OR clinica_id = get_my_clinica_id())
   WITH CHECK (is_superadmin() OR clinica_id = get_my_clinica_id());
 
 ALTER TABLE public.actividad_usuarios ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "actividad_usuarios_clinica" ON public.actividad_usuarios;
 CREATE POLICY "actividad_usuarios_clinica" ON public.actividad_usuarios
   USING (is_superadmin() OR clinica_id = get_my_clinica_id())
   WITH CHECK (is_superadmin() OR clinica_id = get_my_clinica_id());
-
--- ============================================================
 -- PASO 5: LUMEA MED VETERINARY — tablas propias
 -- El paciente veterinario es la MASCOTA y su dueño es el CLIENTE.
 -- Todo se aísla por clinica_id igual que el resto del sistema.
