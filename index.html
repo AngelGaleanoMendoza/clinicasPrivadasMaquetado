@@ -153,6 +153,8 @@
       <!-- DASHBOARD -->
       <div id="view-dashboard" class="view active">
         <div id="panel-pendientes-sesion" style="display:none;margin-bottom:18px"></div>
+        <!-- Dosis pendientes: solo en clínicas veterinarias -->
+        <div id="vet-recordatorios" style="display:none;margin-bottom:18px"></div>
         <!-- Grid de accesos rápidos — solo visible en mobile -->
         <div class="nav-quick-grid" id="nav-quick-grid"></div>
         <div class="stats-grid">
@@ -276,12 +278,14 @@
           <button class="tab" id="mtab-btn-citas" onclick="switchTabMascota('mtab-citas',this)">📅 Citas</button>
           <button class="tab" id="mtab-btn-consultas" onclick="switchTabMascota('mtab-consultas',this)">📝 Consultas</button>
           <button class="tab" id="mtab-btn-recetas" onclick="switchTabMascota('mtab-recetas',this)">💊 Recetas</button>
+          <button class="tab" id="mtab-btn-vacunas" onclick="switchTabMascota('mtab-vacunas',this)">💉 Vacunas</button>
           <button class="tab" id="mtab-btn-expediente" onclick="switchTabMascota('mtab-expediente',this)">📁 Expediente</button>
         </div>
         <div id="mtab-info"></div>
         <div id="mtab-citas" style="display:none"></div>
         <div id="mtab-consultas" style="display:none"></div>
         <div id="mtab-recetas" style="display:none"></div>
+        <div id="mtab-vacunas" style="display:none"></div>
         <div id="mtab-expediente" style="display:none"></div>
       </div>
 
@@ -1917,6 +1921,69 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-mascota')">Cancelar</button>
       <button class="btn btn-primary" onclick="guardarMascota()">💾 Guardar mascota</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL VACUNA (VETERINARIA) -->
+<div class="modal-overlay" id="modal-vacuna">
+  <div class="modal" style="max-width:560px">
+    <button class="modal-close-btn" onclick="closeModal('modal-vacuna')" title="Cerrar">✕</button>
+    <h2 id="modal-vacuna-title">💉 Registrar vacuna</h2>
+    <p class="text-light" style="font-size:13px;margin-bottom:14px" id="vac-mascota-nombre"></p>
+    <div class="form-grid">
+      <div class="form-group full"><label>Vacuna *</label>
+        <select id="vac-vacuna" onchange="onVacunaChange()"></select>
+        <input type="text" id="vac-otra" placeholder="Nombre de la vacuna..." style="display:none;margin-top:8px">
+      </div>
+      <div class="form-group"><label>Fecha de aplicación *</label><input type="date" id="vac-fecha"></div>
+      <div class="form-group"><label>Próxima dosis</label><input type="date" id="vac-proxima">
+        <div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap">
+          <span class="chip" onclick="setProximaDosis(21)">+3 semanas</span>
+          <span class="chip" onclick="setProximaDosis(365)">+1 año</span>
+          <span class="chip" onclick="document.getElementById('vac-proxima').value=''">Sin próxima</span>
+        </div>
+      </div>
+      <div class="form-group"><label>Lote</label><input type="text" id="vac-lote" placeholder="Nº de lote"></div>
+      <div class="form-group"><label>Laboratorio</label><input type="text" id="vac-laboratorio" placeholder="Fabricante"></div>
+      <div class="form-group full"><label>Veterinario</label><select id="vac-veterinario"><option value="">Sin asignar</option></select></div>
+      <div class="form-group full"><label>Observaciones</label><textarea id="vac-notas" placeholder="Reacciones, indicaciones..."></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-vacuna')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarVacuna()">💾 Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DESPARASITACIÓN (VETERINARIA) -->
+<div class="modal-overlay" id="modal-desp">
+  <div class="modal" style="max-width:560px">
+    <button class="modal-close-btn" onclick="closeModal('modal-desp')" title="Cerrar">✕</button>
+    <h2 id="modal-desp-title">🪱 Registrar desparasitación</h2>
+    <p class="text-light" style="font-size:13px;margin-bottom:14px" id="desp-mascota-nombre"></p>
+    <div class="form-grid">
+      <div class="form-group"><label>Producto *</label><select id="desp-producto"></select></div>
+      <div class="form-group"><label>Tipo</label><select id="desp-tipo">
+        <option value="interna">Interna</option>
+        <option value="externa">Externa</option>
+        <option value="ambas">Interna y externa</option>
+      </select></div>
+      <div class="form-group"><label>Fecha *</label><input type="date" id="desp-fecha"></div>
+      <div class="form-group"><label>Próxima dosis</label><input type="date" id="desp-proxima">
+        <div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap">
+          <span class="chip" onclick="setProximaDesp(30)">+1 mes</span>
+          <span class="chip" onclick="setProximaDesp(90)">+3 meses</span>
+          <span class="chip" onclick="document.getElementById('desp-proxima').value=''">Sin próxima</span>
+        </div>
+      </div>
+      <div class="form-group"><label>Peso al aplicar (kg)</label><input type="number" id="desp-peso" step="0.1" min="0" placeholder="12.5"></div>
+      <div class="form-group"><label>Veterinario</label><select id="desp-veterinario"><option value="">Sin asignar</option></select></div>
+      <div class="form-group full"><label>Observaciones</label><textarea id="desp-notas" placeholder="Producto comercial, dosis..."></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-desp')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarDesp()">💾 Guardar</button>
     </div>
   </div>
 </div>

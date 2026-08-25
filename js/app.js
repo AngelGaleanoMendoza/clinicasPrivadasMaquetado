@@ -143,6 +143,10 @@ const fromMas = r => ({ id:r.id, clienteId:r.cliente_id, nombre:r.nombre, especi
 const toMas   = x => ({ cliente_id:x.clienteId||null, nombre:x.nombre, especie:x.especie||null, raza:x.raza||null, sexo:x.sexo||null, fecha_nac:x.fechaNac||null, color:x.color||null, microchip:x.microchip||null, esterilizado:x.esterilizado||'no', senas_particulares:x.senas||null, alergias:x.alergias||null, observaciones:x.observaciones||null, estado:x.estado||'activo', foto_url:x.fotoUrl||null, fecha_registro:x.fechaRegistro||hoy(), clinica_id:currentClinicaId });
 // Expediente clínico de la mascota: una fila por mascota, igual que el expediente humano
 const fromExpMas = r => ({ id:r.id, mascotaId:r.mascota_id, peso:r.peso, temperatura:r.temperatura, fc:r.fc, fr:r.fr, condicionCorporal:r.condicion_corporal, enfermedadesCronicas:r.enfermedades_cronicas, cirugias:r.cirugias_previas, dieta:r.dieta, ambiente:r.ambiente, conviveCon:r.convive_con, reproductivo:r.reproductivo, temperamento:r.temperamento, observacionesMedicas:r.observaciones_medicas });
+const fromVac = r => ({ id:r.id, mascotaId:r.mascota_id, vacuna:r.vacuna, fecha:r.fecha, proximaDosis:r.proxima_dosis, lote:r.lote, laboratorio:r.laboratorio, veterinarioId:r.veterinario_id||null, notas:r.notas });
+const toVac   = x => ({ mascota_id:x.mascotaId, vacuna:x.vacuna, fecha:x.fecha||null, proxima_dosis:x.proximaDosis||null, lote:x.lote||null, laboratorio:x.laboratorio||null, veterinario_id:x.veterinarioId||null, notas:x.notas||null, clinica_id:currentClinicaId });
+const fromDesp = r => ({ id:r.id, mascotaId:r.mascota_id, producto:r.producto, tipo:r.tipo, fecha:r.fecha, proximaDosis:r.proxima_dosis, pesoAplicacion:r.peso_aplicacion, veterinarioId:r.veterinario_id||null, notas:r.notas });
+const toDesp   = x => ({ mascota_id:x.mascotaId, producto:x.producto, tipo:x.tipo||'interna', fecha:x.fecha||null, proxima_dosis:x.proximaDosis||null, peso_aplicacion:x.pesoAplicacion||null, veterinario_id:x.veterinarioId||null, notas:x.notas||null, clinica_id:currentClinicaId });
 const toExpMas    = x => ({ mascota_id:x.mascotaId, peso:x.peso||null, temperatura:x.temperatura||null, fc:x.fc||null, fr:x.fr||null, condicion_corporal:x.condicionCorporal||null, enfermedades_cronicas:x.enfermedadesCronicas||null, cirugias_previas:x.cirugias||null, dieta:x.dieta||null, ambiente:x.ambiente||null, convive_con:x.conviveCon||null, reproductivo:x.reproductivo||null, temperamento:x.temperamento||null, observaciones_medicas:x.observacionesMedicas||null, clinica_id:currentClinicaId });
 
 // ════════════════════ LOAD DATA ════════════════════
@@ -203,16 +207,20 @@ async function loadAll() {
     // Tablas veterinarias (opcionales, igual que las odontológicas): solo se
     // piden en clínicas veterinarias y se toleran si aún no existen en Supabase.
     if(esVeterinaria() || isSuperAdmin()) {
-      const [rcli, rmas, rexpMas] = await Promise.all([
+      const [rcli, rmas, rexpMas, rvac, rdesp] = await Promise.all([
         sb.from('clientes').select('*').eq('clinica_id', currentClinicaId).order('nombre'),
         sb.from('mascotas').select('*').eq('clinica_id', currentClinicaId).order('nombre'),
         sb.from('expediente_mascota').select('*').eq('clinica_id', currentClinicaId),
+        sb.from('vacunas_mascota').select('*').eq('clinica_id', currentClinicaId).order('fecha', {ascending:false}),
+        sb.from('desparasitaciones').select('*').eq('clinica_id', currentClinicaId).order('fecha', {ascending:false}),
       ]);
       C.cli = rcli.error ? [] : (rcli.data||[]).map(fromCli);
       C.mas = rmas.error ? [] : (rmas.data||[]).map(fromMas);
       C.expMas = rexpMas.error ? [] : (rexpMas.data||[]).map(fromExpMas);
+      C.vac = rvac.error ? [] : (rvac.data||[]).map(fromVac);
+      C.desp = rdesp.error ? [] : (rdesp.data||[]).map(fromDesp);
     } else {
-      C.cli = []; C.mas = []; C.expMas = [];
+      C.cli = []; C.mas = []; C.expMas = []; C.vac = []; C.desp = [];
     }
     setDbStatus(true);
     // Notify once per session about expiring/expired products
@@ -1169,10 +1177,50 @@ function renderDashboardSA() {
   renderPendientesSesion();
 }
 
+
+// Panel de dosis pendientes en el dashboard veterinario. Es lo que una clínica
+// mira cada mañana: a quién hay que llamar hoy.
+function _pintarRecordatoriosVet() {
+  const cont = document.getElementById('vet-recordatorios');
+  const lbl = document.querySelector('#stat-pacientes')?.closest('.stat-card')?.querySelector('p');
+  if(!cont) return;
+  // La etiqueta se restaura siempre: si no, al volver a una clínica humana en la
+  // misma sesión la tarjeta se quedaba diciendo "Mascotas".
+  if(lbl) lbl.textContent = esVeterinaria() ? 'Mascotas registradas' : 'Pacientes registrados';
+  if(!esVeterinaria()) { cont.style.display = 'none'; return; }
+  cont.style.display = '';
+
+  const pend = _recordatoriosPendientes();
+  const vencidas = pend.filter(x => x.estado === 'vencida').length;
+  cont.innerHTML = `<div class="card">
+    <div class="card-header">
+      <h3>🔔 Dosis pendientes ${pend.length?`<span class="tag ${vencidas?'tag-red':'tag-orange'}" style="font-size:11px">${pend.length}</span>`:''}</h3>
+      ${pend.length?`<span class="text-light" style="font-size:11.5px">${vencidas} vencida${vencidas!==1?'s':''} · ${pend.length-vencidas} próxima${pend.length-vencidas!==1?'s':''}</span>`:''}
+    </div>
+    ${pend.length ? pend.slice(0, 12).map(x => {
+      const m = C.mas.find(y => y.id === x.reg.mascotaId);
+      const dueno = m ? C.cli.find(c => c.id === m.clienteId) : null;
+      const dias = _diasHasta(x.fecha);
+      return `<div class="recordatorio-item" onclick="navigate('mascota-detalle',${x.reg.mascotaId})">
+        <span style="font-size:19px;flex-shrink:0">${x.tipo === 'vacuna' ? '💉' : '🪱'}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m?escAttr(m.nombre):'—'} · ${escAttr(x.que)}</div>
+          <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${dueno?escAttr(nombreCliente(dueno)):'Sin dueño'}${dueno?.telefono?' · '+escAttr(dueno.telefono):''}</div>
+        </div>
+        <span class="dosis-badge ${x.estado}">${x.estado === 'vencida' ? `Hace ${Math.abs(dias)} d` : `En ${dias} d`}</span>
+        ${dueno?.telefono?`<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();recordarPorWhatsApp('${x.tipo}',${x.reg.id})" title="Recordar por WhatsApp">💬</button>`:''}
+      </div>`;
+    }).join('') + (pend.length > 12 ? `<div style="padding:8px 12px;font-size:11.5px;color:var(--text-light);text-align:center">y ${pend.length-12} más</div>` : '')
+    : '<div class="empty-state" style="padding:22px"><div class="empty-icon">✅</div><p>Sin dosis pendientes</p></div>'}
+  </div>`;
+}
+
 function renderDashboardClinica(){
   const h=hoy();
   const pendientes=C.c.filter(c=>c.estado==='pendiente');
-  document.getElementById('stat-pacientes').textContent=C.p.length;
+  _pintarRecordatoriosVet();
+  // En veterinaria la cifra de "pacientes" son las mascotas
+  document.getElementById('stat-pacientes').textContent = esVeterinaria() ? C.mas.length : C.p.length;
   document.getElementById('stat-citas-hoy').textContent=C.c.filter(c=>c.fecha===h).length;
   document.getElementById('stat-pendientes').textContent=pendientes.length;
   const tEl=document.getElementById('stat-pendientes-trend');
@@ -4506,6 +4554,8 @@ function closeModal(id){
   else if(id==='modal-nota') editingNotaId=null;
   else if(id==='modal-procedimiento') editingProcId=null;
   else if(id==='modal-odontograma') _odoCurrentPid=null;
+  else if(id==='modal-vacuna') editingVacunaId=null;
+  else if(id==='modal-desp') editingDespId=null;
   else if(id==='modal-cliente') editingClienteId=null;
   else if(id==='modal-mascota') { editingMascotaId=null; _fotoMascotaFile=null; }
   else editingId=null;
@@ -11022,7 +11072,7 @@ async function eliminarMascota(id) {
 // Información y Expediente. Citas, notas y recetas veterinarias llegan cuando
 // esos módulos se adapten a mascota_id (no duplican esta ficha).
 function switchTabMascota(tabId, btn) {
-  ['mtab-info', 'mtab-citas', 'mtab-consultas', 'mtab-recetas', 'mtab-expediente'].forEach(id => { const e = document.getElementById(id); if(e) e.style.display = 'none'; });
+  ['mtab-info', 'mtab-citas', 'mtab-consultas', 'mtab-recetas', 'mtab-vacunas', 'mtab-expediente'].forEach(id => { const e = document.getElementById(id); if(e) e.style.display = 'none'; });
   document.querySelectorAll('#view-mascota-detalle .tab').forEach(t => t.classList.remove('active'));
   document.getElementById(tabId).style.display = 'block';
   if(btn) btn.classList.add('active');
@@ -11164,6 +11214,50 @@ function renderDetalleMascota(mid) {
         </div>
       </div>`).join('')
       : '<div class="empty-state"><div class="empty-icon">💊</div><p>Sin medicaciones registradas</p></div>'}
+  </div>`;
+
+  const vacs = C.vac.filter(v => v.mascotaId === mid).sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
+  const desps = C.desp.filter(d => d.mascotaId === mid).sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
+  const filaDosis = (reg, tipo) => {
+    const est = _estadoProximaDosis(reg.proximaDosis);
+    const dias = reg.proximaDosis ? _diasHasta(reg.proximaDosis) : null;
+    const aviso = est === 'vencida' ? `<span class="dosis-badge vencida">Vencida hace ${Math.abs(dias)} d</span>`
+                : est === 'proxima' ? `<span class="dosis-badge proxima">En ${dias} d</span>`
+                : est === 'ok' ? `<span class="dosis-badge ok">${formatFecha(reg.proximaDosis)}</span>` : '';
+    const vet = C.prof.find(x => x.id == reg.veterinarioId);
+    return `<div class="dosis-item ${est||''}">
+      <div class="dosis-icono">${tipo === 'vacuna' ? '💉' : '🪱'}</div>
+      <div style="flex:1;min-width:0">
+        <div class="dosis-nombre">${escAttr(tipo === 'vacuna' ? reg.vacuna : reg.producto)}</div>
+        <div class="dosis-meta">${formatFecha(reg.fecha)}${vet?' · '+escAttr(vet.nombre):''}${reg.lote?' · Lote '+escAttr(reg.lote):''}${reg.tipo?' · '+escAttr(reg.tipo):''}${reg.pesoAplicacion?' · '+reg.pesoAplicacion+' kg':''}</div>
+        ${reg.notas?`<div class="dosis-meta">${escAttr(reg.notas)}</div>`:''}
+      </div>
+      ${aviso}
+      <div class="actions-cell" style="gap:5px;flex-wrap:nowrap">
+        ${(est === 'vencida' || est === 'proxima') ? `<button class="btn btn-secondary btn-sm" onclick="recordarPorWhatsApp('${tipo}',${reg.id})" title="Recordar por WhatsApp">💬</button>` : ''}
+        <button class="btn btn-secondary btn-sm" onclick="${tipo==='vacuna'?`openModalVacuna(null,${reg.id})`:`openModalDesp(null,${reg.id})`}" title="Editar">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="${tipo==='vacuna'?`eliminarVacuna(${reg.id})`:`eliminarDesp(${reg.id})`}" title="Eliminar">🗑️</button>
+      </div>
+    </div>`;
+  };
+
+  document.getElementById('mtab-vacunas').innerHTML = `
+  <div class="card">
+    <div class="card-header"><h3>💉 Vacunas</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${(vacs.length||desps.length)?`<button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirCarnetVacunas(${mid})">🖨️ Carnet</button>`:''}
+        <button class="btn btn-primary btn-sm" onclick="openModalVacuna(${mid})">+ Vacuna</button>
+      </div>
+    </div>
+    ${vacs.length ? vacs.map(v => filaDosis(v,'vacuna')).join('')
+      : '<div class="empty-state" style="padding:26px"><div class="empty-icon">💉</div><p>Sin vacunas registradas</p></div>'}
+  </div>
+  <div class="card" style="margin-top:16px">
+    <div class="card-header"><h3>🪱 Desparasitaciones</h3>
+      <button class="btn btn-primary btn-sm" onclick="openModalDesp(${mid})">+ Desparasitación</button>
+    </div>
+    ${desps.length ? desps.map(d => filaDosis(d,'desparasitacion')).join('')
+      : '<div class="empty-state" style="padding:26px"><div class="empty-icon">🪱</div><p>Sin desparasitaciones registradas</p></div>'}
   </div>`;
 
   document.getElementById('mtab-expediente').innerHTML = `
@@ -11607,4 +11701,274 @@ function _refrescarVistaCitas() {
   }
   renderView(currentView);
   updateBadges();
+}
+
+// ════════════════════ VACUNAS Y DESPARASITACIÓN ════════════════════
+// Hasta ahora "vacunas" era un textarea de texto libre en el expediente. Aquí
+// cada dosis es un registro con su próxima fecha, que alimenta los recordatorios.
+const VACUNAS_CANINO = ['Polivalente (DHPPi)','Quíntuple','Séxtuple','Óctuple','Antirrábica','Bordetella (tos de perrera)','Leptospirosis','Giardia','Influenza canina'];
+const VACUNAS_FELINO = ['Triple felina (FVRCP)','Leucemia felina (FeLV)','Antirrábica','PIF (peritonitis infecciosa)'];
+const VACUNAS_OTRAS  = ['Antirrábica','Polivalente','Refuerzo','Otra'];
+function _vacunasDe(especie) {
+  if(especie === 'Canino') return VACUNAS_CANINO;
+  if(especie === 'Felino') return VACUNAS_FELINO;
+  return VACUNAS_OTRAS;
+}
+const DESPARASITANTES = ['Fenbendazol','Praziquantel','Pirantel','Milbemicina oxima','Ivermectina','Fluralaner (pipeta/comprimido)','Afoxolaner','Selamectina (pipeta)','Fipronil (pipeta)','Otro'];
+
+let editingVacunaId = null;
+let editingDespId   = null;
+let _vacunaMascotaId = null;
+
+// Estado de una próxima dosis, con el mismo criterio de colores que el
+// vencimiento de inventario: vencida, próxima (30 días) o al día.
+function _estadoProximaDosis(fecha) {
+  if(!fecha) return null;
+  const h = hoy();
+  if(fecha < h) return 'vencida';
+  const limite = new Date(); limite.setDate(limite.getDate() + 30);
+  return fecha <= limite.toISOString().split('T')[0] ? 'proxima' : 'ok';
+}
+const _diasHasta = f => Math.round((new Date(f+'T12:00:00') - new Date(hoy()+'T12:00:00')) / 86400000);
+
+// Todas las dosis pendientes de la clínica, para el panel de recordatorios
+function _recordatoriosPendientes() {
+  const out = [];
+  C.vac.forEach(v => {
+    const est = _estadoProximaDosis(v.proximaDosis);
+    if(est === 'vencida' || est === 'proxima') out.push({ tipo:'vacuna', reg:v, estado:est, fecha:v.proximaDosis, que:v.vacuna });
+  });
+  C.desp.forEach(d => {
+    const est = _estadoProximaDosis(d.proximaDosis);
+    if(est === 'vencida' || est === 'proxima') out.push({ tipo:'desparasitacion', reg:d, estado:est, fecha:d.proximaDosis, que:d.producto });
+  });
+  return out.sort((a,b) => a.fecha.localeCompare(b.fecha));
+}
+
+// ── Modal de vacuna ──
+function openModalVacuna(mid, id) {
+  editingVacunaId = id || null;
+  _vacunaMascotaId = mid || null;
+  const v = id ? C.vac.find(x => x.id === id) : null;
+  const m = C.mas.find(x => x.id === (v ? v.mascotaId : mid));
+  document.getElementById('modal-vacuna-title').textContent = v ? '💉 Editar vacuna' : '💉 Registrar vacuna';
+  document.getElementById('vac-mascota-nombre').textContent = m ? `${m.nombre}${m.especie?' · '+m.especie:''}` : '';
+  const sel = document.getElementById('vac-vacuna');
+  const lista = _vacunasDe(m?.especie);
+  sel.innerHTML = lista.map(x => `<option value="${escAttr(x)}">${escAttr(x)}</option>`).join('') + '<option value="__otra">Otra (escribir)…</option>';
+  if(v && !lista.includes(v.vacuna)) sel.insertAdjacentHTML('afterbegin', `<option value="${escAttr(v.vacuna)}" selected>${escAttr(v.vacuna)}</option>`);
+  else if(v) sel.value = v.vacuna;
+  document.getElementById('vac-otra').style.display = 'none';
+  document.getElementById('vac-otra').value = '';
+  document.getElementById('vac-fecha').value = v?.fecha || hoy();
+  document.getElementById('vac-proxima').value = v?.proximaDosis || '';
+  document.getElementById('vac-lote').value = v?.lote || '';
+  document.getElementById('vac-laboratorio').value = v?.laboratorio || '';
+  document.getElementById('vac-notas').value = v?.notas || '';
+  fillMedicoSelect('vac-veterinario', v?.veterinarioId);
+  openModalOverlay('modal-vacuna');
+}
+
+function onVacunaChange() {
+  const sel = document.getElementById('vac-vacuna');
+  const otra = document.getElementById('vac-otra');
+  otra.style.display = sel.value === '__otra' ? '' : 'none';
+  if(sel.value === '__otra') otra.focus();
+}
+
+// Atajos para la próxima dosis: lo habitual es 1 año o 3 semanas (cachorros)
+function setProximaDosis(dias) {
+  const base = document.getElementById('vac-fecha').value || hoy();
+  const d = new Date(base + 'T12:00:00');
+  d.setDate(d.getDate() + dias);
+  document.getElementById('vac-proxima').value = d.toISOString().split('T')[0];
+}
+
+async function guardarVacuna() {
+  if(!currentClinicaId) { toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
+  const sel = document.getElementById('vac-vacuna').value;
+  const vacuna = sel === '__otra' ? document.getElementById('vac-otra').value.trim() : sel;
+  if(!vacuna) { toast('Indica qué vacuna se aplicó','error'); return; }
+  const mid = editingVacunaId ? C.vac.find(x => x.id === editingVacunaId)?.mascotaId : _vacunaMascotaId;
+  if(!mid) { toast('No se pudo determinar la mascota','error'); return; }
+  const obj = {
+    mascotaId: mid, vacuna,
+    fecha: document.getElementById('vac-fecha').value || hoy(),
+    proximaDosis: document.getElementById('vac-proxima').value || null,
+    lote: document.getElementById('vac-lote').value.trim(),
+    laboratorio: document.getElementById('vac-laboratorio').value.trim(),
+    veterinarioId: document.getElementById('vac-veterinario').value || null,
+    notas: document.getElementById('vac-notas').value.trim()
+  };
+  if(obj.proximaDosis && obj.proximaDosis < obj.fecha) { toast('La próxima dosis no puede ser anterior a la aplicación','error'); return; }
+  setLoading(true);
+  const { error } = editingVacunaId
+    ? await sb.from('vacunas_mascota').update(toVac(obj)).eq('id', editingVacunaId)
+    : await sb.from('vacunas_mascota').insert([toVac(obj)]);
+  setLoading(false);
+  if(error) {
+    const falta = /relation .*vacunas_mascota.* does not exist|could not find the table/i.test(error.message||'');
+    toast(falta ? 'Falta ejecutar el script de veterinaria en Supabase (tabla vacunas_mascota)' : 'Error al guardar: '+error.message, 'error');
+    return;
+  }
+  toast(editingVacunaId ? 'Vacuna actualizada 💉' : 'Vacuna registrada 💉');
+  closeModal('modal-vacuna');
+  await loadAll();
+  if(currentView === 'mascota-detalle') renderDetalleMascota(currentMascotaId);
+}
+
+async function eliminarVacuna(id) {
+  const v = C.vac.find(x => x.id === id);
+  const ok = await customConfirm({ icon:'🗑️', title:'Eliminar registro de vacuna',
+    msg:`¿Eliminar <strong>${escAttr(v?.vacuna||'')}</strong> del carnet?`, okText:'Eliminar', danger:true });
+  if(!ok) return;
+  setLoading(true);
+  const { error } = await sb.from('vacunas_mascota').delete().eq('id', id);
+  setLoading(false);
+  if(error) { toast('Error: '+error.message,'error'); return; }
+  toast('Registro eliminado');
+  await loadAll();
+  if(currentView === 'mascota-detalle') renderDetalleMascota(currentMascotaId);
+}
+
+// ── Modal de desparasitación (mismo molde) ──
+function openModalDesp(mid, id) {
+  editingDespId = id || null;
+  _vacunaMascotaId = mid || null;
+  const d = id ? C.desp.find(x => x.id === id) : null;
+  const m = C.mas.find(x => x.id === (d ? d.mascotaId : mid));
+  document.getElementById('modal-desp-title').textContent = d ? '🪱 Editar desparasitación' : '🪱 Registrar desparasitación';
+  document.getElementById('desp-mascota-nombre').textContent = m ? `${m.nombre}${m.especie?' · '+m.especie:''}` : '';
+  const sel = document.getElementById('desp-producto');
+  sel.innerHTML = DESPARASITANTES.map(x => `<option value="${escAttr(x)}">${escAttr(x)}</option>`).join('');
+  if(d && !DESPARASITANTES.includes(d.producto)) sel.insertAdjacentHTML('afterbegin', `<option value="${escAttr(d.producto)}" selected>${escAttr(d.producto)}</option>`);
+  else if(d) sel.value = d.producto;
+  document.getElementById('desp-tipo').value = d?.tipo || 'interna';
+  document.getElementById('desp-fecha').value = d?.fecha || hoy();
+  document.getElementById('desp-proxima').value = d?.proximaDosis || '';
+  const peso = m ? _pesoMascota(m.id) : null;
+  document.getElementById('desp-peso').value = d?.pesoAplicacion || (peso ? peso.kg : '');
+  document.getElementById('desp-notas').value = d?.notas || '';
+  fillMedicoSelect('desp-veterinario', d?.veterinarioId);
+  openModalOverlay('modal-desp');
+}
+
+function setProximaDesp(dias) {
+  const base = document.getElementById('desp-fecha').value || hoy();
+  const d = new Date(base + 'T12:00:00');
+  d.setDate(d.getDate() + dias);
+  document.getElementById('desp-proxima').value = d.toISOString().split('T')[0];
+}
+
+async function guardarDesp() {
+  if(!currentClinicaId) { toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
+  const mid = editingDespId ? C.desp.find(x => x.id === editingDespId)?.mascotaId : _vacunaMascotaId;
+  if(!mid) { toast('No se pudo determinar la mascota','error'); return; }
+  const obj = {
+    mascotaId: mid,
+    producto: document.getElementById('desp-producto').value,
+    tipo: document.getElementById('desp-tipo').value,
+    fecha: document.getElementById('desp-fecha').value || hoy(),
+    proximaDosis: document.getElementById('desp-proxima').value || null,
+    pesoAplicacion: document.getElementById('desp-peso').value || null,
+    veterinarioId: document.getElementById('desp-veterinario').value || null,
+    notas: document.getElementById('desp-notas').value.trim()
+  };
+  if(!obj.producto) { toast('Indica el producto aplicado','error'); return; }
+  if(obj.proximaDosis && obj.proximaDosis < obj.fecha) { toast('La próxima dosis no puede ser anterior a la aplicación','error'); return; }
+  setLoading(true);
+  const { error } = editingDespId
+    ? await sb.from('desparasitaciones').update(toDesp(obj)).eq('id', editingDespId)
+    : await sb.from('desparasitaciones').insert([toDesp(obj)]);
+  setLoading(false);
+  if(error) {
+    const falta = /relation .*desparasitaciones.* does not exist|could not find the table/i.test(error.message||'');
+    toast(falta ? 'Falta ejecutar el script de veterinaria en Supabase (tabla desparasitaciones)' : 'Error al guardar: '+error.message, 'error');
+    return;
+  }
+  toast(editingDespId ? 'Desparasitación actualizada 🪱' : 'Desparasitación registrada 🪱');
+  closeModal('modal-desp');
+  await loadAll();
+  if(currentView === 'mascota-detalle') renderDetalleMascota(currentMascotaId);
+}
+
+async function eliminarDesp(id) {
+  const ok = await customConfirm({ icon:'🗑️', title:'Eliminar desparasitación', msg:'¿Eliminar este registro?', okText:'Eliminar', danger:true });
+  if(!ok) return;
+  setLoading(true);
+  const { error } = await sb.from('desparasitaciones').delete().eq('id', id);
+  setLoading(false);
+  if(error) { toast('Error: '+error.message,'error'); return; }
+  toast('Registro eliminado');
+  await loadAll();
+  if(currentView === 'mascota-detalle') renderDetalleMascota(currentMascotaId);
+}
+
+// Recordatorio por WhatsApp: sin servidor, abre el chat con el mensaje escrito
+function recordarPorWhatsApp(tipo, id) {
+  const reg = tipo === 'vacuna' ? C.vac.find(x => x.id === id) : C.desp.find(x => x.id === id);
+  if(!reg) return;
+  const m = C.mas.find(x => x.id === reg.mascotaId);
+  const dueno = m ? C.cli.find(c => c.id === m.clienteId) : null;
+  const tel = (dueno?.telefono || '').replace(/[^0-9]/g, '');
+  if(!tel) { toast('El dueño no tiene teléfono registrado','error'); return; }
+  const que = tipo === 'vacuna' ? reg.vacuna : reg.producto;
+  const cfg = getClinicaConfig();
+  const msg = `Hola ${dueno.nombre}, le recordamos de ${cfg.nombreClinica||'la clínica'} que ${m.nombre} tiene pendiente ${que} para el ${formatFecha(reg.proximaDosis)}. ¿Le agendamos cita?`;
+  window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msg)}`, '_blank');
+}
+
+// Carnet de vacunación imprimible
+function imprimirCarnetVacunas(mid) {
+  const m = C.mas.find(x => x.id === mid);
+  if(!m) return;
+  const dueno = C.cli.find(c => c.id === m.clienteId);
+  const vacunas = C.vac.filter(v => v.mascotaId === mid).sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
+  const desps = C.desp.filter(d => d.mascotaId === mid).sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
+  if(!vacunas.length && !desps.length) { toast('Esta mascota no tiene vacunas ni desparasitaciones registradas','info'); return; }
+  const cfg = getClinicaConfig();
+  const fmtF = f => { if(!f) return '—'; const d=new Date(f+'T12:00:00'); return d.toLocaleDateString('es-ES',{day:'2-digit',month:'short',year:'numeric'}); };
+  const vetNombre = vid => { const pr = C.prof.find(x => x.id == vid); return pr ? pr.nombre : '—'; };
+
+  const body = '<div class="badge-tipo" style="background:#0891B2">&#128137; CARNET DE VACUNACI&#211;N</div>'
+    + '<div class="patient-box">'
+    +   '<div class="patient-av">'+(m.fotoUrl?'<img src="'+m.fotoUrl+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">':especieIcon(m.especie))+'</div>'
+    +   '<div style="flex:1">'
+    +     '<div class="patient-name">'+escAttr(m.nombre)+'</div>'
+    +     '<div class="patient-meta">'
+    +       (m.especie?'<span>'+escAttr(m.especie)+(m.raza?' &middot; '+escAttr(m.raza):'')+'</span>':'')
+    +       (m.fechaNac?'<span>'+calcEdadMascota(m.fechaNac)+'</span>':'')
+    +       (m.sexo?'<span>'+(m.sexo==='M'?'&#9794; Macho':'&#9792; Hembra')+'</span>':'')
+    +       (m.microchip?'<span>Chip '+escAttr(m.microchip)+'</span>':'')
+    +     '</div>'
+    +     (dueno?'<div style="margin-top:6px;font-size:12px;color:#475569"><strong>Propietario:</strong> '+escAttr(nombreCliente(dueno))+(dueno.telefono?' &middot; '+escAttr(dueno.telefono):'')+'</div>':'')
+    +   '</div>'
+    + '</div>'
+    + (vacunas.length ? '<div class="section-title">&#128137; Vacunas aplicadas</div>'
+      + '<table><thead><tr><th>Vacuna</th><th>Aplicaci&#243;n</th><th>Pr&#243;xima dosis</th><th>Lote</th><th>Laboratorio</th><th>Veterinario</th></tr></thead><tbody>'
+      + vacunas.map(v => '<tr>'
+          + '<td><strong>'+escAttr(v.vacuna)+'</strong></td>'
+          + '<td>'+fmtF(v.fecha)+'</td>'
+          + '<td>'+(v.proximaDosis?fmtF(v.proximaDosis):'—')+'</td>'
+          + '<td>'+escAttr(v.lote||'—')+'</td>'
+          + '<td>'+escAttr(v.laboratorio||'—')+'</td>'
+          + '<td>'+escAttr(vetNombre(v.veterinarioId))+'</td>'
+          + '</tr>').join('')
+      + '</tbody></table>' : '')
+    + (desps.length ? '<div class="section-title">&#129700; Desparasitaciones</div>'
+      + '<table><thead><tr><th>Producto</th><th>Tipo</th><th>Aplicaci&#243;n</th><th>Pr&#243;xima</th><th>Peso</th></tr></thead><tbody>'
+      + desps.map(d => '<tr>'
+          + '<td><strong>'+escAttr(d.producto)+'</strong></td>'
+          + '<td style="text-transform:capitalize">'+escAttr(d.tipo||'')+'</td>'
+          + '<td>'+fmtF(d.fecha)+'</td>'
+          + '<td>'+(d.proximaDosis?fmtF(d.proximaDosis):'—')+'</td>'
+          + '<td>'+(d.pesoAplicacion?d.pesoAplicacion+' kg':'—')+'</td>'
+          + '</tr>').join('')
+      + '</tbody></table>' : '')
+    + '<div class="sig-wrap"><div class="sig-box">'+_firmaImgHTML(46)+'<div class="sig-line"></div>'
+    +   '<div class="sig-name">'+(currentUser&&currentUser.name?currentUser.name:cfg.nombreDoctor||'M&#233;dico Veterinario')+'</div>'
+    +   especialidadFirma(cfg).split(/\r?\n/).filter(Boolean).map(l=>'<div class="sig-role">'+l+'</div>').join('')
+    + '</div></div>';
+
+  pdfAbrir('Carnet de vacunación — '+m.nombre, body, cfg);
 }

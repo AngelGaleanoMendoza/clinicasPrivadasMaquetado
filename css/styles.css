@@ -1451,3 +1451,30 @@ body.dark .cal-tl-esquina,body.dark .cal-tl-colhead,body.dark .cal-tl-hour{backg
   /* La vista DÍA sí conserva las franjas: con scroll horizontal se usa bien */
   .cal-tl{--slot-h:34px;grid-template-columns:50px repeat(var(--cols), minmax(132px,1fr))}
 }
+
+/* ══ VETERINARIA: VACUNAS Y DESPARASITACIÓN ══ */
+.dosis-item{display:flex;align-items:center;gap:11px;padding:11px 13px;border:1.5px solid var(--border);border-radius:12px;background:var(--bg);margin-bottom:9px}
+.dosis-item.vencida{border-color:#FECACA;background:#FEF2F2}
+.dosis-item.proxima{border-color:#FDE68A;background:#FFFBEB}
+.dosis-icono{font-size:22px;flex-shrink:0}
+.dosis-nombre{font-size:13.5px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dosis-meta{font-size:11.5px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dosis-badge{font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap;flex-shrink:0}
+.dosis-badge.vencida{background:#FEE2E2;color:#B91C1C}
+.dosis-badge.proxima{background:#FEF3C7;color:#B45309}
+.dosis-badge.ok{background:var(--primary-light);color:var(--primary)}
+/* Panel de recordatorios del dashboard */
+.recordatorio-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s}
+.recordatorio-item:hover{background:var(--primary-light)}
+.recordatorio-item:last-child{border-bottom:none}
+
+body.dark .dosis-item{background:#0F172A}
+body.dark .dosis-item.vencida{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.3)}
+body.dark .dosis-item.proxima{background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.3)}
+body.dark .dosis-badge.vencida{background:rgba(239,68,68,.18);color:#FCA5A5}
+body.dark .dosis-badge.proxima{background:rgba(245,158,11,.18);color:#FCD34D}
+
+@media(max-width:560px){
+  .dosis-item{flex-wrap:wrap}
+  .dosis-item .actions-cell{width:100%;justify-content:flex-end}
+}
