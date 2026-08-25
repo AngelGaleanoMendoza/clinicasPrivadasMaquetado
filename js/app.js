@@ -8774,7 +8774,7 @@ async function migrarUsuariosAAuth() {
   // justamente moverla a Supabase Auth. Se piden solo las filas que faltan y
   // solo los tres campos imprescindibles.
   const { data: pendientes, error } = await sb.from('profiles')
-    .select('id,email,password').not('password','is',null).neq('password','');
+    .select('id,nombre,email,password').not('password','is',null).neq('password','');
   if(error) { toast('No se pudieron cargar los perfiles','error'); return; }
   if(!pendientes?.length) { toast('Todos los usuarios ya están migrados ✅','success'); return; }
 
@@ -8805,8 +8805,21 @@ async function migrarUsuariosAAuth() {
 
     if(authErr) {
       if(authErr.message.includes('already registered')) {
-        addLog(`⚠️ ${p.email} — ya existe en Auth (OK)`);
-        migrados++;
+        // Ya existe en Auth, pero no sabemos si su contraseña allí coincide con
+        // la del texto plano. Se comprueba entrando: solo si funciona es seguro
+        // borrarla, porque si no coincidiera dejaríamos al usuario sin acceso.
+        const { data: prueba, error: errPrueba } = await sb.auth.signInWithPassword({ email: p.email, password: p.password });
+        if(adminSess) await sb.auth.setSession(adminSess);
+        if(prueba?.user && !errPrueba) {
+          const upd = { password: null };
+          if(prueba.user.id !== p.id) upd.id = prueba.user.id;
+          await sb.from('profiles').update(upd).eq('id', p.id);
+          addLog(`✅ ${p.nombre || p.email} — ya estaba en Auth, contraseña antigua eliminada`);
+          migrados++;
+        } else {
+          addLog(`⚠️ ${p.email} — existe en Auth con OTRA contraseña. Restablécela desde Usuarios y vuelve a migrar.`, false);
+          errores++;
+        }
       } else {
         addLog(`❌ ${p.email} — ${authErr.message}`, false);
         errores++;
@@ -8820,7 +8833,7 @@ async function migrarUsuariosAAuth() {
     } else {
       await sb.from('profiles').update({ password: null }).eq('id', p.id);
     }
-    addLog(`✅ ${p.nombre} (${p.email}) — migrado`);
+    addLog(`✅ ${p.nombre || p.email} (${p.email}) — migrado`);
     migrados++;
   }
 
