@@ -112,6 +112,12 @@ const C = { p:[], c:[], m:[], n:[], e:[], prof:[], inv:[], mov:[], fin:[], fact:
 let currentClinicaId = null;
 let currentClinica   = null;
 
+// Columnas de profiles que el cliente puede recibir. La tabla tiene además una
+// columna `password` heredada del login antiguo: NUNCA debe viajar al navegador,
+// porque cualquier usuario puede leer los perfiles de su clínica (política RLS)
+// y la vería en texto plano desde las herramientas de desarrollo.
+const PROFILE_COLS = 'id,nombre,rol,email,icono,clinica_id,permisos,especialidad,firma_url,bloqueado,intentos_fallidos,horario';
+
 // ════════════════════ MAPPERS DB ↔ JS ════════════════════
 const fromP = r => ({ id:r.id, nombre:r.nombre, apellidos:r.apellidos, identificacion:r.identificacion, fechaNac:r.fecha_nac, sexo:r.sexo, sangre:r.sangre, telefono:r.telefono, email:r.email, direccion:r.direccion, alergias:r.alergias, estado:r.estado||'activo', emergencia:r.emergencia, observaciones:r.observaciones, fechaRegistro:r.fecha_registro, fotoUrl:r.foto_url||null, expediente:r.expediente||null });
 const toP   = x => ({ nombre:x.nombre, apellidos:x.apellidos, identificacion:x.identificacion||null, fecha_nac:x.fechaNac||null, sexo:x.sexo||null, sangre:x.sangre||null, telefono:x.telefono||null, email:x.email||null, direccion:x.direccion||null, alergias:x.alergias||null, estado:x.estado||'activo', emergencia:x.emergencia||null, observaciones:x.observaciones||null, fecha_registro:x.fechaRegistro||hoy(), foto_url:x.fotoUrl||null, clinica_id:currentClinicaId });
@@ -324,7 +330,7 @@ async function verificarLogin() {
   }
 
   // ── PASO 3: fallback legacy (profiles con password en texto plano) ──
-  const { data: legacy } = await sb.from('profiles').select('*').eq('email', email).eq('password', password).maybeSingle();
+  const { data: legacy } = await sb.from('profiles').select(PROFILE_COLS).eq('email', email).eq('password', password).maybeSingle();
   if(legacy) {
     // Auto-registrar en Auth para futuras sesiones
     const { data: migrAuth } = await sb.auth.signInWithPassword({ email, password });
@@ -362,9 +368,9 @@ async function verificarLogin() {
 
 // Busca perfil por Auth UUID; si no lo encuentra por ID, lo busca por email y sincroniza
 async function resolverPerfil(authId, email) {
-  const { data: p1 } = await sb.from('profiles').select('*').eq('id', authId).maybeSingle();
+  const { data: p1 } = await sb.from('profiles').select(PROFILE_COLS).eq('id', authId).maybeSingle();
   if(p1) return p1;
-  const { data: p2 } = await sb.from('profiles').select('*').eq('email', email).maybeSingle();
+  const { data: p2 } = await sb.from('profiles').select(PROFILE_COLS).eq('email', email).maybeSingle();
   if(p2) {
     await sb.from('profiles').update({ id: authId }).eq('email', email);
     return { ...p2, id: authId };
@@ -4859,7 +4865,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if(session?.user) {
       // Guardar email del auth para isSuperAdmin()
       if(session.user.email) _authEmail = session.user.email.trim().toLowerCase();
-      const { data: profile } = await sb.from('profiles').select('*').eq('id', session.user.id).single();
+      const { data: profile } = await sb.from('profiles').select(PROFILE_COLS).eq('id', session.user.id).single();
       if(profile) {
         if(!profile.email && session.user.email) profile.email = session.user.email;
         await entrarConPerfil(profile); return;
@@ -7622,7 +7628,7 @@ async function loadAdminData() {
   setLoading(true);
   const [rc, ru, ra] = await Promise.all([
     sb.from('clinicas').select('*').order('id'),
-    sb.from('profiles').select('*').order('nombre'),
+    sb.from('profiles').select(PROFILE_COLS).order('nombre'),
     sb.from('actividad_usuarios').select('*').order('created_at', {ascending:false}).limit(2000)
   ]);
   adminClinicas = rc.data || [];
@@ -8744,10 +8750,14 @@ function descargarPDFInventario() {
 
 // ════════════════════ MIGRACIÓN A SUPABASE AUTH ════════════════════
 async function verificarEstadoAuth() {
-  const { data: profiles } = await sb.from('profiles').select('id,email,nombre,password');
+  // Se cuenta sin traer las contraseñas: basta saber cuántas filas siguen teniéndola
+  const { data: profiles } = await sb.from('profiles').select('id,email,nombre');
   if(!profiles) return;
-  const conAuth = profiles.filter(p => !p.password || p.password === '');
-  const sinAuth = profiles.filter(p => p.password && p.password !== '');
+  const { data: pendientesRows } = await sb.from('profiles')
+    .select('id').not('password','is',null).neq('password','');
+  const idsPendientes = new Set((pendientesRows||[]).map(r => r.id));
+  const conAuth = profiles.filter(p => !idsPendientes.has(p.id));
+  const sinAuth = profiles.filter(p => idsPendientes.has(p.id));
   const badge = document.getElementById('auth-status-badge');
   const prog  = document.getElementById('migracion-progress');
   if(sinAuth.length === 0) {
@@ -8760,11 +8770,13 @@ async function verificarEstadoAuth() {
 }
 
 async function migrarUsuariosAAuth() {
-  const { data: profiles, error } = await sb.from('profiles').select('*');
-  if(error || !profiles?.length) { toast('No se pudieron cargar los perfiles','error'); return; }
-
-  const pendientes = profiles.filter(p => p.password && p.email);
-  if(!pendientes.length) { toast('Todos los usuarios ya están migrados ✅','success'); return; }
+  // Esta es la única consulta que necesita la contraseña, porque su trabajo es
+  // justamente moverla a Supabase Auth. Se piden solo las filas que faltan y
+  // solo los tres campos imprescindibles.
+  const { data: pendientes, error } = await sb.from('profiles')
+    .select('id,email,password').not('password','is',null).neq('password','');
+  if(error) { toast('No se pudieron cargar los perfiles','error'); return; }
+  if(!pendientes?.length) { toast('Todos los usuarios ya están migrados ✅','success'); return; }
 
   const ok = await customConfirm({
     icon: '🔐', title: 'Migrar a Supabase Auth',
