@@ -101,6 +101,7 @@
       <div class="menu-section" id="menu-clinica-section">Clínica</div>
       <div class="menu-item" id="menu-clientes" onclick="navigate('clientes')" style="display:none"><span class="icon">🧑‍🤝‍🧑</span> Clientes <span class="badge" id="badge-clientes">0</span></div>
       <div class="menu-item" id="menu-mascotas" onclick="navigate('mascotas')" style="display:none"><span class="icon">🐾</span> Mascotas <span class="badge" id="badge-mascotas">0</span></div>
+      <div class="menu-item" id="menu-hospitalizacion" onclick="navigate('hospitalizacion')" style="display:none"><span class="icon">🏥</span> Hospitalización <span class="badge" id="badge-hosp">0</span></div>
       <div class="menu-item" id="menu-pacientes" onclick="navigate('pacientes')"><span class="icon">👥</span> Pacientes <span class="badge" id="badge-pacientes">0</span></div>
       <div class="menu-item" id="menu-citas" onclick="navigate('citas')"><span class="icon">📅</span> Citas <span class="badge" id="badge-citas">0</span></div>
       <div class="menu-item" id="menu-agendas" onclick="navigate('agendas')"><span class="icon">🗓️</span> Agendas</div>
@@ -268,6 +269,9 @@
           <div id="lista-mascotas"></div>
         </div>
       </div>
+
+      <!-- HOSPITALIZACIÓN (VETERINARIA) -->
+      <div id="view-hospitalizacion" class="view"></div>
 
       <!-- DETALLE MASCOTA (VETERINARIA) -->
       <div id="view-mascota-detalle" class="view">
@@ -1921,6 +1925,49 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-mascota')">Cancelar</button>
       <button class="btn btn-primary" onclick="guardarMascota()">💾 Guardar mascota</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL HOSPITALIZACIÓN -->
+<div class="modal-overlay" id="modal-hosp">
+  <div class="modal" style="max-width:560px">
+    <button class="modal-close-btn" onclick="closeModal('modal-hosp')" title="Cerrar">✕</button>
+    <h2 id="modal-hosp-title">🏥 Ingresar mascota</h2>
+    <div class="form-grid">
+      <div class="form-group full" id="hosp-mascota-wrap"></div>
+      <div class="form-group full"><label>Motivo de ingreso</label><input type="text" id="hosp-motivo" placeholder="Gastroenteritis, postoperatorio..."></div>
+      <div class="form-group"><label>Fecha de ingreso *</label><input type="date" id="hosp-ingreso"></div>
+      <div class="form-group"><label>Jaula / box</label><input type="text" id="hosp-jaula" placeholder="A-3"></div>
+      <div class="form-group full"><label>Veterinario responsable</label><select id="hosp-veterinario"><option value="">Sin asignar</option></select></div>
+      <div class="form-group full"><label>Indicaciones</label><textarea id="hosp-notas" placeholder="Dieta, sueroterapia, controles cada 4 h..."></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-hosp')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarHosp()">💾 Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL SEGUIMIENTO DE HOSPITALIZACIÓN -->
+<div class="modal-overlay" id="modal-seguimiento">
+  <div class="modal" style="max-width:600px">
+    <button class="modal-close-btn" onclick="closeModal('modal-seguimiento')" title="Cerrar">✕</button>
+    <h2 id="seg-titulo">📋 Seguimiento</h2>
+    <div class="form-grid">
+      <div class="form-group"><label>Temperatura (°C)</label><input type="number" id="seg-temp" step="0.1" min="25" max="45" placeholder="38.5"></div>
+      <div class="form-group"><label>Medicación aplicada</label><input type="text" id="seg-medicacion" placeholder="Ranitidina 10 mg IV"></div>
+      <div class="form-group full"><label>Observaciones del turno</label><textarea id="seg-notas" placeholder="Come bien, sin vómito, orina normal..."></textarea></div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:14px">
+      <button class="btn btn-primary btn-sm" onclick="guardarSeguimiento()">＋ Registrar control</button>
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:12px">
+      <div style="font-size:12px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Historial del ingreso</div>
+      <div id="seg-lista" style="max-height:300px;overflow-y:auto"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-seguimiento')">Cerrar</button>
     </div>
   </div>
 </div>

@@ -1497,3 +1497,31 @@ body.dark .dosis-badge.proxima{background:rgba(245,158,11,.18);color:#FCD34D}
   .peso-grafico{height:92px}
   .peso-actual{min-width:100%}
 }
+
+/* ══ VETERINARIA: HOSPITALIZACIÓN ══ */
+.hosp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:13px}
+.hosp-card{border:1.5px solid var(--border);border-radius:14px;background:var(--bg);overflow:hidden;display:flex;flex-direction:column;transition:border-color .18s,box-shadow .18s}
+.hosp-card:hover{border-color:var(--primary);box-shadow:0 4px 14px rgba(0,0,0,.07)}
+.hosp-head{display:flex;align-items:center;gap:10px;padding:11px 13px;border-bottom:1px solid var(--border)}
+.hosp-avatar{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:19px;color:#fff;flex-shrink:0;overflow:hidden}
+.hosp-avatar img{width:100%;height:100%;object-fit:cover}
+.hosp-nombre{font-size:14px;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hosp-meta{font-size:11.5px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hosp-jaula{font-size:11px;font-weight:800;background:var(--primary-light);color:var(--primary);padding:3px 9px;border-radius:7px;flex-shrink:0}
+.hosp-body{padding:10px 13px;flex:1;display:flex;flex-direction:column;gap:3px}
+.hosp-motivo{font-size:12.5px;font-weight:600;color:var(--text);margin-bottom:3px}
+.hosp-acciones{display:flex;gap:6px;padding:0 13px 12px;flex-wrap:wrap}
+.hosp-acciones .btn{flex:1;white-space:nowrap}
+.hosp-acciones .btn-secondary{flex:0 0 auto}
+/* Seguimiento por turnos */
+.seg-item{display:flex;gap:11px;padding:9px 0;border-bottom:1px solid var(--border)}
+.seg-item:last-child{border-bottom:none}
+.seg-hora{font-size:11px;font-weight:700;color:var(--primary);min-width:96px;flex-shrink:0}
+
+body.dark .hosp-card{background:#0F172A}
+
+@media(max-width:480px){
+  .hosp-grid{grid-template-columns:1fr}
+  .seg-item{flex-direction:column;gap:3px}
+  .seg-hora{min-width:0}
+}

@@ -142,6 +142,10 @@ const toCli   = x => ({ nombre:x.nombre, apellidos:x.apellidos||null, identifica
 const fromMas = r => ({ id:r.id, clienteId:r.cliente_id, nombre:r.nombre, especie:r.especie, raza:r.raza, sexo:r.sexo, fechaNac:r.fecha_nac, color:r.color, microchip:r.microchip, esterilizado:r.esterilizado||'no', senas:r.senas_particulares, alergias:r.alergias, observaciones:r.observaciones, estado:r.estado||'activo', fotoUrl:r.foto_url||null, expediente:r.expediente||null, fechaRegistro:r.fecha_registro });
 const toMas   = x => ({ cliente_id:x.clienteId||null, nombre:x.nombre, especie:x.especie||null, raza:x.raza||null, sexo:x.sexo||null, fecha_nac:x.fechaNac||null, color:x.color||null, microchip:x.microchip||null, esterilizado:x.esterilizado||'no', senas_particulares:x.senas||null, alergias:x.alergias||null, observaciones:x.observaciones||null, estado:x.estado||'activo', foto_url:x.fotoUrl||null, fecha_registro:x.fechaRegistro||hoy(), clinica_id:currentClinicaId });
 // Expediente clínico de la mascota: una fila por mascota, igual que el expediente humano
+const fromHosp = r => ({ id:r.id, mascotaId:r.mascota_id, motivo:r.motivo, fechaIngreso:r.fecha_ingreso, fechaAlta:r.fecha_alta, jaula:r.jaula, estado:r.estado||'ingresado', veterinarioId:r.veterinario_id||null, notas:r.notas });
+const toHosp   = x => ({ mascota_id:x.mascotaId, motivo:x.motivo||null, fecha_ingreso:x.fechaIngreso||hoy(), fecha_alta:x.fechaAlta||null, jaula:x.jaula||null, estado:x.estado||'ingresado', veterinario_id:x.veterinarioId||null, notas:x.notas||null, clinica_id:currentClinicaId });
+const fromHospSeg = r => ({ id:r.id, hospitalizacionId:r.hospitalizacion_id, fechaHora:r.fecha_hora, temperatura:r.temperatura, notas:r.notas, medicacion:r.medicacion, usuario:r.usuario });
+const toHospSeg   = x => ({ hospitalizacion_id:x.hospitalizacionId, temperatura:x.temperatura||null, notas:x.notas||null, medicacion:x.medicacion||null, usuario:x.usuario||null, clinica_id:currentClinicaId });
 const fromExpMas = r => ({ id:r.id, mascotaId:r.mascota_id, peso:r.peso, temperatura:r.temperatura, fc:r.fc, fr:r.fr, condicionCorporal:r.condicion_corporal, enfermedadesCronicas:r.enfermedades_cronicas, cirugias:r.cirugias_previas, dieta:r.dieta, ambiente:r.ambiente, conviveCon:r.convive_con, reproductivo:r.reproductivo, temperamento:r.temperamento, observacionesMedicas:r.observaciones_medicas });
 const fromVac = r => ({ id:r.id, mascotaId:r.mascota_id, vacuna:r.vacuna, fecha:r.fecha, proximaDosis:r.proxima_dosis, lote:r.lote, laboratorio:r.laboratorio, veterinarioId:r.veterinario_id||null, notas:r.notas });
 const toVac   = x => ({ mascota_id:x.mascotaId, vacuna:x.vacuna, fecha:x.fecha||null, proxima_dosis:x.proximaDosis||null, lote:x.lote||null, laboratorio:x.laboratorio||null, veterinario_id:x.veterinarioId||null, notas:x.notas||null, clinica_id:currentClinicaId });
@@ -207,20 +211,22 @@ async function loadAll() {
     // Tablas veterinarias (opcionales, igual que las odontológicas): solo se
     // piden en clínicas veterinarias y se toleran si aún no existen en Supabase.
     if(esVeterinaria() || isSuperAdmin()) {
-      const [rcli, rmas, rexpMas, rvac, rdesp] = await Promise.all([
+      const [rcli, rmas, rexpMas, rvac, rdesp, rhosp] = await Promise.all([
         sb.from('clientes').select('*').eq('clinica_id', currentClinicaId).order('nombre'),
         sb.from('mascotas').select('*').eq('clinica_id', currentClinicaId).order('nombre'),
         sb.from('expediente_mascota').select('*').eq('clinica_id', currentClinicaId),
         sb.from('vacunas_mascota').select('*').eq('clinica_id', currentClinicaId).order('fecha', {ascending:false}),
         sb.from('desparasitaciones').select('*').eq('clinica_id', currentClinicaId).order('fecha', {ascending:false}),
+        sb.from('hospitalizaciones').select('*').eq('clinica_id', currentClinicaId).order('fecha_ingreso', {ascending:false}),
       ]);
       C.cli = rcli.error ? [] : (rcli.data||[]).map(fromCli);
       C.mas = rmas.error ? [] : (rmas.data||[]).map(fromMas);
       C.expMas = rexpMas.error ? [] : (rexpMas.data||[]).map(fromExpMas);
       C.vac = rvac.error ? [] : (rvac.data||[]).map(fromVac);
       C.desp = rdesp.error ? [] : (rdesp.data||[]).map(fromDesp);
+      C.hosp = rhosp.error ? [] : (rhosp.data||[]).map(fromHosp);
     } else {
-      C.cli = []; C.mas = []; C.expMas = []; C.vac = []; C.desp = [];
+      C.cli = []; C.mas = []; C.expMas = []; C.vac = []; C.desp = []; C.hosp = [];
     }
     setDbStatus(true);
     // Notify once per session about expiring/expired products
@@ -801,7 +807,7 @@ async function navigate(view, patientId) {
   if(el) el.classList.add('active');
   const mi=document.querySelector(`.menu-item[onclick*="'${view}'"]`);
   if(mi) mi.classList.add('active');
-  const titles={dashboard:'Dashboard',expedientes:'Expedientes Clínicos',pacientes:'Pacientes',citas:'Citas',agendas:'Agendas',medicaciones:'Medicaciones',notas:'Notas Clínicas',atendidos:'Atendidos por Día',estadisticas:'Estadísticas',configuracion:'Configuración Clínica',exportar:'Exportar / Enviar','paciente-detalle':'Expediente del Paciente',admin:'Administración',inventario:'Inventario',finanzas:'Finanzas',procedimientos:'Procedimientos Odontológicos',farmacia:'Farmacia',clientes:'Clientes',mascotas:'Mascotas','mascota-detalle':'Ficha de la Mascota'};
+  const titles={dashboard:'Dashboard',expedientes:'Expedientes Clínicos',pacientes:'Pacientes',citas:'Citas',agendas:'Agendas',medicaciones:'Medicaciones',notas:'Notas Clínicas',atendidos:'Atendidos por Día',estadisticas:'Estadísticas',configuracion:'Configuración Clínica',exportar:'Exportar / Enviar','paciente-detalle':'Expediente del Paciente',admin:'Administración',inventario:'Inventario',finanzas:'Finanzas',procedimientos:'Procedimientos Odontológicos',farmacia:'Farmacia',clientes:'Clientes',mascotas:'Mascotas','mascota-detalle':'Ficha de la Mascota',hospitalizacion:'Hospitalización'};
   document.getElementById('page-title').textContent = titles[view]||view;
   currentView=view;
   if(patientId) { if(view==='mascota-detalle') currentMascotaId=patientId; else currentPatientId=patientId; }
@@ -831,7 +837,8 @@ async function navigate(view, patientId) {
   // no tienen sentido y se redirigen a sus equivalentes.
   if(esVeterinaria() && view==='pacientes')   { navigate('mascotas'); return; }
   if(esVeterinaria() && view==='expedientes') { navigate('mascotas'); return; }
-  if((view==='clientes' || view==='mascotas' || view==='mascota-detalle') && !esVeterinaria() && !sa) { navigate('dashboard'); return; }
+  if((view==='clientes' || view==='mascotas' || view==='mascota-detalle' || view==='hospitalizacion') && !esVeterinaria() && !sa) { navigate('dashboard'); return; }
+  if(view==='hospitalizacion' && !hasPermiso('pacientes')) { navigate('dashboard'); return; }
   if(view==='clientes' && !hasPermiso('pacientes')) { navigate('dashboard'); return; }
   if(view==='mascotas' && !hasPermiso('pacientes')) { navigate('dashboard'); return; }
   if(view==='mascota-detalle' && !hasPermiso('pacientes')) { navigate('dashboard'); return; }
@@ -870,6 +877,7 @@ function renderView(v) {
     case 'clientes': renderClientes(); break;
     case 'mascotas': renderMascotas(); break;
     case 'mascota-detalle': renderDetalleMascota(currentMascotaId); break;
+    case 'hospitalizacion': renderHospitalizacion(); break;
   }
   updateBadges();
 }
@@ -881,6 +889,7 @@ function updateBadges() {
   document.getElementById('badge-citas').textContent = citasHoy;
   const bCli=document.getElementById('badge-clientes'); if(bCli) bCli.textContent = C.cli.length;
   const bMas=document.getElementById('badge-mascotas'); if(bMas) bMas.textContent = C.mas.length;
+  const bHosp=document.getElementById('badge-hosp'); if(bHosp) bHosp.textContent = _hospActivas().length;
   const bnBadge=document.getElementById('bn-badge-citas');
   if(bnBadge){ bnBadge.textContent=citasHoy; bnBadge.style.display=citasHoy>0?'block':'none'; }
   updateBottomNav(currentView);
@@ -990,6 +999,7 @@ function renderNavQuickGrid(cv) {
   const all = [
     { view:'clientes',     icon:'🧑‍🤝‍🧑', label:'Clientes', show: esVet && hasPermiso('pacientes') },
     { view:'mascotas',     icon:'🐾', label:'Mascotas',     show: esVet && hasPermiso('pacientes') },
+    { view:'hospitalizacion', icon:'🏥', label:'Hospital.',  show: esVet && hasPermiso('pacientes') },
     { view:'pacientes',    icon:'👥', label:'Pacientes',    show: !esVet && hasPermiso('pacientes') },
     { view:'citas',        icon:'📅', label:'Citas',        show: hasPermiso('citas') },
     { view:'agendas',      icon:'🗓️', label:'Agendas',      show: hasPermiso('agendas') },
@@ -4554,6 +4564,7 @@ function closeModal(id){
   else if(id==='modal-nota') editingNotaId=null;
   else if(id==='modal-procedimiento') editingProcId=null;
   else if(id==='modal-odontograma') _odoCurrentPid=null;
+  else if(id==='modal-hosp') editingHospId=null;
   else if(id==='modal-vacuna') editingVacunaId=null;
   else if(id==='modal-desp') editingDespId=null;
   else if(id==='modal-cliente') editingClienteId=null;
@@ -7536,6 +7547,7 @@ function applyRoleMenu() {
   vis('menu-clinica-section', hasClinica);
   vis('menu-clientes',        hasClinica && esVet && hasPermiso('pacientes'));
   vis('menu-mascotas',        hasClinica && esVet && hasPermiso('pacientes'));
+  vis('menu-hospitalizacion', hasClinica && esVet && hasPermiso('pacientes'));
   vis('menu-pacientes',       hasClinica && !esVet && hasPermiso('pacientes'));
   vis('menu-citas',             hasClinica && hasPermiso('citas'));
   vis('menu-agendas',          hasClinica && hasPermiso('agendas') && !isOdonto);
@@ -12045,4 +12057,240 @@ function imprimirCarnetVacunas(mid) {
     + '</div></div>';
 
   pdfAbrir('Carnet de vacunación — '+m.nombre, body, cfg);
+}
+
+// ════════════════════ HOSPITALIZACIÓN ════════════════════
+// Tablero de mascotas ingresadas, con seguimiento por turnos. Lo que se mira
+// al entrar de guardia: quién está internado y qué falta hacerle.
+let editingHospId = null;
+let _hospMascotaId = null;
+let _hospSeguimiento = [];   // seguimiento de la hospitalización abierta
+
+const _hospActivas = () => C.hosp.filter(h => h.estado === 'ingresado');
+const _diasIngresado = h => {
+  const ini = new Date((h.fechaIngreso||hoy())+'T12:00:00');
+  const fin = new Date((h.fechaAlta||hoy())+'T12:00:00');
+  return Math.max(0, Math.round((fin - ini) / 86400000));
+};
+
+function renderHospitalizacion() {
+  const el = document.getElementById('view-hospitalizacion');
+  if(!el) return;
+  const activas = _hospActivas().sort((a,b) => (a.fechaIngreso||'').localeCompare(b.fechaIngreso||''));
+  const altas = C.hosp.filter(h => h.estado !== 'ingresado')
+    .sort((a,b) => (b.fechaAlta||'').localeCompare(a.fechaAlta||'')).slice(0, 15);
+
+  el.innerHTML = `
+  <div class="card">
+    <div class="card-header">
+      <h3>🏥 Mascotas ingresadas ${activas.length?`<span class="tag tag-blue" style="font-size:11px">${activas.length}</span>`:''}</h3>
+      <button class="btn btn-primary btn-sm" onclick="openModalHosp()">+ Ingresar mascota</button>
+    </div>
+    ${activas.length ? `<div class="hosp-grid">${activas.map(h => {
+      const m = C.mas.find(x => x.id === h.mascotaId);
+      const dueno = m ? C.cli.find(c => c.id === m.clienteId) : null;
+      const vet = C.prof.find(x => x.id == h.veterinarioId);
+      const dias = _diasIngresado(h);
+      return `<div class="hosp-card">
+        <div class="hosp-head">
+          <div class="hosp-avatar" style="background:${colAvatar(m?.id||0)}">${m?.fotoUrl?`<img src="${escAttr(m.fotoUrl)}" alt="">`:especieIcon(m?.especie)}</div>
+          <div style="flex:1;min-width:0">
+            <div class="hosp-nombre">${m?escAttr(m.nombre):'—'}</div>
+            <div class="hosp-meta">${m?escAttr([m.especie,m.raza].filter(Boolean).join(' · ')):''}</div>
+          </div>
+          ${h.jaula?`<span class="hosp-jaula">${escAttr(h.jaula)}</span>`:''}
+        </div>
+        <div class="hosp-body">
+          ${h.motivo?`<div class="hosp-motivo">${escAttr(h.motivo)}</div>`:''}
+          <div class="hosp-meta">Ingresó ${formatFecha(h.fechaIngreso)} · ${dias===0?'hoy':dias===1?'1 día':dias+' días'}</div>
+          ${dueno?`<div class="hosp-meta">🧑 ${escAttr(nombreCliente(dueno))}${dueno.telefono?' · '+escAttr(dueno.telefono):''}</div>`:''}
+          ${vet?`<div class="hosp-meta">👩‍⚕️ ${escAttr(vet.nombre)}</div>`:''}
+        </div>
+        <div class="hosp-acciones">
+          <button class="btn btn-primary btn-sm" onclick="openModalSeguimiento(${h.id})">📋 Seguimiento</button>
+          <button class="btn btn-secondary btn-sm" onclick="openModalHosp(null,${h.id})" title="Editar">✏️</button>
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff" onclick="darAltaHosp(${h.id})">✅ Alta</button>
+        </div>
+      </div>`;
+    }).join('')}</div>`
+    : '<div class="empty-state" style="padding:36px"><div class="empty-icon">🏥</div><p>Ninguna mascota ingresada.<br><span style="font-size:12px">Usa <strong>+ Ingresar mascota</strong> cuando alguna quede internada.</span></p></div>'}
+  </div>
+  ${altas.length ? `<div class="card" style="margin-top:18px">
+    <div class="card-header"><h3>📋 Altas recientes</h3></div>
+    ${altas.map(h => {
+      const m = C.mas.find(x => x.id === h.mascotaId);
+      return `<div class="dosis-item" style="cursor:pointer" onclick="navigate('mascota-detalle',${h.mascotaId})">
+        <div class="dosis-icono">${especieIcon(m?.especie)}</div>
+        <div style="flex:1;min-width:0">
+          <div class="dosis-nombre">${m?escAttr(m.nombre):'—'}${h.motivo?' · '+escAttr(h.motivo):''}</div>
+          <div class="dosis-meta">${formatFecha(h.fechaIngreso)} → ${h.fechaAlta?formatFecha(h.fechaAlta):'—'} · ${_diasIngresado(h)} día(s)</div>
+        </div>
+        ${estadoTag(h.estado)}
+      </div>`;
+    }).join('')}
+  </div>` : ''}`;
+}
+
+function openModalHosp(mid, id) {
+  editingHospId = id || null;
+  const h = id ? C.hosp.find(x => x.id === id) : null;
+  _hospMascotaId = h ? h.mascotaId : (mid || null);
+  document.getElementById('modal-hosp-title').textContent = h ? '🏥 Editar ingreso' : '🏥 Ingresar mascota';
+  const wrap = document.getElementById('hosp-mascota-wrap');
+  // Al editar, la mascota ya no se cambia: se ve, no se elige
+  if(h) {
+    const m = C.mas.find(x => x.id === h.mascotaId);
+    wrap.innerHTML = `<label>Mascota</label><div style="padding:10px 14px;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-weight:600">${especieIcon(m?.especie)} ${m?escAttr(m.nombre):'—'}</div>`;
+  } else {
+    wrap.innerHTML = `<label>Mascota *</label>
+      <div style="position:relative">
+        <input type="text" id="hosp-mas-txt" placeholder="Buscar mascota por nombre, raza o dueño..." autocomplete="off"
+          oninput="filterMasSugHosp(this.value)" onfocus="filterMasSugHosp(this.value)" onblur="setTimeout(()=>hideMasSugHosp(),200)">
+        <input type="hidden" id="hosp-mascota">
+        <div id="hosp-mas-sug" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;z-index:300;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.15);margin-top:4px"></div>
+      </div>`;
+    if(mid) setTimeout(() => setMascotaSelectHosp(mid), 0);
+  }
+  document.getElementById('hosp-motivo').value = h?.motivo || '';
+  document.getElementById('hosp-ingreso').value = h?.fechaIngreso || hoy();
+  document.getElementById('hosp-jaula').value = h?.jaula || '';
+  document.getElementById('hosp-notas').value = h?.notas || '';
+  fillMedicoSelect('hosp-veterinario', h?.veterinarioId);
+  openModalOverlay('modal-hosp');
+}
+
+function filterMasSugHosp(q) { _filterMasSugEn('hosp-mas-sug', q, 'selectMasHosp'); }
+function hideMasSugHosp() { const s = document.getElementById('hosp-mas-sug'); if(s) s.style.display = 'none'; }
+function selectMasHosp(mid, nombre) {
+  document.getElementById('hosp-mascota').value = mid;
+  document.getElementById('hosp-mas-txt').value = nombre;
+  hideMasSugHosp();
+}
+function setMascotaSelectHosp(mid) {
+  const m = C.mas.find(x => x.id === mid);
+  const hid = document.getElementById('hosp-mascota'), txt = document.getElementById('hosp-mas-txt');
+  if(hid) hid.value = mid || '';
+  if(txt) txt.value = m ? m.nombre : '';
+}
+
+async function guardarHosp() {
+  if(!currentClinicaId) { toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
+  const mid = editingHospId ? _hospMascotaId : (parseInt(document.getElementById('hosp-mascota')?.value) || null);
+  if(!mid) { toast('Elige la mascota que ingresa','error'); return; }
+  const obj = {
+    mascotaId: mid,
+    motivo: document.getElementById('hosp-motivo').value.trim(),
+    fechaIngreso: document.getElementById('hosp-ingreso').value || hoy(),
+    jaula: document.getElementById('hosp-jaula').value.trim(),
+    veterinarioId: document.getElementById('hosp-veterinario').value || null,
+    notas: document.getElementById('hosp-notas').value.trim(),
+    estado: editingHospId ? (C.hosp.find(x => x.id === editingHospId)?.estado || 'ingresado') : 'ingresado',
+    fechaAlta: editingHospId ? (C.hosp.find(x => x.id === editingHospId)?.fechaAlta || null) : null
+  };
+  setLoading(true);
+  const { error } = editingHospId
+    ? await sb.from('hospitalizaciones').update(toHosp(obj)).eq('id', editingHospId)
+    : await sb.from('hospitalizaciones').insert([toHosp(obj)]);
+  setLoading(false);
+  if(error) {
+    const falta = /relation .*hospitalizaciones.* does not exist|could not find the table/i.test(error.message||'');
+    toast(falta ? 'Falta ejecutar el script de veterinaria en Supabase (tabla hospitalizaciones)' : 'Error al guardar: '+error.message, 'error');
+    return;
+  }
+  toast(editingHospId ? 'Ingreso actualizado' : 'Mascota ingresada 🏥');
+  closeModal('modal-hosp');
+  await loadAll();
+  _refrescarHosp();
+}
+
+async function darAltaHosp(id) {
+  const h = C.hosp.find(x => x.id === id);
+  const m = h ? C.mas.find(x => x.id === h.mascotaId) : null;
+  const ok = await customConfirm({
+    icon: '✅', title: 'Dar de alta',
+    msg: `¿Dar de alta a <strong>${escAttr(m?.nombre||'')}</strong>?<br><small style="color:var(--text-light)">Lleva ${_diasIngresado(h)} día(s) ingresada. El registro se conserva en el historial.</small>`,
+    okText: 'Dar de alta', danger: false
+  });
+  if(!ok) return;
+  setLoading(true);
+  const { error } = await sb.from('hospitalizaciones').update({ estado:'alta', fecha_alta: hoy() }).eq('id', id);
+  setLoading(false);
+  if(error) { toast('Error: '+error.message,'error'); return; }
+  toast('Alta registrada ✅');
+  await loadAll();
+  _refrescarHosp();
+}
+
+// ── Seguimiento por turnos ──
+async function openModalSeguimiento(hid) {
+  const h = C.hosp.find(x => x.id === hid);
+  if(!h) return;
+  _hospMascotaId = h.mascotaId;
+  editingHospId = hid;
+  const m = C.mas.find(x => x.id === h.mascotaId);
+  document.getElementById('seg-titulo').textContent = `📋 Seguimiento — ${m?m.nombre:''}`;
+  document.getElementById('seg-temp').value = '';
+  document.getElementById('seg-medicacion').value = '';
+  document.getElementById('seg-notas').value = '';
+  document.getElementById('seg-lista').innerHTML = '<p class="text-light" style="font-size:12px;padding:10px 0">Cargando…</p>';
+  openModalOverlay('modal-seguimiento');
+  const { data, error } = await sb.from('hospitalizacion_seguimiento')
+    .select('*').eq('hospitalizacion_id', hid).order('fecha_hora', { ascending:false });
+  _hospSeguimiento = error ? [] : (data||[]).map(fromHospSeg);
+  _pintarSeguimiento(error);
+}
+
+function _pintarSeguimiento(error) {
+  const el = document.getElementById('seg-lista');
+  if(!el) return;
+  if(error) {
+    const falta = /relation .*hospitalizacion_seguimiento.* does not exist|could not find the table/i.test(error.message||'');
+    el.innerHTML = `<p class="text-light" style="font-size:12px;padding:10px 0">${falta?'Falta ejecutar el script de veterinaria en Supabase (tabla hospitalizacion_seguimiento).':'No se pudo cargar el seguimiento.'}</p>`;
+    return;
+  }
+  if(!_hospSeguimiento.length) { el.innerHTML = '<p class="text-light" style="font-size:12px;padding:10px 0">Sin registros todavía. Anota el primer control.</p>'; return; }
+  el.innerHTML = _hospSeguimiento.map(s => {
+    const d = s.fechaHora ? new Date(s.fechaHora) : null;
+    return `<div class="seg-item">
+      <div class="seg-hora">${d ? d.toLocaleString('es-ES',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</div>
+      <div style="flex:1;min-width:0">
+        ${s.temperatura?`<span class="tag tag-cyan" style="font-size:10px">${s.temperatura}°C</span> `:''}
+        ${s.medicacion?`<span class="tag tag-blue" style="font-size:10px">💊 ${escAttr(s.medicacion)}</span>`:''}
+        ${s.notas?`<div style="font-size:12.5px;margin-top:4px;white-space:pre-wrap">${escAttr(s.notas)}</div>`:''}
+        ${s.usuario?`<div style="font-size:11px;color:var(--text-light);margin-top:2px">${escAttr(s.usuario)}</div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function guardarSeguimiento() {
+  const temp = document.getElementById('seg-temp').value;
+  const med  = document.getElementById('seg-medicacion').value.trim();
+  const notas= document.getElementById('seg-notas').value.trim();
+  if(!temp && !med && !notas) { toast('Anota al menos una temperatura, medicación u observación','error'); return; }
+  setLoading(true);
+  const { error } = await sb.from('hospitalizacion_seguimiento').insert([toHospSeg({
+    hospitalizacionId: editingHospId, temperatura: temp || null, medicacion: med, notas,
+    usuario: currentUser?.name || currentUser?.nombre || null
+  })]);
+  setLoading(false);
+  if(error) {
+    const falta = /relation .*hospitalizacion_seguimiento.* does not exist|could not find the table/i.test(error.message||'');
+    toast(falta ? 'Falta ejecutar el script de veterinaria en Supabase (tabla hospitalizacion_seguimiento)' : 'Error: '+error.message, 'error');
+    return;
+  }
+  toast('Control registrado 📋');
+  document.getElementById('seg-temp').value = '';
+  document.getElementById('seg-medicacion').value = '';
+  document.getElementById('seg-notas').value = '';
+  const { data } = await sb.from('hospitalizacion_seguimiento')
+    .select('*').eq('hospitalizacion_id', editingHospId).order('fecha_hora', { ascending:false });
+  _hospSeguimiento = (data||[]).map(fromHospSeg);
+  _pintarSeguimiento(null);
+}
+
+function _refrescarHosp() {
+  if(currentView === 'hospitalizacion') renderHospitalizacion();
+  else if(currentView === 'mascota-detalle') renderDetalleMascota(currentMascotaId);
+  updateBadges();
 }
