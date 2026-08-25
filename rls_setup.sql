@@ -333,6 +333,9 @@ CREATE POLICY "hosp_seguimiento_clinica" ON public.hospitalizacion_seguimiento
 ALTER TABLE public.citas        ADD COLUMN IF NOT EXISTS mascota_id BIGINT REFERENCES public.mascotas(id) ON DELETE CASCADE;
 ALTER TABLE public.citas        ADD COLUMN IF NOT EXISTS duracion_min SMALLINT DEFAULT 30;
 ALTER TABLE public.citas        ADD COLUMN IF NOT EXISTS motivo_cancelacion TEXT;
+-- Una cita veterinaria no tiene paciente_id (tiene mascota_id en su lugar).
+-- Si paciente_id ya era NOT NULL, esto lo libera; si ya era nullable, no hace nada.
+ALTER TABLE public.citas ALTER COLUMN paciente_id DROP NOT NULL;
 ALTER TABLE public.notas        ADD COLUMN IF NOT EXISTS mascota_id BIGINT REFERENCES public.mascotas(id) ON DELETE CASCADE;
 ALTER TABLE public.medicaciones ADD COLUMN IF NOT EXISTS mascota_id BIGINT REFERENCES public.mascotas(id) ON DELETE CASCADE;
 ALTER TABLE public.examenes     ADD COLUMN IF NOT EXISTS mascota_id BIGINT REFERENCES public.mascotas(id) ON DELETE CASCADE;

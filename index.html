@@ -273,9 +273,11 @@
         <div id="mas-detalle-header"></div>
         <div class="tabs">
           <button class="tab active" id="mtab-btn-info" onclick="switchTabMascota('mtab-info',this)">📋 Información</button>
+          <button class="tab" id="mtab-btn-citas" onclick="switchTabMascota('mtab-citas',this)">📅 Citas</button>
           <button class="tab" id="mtab-btn-expediente" onclick="switchTabMascota('mtab-expediente',this)">📁 Expediente</button>
         </div>
         <div id="mtab-info"></div>
+        <div id="mtab-citas" style="display:none"></div>
         <div id="mtab-expediente" style="display:none"></div>
       </div>
 
@@ -1905,7 +1907,7 @@
     <button class="modal-close-btn" onclick="closeModal('modal-cita')" title="Cerrar">✕</button>
     <h2 id="modal-cita-title">📅 Nueva Cita</h2>
     <div class="form-grid">
-      <div class="form-group full"><label>Paciente *</label>
+      <div class="form-group full" id="c-paciente-wrap"><label>Paciente *</label>
         <div style="position:relative">
           <input type="text" id="c-pac-txt" placeholder="Buscar paciente por nombre..." autocomplete="off"
             oninput="filterPacSug(this.value,'c')" onfocus="filterPacSug(this.value,'c')" onblur="setTimeout(()=>hidePacSug('c'),200)">
@@ -1913,9 +1915,24 @@
           <div id="c-pac-sug" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;z-index:300;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.15);margin-top:4px"></div>
         </div>
       </div>
+      <div class="form-group full" id="c-mascota-wrap" style="display:none"><label>Mascota *</label>
+        <div style="position:relative">
+          <input type="text" id="c-mas-txt" placeholder="Buscar mascota por nombre o dueño..." autocomplete="off"
+            oninput="filterMasSug(this.value)" onfocus="filterMasSug(this.value)" onblur="setTimeout(()=>hideMasSug(),200)">
+          <input type="hidden" id="c-mascota">
+          <div id="c-mas-sug" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;z-index:300;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.15);margin-top:4px"></div>
+        </div>
+      </div>
       <div class="form-group full"><label>Médico</label><select id="c-medico"><option value="">Sin asignar</option></select></div>
       <div class="form-group"><label>Fecha *</label><input type="date" id="c-fecha"></div>
       <div class="form-group"><label>Hora *</label><select id="c-hora"><option value="">Seleccionar hora...</option></select></div>
+      <div class="form-group" id="c-duracion-wrap" style="display:none"><label>Duración</label><select id="c-duracion">
+        <option value="15">15 min</option>
+        <option value="30" selected>30 min</option>
+        <option value="45">45 min</option>
+        <option value="60">1 hora</option>
+        <option value="90">1 hora 30 min</option>
+      </select></div>
       <div id="c-motivo-wrap" class="form-group full" style="position:relative">
         <label>Motivo de Consulta *</label>
         <input type="text" id="c-motivo" placeholder="Ej: dolor de cabeza, fiebre, control..." autocomplete="off" oninput="mostrarSugerenciasDx(this.value)" onblur="setTimeout(()=>ocultarSugerenciasDx(),180)">

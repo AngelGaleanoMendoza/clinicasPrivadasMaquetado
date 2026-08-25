@@ -117,8 +117,8 @@ const fromP = r => ({ id:r.id, nombre:r.nombre, apellidos:r.apellidos, identific
 const toP   = x => ({ nombre:x.nombre, apellidos:x.apellidos, identificacion:x.identificacion||null, fecha_nac:x.fechaNac||null, sexo:x.sexo||null, sangre:x.sangre||null, telefono:x.telefono||null, email:x.email||null, direccion:x.direccion||null, alergias:x.alergias||null, estado:x.estado||'activo', emergencia:x.emergencia||null, observaciones:x.observaciones||null, fecha_registro:x.fechaRegistro||hoy(), foto_url:x.fotoUrl||null, clinica_id:currentClinicaId });
 const fromE = r => ({ id:r.id, pacienteId:r.paciente_id, peso:r.peso, talla:r.talla, presion:r.presion, temperatura:r.temperatura, enfermedadesCronicas:r.enfermedades_cronicas, cirugias:r.cirugias_previas, antecedentesFamiliares:r.antecedentes_familiares, vacunas:r.vacunas, tabaco:r.habito_tabaco||'no', alcohol:r.habito_alcohol||'no', actividadFisica:r.actividad_fisica||'sedentario', ocupacion:r.ocupacion, estadoCivil:r.estado_civil, observacionesMedicas:r.observaciones_medicas });
 const toE   = x => ({ paciente_id:x.pacienteId, peso:x.peso?Number(x.peso):null, talla:x.talla?Number(x.talla):null, presion:x.presion||null, temperatura:x.temperatura?Number(x.temperatura):null, enfermedades_cronicas:x.enfermedadesCronicas||null, cirugias_previas:x.cirugias||null, antecedentes_familiares:x.antecedentesFamiliares||null, vacunas:x.vacunas||null, habito_tabaco:x.tabaco||'no', habito_alcohol:x.alcohol||'no', actividad_fisica:x.actividadFisica||'sedentario', ocupacion:x.ocupacion||null, estado_civil:x.estadoCivil||null, observaciones_medicas:x.observacionesMedicas||null, clinica_id:currentClinicaId });
-const fromC = r => ({ id:r.id, pacienteId:r.paciente_id, medicoId:r.medico_id||null, fecha:r.fecha, hora:(r.hora||'').slice(0,5), motivo:r.motivo, tipo:r.tipo, estado:r.estado, notas:r.notas });
-const toC   = x => ({ paciente_id:x.pacienteId, medico_id:x.medicoId||null, fecha:x.fecha, hora:x.hora, motivo:x.motivo, tipo:x.tipo||'consulta', estado:x.estado||'pendiente', notas:x.notas||null, clinica_id:currentClinicaId });
+const fromC = r => ({ id:r.id, pacienteId:r.paciente_id, mascotaId:r.mascota_id||null, medicoId:r.medico_id||null, fecha:r.fecha, hora:(r.hora||'').slice(0,5), duracionMin:r.duracion_min||30, motivo:r.motivo, tipo:r.tipo, estado:r.estado, notas:r.notas, motivoCancelacion:r.motivo_cancelacion||null });
+const toC   = x => ({ paciente_id:x.pacienteId||null, mascota_id:x.mascotaId||null, medico_id:x.medicoId||null, fecha:x.fecha, hora:x.hora, duracion_min:x.duracionMin||30, motivo:x.motivo, tipo:x.tipo||'consulta', estado:x.estado||'pendiente', notas:x.notas||null, motivo_cancelacion:x.motivoCancelacion||null, clinica_id:currentClinicaId });
 const fromM = r => ({ id:r.id, pacienteId:r.paciente_id, nombre:r.nombre, dosis:r.dosis, frecuencia:r.frecuencia, inicio:r.inicio, fin:r.fin, via:r.via, estado:r.estado, indicaciones:r.indicaciones });
 const toM   = x => ({ paciente_id:x.pacienteId, nombre:x.nombre, dosis:x.dosis, frecuencia:x.frecuencia, inicio:x.inicio||null, fin:x.fin||null, via:x.via||'oral', estado:x.estado||'activa', indicaciones:x.indicaciones||null, clinica_id:currentClinicaId });
 const fromN   = r => ({ id:r.id, pacienteId:r.paciente_id, tipo:r.tipo, fecha:r.fecha, titulo:r.titulo, contenido:r.contenido, signos:r.signos||null });
@@ -2046,6 +2046,69 @@ function renderCitas(){
   }).join('');
 }
 
+// Servicios veterinarios: reutilizan la columna citas.tipo, que ya es texto
+// libre con valores propios por clínica (examen_visual, odontologia...).
+const SERVICIOS_VET = [
+  ['consulta','Consulta general'], ['control','Control / seguimiento'],
+  ['vacunacion','Vacunación'], ['desparasitacion','Desparasitación'],
+  ['cirugia','Cirugía'], ['grooming','Grooming / estética'],
+  ['hospitalizacion','Hospitalización'], ['emergencia','Emergencia']
+];
+// El HTML solo trae los tipos humanos; se guardan aquí para poder restaurarlos
+// si una clínica veterinaria ya reescribió el select en esta misma sesión.
+const SERVICIOS_HUMANO = [
+  ['consulta','Consulta general'], ['control','Control'], ['urgencia','Urgencia'],
+  ['cirugia','Cirugía'], ['examen','Examen'], ['optometria','Optometría / Examen visual'],
+  ['odontologia','Odontología']
+];
+function fillServicioSelect(selected) {
+  const sel = document.getElementById('c-tipo');
+  if(!sel) return;
+  const opciones = esVeterinaria() ? SERVICIOS_VET : SERVICIOS_HUMANO;
+  sel.innerHTML = opciones.map(([v,l]) => `<option value="${v}">${l}</option>`).join('');
+  if(selected) sel.value = selected;
+}
+
+// Buscador de mascota para el modal de cita, molde de filterPacSug/selectPac/hidePacSug
+function filterMasSug(q) {
+  const sug = document.getElementById('c-mas-sug');
+  if(!sug) return;
+  const q2 = (q||'').toLowerCase().trim();
+  const matches = (q2.length < 1 ? C.mas.slice(0, 12) : C.mas.filter(m => {
+    const dueno = C.cli.find(c => c.id === m.clienteId);
+    return (m.nombre||'').toLowerCase().includes(q2)
+      || (m.microchip||'').toLowerCase().includes(q2)
+      || nombreCliente(dueno).toLowerCase().includes(q2);
+  }).slice(0, 10));
+  if(!matches.length) {
+    sug.innerHTML = `<div style="padding:8px 14px;font-size:12px;color:var(--text-light)">Sin resultados para "${escAttr(q)}"</div>`;
+    sug.style.display = 'block';
+    return;
+  }
+  sug.innerHTML = matches.map(m => {
+    const dueno = C.cli.find(c => c.id === m.clienteId);
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseenter="this.style.background='var(--primary-light)'" onmouseleave="this.style.background=''" onmousedown="selectMas(${m.id},'${escAttr(m.nombre)}')">
+      <div style="width:32px;height:32px;border-radius:50%;background:${colAvatar(m.id)};display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;flex-shrink:0">${especieIcon(m.especie)}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--text)">${escAttr(m.nombre)}</div>
+        <div style="font-size:11px;color:var(--text-light)">${[m.especie,m.raza].filter(Boolean).map(escAttr).join(' · ')}${dueno?' · '+escAttr(nombreCliente(dueno)):''}</div>
+      </div>
+    </div>`;
+  }).join('');
+  sug.style.display = 'block';
+}
+function selectMas(mid, nombre) {
+  document.getElementById('c-mascota').value = mid;
+  document.getElementById('c-mas-txt').value = nombre;
+  hideMasSug();
+}
+function hideMasSug() { const sug = document.getElementById('c-mas-sug'); if(sug) sug.style.display = 'none'; }
+function setMascotaSelect(mid) {
+  const m = C.mas.find(x => x.id === mid);
+  document.getElementById('c-mascota').value = mid || '';
+  document.getElementById('c-mas-txt').value = m ? m.nombre : '';
+}
+
 function fillMedicoSelect(selId, selectedId) {
   const medicos = C.prof.filter(p => ['medico','medico_admin','dr','dra','admin'].includes(p.rol));
   const sel = document.getElementById(selId);
@@ -2095,9 +2158,11 @@ function formatHora12(h24) {
 
 function openModalCita(id){
   const isMedico = currentUser?.key === 'medico';
+  const esVet = esVeterinaria();
   editingCitaId=id||null;
   document.getElementById('modal-cita-title').textContent=id?'✏️ Editar Cita':'📅 Nueva Cita';
   fillSelect('c-paciente');
+  document.getElementById('c-mascota').value=''; document.getElementById('c-mas-txt').value='';
   fillMedicoSelect('c-medico');
   const fechaEl = document.getElementById('c-fecha');
   fechaEl.value = hoy();
@@ -2107,11 +2172,21 @@ function openModalCita(id){
   ['motivo','notas'].forEach(f=>document.getElementById('c-'+f).value='');
   dxElegidos=[]; renderDxElegidos(); ocultarSugerenciasDx();
   document.getElementById('c-estado').value='pendiente';
+  document.getElementById('c-duracion').value='30';
+
+  // Veterinaria: se pide mascota en vez de paciente y el servicio cambia;
+  // médico, fecha, hora, estado y notas se comportan igual que siempre.
+  const pacWrap = document.getElementById('c-paciente-wrap');
+  const masWrap = document.getElementById('c-mascota-wrap');
+  const durWrap = document.getElementById('c-duracion-wrap');
+  if(pacWrap) pacWrap.style.display = esVet ? 'none' : '';
+  if(masWrap) masWrap.style.display = esVet ? '' : 'none';
+  if(durWrap) durWrap.style.display = esVet ? '' : 'none';
 
   const esOptica = currentClinica?.tipo === 'optica';
   const motivoWrap = document.getElementById('c-motivo-wrap');
   if(motivoWrap) motivoWrap.style.display = esOptica ? 'none' : '';
-  document.getElementById('c-tipo').value = esOptica ? 'examen_visual' : isOdontologo() ? 'odontologia' : 'consulta';
+  fillServicioSelect(esVet ? 'consulta' : (esOptica ? 'examen_visual' : isOdontologo() ? 'odontologia' : 'consulta'));
   const motivoInput = document.getElementById('c-motivo');
   if(motivoInput && isOdontologo()) motivoInput.placeholder = 'Escribe el procedimiento dental (ej: limpieza, conducto...)';
   const motivoLabel = motivoWrap?.querySelector('label');
@@ -2137,29 +2212,34 @@ function openModalCita(id){
         return;
       }
       if(fechaEl._flatpickr) fechaEl._flatpickr.set('minDate', null);
-      setPacienteSelect('c-paciente', c.pacienteId);
+      if(esVet) setMascotaSelect(c.mascotaId); else setPacienteSelect('c-paciente', c.pacienteId);
       fechaEl.value=c.fecha;
       if(fechaEl._flatpickr) fechaEl._flatpickr.setDate(c.fecha, false);
       fillHoraSelect(c.hora, null);
       document.getElementById('c-motivo').value=c.motivo;
-      document.getElementById('c-tipo').value=c.tipo;
+      if(esVet) fillServicioSelect(c.tipo); else document.getElementById('c-tipo').value=c.tipo;
       document.getElementById('c-estado').value=c.estado;
       document.getElementById('c-notas').value=c.notas||'';
+      document.getElementById('c-duracion').value=c.duracionMin||30;
       if(c.medicoId) medicoSel.value=c.medicoId;
     }
   }
   openModalOverlay('modal-cita');
 }
 function openModalCitaP(pid){ openModalCita(); setPacienteSelect('c-paciente', pid); }
+function openModalCitaMascota(mid){ openModalCita(); setMascotaSelect(mid); }
 
 async function guardarCita(){
   if(!currentClinicaId){ toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
-  const pid=parseInt(document.getElementById('c-paciente').value);
+  const esVet = esVeterinaria();
   const fecha=document.getElementById('c-fecha').value;
   const hora=document.getElementById('c-hora').value;
   const motivo=document.getElementById('c-motivo').value.trim();
   const esOptica = currentClinica?.tipo === 'optica';
-  if(!pid||!fecha||!hora||(!motivo&&!esOptica)){ toast('Completa los campos obligatorios','error'); return; }
+  let pid=null, mid=null;
+  if(esVet) { mid = parseInt(document.getElementById('c-mascota').value) || null; if(!mid){ toast('Elige la mascota','error'); return; } }
+  else { pid = parseInt(document.getElementById('c-paciente').value) || null; if(!pid){ toast('Completa los campos obligatorios','error'); return; } }
+  if(!fecha||!hora||(!motivo&&!esOptica)){ toast('Completa los campos obligatorios','error'); return; }
   if(!editingCitaId && fecha < hoy()){ toast('No se pueden agendar citas en fechas pasadas','error'); return; }
   if(!editingCitaId && fecha === hoy()) {
     const minH = _getMinHoraHoy();
@@ -2167,14 +2247,35 @@ async function guardarCita(){
   }
   const isMedico = currentUser?.key === 'medico';
   const medicoId = (isMedico && !isSuperAdmin()) ? currentUser.id : (document.getElementById('c-medico').value||null);
-  const obj={pacienteId:pid,medicoId,fecha,hora,motivo,tipo:document.getElementById('c-tipo').value,estado:document.getElementById('c-estado').value,notas:document.getElementById('c-notas').value.trim()};
+  const duracionMin = esVet ? (parseInt(document.getElementById('c-duracion').value) || 30) : 30;
+  const obj={pacienteId:pid,mascotaId:mid,medicoId,fecha,hora,duracionMin,motivo,tipo:document.getElementById('c-tipo').value,estado:document.getElementById('c-estado').value,notas:document.getElementById('c-notas').value.trim()};
   setLoading(true);
+  const payload = toC(obj);
   let err;
-  if(editingCitaId){ const r=await sb.from('citas').update(toC(obj)).eq('id',editingCitaId); err=r.error; }
-  else { const r=await sb.from('citas').insert([toC(obj)]); err=r.error; }
+  ({ error: err } = editingCitaId
+    ? await sb.from('citas').update(payload).eq('id',editingCitaId)
+    : await sb.from('citas').insert([payload]));
+  // mascota_id es indispensable en veterinaria: si la columna todavía no existe
+  // en Supabase no se puede degradar sin perder a quién pertenece la cita.
+  if(err && esVet && _faltaColumna(err,'mascota_id')) {
+    setLoading(false);
+    toast('Falta ejecutar el script de veterinaria en Supabase (columna mascota_id de citas)','error');
+    return;
+  }
+  const OPCIONALES = ['duracion_min','motivo_cancelacion'];
+  const faltantes = [];
+  while(err && OPCIONALES.some(col => (col in payload) && _faltaColumna(err, col))) {
+    const col = OPCIONALES.find(c => (c in payload) && _faltaColumna(err, c));
+    faltantes.push(col);
+    delete payload[col];
+    ({ error: err } = editingCitaId
+      ? await sb.from('citas').update(payload).eq('id',editingCitaId)
+      : await sb.from('citas').insert([payload]));
+  }
   setLoading(false);
   if(err){ toast('Error: '+err.message,'error'); return; }
   toast(editingCitaId?'Cita actualizada':'Cita registrada ✅');
+  if(faltantes.length) toast('Cita guardada, pero faltan columnas en Supabase: '+faltantes.join(', '), 'warning');
   if(!editingCitaId) logActivity('cita');
   closeModal('modal-cita');
   await loadAll();
@@ -2192,6 +2293,7 @@ async function eliminarCita(id){
   toast('Cita eliminada');
   await loadAll(); renderCitas();
   if(currentView==='paciente-detalle') renderDetalleP(currentPatientId);
+  if(currentView==='mascota-detalle') renderDetalleMascota(currentMascotaId);
   updateBadges();
 }
 
@@ -2229,8 +2331,9 @@ async function marcarCitaCompletada(id){
   atendidosFecha=c.fecha;
   toast(`Cita de ${nombre} marcada como completada ✅`,'success');
   await loadAll(); renderView(currentView); updateBadges();
-  // Abrir nota de evolución automáticamente
-  setTimeout(() => abrirNotaEvolucion(c.pacienteId, c), 400);
+  // Abrir nota de evolución automáticamente — solo para pacientes humanos;
+  // la nota de consulta veterinaria llega con las notas clínicas veterinarias.
+  if(c.pacienteId) setTimeout(() => abrirNotaEvolucion(c.pacienteId, c), 400);
 }
 
 function abrirNotaEvolucion(pacienteId, cita) {
@@ -10438,7 +10541,7 @@ async function eliminarMascota(id) {
 // Información y Expediente. Citas, notas y recetas veterinarias llegan cuando
 // esos módulos se adapten a mascota_id (no duplican esta ficha).
 function switchTabMascota(tabId, btn) {
-  ['mtab-info', 'mtab-expediente'].forEach(id => { const e = document.getElementById(id); if(e) e.style.display = 'none'; });
+  ['mtab-info', 'mtab-citas', 'mtab-expediente'].forEach(id => { const e = document.getElementById(id); if(e) e.style.display = 'none'; });
   document.querySelectorAll('#view-mascota-detalle .tab').forEach(t => t.classList.remove('active'));
   document.getElementById(tabId).style.display = 'block';
   if(btn) btn.classList.add('active');
@@ -10464,6 +10567,7 @@ function renderDetalleMascota(mid) {
         ${m.alergias ? `<div style="margin-top:6px;background:rgba(220,38,38,.25);border-radius:6px;padding:5px 10px;font-size:11px;font-weight:600">⚠ Alergias: ${escAttr(m.alergias)}</div>` : ''}
       </div>
       <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff" onclick="openModalCitaMascota(${m.id})">📅 Nueva Cita</button>
         <button class="btn" style="background:rgba(255,255,255,.15);color:#fff" onclick="openModalMascota(${m.id})">✏️ Editar</button>
       </div>
     </div>`;
@@ -10502,6 +10606,37 @@ function renderDetalleMascota(mid) {
       <p class="text-light">Estado: ${estadoTag(m.estado || 'activo')}</p>
       ${m.observaciones ? `<div class="mt-16"><p class="text-light" style="margin-bottom:6px">Observaciones:</p><div style="font-size:13px;line-height:1.7;background:var(--bg);padding:10px 12px;border-radius:8px">${escAttr(m.observaciones)}</div></div>` : ''}
     </div>`;
+
+  const citasMascota = C.c.filter(c => c.mascotaId === mid).sort((a,b) => b.fecha.localeCompare(a.fecha) || b.hora.localeCompare(a.hora));
+  document.getElementById('mtab-citas').innerHTML = `<div class="card">
+    <div class="card-header"><h3>📅 Citas</h3><button class="btn btn-primary btn-sm" onclick="openModalCitaMascota(${mid})">+ Nueva</button></div>
+    ${citasMascota.length ? citasMascota.map(c => {
+      const abierta = _citaAbierta(c);
+      const [,mm,dd] = c.fecha.split('-');
+      const MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+      const veterinario = C.prof.find(pr => pr.id === c.medicoId);
+      return `<div class="cita-item ${c.estado}" style="gap:10px;flex-wrap:wrap">
+        <div style="width:38px;flex-shrink:0;text-align:center;background:var(--primary-light);border-radius:8px;padding:5px 2px">
+          <div style="font-size:13px;font-weight:800;color:var(--primary);line-height:1">${dd}</div>
+          <div style="font-size:10px;color:var(--primary);text-transform:uppercase;font-weight:600">${MESES[parseInt(mm)-1]}</div>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div class="cita-paciente">${c.hora} · ${escAttr(c.motivo||'')}</div>
+          <div class="cita-motivo">
+            <span class="tag tag-cyan" style="font-size:10px">${SERVICIOS_VET.find(([v])=>v===c.tipo)?.[1] || escAttr(c.tipo||'')}</span>
+            ${veterinario ? `<span style="font-size:11px;color:var(--text-light);margin-left:6px">${escAttr(veterinario.nombre)}</span>` : ''}
+            ${c.duracionMin ? `<span style="font-size:11px;color:var(--text-light);margin-left:6px">${c.duracionMin} min</span>` : ''}
+          </div>
+        </div>
+        ${estadoTag(c.estado)}
+        <div class="actions-cell" style="gap:6px;flex-wrap:wrap">
+          ${abierta ? `<button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;font-size:11px;font-weight:700;white-space:nowrap" onclick="marcarCitaCompletada(${c.id})">✅ Atendida</button>` : ''}
+          <button class="btn btn-secondary btn-sm" onclick="openModalCita(${c.id})">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="eliminarCita(${c.id})">🗑️</button>
+        </div>
+      </div>`;
+    }).join('') : '<div class="empty-state"><div class="empty-icon">📅</div><p>Sin citas registradas</p></div>'}
+  </div>`;
 
   document.getElementById('mtab-expediente').innerHTML = `
   <div class="card">
