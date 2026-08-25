@@ -1525,3 +1525,7 @@ body.dark .hosp-card{background:#0F172A}
   .seg-item{flex-direction:column;gap:3px}
   .seg-hora{min-width:0}
 }
+
+/* Servicios no clínicos (grooming, guardería, baño): otro color en la agenda
+   para distinguirlos de un vistazo de la atención médica */
+.cal-ev.no-clinico{background:linear-gradient(135deg,#8B5CF6,#7C3AED)}

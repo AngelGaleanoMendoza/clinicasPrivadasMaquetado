@@ -2146,9 +2146,20 @@ function renderCitas(){
 const SERVICIOS_VET = [
   ['consulta','Consulta general'], ['control','Control / seguimiento'],
   ['vacunacion','Vacunación'], ['desparasitacion','Desparasitación'],
-  ['cirugia','Cirugía'], ['grooming','Grooming / estética'],
-  ['hospitalizacion','Hospitalización'], ['emergencia','Emergencia']
+  ['cirugia','Cirugía'], ['emergencia','Emergencia'],
+  ['hospitalizacion','Hospitalización'],
+  ['grooming','Grooming / estética'], ['guarderia','Guardería'], ['bano','Baño']
 ];
+// Servicios que no son clínicos: no abren consulta al completarse ni aparecen
+// como atención médica, aunque se agendan igual que el resto.
+const SERVICIOS_NO_CLINICOS = ['grooming','guarderia','bano'];
+const _esServicioNoClinico = tipo => SERVICIOS_NO_CLINICOS.includes(tipo);
+// Duración habitual por servicio: un baño no dura lo mismo que una consulta
+const DURACION_SERVICIO = {
+  consulta:30, control:20, vacunacion:15, desparasitacion:15,
+  cirugia:90, emergencia:45, hospitalizacion:30,
+  grooming:90, guarderia:60, bano:60
+};
 // El HTML solo trae los tipos humanos; se guardan aquí para poder restaurarlos
 // si una clínica veterinaria ya reescribió el select en esta misma sesión.
 const SERVICIOS_HUMANO = [
@@ -2162,6 +2173,24 @@ function fillServicioSelect(selected) {
   const opciones = esVeterinaria() ? SERVICIOS_VET : SERVICIOS_HUMANO;
   sel.innerHTML = opciones.map(([v,l]) => `<option value="${v}">${l}</option>`).join('');
   if(selected) sel.value = selected;
+  sel.onchange = esVeterinaria() ? onServicioChange : null;
+}
+
+// Cambiar de servicio ajusta la duración sugerida, salvo que ya se editara
+let _duracionTocadaAMano = false;
+function onServicioChange() {
+  const dur = document.getElementById('c-duracion');
+  const tipo = document.getElementById('c-tipo')?.value;
+  if(dur && !_duracionTocadaAMano && DURACION_SERVICIO[tipo]) {
+    const sugerida = String(DURACION_SERVICIO[tipo]);
+    // Solo si la duración sugerida existe como opción del select
+    if([...dur.options].some(o => o.value === sugerida)) dur.value = sugerida;
+  }
+  // El motivo deja de ser obligatorio en servicios no clínicos
+  const wrap = document.getElementById('c-motivo-wrap');
+  const lbl = wrap?.querySelector('label');
+  if(lbl && esVeterinaria()) lbl.textContent = _esServicioNoClinico(tipo) ? 'Observaciones' : 'Motivo de Consulta *';
+  onCitaHorarioChange();
 }
 
 // Buscador de mascota para el modal de cita, molde de filterPacSug/selectPac/hidePacSug
@@ -2371,6 +2400,7 @@ function openModalCita(id){
   dxElegidos=[]; renderDxElegidos(); ocultarSugerenciasDx();
   document.getElementById('c-estado').value='pendiente';
   document.getElementById('c-duracion').value='30';
+  _duracionTocadaAMano = false;
 
   // Veterinaria: se pide mascota en vez de paciente y el servicio cambia;
   // médico, fecha, hora, estado y notas se comportan igual que siempre.
@@ -2387,8 +2417,14 @@ function openModalCita(id){
   fillServicioSelect(esVet ? 'consulta' : (esOptica ? 'examen_visual' : isOdontologo() ? 'odontologia' : 'consulta'));
   const motivoInput = document.getElementById('c-motivo');
   if(motivoInput && isOdontologo()) motivoInput.placeholder = 'Escribe el procedimiento dental (ej: limpieza, conducto...)';
+  // La etiqueta se reescribe SIEMPRE: si no, una clínica que abrió el modal como
+  // veterinaria dejaba "Observaciones" pegado para el resto de la sesión.
   const motivoLabel = motivoWrap?.querySelector('label');
-  if(motivoLabel && isOdontologo()) motivoLabel.textContent = 'Procedimiento / Motivo *';
+  if(motivoLabel) {
+    motivoLabel.textContent = isOdontologo() ? 'Procedimiento / Motivo *'
+      : (esVet && _esServicioNoClinico(document.getElementById('c-tipo').value)) ? 'Observaciones'
+      : 'Motivo de Consulta *';
+  }
 
   // Restricción: médico solo puede crear citas en su propio nombre
   const medicoSel = document.getElementById('c-medico');
@@ -2440,7 +2476,9 @@ async function guardarCita(){
   let pid=null, mid=null;
   if(esVet) { mid = parseInt(document.getElementById('c-mascota').value) || null; if(!mid){ toast('Elige la mascota','error'); return; } }
   else { pid = parseInt(document.getElementById('c-paciente').value) || null; if(!pid){ toast('Completa los campos obligatorios','error'); return; } }
-  if(!fecha||!hora||(!motivo&&!esOptica)){ toast('Completa los campos obligatorios','error'); return; }
+  const tipoElegido = document.getElementById('c-tipo').value;
+  const motivoOpcional = esOptica || (esVet && _esServicioNoClinico(tipoElegido));
+  if(!fecha||!hora||(!motivo&&!motivoOpcional)){ toast('Completa los campos obligatorios','error'); return; }
   if(!editingCitaId && fecha < hoy()){ toast('No se pueden agendar citas en fechas pasadas','error'); return; }
   if(!editingCitaId && fecha === hoy()) {
     const minH = _getMinHoraHoy();
@@ -2449,7 +2487,7 @@ async function guardarCita(){
   const isMedico = currentUser?.key === 'medico';
   const medicoId = (isMedico && !isSuperAdmin()) ? currentUser.id : (document.getElementById('c-medico').value||null);
   const duracionMin = esVet ? (parseInt(document.getElementById('c-duracion').value) || 30) : 30;
-  const tipoCita = document.getElementById('c-tipo').value;
+  const tipoCita = tipoElegido;
 
   // Doble reserva: se avisa y se deja decidir. Una emergencia pasa sin fricción.
   const choques = _haySolape(medicoId, fecha, hora, duracionMin, editingCitaId);
@@ -2560,7 +2598,7 @@ async function marcarCitaCompletada(id){
   // Abrir nota de evolución automáticamente — solo para pacientes humanos;
   // la nota de consulta veterinaria llega con las notas clínicas veterinarias.
   if(c.pacienteId) setTimeout(() => abrirNotaEvolucion(c.pacienteId, c), 400);
-  else if(c.mascotaId) setTimeout(() => abrirNotaEvolucionMascota(c.mascotaId, c), 400);
+  else if(c.mascotaId && !_esServicioNoClinico(c.tipo)) setTimeout(() => abrirNotaEvolucionMascota(c.mascotaId, c), 400);
 }
 
 function abrirNotaEvolucionMascota(mascotaId, cita) {
@@ -11416,7 +11454,8 @@ function _citaBloqueHTML(c, rango, paso, colIdx, carril, carriles) {
   const filas = Math.max(1, Math.round(dur / paso));
   const s = _sujetoCita(c);
   const solapada = carriles > 1 ? ' solapada' : '';
-  return `<div class="cal-ev ${c.estado}${solapada}"
+  const noClinico = _esServicioNoClinico(c.tipo) ? ' no-clinico' : '';
+  return `<div class="cal-ev ${c.estado}${solapada}${noClinico}"
     style="grid-column:${colIdx + 2};grid-row:${fila} / span ${filas};--carril:${carril};--carriles:${carriles}"
     onclick="verResumenCita(${c.id})" title="${escAttr((s?s.titulo+' · ':'') + (c.motivo||''))}">
     <div class="cal-ev-hora">${formatHora12(c.hora)}</div>
