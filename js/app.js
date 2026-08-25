@@ -141,6 +141,9 @@ const fromCli = r => ({ id:r.id, nombre:r.nombre, apellidos:r.apellidos||'', ide
 const toCli   = x => ({ nombre:x.nombre, apellidos:x.apellidos||null, identificacion:x.identificacion||null, telefono:x.telefono||null, telefono_alt:x.telefonoAlt||null, email:x.email||null, direccion:x.direccion||null, notas:x.notas||null, estado:x.estado||'activo', fecha_registro:x.fechaRegistro||hoy(), clinica_id:currentClinicaId });
 const fromMas = r => ({ id:r.id, clienteId:r.cliente_id, nombre:r.nombre, especie:r.especie, raza:r.raza, sexo:r.sexo, fechaNac:r.fecha_nac, color:r.color, microchip:r.microchip, esterilizado:r.esterilizado||'no', senas:r.senas_particulares, alergias:r.alergias, observaciones:r.observaciones, estado:r.estado||'activo', fotoUrl:r.foto_url||null, expediente:r.expediente||null, fechaRegistro:r.fecha_registro });
 const toMas   = x => ({ cliente_id:x.clienteId||null, nombre:x.nombre, especie:x.especie||null, raza:x.raza||null, sexo:x.sexo||null, fecha_nac:x.fechaNac||null, color:x.color||null, microchip:x.microchip||null, esterilizado:x.esterilizado||'no', senas_particulares:x.senas||null, alergias:x.alergias||null, observaciones:x.observaciones||null, estado:x.estado||'activo', foto_url:x.fotoUrl||null, fecha_registro:x.fechaRegistro||hoy(), clinica_id:currentClinicaId });
+// Expediente clínico de la mascota: una fila por mascota, igual que el expediente humano
+const fromExpMas = r => ({ id:r.id, mascotaId:r.mascota_id, peso:r.peso, temperatura:r.temperatura, fc:r.fc, fr:r.fr, condicionCorporal:r.condicion_corporal, enfermedadesCronicas:r.enfermedades_cronicas, cirugias:r.cirugias_previas, dieta:r.dieta, ambiente:r.ambiente, conviveCon:r.convive_con, reproductivo:r.reproductivo, temperamento:r.temperamento, observacionesMedicas:r.observaciones_medicas });
+const toExpMas    = x => ({ mascota_id:x.mascotaId, peso:x.peso||null, temperatura:x.temperatura||null, fc:x.fc||null, fr:x.fr||null, condicion_corporal:x.condicionCorporal||null, enfermedades_cronicas:x.enfermedadesCronicas||null, cirugias_previas:x.cirugias||null, dieta:x.dieta||null, ambiente:x.ambiente||null, convive_con:x.conviveCon||null, reproductivo:x.reproductivo||null, temperamento:x.temperamento||null, observaciones_medicas:x.observacionesMedicas||null, clinica_id:currentClinicaId });
 
 // ════════════════════ LOAD DATA ════════════════════
 async function loadAll() {
@@ -193,14 +196,16 @@ async function loadAll() {
     // Tablas veterinarias (opcionales, igual que las odontológicas): solo se
     // piden en clínicas veterinarias y se toleran si aún no existen en Supabase.
     if(esVeterinaria() || isSuperAdmin()) {
-      const [rcli, rmas] = await Promise.all([
+      const [rcli, rmas, rexpMas] = await Promise.all([
         sb.from('clientes').select('*').eq('clinica_id', currentClinicaId).order('nombre'),
         sb.from('mascotas').select('*').eq('clinica_id', currentClinicaId).order('nombre'),
+        sb.from('expediente_mascota').select('*').eq('clinica_id', currentClinicaId),
       ]);
       C.cli = rcli.error ? [] : (rcli.data||[]).map(fromCli);
       C.mas = rmas.error ? [] : (rmas.data||[]).map(fromMas);
+      C.expMas = rexpMas.error ? [] : (rexpMas.data||[]).map(fromExpMas);
     } else {
-      C.cli = []; C.mas = [];
+      C.cli = []; C.mas = []; C.expMas = [];
     }
     setDbStatus(true);
     // Notify once per session about expiring/expired products
@@ -754,7 +759,7 @@ function _confirmOk()     { document.getElementById('modal-confirm').classList.r
 function _confirmCancel() { document.getElementById('modal-confirm').classList.remove('open'); if(_confirmResolve) { _confirmResolve(false); _confirmResolve=null; } }
 
 // ════════════════════ NAVIGATION ════════════════════
-let currentView='dashboard', editingId=null, editingCitaId=null, editingMedId=null, editingNotaId=null, currentPatientId=null, selCalDate=hoy(), currentResumenCitaId=null, currentNotaId=null;
+let currentView='dashboard', editingId=null, editingCitaId=null, editingMedId=null, editingNotaId=null, currentPatientId=null, currentMascotaId=null, selCalDate=hoy(), currentResumenCitaId=null, currentNotaId=null;
 
 async function navigate(view, patientId) {
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
@@ -763,10 +768,10 @@ async function navigate(view, patientId) {
   if(el) el.classList.add('active');
   const mi=document.querySelector(`.menu-item[onclick*="'${view}'"]`);
   if(mi) mi.classList.add('active');
-  const titles={dashboard:'Dashboard',expedientes:'Expedientes Clínicos',pacientes:'Pacientes',citas:'Citas',agendas:'Agendas',medicaciones:'Medicaciones',notas:'Notas Clínicas',atendidos:'Atendidos por Día',estadisticas:'Estadísticas',configuracion:'Configuración Clínica',exportar:'Exportar / Enviar','paciente-detalle':'Expediente del Paciente',admin:'Administración',inventario:'Inventario',finanzas:'Finanzas',procedimientos:'Procedimientos Odontológicos',farmacia:'Farmacia',clientes:'Clientes',mascotas:'Mascotas'};
+  const titles={dashboard:'Dashboard',expedientes:'Expedientes Clínicos',pacientes:'Pacientes',citas:'Citas',agendas:'Agendas',medicaciones:'Medicaciones',notas:'Notas Clínicas',atendidos:'Atendidos por Día',estadisticas:'Estadísticas',configuracion:'Configuración Clínica',exportar:'Exportar / Enviar','paciente-detalle':'Expediente del Paciente',admin:'Administración',inventario:'Inventario',finanzas:'Finanzas',procedimientos:'Procedimientos Odontológicos',farmacia:'Farmacia',clientes:'Clientes',mascotas:'Mascotas','mascota-detalle':'Ficha de la Mascota'};
   document.getElementById('page-title').textContent = titles[view]||view;
   currentView=view;
-  if(patientId) currentPatientId=patientId;
+  if(patientId) { if(view==='mascota-detalle') currentMascotaId=patientId; else currentPatientId=patientId; }
   // Guardar vista actual para restaurarla al recargar
   if(currentUser) localStorage.setItem('lm_last_view', view);
   const sa   = isSuperAdmin();
@@ -793,9 +798,10 @@ async function navigate(view, patientId) {
   // no tienen sentido y se redirigen a sus equivalentes.
   if(esVeterinaria() && view==='pacientes')   { navigate('mascotas'); return; }
   if(esVeterinaria() && view==='expedientes') { navigate('mascotas'); return; }
-  if((view==='clientes' || view==='mascotas') && !esVeterinaria() && !sa) { navigate('dashboard'); return; }
+  if((view==='clientes' || view==='mascotas' || view==='mascota-detalle') && !esVeterinaria() && !sa) { navigate('dashboard'); return; }
   if(view==='clientes' && !hasPermiso('pacientes')) { navigate('dashboard'); return; }
   if(view==='mascotas' && !hasPermiso('pacientes')) { navigate('dashboard'); return; }
+  if(view==='mascota-detalle' && !hasPermiso('pacientes')) { navigate('dashboard'); return; }
   // Rutas especiales sin loadAll
   if(view==='finanzas'){
     renderFinanzas(); if(window.innerWidth<=768) closeSidebar(); return;
@@ -830,6 +836,7 @@ function renderView(v) {
     case 'procedimientos': renderProcedimientosView(); break;
     case 'clientes': renderClientes(); break;
     case 'mascotas': renderMascotas(); break;
+    case 'mascota-detalle': renderDetalleMascota(currentMascotaId); break;
   }
   updateBadges();
 }
@@ -3854,7 +3861,7 @@ function globalSearch(q){
   dd.style.display='block';
 }
 function selectSearchResult(id){ document.getElementById('global-search').value=''; document.getElementById('search-dropdown').style.display='none'; navigate('paciente-detalle',id); }
-function selectSearchResultMascota(id){ document.getElementById('global-search').value=''; document.getElementById('search-dropdown').style.display='none'; navigate('mascotas'); openModalMascota(id); }
+function selectSearchResultMascota(id){ document.getElementById('global-search').value=''; document.getElementById('search-dropdown').style.display='none'; navigate('mascota-detalle',id); }
 
 // El texto del buscador de la barra superior sigue al tipo de clínica
 function _syncBuscadorGlobal(){
@@ -10103,7 +10110,7 @@ function _pintarClientes() {
         </div>
         <div class="cli-mascotas">
           ${suyas.length
-            ? suyas.map(m => `<span class="cli-pet" onclick="event.stopPropagation();openModalMascota(${m.id})" title="Editar ${escAttr(m.nombre)}">${especieIcon(m.especie)} ${escAttr(m.nombre)}</span>`).join('')
+            ? suyas.map(m => `<span class="cli-pet" onclick="event.stopPropagation();navigate('mascota-detalle',${m.id})" title="Ver ficha de ${escAttr(m.nombre)}">${especieIcon(m.especie)} ${escAttr(m.nombre)}</span>`).join('')
             : '<span class="cli-pet vacio">Sin mascotas registradas</span>'}
           <span class="cli-pet add" onclick="event.stopPropagation();openModalMascota(null,${c.id})" title="Agregar mascota a este cliente">+ Mascota</span>
         </div>
@@ -10238,7 +10245,7 @@ function _pintarMascotas() {
 
   cont.innerHTML = `<div class="mas-grid">${lista.map(m => {
     const dueno = C.cli.find(c => c.id === m.clienteId);
-    return `<div class="mas-card">
+    return `<div class="mas-card" onclick="navigate('mascota-detalle',${m.id})" style="cursor:pointer" title="Ver ficha de ${escAttr(m.nombre)}">
       <div class="mas-thumb" style="background:${colAvatar(m.id||0)}">
         ${m.fotoUrl ? `<img src="${escAttr(m.fotoUrl)}" alt="${escAttr(m.nombre)}" loading="lazy">`
                     : `<span>${especieIcon(m.especie)}</span>`}
@@ -10252,8 +10259,8 @@ function _pintarMascotas() {
                 : '<div class="mas-dueno sin">🧑 Sin dueño asignado</div>'}
         ${m.alergias ? `<div class="mas-alerta">⚠ ${escAttr(m.alergias)}</div>` : ''}
         <div class="mas-acciones">
-          <button class="btn btn-secondary btn-sm" onclick="openModalMascota(${m.id})">✏️ Editar</button>
-          <button class="btn btn-danger btn-sm" onclick="eliminarMascota(${m.id})" title="Eliminar mascota">🗑️</button>
+          <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openModalMascota(${m.id})">✏️ Editar</button>
+          <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();eliminarMascota(${m.id})" title="Eliminar mascota">🗑️</button>
         </div>
       </div>
     </div>`;
@@ -10424,4 +10431,164 @@ async function eliminarMascota(id) {
   _pintarMascotas();
   if(currentView === 'clientes') _pintarClientes();
   updateBadges();
+}
+
+// ════════════════════ DETALLE MASCOTA (VETERINARIA) ════════════════════
+// Ficha de la mascota, molde de renderDetalleP. Solo dos pestañas por ahora:
+// Información y Expediente. Citas, notas y recetas veterinarias llegan cuando
+// esos módulos se adapten a mascota_id (no duplican esta ficha).
+function switchTabMascota(tabId, btn) {
+  ['mtab-info', 'mtab-expediente'].forEach(id => { const e = document.getElementById(id); if(e) e.style.display = 'none'; });
+  document.querySelectorAll('#view-mascota-detalle .tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(tabId).style.display = 'block';
+  if(btn) btn.classList.add('active');
+}
+
+function renderDetalleMascota(mid) {
+  const m = C.mas.find(x => x.id === mid);
+  if(!m) { navigate('mascotas'); return; }
+  const dueno = C.cli.find(c => c.id === m.clienteId);
+
+  document.getElementById('mas-detalle-header').innerHTML = `
+    <div class="patient-detail-header">
+      ${m.fotoUrl ? `<img src="${escAttr(m.fotoUrl)}" class="patient-detail-avatar" style="object-fit:cover;border:3px solid rgba(255,255,255,.4)" alt="foto">`
+                  : `<div class="patient-detail-avatar" style="background:${colAvatar(m.id)}">${especieIcon(m.especie)}</div>`}
+      <div class="patient-detail-info">
+        <h2>${escAttr(m.nombre)}</h2>
+        <div class="meta">
+          <span>${[m.especie, m.raza].filter(Boolean).map(escAttr).join(' · ') || 'Sin especie'}</span>
+          <span>🎂 ${calcEdadMascota(m.fechaNac)}</span>
+          ${m.sexo ? `<span>${m.sexo==='M'?'♂ Macho':'♀ Hembra'}</span>` : ''}
+          ${dueno ? `<span>🧑 ${escAttr(nombreCliente(dueno))}</span>` : ''}
+        </div>
+        ${m.alergias ? `<div style="margin-top:6px;background:rgba(220,38,38,.25);border-radius:6px;padding:5px 10px;font-size:11px;font-weight:600">⚠ Alergias: ${escAttr(m.alergias)}</div>` : ''}
+      </div>
+      <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" style="background:rgba(255,255,255,.15);color:#fff" onclick="openModalMascota(${m.id})">✏️ Editar</button>
+      </div>
+    </div>`;
+
+  const exp = C.expMas.find(x => x.mascotaId === mid) || {};
+  const imc = null; // no aplica en veterinaria: se usa condición corporal (1-9) en su lugar
+
+  document.getElementById('mtab-info').innerHTML = `
+    <div class="grid-2">
+      <div class="card"><h3 style="margin-bottom:14px;font-size:14px">📋 Datos de la Mascota</h3>
+        <table style="width:100%">${[
+          ['Especie', escAttr(m.especie) || '—'],
+          ['Raza', escAttr(m.raza) || '—'],
+          ['Fecha de nacimiento', m.fechaNac ? `${formatFecha(m.fechaNac)} <span class="tag tag-cyan" style="font-size:10px;margin-left:4px">${calcEdadMascota(m.fechaNac)}</span>` : '—'],
+          ['Color / capa', escAttr(m.color) || '—'],
+          ['Microchip', escAttr(m.microchip) || 'Sin registrar'],
+          ['Esterilizado', m.esterilizado==='si'?'Sí':m.esterilizado==='no'?'No':'Se desconoce'],
+          ['Registro', formatFecha(m.fechaRegistro)]
+        ].map(([k,v]) => `<tr><td class="text-light" style="padding:6px 0;width:150px">${k}</td><td style="padding:6px 0;font-weight:600;font-size:13px">${v}</td></tr>`).join('')}</table>
+      </div>
+      <div class="card"><h3 style="margin-bottom:14px;font-size:14px">🧑 Dueño</h3>
+        ${dueno ? `
+          <table style="width:100%">${[
+            ['Nombre', escAttr(nombreCliente(dueno))],
+            ['Teléfono', escAttr(dueno.telefono) || '—'],
+            ['Correo', escAttr(dueno.email) || '—'],
+            ['Identificación', escAttr(dueno.identificacion) || '—']
+          ].map(([k,v]) => `<tr><td class="text-light" style="padding:6px 0;width:120px">${k}</td><td style="padding:6px 0;font-weight:600;font-size:13px">${v}</td></tr>`).join('')}</table>
+          <button class="btn btn-secondary btn-sm" style="margin-top:10px" onclick="openModalCliente(${dueno.id})">✏️ Editar cliente</button>
+        ` : `<p class="text-light">Sin dueño asignado.</p><button class="btn btn-secondary btn-sm" onclick="openModalMascota(${m.id})">Asignar dueño</button>`}
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3 style="margin-bottom:10px;font-size:14px">📝 Señas y Observaciones</h3>
+      ${m.senas ? `<p class="text-light" style="margin-bottom:8px">Señas particulares: <strong style="color:var(--text)">${escAttr(m.senas)}</strong></p>` : ''}
+      <p class="text-light">Estado: ${estadoTag(m.estado || 'activo')}</p>
+      ${m.observaciones ? `<div class="mt-16"><p class="text-light" style="margin-bottom:6px">Observaciones:</p><div style="font-size:13px;line-height:1.7;background:var(--bg);padding:10px 12px;border-radius:8px">${escAttr(m.observaciones)}</div></div>` : ''}
+    </div>`;
+
+  document.getElementById('mtab-expediente').innerHTML = `
+  <div class="card">
+    <div class="card-header"><h3>📁 Expediente Clínico</h3>
+      <button class="btn btn-primary btn-sm" onclick="guardarExpedienteMascota(${mid})">💾 Guardar</button>
+    </div>
+
+    <div class="exp-section">
+      <div class="exp-section-title">⚡ Signos Vitales</div>
+      <div class="vitales-grid">
+        <div class="vital-card"><div class="v-val">${exp.peso||'—'}</div><div class="v-lbl">Peso kg</div></div>
+        <div class="vital-card"><div class="v-val">${exp.temperatura?exp.temperatura+'°':'—'}</div><div class="v-lbl">Temp.</div></div>
+        <div class="vital-card"><div class="v-val">${exp.fc||'—'}</div><div class="v-lbl">FC lpm</div></div>
+        <div class="vital-card"><div class="v-val">${exp.fr||'—'}</div><div class="v-lbl">FR rpm</div></div>
+        <div class="vital-card"><div class="v-val">${exp.condicionCorporal||'—'}</div><div class="v-lbl">Cond. corporal</div></div>
+      </div>
+      <div class="form-grid" style="margin-top:12px">
+        <div class="form-group"><label>Peso (kg)</label><input type="number" id="expm-peso" value="${exp.peso||''}" placeholder="12.5" step="0.1"></div>
+        <div class="form-group"><label>Temperatura (°C)</label><input type="number" id="expm-temperatura" value="${exp.temperatura||''}" placeholder="38.5" step="0.1"></div>
+        <div class="form-group"><label>Frecuencia cardíaca (lpm)</label><input type="number" id="expm-fc" value="${exp.fc||''}" placeholder="90"></div>
+        <div class="form-group"><label>Frecuencia respiratoria (rpm)</label><input type="number" id="expm-fr" value="${exp.fr||''}" placeholder="24"></div>
+        <div class="form-group"><label>Condición corporal (1–9)</label><input type="number" id="expm-condicionCorporal" value="${exp.condicionCorporal||''}" placeholder="5" min="1" max="9"></div>
+      </div>
+    </div>
+
+    <div class="exp-section">
+      <div class="exp-section-title">🏡 Manejo y Entorno</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Dieta</label><input type="text" id="expm-dieta" value="${escAttr(exp.dieta||'')}" placeholder="Concentrado, casera, mixta..."></div>
+        <div class="form-group"><label>Ambiente</label><select id="expm-ambiente">
+          <option value="">—</option>
+          ${['interior','exterior','mixto'].map(v=>`<option value="${v}" ${exp.ambiente===v?'selected':''}>${v}</option>`).join('')}
+        </select></div>
+        <div class="form-group"><label>Convive con</label><input type="text" id="expm-conviveCon" value="${escAttr(exp.conviveCon||'')}" placeholder="Otros perros, gatos, niños..."></div>
+        <div class="form-group"><label>Estado reproductivo</label><input type="text" id="expm-reproductivo" value="${escAttr(exp.reproductivo||'')}" placeholder="Sin celos, en gestación..."></div>
+        <div class="form-group full"><label>Temperamento</label><input type="text" id="expm-temperamento" value="${escAttr(exp.temperamento||'')}" placeholder="Dócil, ansioso, agresivo con extraños..."></div>
+      </div>
+    </div>
+
+    <div class="exp-section">
+      <div class="exp-section-title">🏥 Antecedentes Clínicos</div>
+      <div class="form-grid cols-1">
+        <div class="form-group"><label>Enfermedades Crónicas</label><textarea id="expm-enfermedadesCronicas" placeholder="Insuficiencia renal, diabetes...">${escAttr(exp.enfermedadesCronicas||'')}</textarea></div>
+        <div class="form-group"><label>Cirugías Previas</label><textarea id="expm-cirugias" placeholder="Esterilización 2022, extracción dental...">${escAttr(exp.cirugias||'')}</textarea></div>
+      </div>
+    </div>
+
+    <div class="exp-section">
+      <div class="exp-section-title">💉 Alergias</div>
+      <div class="form-group full" style="margin-bottom:0">
+        <label>Alergias conocidas (del perfil de la mascota)</label>
+        <div style="padding:10px 14px;background:${m.alergias?'#FEF2F2':'var(--bg)'};border:1.5px solid ${m.alergias?'#FECACA':'var(--border)'};border-radius:10px;font-size:13px;color:${m.alergias?'#DC2626':'var(--text-light)'}">
+          ${m.alergias?'⚠️ '+escAttr(m.alergias):'Sin alergias registradas — edita la mascota para agregar'}
+        </div>
+      </div>
+      <div class="form-group full"><label>Observaciones Médicas Adicionales</label><textarea id="expm-observacionesMedicas" placeholder="Notas del veterinario sobre el expediente...">${escAttr(exp.observacionesMedicas||'')}</textarea></div>
+    </div>
+  </div>`;
+}
+
+async function guardarExpedienteMascota(mid) {
+  if(!currentClinicaId) { toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
+  const obj = {
+    mascotaId: mid,
+    peso: document.getElementById('expm-peso').value,
+    temperatura: document.getElementById('expm-temperatura').value,
+    fc: document.getElementById('expm-fc').value,
+    fr: document.getElementById('expm-fr').value,
+    condicionCorporal: document.getElementById('expm-condicionCorporal').value,
+    dieta: document.getElementById('expm-dieta').value.trim(),
+    ambiente: document.getElementById('expm-ambiente').value,
+    conviveCon: document.getElementById('expm-conviveCon').value.trim(),
+    reproductivo: document.getElementById('expm-reproductivo').value.trim(),
+    temperamento: document.getElementById('expm-temperamento').value.trim(),
+    enfermedadesCronicas: document.getElementById('expm-enfermedadesCronicas').value.trim(),
+    cirugias: document.getElementById('expm-cirugias').value.trim(),
+    observacionesMedicas: document.getElementById('expm-observacionesMedicas').value.trim()
+  };
+  setLoading(true);
+  const existing = C.expMas.find(x => x.mascotaId === mid);
+  let error;
+  if(existing) { const r = await sb.from('expediente_mascota').update(toExpMas(obj)).eq('id', existing.id); error = r.error; }
+  else { const r = await sb.from('expediente_mascota').insert([toExpMas(obj)]); error = r.error; }
+  setLoading(false);
+  if(error) { toast('Error al guardar: ' + error.message, 'error'); return; }
+  toast('Expediente guardado 🐾');
+  await loadAll();
+  renderDetalleMascota(mid);
+  switchTabMascota('mtab-expediente', document.getElementById('mtab-btn-expediente'));
 }

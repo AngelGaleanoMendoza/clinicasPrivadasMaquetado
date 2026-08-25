@@ -267,6 +267,18 @@
         </div>
       </div>
 
+      <!-- DETALLE MASCOTA (VETERINARIA) -->
+      <div id="view-mascota-detalle" class="view">
+        <div style="margin-bottom:14px"><button class="btn btn-secondary btn-sm" onclick="navigate('mascotas')">← Volver</button></div>
+        <div id="mas-detalle-header"></div>
+        <div class="tabs">
+          <button class="tab active" id="mtab-btn-info" onclick="switchTabMascota('mtab-info',this)">📋 Información</button>
+          <button class="tab" id="mtab-btn-expediente" onclick="switchTabMascota('mtab-expediente',this)">📁 Expediente</button>
+        </div>
+        <div id="mtab-info"></div>
+        <div id="mtab-expediente" style="display:none"></div>
+      </div>
+
       <!-- CITAS -->
       <div id="view-citas" class="view">
 
