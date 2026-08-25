@@ -131,7 +131,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 .btn-logout:hover,.btn-logout:active{background:rgba(239,68,68,.28);border-color:rgba(239,68,68,.45);color:#fff}
 
 /* MAIN */
-.main{margin-left:260px;flex:1;display:flex;flex-direction:column;min-height:100vh}
+.main{margin-left:260px;flex:1;min-width:0;display:flex;flex-direction:column;min-height:100vh}
 .topbar{background:var(--card);border-bottom:1px solid var(--border);padding:14px 28px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:90}
 .topbar h1{font-size:18px;font-weight:700;flex:1}
 .topbar-search{display:flex;align-items:center;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;padding:8px 14px;gap:8px;min-width:240px;transition:border .2s}
@@ -1388,4 +1388,66 @@ body.dark .cli-card,body.dark .mas-card{background:#0F172A}
 @media(max-width:380px){
   .mas-grid{grid-template-columns:1fr}
   .mas-thumb{height:150px}
+}
+
+/* ══ CALENDARIO: VISTAS SEMANA Y DÍA CON FRANJAS ══ */
+/* El posicionamiento es por grid-row: al cambiar --slot-h en un breakpoint,
+   las citas se reacomodan solas sin recalcular nada desde JS. */
+.cal-tl-scroll{overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:touch;border:1.5px solid var(--border);border-radius:12px;background:var(--card)}
+.cal-tl{
+  --slot-h:26px;
+  display:grid;
+  grid-template-columns:58px repeat(var(--cols), minmax(112px,1fr));
+  grid-auto-rows:var(--slot-h);
+  position:relative;
+  min-width:max-content;
+}
+.cal-tl-esquina{grid-column:1;grid-row:1;position:sticky;left:0;top:0;z-index:4;background:var(--card);border-right:1.5px solid var(--border);border-bottom:1.5px solid var(--border)}
+.cal-tl-colhead{grid-row:1;position:sticky;top:0;z-index:3;background:var(--card);border-bottom:1.5px solid var(--border);border-left:1px solid var(--border);padding:7px 6px;text-align:center;font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;flex-direction:column;justify-content:center;gap:1px}
+.cal-tl-colhead span{font-size:10px;font-weight:500;color:var(--text-light)}
+.cal-tl-colhead.hoy{color:var(--primary);background:var(--primary-light)}
+/* La columna de horas queda fija al hacer scroll horizontal */
+.cal-tl-hour{grid-column:1;position:sticky;left:0;z-index:2;background:var(--card);border-right:1.5px solid var(--border);font-size:10px;color:var(--text-light);text-align:right;padding:0 7px;line-height:1;display:flex;align-items:flex-start;justify-content:flex-end}
+.cal-tl-hour.punto{color:var(--text);font-weight:600}
+.cal-tl-celda{border-left:1px solid var(--border);border-bottom:1px solid color-mix(in srgb, var(--border) 55%, transparent);cursor:pointer;transition:background .12s}
+.cal-tl-celda:hover{background:var(--primary-light)}
+/* Fuera de jornada: rayado y no agendable */
+.cal-tl-celda.off{background:repeating-linear-gradient(45deg,transparent,transparent 5px,color-mix(in srgb, var(--border) 45%, transparent) 5px,color-mix(in srgb, var(--border) 45%, transparent) 10px);cursor:default;pointer-events:none}
+/* Cita: el ancho y el desplazamiento salen de los carriles calculados en JS */
+.cal-ev{
+  --carril:0; --carriles:1;
+  margin:1px 2px;padding:3px 6px;border-radius:7px;overflow:hidden;cursor:pointer;
+  background:var(--primary);color:#fff;font-size:11px;line-height:1.25;
+  width:calc((100% - 4px) / var(--carriles));
+  margin-left:calc(var(--carril) * (100% - 4px) / var(--carriles) + 2px);
+  z-index:1;box-shadow:0 1px 3px rgba(0,0,0,.18);transition:transform .12s
+}
+.cal-ev:hover{transform:translateY(-1px);z-index:5}
+.cal-ev.solapada{outline:1.5px solid var(--card)}
+.cal-ev-hora{font-size:9.5px;opacity:.85;font-weight:600}
+.cal-ev-tit{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-ev-sub{font-size:10px;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-ev.pendiente{background:linear-gradient(135deg,#F59E0B,#D97706)}
+.cal-ev.confirmada{background:linear-gradient(135deg,#06B6D4,#0891B2)}
+.cal-ev.completada{background:linear-gradient(135deg,#10B981,#059669)}
+/* Tira de días y lista, para el colapso en móvil */
+.semana-lista{display:none;margin-top:12px}
+.wk-strip{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;margin-bottom:12px}
+.wk-chip{flex:1;min-width:44px;display:flex;flex-direction:column;align-items:center;gap:1px;padding:7px 4px;border:1.5px solid var(--border);border-radius:10px;background:var(--bg);cursor:pointer;font-size:11px;position:relative}
+.wk-chip b{font-weight:700;color:var(--text)}
+.wk-chip span{color:var(--text-light);font-size:10px}
+.wk-chip i{position:absolute;top:-5px;right:-3px;background:var(--primary);color:#fff;border-radius:10px;font-size:9px;font-style:normal;font-weight:700;padding:1px 5px}
+.wk-chip.hoy{border-color:var(--primary)}
+.wk-chip.sel{background:var(--primary-light);border-color:var(--primary)}
+.wk-dia{margin-bottom:14px}
+.wk-dia-tit{font-size:12px;font-weight:700;color:var(--text-light);text-transform:capitalize;margin-bottom:6px}
+
+body.dark .cal-tl-esquina,body.dark .cal-tl-colhead,body.dark .cal-tl-hour{background:var(--card)}
+
+@media(max-width:640px){
+  /* La vista SEMANA colapsa a lista: 7 columnas serían 44 px por día */
+  .semana-grid{display:none}
+  .semana-lista{display:block}
+  /* La vista DÍA sí conserva las franjas: con scroll horizontal se usa bien */
+  .cal-tl{--slot-h:34px;grid-template-columns:50px repeat(var(--cols), minmax(132px,1fr))}
 }

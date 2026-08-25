@@ -1981,19 +1981,21 @@ let citasTabFecha = '';
 
 function switchCitasTab(tab) {
   citasTab = tab;
-  ['fecha','calendario'].forEach(t => {
+  ['fecha','calendario','semana','dia'].forEach(t => {
     const el = document.getElementById('ctab-'+t);
     if(el) el.classList.toggle('active', t===tab);
   });
-  const pickerRow = document.getElementById('citas-fecha-picker-row');
-  const tabLista  = document.getElementById('citas-tab-lista');
-  const tabCal    = document.getElementById('citas-tab-calendario');
-  if(pickerRow) pickerRow.style.display = tab==='fecha' ? 'flex' : 'none';
-  if(tabLista)  tabLista.style.display  = tab==='calendario' ? 'none' : 'block';
-  if(tabCal)    tabCal.style.display    = tab==='calendario' ? 'block' : 'none';
+  const vis = (id, mostrar, modo='block') => { const e = document.getElementById(id); if(e) e.style.display = mostrar ? modo : 'none'; };
+  vis('citas-fecha-picker-row', tab==='fecha', 'flex');
+  vis('citas-tab-lista',        tab==='fecha');
+  vis('citas-tab-calendario',   tab==='calendario');
+  vis('citas-tab-semana',       tab==='semana');
+  vis('citas-tab-dia',          tab==='dia');
 
   if(tab==='fecha'){ if(citasTabFecha) renderCitasParaFecha(citasTabFecha); }
   else if(tab==='calendario'){ renderCalendar('citas-cal',true); renderCalDayCitas(selCalDate); }
+  else if(tab==='semana'){ renderVistaSemana(); }
+  else if(tab==='dia'){ renderVistaDia(); }
 }
 
 function renderCitasParaFecha(fecha) {
@@ -10832,4 +10834,251 @@ async function guardarExpedienteMascota(mid) {
   await loadAll();
   renderDetalleMascota(mid);
   switchTabMascota('mtab-expediente', document.getElementById('mtab-btn-expediente'));
+}
+
+// ════════════════════ VISTAS SEMANA Y DÍA (FRANJAS HORARIAS) ════════════════════
+// El posicionamiento usa CSS Grid con grid-row: span, no position:absolute.
+// Así, al cambiar --slot-h en un breakpoint, todo se reacomoda solo; con
+// píxeles habría que releer valores computados en cada resize.
+
+// Rango horario a pintar: la unión de las jornadas implicadas, acotada por las
+// citas que existan, para no dibujar horas vacías de madrugada.
+function _rangoHorario(medicoIds, fechas) {
+  let ini = 24*60, fin = 0;
+  medicoIds.forEach(mid => fechas.forEach(f => {
+    _tramosDia(mid, f).forEach(([a,b]) => { ini = Math.min(ini, _minutos(a)); fin = Math.max(fin, _minutos(b)); });
+  }));
+  // Las citas fuera de jornada (emergencias) también deben verse
+  C.c.filter(c => fechas.includes(c.fecha) && _citaActiva(c)).forEach(c => {
+    ini = Math.min(ini, _minutos(c.hora));
+    fin = Math.max(fin, _minutos(c.hora) + (c.duracionMin||30));
+  });
+  if(ini >= fin) { ini = 8*60; fin = 18*60; }
+  return { ini: Math.floor(ini/60)*60, fin: Math.ceil(fin/60)*60 };
+}
+
+// Reparte en carriles las citas que se pisan, estilo Google Calendar.
+function _repartirCarriles(citas) {
+  const orden = citas.slice().sort((a,b) => _minutos(a.hora) - _minutos(b.hora));
+  const grupos = [];
+  let grupo = [], finGrupo = -1;
+  orden.forEach(c => {
+    const ini = _minutos(c.hora), fin = ini + (c.duracionMin||30);
+    if(grupo.length && ini >= finGrupo) { grupos.push(grupo); grupo = []; finGrupo = -1; }
+    grupo.push(c); finGrupo = Math.max(finGrupo, fin);
+  });
+  if(grupo.length) grupos.push(grupo);
+
+  const mapa = new Map();
+  grupos.forEach(g => {
+    const carriles = [];
+    g.forEach(c => {
+      const ini = _minutos(c.hora), fin = ini + (c.duracionMin||30);
+      let i = carriles.findIndex(finCarril => ini >= finCarril);
+      if(i === -1) { i = carriles.length; carriles.push(fin); } else { carriles[i] = fin; }
+      mapa.set(c.id, { carril: i });
+    });
+    g.forEach(c => { mapa.get(c.id).carriles = carriles.length; });
+  });
+  return mapa;
+}
+
+function _citaBloqueHTML(c, rango, paso, colIdx, carril, carriles) {
+  const ini = _minutos(c.hora), dur = c.duracionMin || 30;
+  const fila = Math.floor((ini - rango.ini) / paso) + 2;   // +2: fila 1 es la cabecera
+  const filas = Math.max(1, Math.round(dur / paso));
+  const s = _sujetoCita(c);
+  const solapada = carriles > 1 ? ' solapada' : '';
+  return `<div class="cal-ev ${c.estado}${solapada}"
+    style="grid-column:${colIdx + 2};grid-row:${fila} / span ${filas};--carril:${carril};--carriles:${carriles}"
+    onclick="verResumenCita(${c.id})" title="${escAttr((s?s.titulo+' · ':'') + (c.motivo||''))}">
+    <div class="cal-ev-hora">${formatHora12(c.hora)}</div>
+    <div class="cal-ev-tit">${escAttr(s ? s.titulo : 'Cita')}</div>
+    ${filas > 1 ? `<div class="cal-ev-sub">${escAttr(c.motivo||'')}</div>` : ''}
+  </div>`;
+}
+
+// Rejilla de franjas: columnas = veterinarios (día) o días (semana)
+function _calFranjasHTML({ columnas, rango, paso, citasPorColumna, fechaPorColumna }) {
+  const filas = Math.ceil((rango.fin - rango.ini) / paso);
+  let html = `<div class="cal-tl" style="--cols:${columnas.length};--filas:${filas}">`;
+  html += `<div class="cal-tl-esquina"></div>`;
+  columnas.forEach(col => { html += `<div class="cal-tl-colhead${col.hoy?' hoy':''}">${col.titulo}${col.sub?`<span>${col.sub}</span>`:''}</div>`; });
+
+  // Columna de horas + celdas de fondo (fuera de jornada se rayan)
+  for(let f = 0; f < filas; f++) {
+    const min = rango.ini + f*paso;
+    const enPunto = min % 60 === 0;
+    html += `<div class="cal-tl-hour${enPunto?' punto':''}" style="grid-row:${f+2}">${enPunto ? formatHora12(_hhmm(min)) : ''}</div>`;
+    columnas.forEach((col, i) => {
+      const fecha = fechaPorColumna(col, i);
+      const dentro = _tramosDia(col.medicoId, fecha).some(([a,b]) => min >= _minutos(a) && min < _minutos(b));
+      html += `<div class="cal-tl-celda${dentro?'':' off'}" style="grid-column:${i+2};grid-row:${f+2}"
+        ${dentro ? `onclick="_nuevaCitaEnSlot('${fecha}','${_hhmm(min)}','${col.medicoId||''}')"` : ''}></div>`;
+    });
+  }
+
+  // Citas encima de las celdas
+  columnas.forEach((col, i) => {
+    const citas = citasPorColumna(col, i);
+    const carriles = _repartirCarriles(citas);
+    citas.forEach(c => {
+      const info = carriles.get(c.id) || { carril:0, carriles:1 };
+      html += _citaBloqueHTML(c, rango, paso, i, info.carril, info.carriles);
+    });
+  });
+
+  return html + '</div>';
+}
+
+function _nuevaCitaEnSlot(fecha, hora, medicoId) {
+  openModalCita();
+  const fechaEl = document.getElementById('c-fecha');
+  fechaEl.value = fecha;
+  if(fechaEl._flatpickr) fechaEl._flatpickr.setDate(fecha, false);
+  if(medicoId) { const sel = document.getElementById('c-medico'); if(sel) sel.value = medicoId; }
+  onCitaHorarioChange();
+  const horaSel = document.getElementById('c-hora');
+  if(horaSel) horaSel.value = hora;
+}
+
+// ── VISTA DÍA: una columna por veterinario ──
+function renderVistaDia() {
+  const el = document.getElementById('cal-dia');
+  if(!el) return;
+  const fecha = selCalDate;
+  const citasDia = C.c.filter(c => c.fecha === fecha && _citaActiva(c));
+
+  // Profesionales con citas ese día; si hay pocos, se muestran todos
+  const medicos = C.prof.filter(p => ['medico','medico_admin','dr','dra','admin','odontologo'].includes(p.rol));
+  let columnas = medicos.filter(p => citasDia.some(c => c.medicoId == p.id));
+  if(columnas.length === 0) columnas = medicos.slice(0, 4);
+  if(columnas.length === 0) columnas = [{ id:null, nombre:'Sin asignar' }];
+  const sinAsignar = citasDia.filter(c => !c.medicoId);
+  const cols = columnas.map(p => ({ medicoId:p.id, titulo:p.nombre, sub:null, hoy:false }));
+  if(sinAsignar.length) cols.push({ medicoId:null, titulo:'Sin asignar', sub:null, hoy:false });
+
+  const rango = _rangoHorario(cols.map(c => c.medicoId), [fecha]);
+  const paso = 30;
+
+  el.innerHTML = `
+    <div class="cal-nav">
+      <div class="cal-nav-btns">
+        <button class="btn-ghost" onclick="navDia(-1)">‹</button>
+        <button class="btn-ghost" onclick="navDia(0)" style="font-size:11px;padding:5px 8px">Hoy</button>
+        <button class="btn-ghost" onclick="navDia(1)">›</button>
+      </div>
+      <h4>${formatFecha(fecha)}${fecha===hoy()?' <span class="tag tag-blue" style="font-size:10px">Hoy</span>':''}</h4>
+    </div>
+    ${citasDia.length ? '' : '<p class="text-light" style="font-size:12px;margin-bottom:8px">Sin citas este día. Toca una franja para agendar.</p>'}
+    <div class="cal-tl-scroll">
+      ${_calFranjasHTML({
+        columnas: cols, rango, paso,
+        fechaPorColumna: () => fecha,
+        citasPorColumna: col => citasDia.filter(c => (col.medicoId ? c.medicoId == col.medicoId : !c.medicoId))
+      })}
+    </div>`;
+}
+
+function navDia(dir) {
+  if(dir === 0) selCalDate = hoy();
+  else { const d = new Date(selCalDate+'T12:00:00'); d.setDate(d.getDate()+dir); selCalDate = d.toISOString().split('T')[0]; }
+  renderVistaDia();
+}
+
+// ── VISTA SEMANA: una columna por día, para un profesional ──
+let _semanaMedicoId = '';
+
+function _lunesDe(fecha) {
+  const d = new Date(fecha+'T12:00:00');
+  const dow = d.getDay();
+  d.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1));   // semana de lunes a domingo
+  return d.toISOString().split('T')[0];
+}
+function _diasSemana(fecha) {
+  const lunes = new Date(_lunesDe(fecha)+'T12:00:00');
+  return Array.from({length:7}, (_,i) => {
+    const d = new Date(lunes); d.setDate(d.getDate()+i);
+    return d.toISOString().split('T')[0];
+  });
+}
+
+function renderVistaSemana() {
+  const el = document.getElementById('cal-semana');
+  if(!el) return;
+  const dias = _diasSemana(selCalDate);
+  const medicos = C.prof.filter(p => ['medico','medico_admin','dr','dra','admin','odontologo'].includes(p.rol));
+  const mid = _semanaMedicoId || '';
+  const citasSemana = C.c.filter(c => dias.includes(c.fecha) && _citaActiva(c)
+    && (mid ? c.medicoId == mid : true));
+
+  const selMedico = `<select onchange="_semanaMedicoId=this.value;renderVistaSemana()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:9px;font-size:12px;background:var(--card);color:var(--text)">
+      <option value="">Todos los profesionales</option>
+      ${medicos.map(p => `<option value="${p.id}"${mid==p.id?' selected':''}>${escAttr(p.nombre)}</option>`).join('')}
+    </select>`;
+
+  const DOW = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+  const cols = dias.map((f,i) => ({
+    medicoId: mid || null, fecha: f, titulo: DOW[i],
+    sub: f.slice(8) + '/' + f.slice(5,7), hoy: f === hoy()
+  }));
+  const rango = _rangoHorario([mid||null], dias);
+
+  const lunes = dias[0], domingo = dias[6];
+  el.innerHTML = `
+    <div class="cal-nav" style="flex-wrap:wrap;gap:8px">
+      <div class="cal-nav-btns">
+        <button class="btn-ghost" onclick="navSemana(-1)">‹</button>
+        <button class="btn-ghost" onclick="navSemana(0)" style="font-size:11px;padding:5px 8px">Hoy</button>
+        <button class="btn-ghost" onclick="navSemana(1)">›</button>
+      </div>
+      <h4 style="font-size:13px">${formatFecha(lunes)} — ${formatFecha(domingo)}</h4>
+      ${selMedico}
+    </div>
+    <div class="cal-tl-scroll semana-grid">
+      ${_calFranjasHTML({
+        columnas: cols, rango, paso: 30,
+        fechaPorColumna: col => col.fecha,
+        citasPorColumna: col => citasSemana.filter(c => c.fecha === col.fecha)
+      })}
+    </div>
+    <div class="semana-lista">${_semanaListaHTML(dias, citasSemana)}</div>`;
+}
+
+// En móvil, 7 columnas serían 44 px: el nombre no entra y el objetivo táctil
+// queda bajo el mínimo. Se colapsa a lista reutilizando las filas .cita-item.
+function _semanaListaHTML(dias, citas) {
+  const DOW = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+  const chips = dias.map((f,i) => {
+    const n = citas.filter(c => c.fecha === f).length;
+    return `<span class="wk-chip${f===hoy()?' hoy':''}${f===selCalDate?' sel':''}" onclick="selCalDate='${f}';renderVistaSemana()">
+      <b>${DOW[i]}</b><span>${f.slice(8)}</span>${n?`<i>${n}</i>`:''}</span>`;
+  }).join('');
+
+  const porDia = dias.map((f,i) => {
+    const delDia = citas.filter(c => c.fecha === f).sort((a,b) => a.hora.localeCompare(b.hora));
+    if(!delDia.length) return '';
+    return `<div class="wk-dia">
+      <div class="wk-dia-tit">${DOW[i]} ${formatFecha(f)}</div>
+      ${delDia.map(c => {
+        const s = _sujetoCita(c);
+        return `<div class="cita-item ${c.estado}" style="gap:10px" onclick="verResumenCita(${c.id})">
+          <div class="cita-time">${formatHora12(c.hora)}</div>
+          <div style="flex:1;min-width:0">
+            <div class="cita-paciente">${escAttr(s?s.titulo:'Cita')}</div>
+            <div class="cita-motivo">${escAttr(c.motivo||'')}${c.duracionMin?` · ${c.duracionMin} min`:''}</div>
+          </div>
+          ${estadoTag(c.estado)}
+        </div>`;
+      }).join('')}
+    </div>`;
+  }).join('');
+
+  return `<div class="wk-strip">${chips}</div>${porDia || '<div class="empty-state" style="padding:26px"><div class="empty-icon">📅</div><p>Sin citas esta semana</p></div>'}`;
+}
+
+function navSemana(dir) {
+  if(dir === 0) selCalDate = hoy();
+  else { const d = new Date(selCalDate+'T12:00:00'); d.setDate(d.getDate() + dir*7); selCalDate = d.toISOString().split('T')[0]; }
+  renderVistaSemana();
 }

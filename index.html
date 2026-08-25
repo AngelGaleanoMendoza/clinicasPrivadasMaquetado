@@ -305,10 +305,16 @@
           <!-- TABS de fecha -->
           <div class="citas-view-tabs" id="citas-view-tabs">
             <button class="citas-view-tab active" id="ctab-calendario" onclick="switchCitasTab('calendario')">
-              📆 Calendario
+              📆 Mes
+            </button>
+            <button class="citas-view-tab" id="ctab-semana" onclick="switchCitasTab('semana')">
+              🗓️ Semana
+            </button>
+            <button class="citas-view-tab" id="ctab-dia" onclick="switchCitasTab('dia')">
+              📋 Día
             </button>
             <button class="citas-view-tab" id="ctab-fecha" onclick="switchCitasTab('fecha')">
-              🗓️ Buscar fecha
+              🔍 Buscar fecha
             </button>
           </div>
 
@@ -330,6 +336,16 @@
             <div class="cal-wrap" id="citas-cal"></div>
             <div class="cal-legend"><div class="cal-legend-dot"></div><span>Tiene citas agendadas</span></div>
             <div style="margin-top:14px" id="cal-day-citas"></div>
+          </div>
+
+          <!-- Vista semana -->
+          <div id="citas-tab-semana" style="display:none">
+            <div id="cal-semana"></div>
+          </div>
+
+          <!-- Vista día con franjas horarias -->
+          <div id="citas-tab-dia" style="display:none">
+            <div id="cal-dia"></div>
           </div>
         </div>
 
