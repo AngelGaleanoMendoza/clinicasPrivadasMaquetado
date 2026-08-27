@@ -379,11 +379,50 @@ let currentUser = null;
 let selectedEmail = '';
 let _authEmail = ''; // email capturado en login o desde Supabase Auth
 
+function mostrarLoginAuthError(html) {
+  setLoading(false);
+  currentUser = null;
+  currentClinicaId = null;
+  currentClinica = null;
+  sessionStorage.removeItem('lm_user');
+  document.getElementById('app')?.classList.remove('visible');
+  const ls = document.getElementById('login-screen');
+  if(ls) ls.style.cssText = 'display:flex;opacity:1';
+  const errEl = document.getElementById('login-error');
+  if(errEl) { errEl.style.color = '#f87171'; errEl.innerHTML = html; errEl.style.display = 'block'; }
+}
+
+async function solicitarRecuperacionPassword() {
+  const emailEl = document.getElementById('login-email');
+  const email = (emailEl?.value || '').trim().toLowerCase();
+  const errEl = document.getElementById('login-error');
+  errEl.style.color = '#f87171';
+  if(!email || !emailEl.checkValidity()) {
+    errEl.textContent = 'Ingresa primero un correo electrónico válido';
+    errEl.style.display = 'block';
+    emailEl?.focus();
+    return;
+  }
+  setLoading(true);
+  const redirectTo = window.location.origin + window.location.pathname;
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
+  setLoading(false);
+  if(error) {
+    errEl.textContent = 'No se pudo enviar la recuperación: ' + error.message;
+    errEl.style.display = 'block';
+    return;
+  }
+  errEl.innerHTML = 'Si la cuenta existe en Supabase Auth, recibirás un enlace en <strong>' + escAttr(email) + '</strong>.';
+  errEl.style.color = '#6EE7B7';
+  errEl.style.display = 'block';
+}
+
 async function verificarLogin() {
   const email = document.getElementById('login-email').value.trim();
   _authEmail = email.toLowerCase();
   const password = document.getElementById('login-password').value;
   const errEl = document.getElementById('login-error');
+  errEl.style.color = '#f87171';
   errEl.style.display = 'none';
   if(!email || !password) {
     errEl.textContent = 'Ingresa tu email y contraseña';
@@ -429,39 +468,30 @@ async function verificarLogin() {
     return;
   }
 
-  // ── PASO 2: usuario no está en Auth → intentar registrarlo (auto-migración) ──
-  // Funciona cuando "Confirm email" está desactivado en Supabase
-  const { data: signUpData, error: signUpErr } = await sb.auth.signUp({ email, password });
-  if(!signUpErr && signUpData?.user) {
-    // Si hay sesión activa el usuario quedó confirmado automáticamente
-    if(signUpData.session || signUpData.user.confirmed_at || signUpData.user.email_confirmed_at) {
-      // Intentar login inmediato post-registro
-      const { data: retryAuth } = await sb.auth.signInWithPassword({ email, password });
-      if(retryAuth?.user) {
-        const profile = await resolverPerfil(retryAuth.user.id, email);
-        if(profile) { await entrarConPerfil(profile); return; }
-        await sb.auth.signOut();
-      }
-    } else {
-      // Necesita confirmar correo — no podemos continuar automáticamente
-      setLoading(false);
-      shakeLogin();
-      errEl.innerHTML = 'Cuenta pendiente de confirmación de correo.<br><small>Revisa <strong>' + email + '</strong> o pide al administrador que confirme tu cuenta en el panel de Supabase.</small>';
-      errEl.style.display = 'block';
-      return;
-    }
-  }
-
-  // ── PASO 3: fallback legacy (profiles con password en texto plano) ──
+  // ── PASO 2: migración legacy, solo después de validar la contraseña antigua ──
+  // Nunca se abre la aplicación con este perfil por sí solo: RLS necesita una
+  // sesión real de Supabase Auth. El registro se intenta únicamente si email y
+  // contraseña coinciden con el perfil heredado.
   const { data: legacy } = await _consultaPerfil(cols => sb.from('profiles').select(cols).ilike('email', email).eq('password', password).limit(1).maybeSingle());
   if(legacy) {
-    // Auto-registrar en Auth para futuras sesiones
-    const { data: migrAuth } = await sb.auth.signInWithPassword({ email, password });
-    if(migrAuth?.user) {
-      await sb.from('profiles').update({ id: migrAuth.user.id }).eq('email', email);
-      legacy.id = migrAuth.user.id;
+    const { data: signUpData, error: signUpErr } = await sb.auth.signUp({ email, password });
+    if(!signUpErr && signUpData?.session?.user) {
+      const authId = signUpData.session.user.id;
+      const profile = await resolverPerfil(authId, email);
+      if(profile) { await entrarConPerfil(profile); return; }
+      await sb.auth.signOut();
+      mostrarLoginAuthError('La cuenta se creó en Auth, pero no se pudo vincular con su perfil. Contacta al Super Admin.');
+      return;
     }
-    await entrarConPerfil(legacy);
+    setLoading(false);
+    shakeLogin();
+    const identidadNueva = (signUpData?.user?.identities || []).length > 0;
+    if(!signUpErr && identidadNueva) {
+      errEl.innerHTML = 'La cuenta fue creada, pero necesita confirmar su correo.<br><small>Revisa <strong>' + escAttr(email) + '</strong> y luego inicia sesión.</small>';
+    } else {
+      errEl.innerHTML = 'La contraseña coincide con el perfil antiguo, pero no con Supabase Auth.<br><small>Usa <strong>¿Olvidaste tu contraseña?</strong> para establecer la contraseña de Auth.</small>';
+    }
+    errEl.style.display = 'block';
     return;
   }
 
@@ -745,16 +775,21 @@ function limpiarPendientesSesion() {
 }
 
 async function entrarConPerfil(profile) {
+  // La interfaz no debe abrirse con el perfil legacy si falta el JWT. Sin este
+  // token todas las escrituras protegidas por RLS fallan aunque el perfil sea válido.
+  let authUser = null;
+  try {
+    const {data,error} = await sb.auth.getUser();
+    authUser = error ? null : data?.user;
+  } catch(e) {}
+  if(!authUser) {
+    mostrarLoginAuthError('No existe una sesión válida de Supabase Auth.<br><small>Inicia sesión nuevamente o usa <strong>¿Olvidaste tu contraseña?</strong>.</small>');
+    return false;
+  }
   const rolLabel = {admin:'Administración',medico:'Médico',medico_admin:'Médico Adm.',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',farmaceutico:'Farmacéutico',odontologo:'Odontólogo',optometrista:'Optometrista',oftalmologo:'Oftalmólogo'}[profile.rol]||profile.rol;
   currentClinicaId = profile.clinica_id || null;
   // Obtener email desde todas las fuentes disponibles
-  let emailFinal = (profile.email || '').trim().toLowerCase() || null;
-  if(!emailFinal) {
-    try {
-      const { data: { user: authUser } } = await sb.auth.getUser();
-      emailFinal = authUser?.email?.trim().toLowerCase() || null;
-    } catch(e) {}
-  }
+  let emailFinal = (profile.email || '').trim().toLowerCase() || authUser.email?.trim().toLowerCase() || null;
   if(!emailFinal && _authEmail) emailFinal = _authEmail; // fallback: email del formulario
   if(emailFinal) _authEmail = emailFinal; // sincronizar siempre
   currentUser = {
@@ -793,6 +828,7 @@ async function entrarConPerfil(profile) {
   toast(`Bienvenido, ${currentUser.name} 👋`, 'info');
   logActivity('login');
   iniciarInactividad();
+  return true;
 }
 
 async function checkSession() {}
@@ -5162,9 +5198,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       await sb.auth.signOut();
     }
-    // Legacy fallback
-    const saved = sessionStorage.getItem('lm_user');
-    if(saved) { await entrarConPerfil(JSON.parse(saved)); return; }
+    // Los perfiles legacy sin JWT no pueden operar con RLS. Se elimina cualquier
+    // sesión antigua guardada por versiones previas y se solicita login real.
+    sessionStorage.removeItem('lm_user');
   } catch(e) { sessionStorage.removeItem('lm_user'); }
 
   // Sin sesión — mostrar login
