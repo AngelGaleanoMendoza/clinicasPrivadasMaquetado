@@ -966,7 +966,7 @@
           </div>
           <p style="font-size:13px;color:var(--text-light);margin-bottom:16px;line-height:1.6">
             Migra todos los usuarios al sistema de autenticación seguro de Supabase.<br>
-            Las contraseñas se cifrarán con <strong>bcrypt</strong> y dejarán de guardarse en texto plano.<br>
+            Los usuarios conservarán sus contraseñas actuales. Cada clave se retirará de <code>profiles</code> únicamente después de comprobarla en Auth, donde quedará protegida con <strong>bcrypt</strong>.<br>
             <strong>Requisito previo:</strong> En Supabase → Authentication → Settings → Email → desactivar <em>"Confirm email"</em>.
           </p>
           <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
@@ -2466,7 +2466,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260827b"></script>
+<script src="js/app.js?v=20260827c"></script>
 </body>
 </html>
 

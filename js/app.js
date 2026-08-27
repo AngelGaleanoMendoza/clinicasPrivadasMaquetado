@@ -9482,6 +9482,12 @@ async function verificarEstadoAuth() {
 }
 
 async function migrarUsuariosAAuth() {
+  if(!isSuperAdmin()) { toast('Solo el Super Admin puede migrar usuarios','error'); return; }
+  const { data: { user: adminAuth }, error: adminAuthError } = await sb.auth.getUser();
+  if(adminAuthError || !adminAuth) {
+    toast('La sesión del Super Admin no es válida. Vuelve a iniciar sesión.','error');
+    return;
+  }
   // Esta es la única consulta que necesita la contraseña, porque su trabajo es
   // justamente moverla a Supabase Auth. Se piden solo las filas que faltan y
   // solo los tres campos imprescindibles.
@@ -9507,46 +9513,62 @@ async function migrarUsuariosAAuth() {
   };
 
   let migrados = 0, errores = 0;
-  const { data: { session: adminSess } } = await sb.auth.getSession();
+  const emailAdmin = (adminAuth.email || '').trim().toLowerCase();
 
   for(const p of pendientes) {
     if(prog) prog.textContent = `Migrando ${migrados + errores + 1}/${pendientes.length}...`;
-    const { data: newAuth, error: authErr } = await sb.auth.signUp({ email: p.email, password: p.password });
-    // Restaurar sesión del super admin inmediatamente
-    if(adminSess) await sb.auth.setSession(adminSess);
+    const email = (p.email || '').trim().toLowerCase();
+    if(!email) {
+      addLog(`❌ ${p.nombre || p.id} — no tiene correo; no se modificó su contraseña`, false);
+      errores++;
+      continue;
+    }
 
-    if(authErr) {
-      if(authErr.message.includes('already registered')) {
-        // Ya existe en Auth, pero no sabemos si su contraseña allí coincide con
-        // la del texto plano. Se comprueba entrando: solo si funciona es seguro
-        // borrarla, porque si no coincidiera dejaríamos al usuario sin acceso.
-        const { data: prueba, error: errPrueba } = await sb.auth.signInWithPassword({ email: p.email, password: p.password });
-        if(adminSess) await sb.auth.setSession(adminSess);
-        if(prueba?.user && !errPrueba) {
-          const upd = { password: null };
-          if(prueba.user.id !== p.id) upd.id = prueba.user.id;
-          await sb.from('profiles').update(upd).eq('id', p.id);
-          addLog(`✅ ${p.nombre || p.email} — ya estaba en Auth, contraseña antigua eliminada`);
-          migrados++;
-        } else {
-          addLog(`⚠️ ${p.email} — existe en Auth con OTRA contraseña. Restablécela desde Usuarios y vuelve a migrar.`, false);
-          errores++;
-        }
-      } else {
-        addLog(`❌ ${p.email} — ${authErr.message}`, false);
+    // La cuenta que está ejecutando la migración ya quedó validada por getUser().
+    // Su clave legacy puede retirarse sin volver a conocer la nueva contraseña.
+    if(email === emailAdmin) {
+      const {error:updError}=await sb.from('profiles').update({password:null}).eq('id',p.id);
+      if(updError) { addLog(`❌ ${email} — no se pudo retirar la clave antigua: ${updError.message}`,false); errores++; }
+      else { addLog(`✅ ${p.nombre || email} — sesión Auth verificada`); migrados++; }
+      continue;
+    }
+
+    // Cliente aislado: crear/probar otro usuario no reemplaza la sesión del
+    // Super Admin en la aplicación principal.
+    const authTmp = supabase.createClient(SURL, SKEY, {
+      auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}
+    });
+    let alta=null, authErr=null, prueba=null, errPrueba=null;
+    try {
+      ({data:alta,error:authErr}=await authTmp.auth.signUp({email,password:p.password}));
+      ({data:prueba,error:errPrueba}=await authTmp.auth.signInWithPassword({email,password:p.password}));
+    } catch(e) {
+      errPrueba=e;
+    }
+
+    if(prueba?.user && !errPrueba) {
+      // Solo ahora se borra el texto plano: la misma clave acaba de funcionar
+      // contra Supabase Auth. El id del perfil no se cambia para no afectar FKs.
+      const {error:updError}=await sb.from('profiles').update({password:null}).eq('id',p.id);
+      if(updError) {
+        addLog(`❌ ${email} — Auth funciona, pero no se pudo limpiar la clave antigua: ${updError.message}`,false);
         errores++;
+      } else {
+        addLog(`✅ ${p.nombre || email} — conservó su contraseña actual`);
+        migrados++;
       }
       continue;
     }
 
-    const newId = newAuth?.user?.id;
-    if(newId && newId !== p.id) {
-      await sb.from('profiles').update({ id: newId, password: null }).eq('id', p.id);
+    const identidadNueva=(alta?.user?.identities||[]).length>0;
+    if(identidadNueva && /confirm/i.test(errPrueba?.message||'')) {
+      addLog(`⚠️ ${email} — cuenta creada; falta confirmar el correo. La clave antigua sigue intacta.`,false);
+    } else if(authErr && !/already registered|already been registered/i.test(authErr.message||'')) {
+      addLog(`❌ ${email} — ${authErr.message}. La clave antigua sigue intacta.`,false);
     } else {
-      await sb.from('profiles').update({ password: null }).eq('id', p.id);
+      addLog(`⚠️ ${email} — ya existe en Auth con otra contraseña. Debe restablecerla; la clave antigua sigue intacta.`,false);
     }
-    addLog(`✅ ${p.nombre || p.email} (${p.email}) — migrado`);
-    migrados++;
+    errores++;
   }
 
   if(prog) prog.textContent = `Completado: ${migrados} migrados, ${errores} error(es).`;
