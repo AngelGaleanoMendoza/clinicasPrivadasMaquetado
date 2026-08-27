@@ -165,7 +165,73 @@ DROP POLICY IF EXISTS "actividad_usuarios_clinica" ON public.actividad_usuarios;
 CREATE POLICY "actividad_usuarios_clinica" ON public.actividad_usuarios
   USING (is_superadmin() OR clinica_id = get_my_clinica_id())
   WITH CHECK (is_superadmin() OR clinica_id = get_my_clinica_id());
--- PASO 5: LUMEA MED VETERINARY — tablas propias
+-- ============================================================
+-- PASO 5: OFTALMOLOGIA - procedimientos y quirofano
+-- Registro estructurado para optometria, diagnostico, laser, procedimientos
+-- invasivos y cirugia. No comparte tabla con procedimientos odontologicos.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS public.procedimientos_oftalmologicos (
+  id                         BIGSERIAL PRIMARY KEY,
+  paciente_id                BIGINT NOT NULL REFERENCES public.pacientes(id) ON DELETE CASCADE,
+  cita_id                    BIGINT REFERENCES public.citas(id) ON DELETE SET NULL,
+  procedimiento              TEXT NOT NULL,
+  categoria                  TEXT NOT NULL,
+  tipo                       TEXT NOT NULL,
+  especialidad               TEXT,
+  fecha                      DATE NOT NULL DEFAULT CURRENT_DATE,
+  hora                       TIME,
+  profesional_id             UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  profesional_nombre         TEXT,
+  rol_profesional            TEXT,
+  firma_url                  TEXT,
+  estado                     TEXT NOT NULL DEFAULT 'programado',
+  prioridad                  TEXT NOT NULL DEFAULT 'normal',
+  sala                       TEXT,
+  ojo                        TEXT NOT NULL DEFAULT 'no_aplica',
+  diagnostico_indicacion     TEXT,
+  procedimiento_realizado    TEXT,
+  tecnica_utilizada          TEXT,
+  hallazgos_previos          TEXT,
+  anestesia                  TEXT NOT NULL DEFAULT 'ninguna',
+  equipo_utilizado           TEXT,
+  materiales_implantes       TEXT,
+  dispositivo_implantado     TEXT,
+  medicamento_administrado   TEXT,
+  hallazgos_posteriores      TEXT,
+  complicaciones             TEXT DEFAULT 'Ninguna',
+  resultado_inmediato        TEXT,
+  indicaciones_posteriores   TEXT,
+  seguimiento_requerido      BOOLEAN NOT NULL DEFAULT FALSE,
+  fecha_proximo_control      DATE,
+  referencia                 TEXT,
+  consentimiento_informado   BOOLEAN NOT NULL DEFAULT FALSE,
+  consentimiento_fecha       DATE,
+  adjuntos                   JSONB NOT NULL DEFAULT '[]'::jsonb,
+  clinica_id                 BIGINT NOT NULL REFERENCES public.clinicas(id) ON DELETE CASCADE,
+  creado_en                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  actualizado_en             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Compatibilidad si la primera versión de la tabla ya se había ejecutado.
+ALTER TABLE public.procedimientos_oftalmologicos ADD COLUMN IF NOT EXISTS firma_url TEXT;
+
+CREATE INDEX IF NOT EXISTS proc_oft_clinica_idx
+  ON public.procedimientos_oftalmologicos(clinica_id);
+CREATE INDEX IF NOT EXISTS proc_oft_paciente_idx
+  ON public.procedimientos_oftalmologicos(paciente_id);
+CREATE INDEX IF NOT EXISTS proc_oft_agenda_idx
+  ON public.procedimientos_oftalmologicos(clinica_id, fecha, estado);
+CREATE INDEX IF NOT EXISTS proc_oft_control_idx
+  ON public.procedimientos_oftalmologicos(clinica_id, fecha_proximo_control)
+  WHERE seguimiento_requerido = TRUE;
+
+ALTER TABLE public.procedimientos_oftalmologicos ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "procedimientos_oftalmologicos_clinica" ON public.procedimientos_oftalmologicos;
+CREATE POLICY "procedimientos_oftalmologicos_clinica" ON public.procedimientos_oftalmologicos
+  USING (is_superadmin() OR clinica_id = get_my_clinica_id())
+  WITH CHECK (is_superadmin() OR clinica_id = get_my_clinica_id());
+
+-- PASO 6: LUMEA MED VETERINARY — tablas propias
 -- El paciente veterinario es la MASCOTA y su dueño es el CLIENTE.
 -- Todo se aísla por clinica_id igual que el resto del sistema.
 -- ============================================================
@@ -330,7 +396,7 @@ CREATE POLICY "hosp_seguimiento_clinica" ON public.hospitalizacion_seguimiento
   WITH CHECK (is_superadmin() OR clinica_id = get_my_clinica_id());
 
 -- ============================================================
--- PASO 6: Columnas añadidas a tablas existentes
+-- PASO 7: Columnas añadidas a tablas existentes
 -- Todas nullable: las clínicas humanas siguen funcionando igual.
 -- El código reintenta sin ellas si todavía no existen (_faltaColumna).
 -- ============================================================
@@ -358,7 +424,7 @@ ALTER TABLE public.clinicas     ADD COLUMN IF NOT EXISTS horario JSONB;
 
 
 -- ============================================================
--- PASO 7: Acceso al propio perfil (arreglo de bloqueo de login)
+-- PASO 8: Acceso al propio perfil (arreglo de bloqueo de login)
 -- Se puede ejecutar varias veces sin error.
 -- ============================================================
 DROP POLICY IF EXISTS "profiles_select" ON public.profiles;
@@ -367,7 +433,7 @@ CREATE POLICY "profiles_select" ON public.profiles FOR SELECT
 
 
 -- ============================================================
--- PASO 8: Desbloqueo definitivo del login (candado circular)
+-- PASO 9: Desbloqueo definitivo del login (candado circular)
 --
 -- El problema: si `profiles.id` no coincide con el UUID de Supabase Auth,
 -- ninguna de las tres ramas de la política deja leer la fila —

@@ -18,17 +18,51 @@ const ALL_PERMISOS = [
   { id:'estadisticas', label:'Estadísticas',        icon:'📈' },
   { id:'exportar',     label:'Exportar / Enviar',   icon:'📤' },
   { id:'farmacia',     label:'Módulo Farmacia',     icon:'🏪' },
+  { id:'proc_oftalmo', label:'Procedimientos Oft.', icon:'👁️' },
 ];
 // Inventario y Finanzas NUNCA se otorgan por rol: el administrador debe marcarlos
 // explícitamente al crear o editar el usuario.
 const PERMISOS_DEFECTO = {
-  medico:       ['pacientes','citas','agendas','medicaciones','notas'],
-  medico_admin: ['pacientes','citas','agendas','medicaciones','notas','atendidos','estadisticas','exportar'],
-  admin:        ['pacientes','citas','agendas','medicaciones','notas','atendidos','estadisticas','exportar'],
+  medico:       ['pacientes','citas','agendas','medicaciones','notas','proc_oftalmo'],
+  medico_admin: ['pacientes','citas','agendas','medicaciones','notas','atendidos','estadisticas','exportar','proc_oftalmo'],
+  admin:        ['pacientes','citas','agendas','medicaciones','notas','atendidos','estadisticas','exportar','proc_oftalmo'],
   recepcion:    ['pacientes','citas'],
   enfermeria:   ['pacientes','medicaciones','notas'],
   farmaceutico: ['inventario','finanzas','farmacia'],
   odontologo:   ['pacientes','citas','medicaciones','notas'],
+  optometrista: ['pacientes','citas','agendas','notas','proc_oftalmo'],
+  oftalmologo:  ['pacientes','citas','agendas','medicaciones','notas','atendidos','proc_oftalmo'],
+};
+
+// ════════════════════ PROCEDIMIENTOS OFTALMOLÓGICOS ════════════════════
+// Catálogo separado del plan dental. `tipo` alimenta filtros y reportes, mientras
+// que `cat` es el encabezado clínico visible para el usuario.
+const CATALOGO_PROCEDIMIENTOS_OFTALMO = [
+  { tipo:'optometrico', cat:'Optometría', procs:[
+    'Refracción','Lentes de contacto','Ortoqueratología','Terapia visual','Baja visión','Prótesis ocular'
+  ]},
+  { tipo:'diagnostico', cat:'Diagnóstico oftálmico', procs:[
+    'Biomicroscopía','Tonometría','Campo visual','Topografía','OCT','Fondo de ojo'
+  ]},
+  { tipo:'laser', cat:'Láser', procs:[
+    'YAG','SLT','LPI','PRP','Retinopexia'
+  ]},
+  { tipo:'invasivo', cat:'Procedimiento invasivo', procs:[
+    'Inyección intravítrea','Paracentesis','Procedimiento menor'
+  ]},
+  { tipo:'cirugia', cat:'Cirugía oftalmológica', procs:[
+    'Refractiva','Catarata','Córnea','Glaucoma','Retina / Vítreo','Estrabismo',
+    'Párpado','Vía lagrimal','Órbita','Trauma'
+  ]},
+];
+
+const PROC_OFT_TIPO_LABEL = {
+  optometrico:'Optométrico', diagnostico:'Diagnóstico', laser:'Láser',
+  invasivo:'Invasivo', cirugia:'Cirugía'
+};
+const PROC_OFT_ESTADO_LABEL = {
+  programado:'Programado', preparacion:'En preparación', en_procedimiento:'En procedimiento',
+  recuperacion:'Recuperación', completado:'Completado', cancelado:'Cancelado'
 };
 
 // ════════════════════ PROCEDIMIENTOS ODONTOLÓGICOS ════════════════════
@@ -108,9 +142,10 @@ window.addEventListener('DOMContentLoaded', () => {
 
 // ════════════════════ CACHE LOCAL ════════════════════
 // cli/mas/expMas/vac/desp/hosp son las tablas veterinarias; quedan vacías en clínicas humanas
-const C = { p:[], c:[], m:[], n:[], e:[], prof:[], inv:[], mov:[], fin:[], fact:[], factItems:[], proc:[], hd:[], odo:[], perio:[], cli:[], mas:[], expMas:[], vac:[], desp:[], hosp:[] };
+const C = { p:[], c:[], m:[], n:[], e:[], prof:[], inv:[], mov:[], fin:[], fact:[], factItems:[], proc:[], procOft:[], hd:[], odo:[], perio:[], cli:[], mas:[], expMas:[], vac:[], desp:[], hosp:[] };
 let currentClinicaId = null;
 let currentClinica   = null;
+let procOftLoadError = null;
 
 // Columnas de profiles que el cliente puede recibir. La tabla tiene además una
 // columna `password` heredada del login antiguo: NUNCA debe viajar al navegador,
@@ -159,6 +194,43 @@ const fromMov     = r => ({ id:r.id, invId:r.inventario_id, tipo:r.tipo, cantida
 const fromFin     = r => ({ id:r.id, tipo:r.tipo, categoria:r.categoria||'general', descripcion:r.descripcion, monto:Number(r.monto), fecha:r.fecha, metodoPago:r.metodo_pago||'efectivo', referencia:r.referencia||null, citaId:r.cita_id||null, pacienteId:r.paciente_id||null, invMovId:r.inventario_mov_id||null, creadoPor:r.creado_por||null });
 const fromProc = r => ({ id:r.id, pacienteId:r.paciente_id, procedimiento:r.procedimiento, categoria:r.categoria, estado:r.estado||'pendiente', fecha:r.fecha, notas:r.notas||null, presupuesto:r.presupuesto!=null?Number(r.presupuesto):null, diente:r.diente||null });
 const toProc   = x => ({ paciente_id:x.pacienteId, procedimiento:x.procedimiento, categoria:x.categoria, estado:x.estado||'pendiente', fecha:x.fecha||hoy(), notas:x.notas||null, presupuesto:x.presupuesto||null, diente:x.diente||null, clinica_id:currentClinicaId });
+const fromProcOft = r => ({
+  id:r.id, pacienteId:r.paciente_id, citaId:r.cita_id||null,
+  procedimiento:r.procedimiento, categoria:r.categoria, tipo:r.tipo,
+  especialidad:r.especialidad||'', fecha:r.fecha, hora:(r.hora||'').slice(0,5),
+  profesionalId:r.profesional_id||null, profesionalNombre:r.profesional_nombre||'',
+  rolProfesional:r.rol_profesional||'', firmaUrl:r.firma_url||null,
+  estado:r.estado||'programado', prioridad:r.prioridad||'normal',
+  sala:r.sala||'', ojo:r.ojo||'no_aplica', diagnosticoIndicacion:r.diagnostico_indicacion||'',
+  procedimientoRealizado:r.procedimiento_realizado||'', tecnicaUtilizada:r.tecnica_utilizada||'',
+  hallazgosPrevios:r.hallazgos_previos||'', anestesia:r.anestesia||'ninguna',
+  equipoUtilizado:r.equipo_utilizado||'', materialesImplantes:r.materiales_implantes||'',
+  dispositivoImplantado:r.dispositivo_implantado||'', medicamentoAdministrado:r.medicamento_administrado||'',
+  hallazgosPosteriores:r.hallazgos_posteriores||'', complicaciones:r.complicaciones||'Ninguna',
+  resultadoInmediato:r.resultado_inmediato||'', indicacionesPosteriores:r.indicaciones_posteriores||'',
+  seguimientoRequerido:r.seguimiento_requerido===true, fechaProximoControl:r.fecha_proximo_control||null,
+  referencia:r.referencia||'', consentimientoInformado:r.consentimiento_informado===true,
+  consentimientoFecha:r.consentimiento_fecha||null, adjuntos:Array.isArray(r.adjuntos)?r.adjuntos:[]
+});
+const toProcOft = x => ({
+  paciente_id:x.pacienteId, cita_id:x.citaId||null, procedimiento:x.procedimiento,
+  categoria:x.categoria, tipo:x.tipo, especialidad:x.especialidad||null,
+  fecha:x.fecha||hoy(), hora:x.hora||null, profesional_id:x.profesionalId||null,
+  profesional_nombre:x.profesionalNombre||null, rol_profesional:x.rolProfesional||null,
+  firma_url:x.firmaUrl||null,
+  estado:x.estado||'programado', prioridad:x.prioridad||'normal', sala:x.sala||null,
+  ojo:x.ojo||'no_aplica', diagnostico_indicacion:x.diagnosticoIndicacion||null,
+  procedimiento_realizado:x.procedimientoRealizado||null, tecnica_utilizada:x.tecnicaUtilizada||null,
+  hallazgos_previos:x.hallazgosPrevios||null, anestesia:x.anestesia||'ninguna',
+  equipo_utilizado:x.equipoUtilizado||null, materiales_implantes:x.materialesImplantes||null,
+  dispositivo_implantado:x.dispositivoImplantado||null, medicamento_administrado:x.medicamentoAdministrado||null,
+  hallazgos_posteriores:x.hallazgosPosteriores||null, complicaciones:x.complicaciones||'Ninguna',
+  resultado_inmediato:x.resultadoInmediato||null, indicaciones_posteriores:x.indicacionesPosteriores||null,
+  seguimiento_requerido:x.seguimientoRequerido===true, fecha_proximo_control:x.fechaProximoControl||null,
+  referencia:x.referencia||null, consentimiento_informado:x.consentimientoInformado===true,
+  consentimiento_fecha:x.consentimientoFecha||null, adjuntos:Array.isArray(x.adjuntos)?x.adjuntos:[],
+  clinica_id:currentClinicaId
+});
 const fromHD   = r => ({ id:r.id, pacienteId:r.paciente_id, motivoConsulta:r.motivo_consulta||'', antecedentesMedicos:r.antecedentes_medicos||'', medicamentosActuales:r.medicamentos_actuales||'', alergiasMedicamentos:r.alergias_medicamentos||'', enfermedadesSistemicas:r.enfermedades_sistemicas||'', ultimaVisitaDental:r.ultima_visita_dental||'', tratamientosPrevios:r.tratamientos_previos||'', habitosOrales:r.habitos_orales||'', higieneOral:r.higiene_oral||'', examenExtraoral:r.examen_extraoral||'', examenTejidosBlandos:r.examen_tejidos_blandos||'', examenOclusion:r.examen_oclusion||'', examenAtm:r.examen_atm||'', diagnosticoPrincipal:r.diagnostico_principal||'', observaciones:r.observaciones||'' });
 const toHD     = (x,pid) => ({ paciente_id:pid, motivo_consulta:x.motivoConsulta||null, antecedentes_medicos:x.antecedentesMedicos||null, medicamentos_actuales:x.medicamentosActuales||null, alergias_medicamentos:x.alergiasMedicamentos||null, enfermedades_sistemicas:x.enfermedadesSistemicas||null, ultima_visita_dental:x.ultimaVisitaDental||null, tratamientos_previos:x.tratamientosPrevios||null, habitos_orales:x.habitosOrales||null, higiene_oral:x.higieneOral||null, examen_extraoral:x.examenExtraoral||null, examen_tejidos_blandos:x.examenTejidosBlandos||null, examen_oclusion:x.examenOclusion||null, examen_atm:x.examenAtm||null, diagnostico_principal:x.diagnosticoPrincipal||null, observaciones:x.observaciones||null, clinica_id:currentClinicaId });
 const fromOdo  = r => ({ id:r.id, pacienteId:r.paciente_id, dientes:r.dientes||{}, observaciones:r.observaciones||'' });
@@ -237,6 +309,18 @@ async function loadAll() {
       C.perio = rperio.error ? [] : (rperio.data||[]).map(fromPerio);
     } else {
       C.proc = []; C.hd = []; C.odo = []; C.perio = [];
+    }
+    // Oftalmología usa una tabla propia. Si la migración aún no se ejecutó, el
+    // resto del sistema sigue cargando y la vista explica qué falta.
+    if(esOftalmologia() || esProfesionalOftalmo() || isSuperAdmin()) {
+      const rpo = await sb.from('procedimientos_oftalmologicos')
+        .select('*').eq('clinica_id', currentClinicaId)
+        .order('fecha', {ascending:false});
+      procOftLoadError = rpo.error || null;
+      C.procOft = rpo.error ? [] : (rpo.data||[]).map(fromProcOft);
+    } else {
+      procOftLoadError = null;
+      C.procOft = [];
     }
     // Tablas veterinarias (opcionales, igual que las odontológicas): solo se
     // piden en clínicas veterinarias y se toleran si aún no existen en Supabase.
@@ -661,7 +745,7 @@ function limpiarPendientesSesion() {
 }
 
 async function entrarConPerfil(profile) {
-  const rolLabel = {admin:'Administración',medico:'Médico',medico_admin:'Médico Adm.',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',farmaceutico:'Farmacéutico',odontologo:'Odontólogo'}[profile.rol]||profile.rol;
+  const rolLabel = {admin:'Administración',medico:'Médico',medico_admin:'Médico Adm.',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',farmaceutico:'Farmacéutico',odontologo:'Odontólogo',optometrista:'Optometrista',oftalmologo:'Oftalmólogo'}[profile.rol]||profile.rol;
   currentClinicaId = profile.clinica_id || null;
   // Obtener email desde todas las fuentes disponibles
   let emailFinal = (profile.email || '').trim().toLowerCase() || null;
@@ -863,7 +947,7 @@ async function navigate(view, patientId) {
   if(el) el.classList.add('active');
   const mi=document.querySelector(`.menu-item[onclick*="'${view}'"]`);
   if(mi) mi.classList.add('active');
-  const titles={dashboard:'Dashboard',expedientes:'Expedientes Clínicos',pacientes:'Pacientes',citas:'Citas',agendas:'Agendas',medicaciones:'Medicaciones',notas:'Notas Clínicas',atendidos:'Atendidos por Día',estadisticas:'Estadísticas',configuracion:'Configuración Clínica',exportar:'Exportar / Enviar','paciente-detalle':'Expediente del Paciente',admin:'Administración',inventario:'Inventario',finanzas:'Finanzas',procedimientos:'Procedimientos Odontológicos',farmacia:'Farmacia',clientes:'Clientes',mascotas:'Mascotas','mascota-detalle':'Ficha de la Mascota',hospitalizacion:'Hospitalización'};
+  const titles={dashboard:'Dashboard',expedientes:'Expedientes Clínicos',pacientes:'Pacientes',citas:'Citas',agendas:'Agendas',medicaciones:'Medicaciones',notas:'Notas Clínicas',atendidos:'Atendidos por Día',estadisticas:'Estadísticas',configuracion:'Configuración Clínica',exportar:'Exportar / Enviar','paciente-detalle':'Expediente del Paciente',admin:'Administración',inventario:'Inventario',finanzas:'Finanzas',procedimientos:'Procedimientos Odontológicos','procedimientos-oftalmo':'Procedimientos y Quirófano',farmacia:'Farmacia',clientes:'Clientes',mascotas:'Mascotas','mascota-detalle':'Ficha de la Mascota',hospitalizacion:'Hospitalización'};
   document.getElementById('page-title').textContent = titles[view]||view;
   currentView=view;
   if(patientId) { if(view==='mascota-detalle') currentMascotaId=patientId; else currentPatientId=patientId; }
@@ -889,6 +973,7 @@ async function navigate(view, patientId) {
   if(view==='pacientes' && (role==='farmaceutico' || esFarmacia)) { navigate('farmacia'); return; }
   if(view==='expedientes' && (role==='farmaceutico' || esFarmacia)) { navigate('farmacia'); return; }
   if(view==='procedimientos' && !isOdontologo() && !isSuperAdmin()) { navigate('dashboard'); return; }
+  if(view==='procedimientos-oftalmo' && !puedeGestionarProcOft()) { navigate('dashboard'); return; }
   // En veterinaria el paciente es la mascota: Pacientes y Expedientes humanos
   // no tienen sentido y se redirigen a sus equivalentes.
   if(esVeterinaria() && view==='pacientes')   { navigate('mascotas'); return; }
@@ -930,6 +1015,7 @@ function renderView(v) {
     case 'farmacia': renderFarmacia(); break;
     case 'paciente-detalle': renderDetalleP(currentPatientId); break;
     case 'procedimientos': renderProcedimientosView(); break;
+    case 'procedimientos-oftalmo': renderProcedimientosOftView(); break;
     case 'clientes': renderClientes(); break;
     case 'mascotas': renderMascotas(); break;
     case 'mascota-detalle': renderDetalleMascota(currentMascotaId); break;
@@ -1096,7 +1182,7 @@ function renderDashboardSA() {
   const ingresosH     = C.fin.filter(f=>f.fecha===h&&f.tipo==='ingreso').reduce((s,f)=>s+Number(f.monto||0),0);
   const egresosH      = C.fin.filter(f=>f.fecha===h&&f.tipo==='egreso').reduce((s,f)=>s+Number(f.monto||0),0);
   const sinStock      = C.inv.filter(p=>p.stock<=0).length;
-  const medicos       = C.prof.filter(p=>['medico','medico_admin','admin','recepcion','enfermeria'].includes(p.rol));
+  const medicos       = C.prof.filter(p=>['medico','medico_admin','admin','recepcion','enfermeria','optometrista','oftalmologo'].includes(p.rol));
 
   const view = document.getElementById('view-dashboard');
   view.innerHTML = `
@@ -1322,7 +1408,7 @@ function renderDashboardPorUsuario() {
   const el = document.getElementById('dash-por-usuario');
   if(!el) return;
   if(currentUser?.key === 'medico') { el.style.display='none'; return; }
-  const medicos = C.prof.filter(p => ['medico','medico_admin','admin','enfermeria','recepcion'].includes(p.rol));
+  const medicos = C.prof.filter(p => ['medico','medico_admin','admin','enfermeria','recepcion','optometrista','oftalmologo'].includes(p.rol));
   if(!medicos.length) { el.style.display='none'; return; }
   el.style.display='';
   const citasHoy = C.c.filter(c => c.fecha === h);
@@ -1334,7 +1420,7 @@ function renderDashboardPorUsuario() {
           const atendidas = citasHoy.filter(c => c.medicoId === u.id && c.estado === 'completada').length;
           const pendientes = citasHoy.filter(c => c.medicoId === u.id && (c.estado === 'pendiente'||c.estado==='confirmada')).length;
           const total = citasHoy.filter(c => c.medicoId === u.id).length;
-          const rolLabel = {admin:'Administración',medico:'Médico',medico_admin:'Médico Adm.',recepcion:'Recepcionista',enfermeria:'Enfermería',farmaceutico:'Farmacéutico'}[u.rol]||u.rol;
+          const rolLabel = {admin:'Administración',medico:'Médico',medico_admin:'Médico Adm.',recepcion:'Recepcionista',enfermeria:'Enfermería',farmaceutico:'Farmacéutico',optometrista:'Optometrista',oftalmologo:'Oftalmólogo'}[u.rol]||u.rol;
           const pct = total ? Math.round(atendidas/total*100) : 0;
           return `<div style="background:var(--bg);border-radius:12px;padding:14px;border:1.5px solid var(--border)">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
@@ -1783,7 +1869,7 @@ function renderDetalleP(pid){
 
   document.getElementById('tab-notas-p').innerHTML=`<div class="card">
     <div class="card-header"><h3>📝 Notas Clínicas</h3><button class="btn btn-primary btn-sm" onclick="openModalNotaP(${p.id})">+ Nueva</button></div>
-    ${notas.length?`<div class="timeline">${notas.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(n=>`<div class="timeline-item"><div class="timeline-date">${formatFecha(n.fecha)} · <span class="tag tag-blue" style="font-size:10px">${NOTA_TIPO_ICON[n.tipo]||'📝'} ${notaTipoLabel(n.tipo)}</span></div><div class="timeline-content">${n.titulo?`<strong style="display:block;margin-bottom:5px">${n.titulo}</strong>`:''}${_signosChipsHTML(n.signos)}${n.contenido?`<p style="white-space:pre-wrap;line-height:1.7">${n.contenido}</p>`:''}<div style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-secondary btn-sm" onclick="verNota(${n.id})">👁️ Ver</button><button class="btn btn-secondary btn-sm" onclick="openModalNota(${n.id})">✏️ Editar</button><button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})">🖨️</button><button class="btn btn-danger btn-sm" onclick="eliminarNota(${n.id})">🗑️</button></div></div></div>`).join('')}</div>`:'<div class="empty-state"><div class="empty-icon">📝</div><p>Sin notas</p></div>'}
+    ${notas.length?`<div class="timeline">${notas.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(n=>`<div class="timeline-item"><div class="timeline-date">${formatFecha(n.fecha)} · <span class="tag tag-blue" style="font-size:10px">${NOTA_TIPO_ICON[n.tipo]||'📝'} ${notaTipoLabel(n.tipo)}</span></div><div class="timeline-content">${n.titulo?`<strong style="display:block;margin-bottom:5px">${n.titulo}</strong>`:''}${_signosChipsHTML(n.signos)}${n.contenido?`<p style="white-space:pre-wrap;line-height:1.7">${n.contenido}</p>`:''}<div style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-secondary btn-sm" onclick="verNota(${n.id})">👁️ Ver</button><button class="btn btn-secondary btn-sm" onclick="editarNota(${n.id})">✏️ Editar</button><button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})">🖨️</button><button class="btn btn-danger btn-sm" onclick="eliminarNota(${n.id})">🗑️</button></div></div></div>`).join('')}</div>`:'<div class="empty-state"><div class="empty-icon">📝</div><p>Sin notas</p></div>'}
   </div>`;
 
   // Pestañas odontológicas — solo visibles para odontólogo / superadmin
@@ -1796,6 +1882,10 @@ function renderDetalleP(pid){
     renderPeriodontograma(pid);
     renderProcedimientosTab(pid);
   }
+  const esOft = puedeGestionarProcOft();
+  const tabOft = document.getElementById('tab-btn-proc-oft-p');
+  if(tabOft) tabOft.style.display = esOft ? '' : 'none';
+  if(esOft) renderProcedimientosOftTab(pid);
 
   const exp=C.e.find(x=>x.pacienteId===pid)||{};
   const imc=(exp.peso&&exp.talla)?(exp.peso/((exp.talla/100)**2)).toFixed(1):null;
@@ -1803,7 +1893,7 @@ function renderDetalleP(pid){
   <div class="card">
     <div class="card-header"><h3>📁 Expediente Médico</h3>
       <div style="display:flex;gap:8px">
-        ${(currentClinica?.tipo==='optica'||isSuperAdmin())?`<button class="btn btn-secondary btn-sm" onclick="abrirExamenVisual(${pid})">👁️ Examen Visual</button>`:''}
+        ${(currentClinica?.tipo==='optica'||esOftalmologia()||isSuperAdmin())?`<button class="btn btn-secondary btn-sm" onclick="abrirExamenVisual(${pid})">👁️ Examen Visual</button>`:''}
         <button class="btn btn-primary btn-sm" onclick="guardarExpediente(${pid})">💾 Guardar</button>
       </div>
     </div>
@@ -1878,6 +1968,7 @@ function imprimirExpedienteCompleto(pid) {
   const notas = C.n.filter(x=>x.pacienteId===pid);
   const examenes = notas.filter(n=>n.tipo==='examen_visual').sort((a,b)=>b.fecha.localeCompare(a.fecha));
   const otrasNotas = notas.filter(n=>n.tipo!=='examen_visual').sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  const procOft = (C.procOft||[]).filter(x=>x.pacienteId===pid).sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''));
   const cl   = currentClinica;
   const imc  = (exp.peso&&exp.talla) ? (exp.peso/((exp.talla/100)**2)).toFixed(1) : null;
   const edad = _getEdadNum(p.fechaNac);
@@ -1992,23 +2083,37 @@ function imprimirExpedienteCompleto(pid) {
   // ── EXAMEN VISUAL ──
   const secExamen = examenes.length ? sec('👁️','Exámenes Visuales','#6d28d9') +
     examenes.map(ev => {
-      // Parsear el contenido de texto a bloques visuales
-      const lines = (ev.contenido||'').split('\n');
-      const bloques = {};
-      let bloque = '';
-      lines.forEach(l => {
-        const l2 = l.trim();
-        if(l2.startsWith('▸')) { bloque = l2.replace('▸','').trim().split('\n')[0]; bloques[bloque]=[]; }
-        else if(bloque && l2 && !l2.startsWith('╔') && !l2.startsWith('╚') && !l2.startsWith('║')) {
-          bloques[bloque] = bloques[bloque]||[];
-          bloques[bloque].push(l2);
-        }
-      });
-      const blk = (titulo) => bloques[titulo] ? `
+      // El mismo parser alimenta el expediente y la orden óptica individual.
+      // Acepta títulos con/sin tildes y conserva los exámenes históricos.
+      const bloques = parseExamenVisual(ev.contenido);
+      const bloque = (...titulos) => titulos
+        .map(t => bloques[normalizarOptico(t)])
+        .find(Boolean);
+      const blk = (titulo) => {
+        const b = bloque(titulo);
+        if(!b) return '';
+        const lineas = [
+          ...Object.entries(b.datos)
+            .filter(([k],i,arr) => arr.findIndex(([otro]) => normalizarOptico(otro) === normalizarOptico(k)) === i)
+            .map(([k,v]) => `${k}: ${v}`),
+          ...b.texto
+        ];
+        return `
         <div style="margin-bottom:10px">
           <div style="font-weight:700;font-size:11px;color:#6d28d9;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;border-bottom:1px solid #ede9fe;padding-bottom:3px">${titulo}</div>
-          <div style="font-size:12px;color:#374151;line-height:1.8;white-space:pre-wrap">${bloques[titulo].join('\n')}</div>
-        </div>` : '';
+          <div style="font-size:12px;color:#374151;line-height:1.8;white-space:pre-wrap">${lineas.map(escAttr).join('\n')}</div>
+        </div>`;
+      };
+      const servicios = bloque('SERVICIOS VISUALES','CORRECCIÓN RECOMENDADA');
+      const serviciosTxt = servicios ? [
+        ...servicios.texto,
+        ...['Material','Tratamientos'].map(k => {
+          const v = servicios.datos[k] || servicios.datos[normalizarOptico(k)];
+          return v ? `${k}: ${v}` : '';
+        }).filter(Boolean)
+      ] : [];
+      const diagnostico = bloque('DIAGNÓSTICO');
+      const observaciones = bloque('OBSERVACIONES');
       return `
         <div style="border:1px solid #ede9fe;border-radius:10px;padding:16px;margin-bottom:14px;background:#faf5ff;break-inside:avoid">
           <div style="font-weight:700;font-size:13px;color:#6d28d9;margin-bottom:12px;padding-bottom:8px;border-bottom:1.5px solid #ede9fe">
@@ -2027,24 +2132,29 @@ function imprimirExpedienteCompleto(pid) {
             ${blk('BIOMICROSCOPÍA')}
             ${blk('FONDO DE OJO')}
           </div>
-          ${bloques['DIAGNÓSTICO']?`<div style="margin-top:10px;padding:10px;background:#fff;border-radius:6px;border:1px solid #ede9fe"><strong style="font-size:12px;color:#6d28d9">DIAGNÓSTICO</strong><p style="margin:4px 0 0;font-size:13px">${bloques['DIAGNÓSTICO'].join(' ')}</p></div>`:''}
-          ${bloques['CORRECCIÓN RECOMENDADA']?`<div style="margin-top:8px;padding:10px;background:#fff;border-radius:6px;border:1px solid #ede9fe"><strong style="font-size:12px;color:#6d28d9">CORRECCIÓN RECOMENDADA</strong><p style="margin:4px 0 0;font-size:13px">${bloques['CORRECCIÓN RECOMENDADA'].join(' ')}</p></div>`:''}
-          ${bloques['OBSERVACIONES']?`<div style="margin-top:8px;padding:10px;background:#fff;border-radius:6px;border:1px solid #ede9fe"><strong style="font-size:12px;color:#6d28d9">OBSERVACIONES</strong><p style="margin:4px 0 0;font-size:13px">${bloques['OBSERVACIONES'].join(' ')}</p></div>`:''}
+          ${diagnostico?`<div style="margin-top:10px;padding:10px;background:#fff;border-radius:6px;border:1px solid #ede9fe"><strong style="font-size:12px;color:#6d28d9">DIAGNÓSTICO</strong><p style="margin:4px 0 0;font-size:13px">${diagnostico.texto.map(escAttr).join(' ')}</p></div>`:''}
+          ${serviciosTxt.length?`<div style="margin-top:8px;padding:10px;background:#fff;border-radius:6px;border:1px solid #ede9fe"><strong style="font-size:12px;color:#6d28d9">SERVICIOS VISUALES</strong><p style="margin:4px 0 0;font-size:13px;white-space:pre-wrap">${serviciosTxt.map(escAttr).join('\n')}</p></div>`:''}
+          ${observaciones?`<div style="margin-top:8px;padding:10px;background:#fff;border-radius:6px;border:1px solid #ede9fe"><strong style="font-size:12px;color:#6d28d9">OBSERVACIONES</strong><p style="margin:4px 0 0;font-size:13px">${observaciones.texto.map(escAttr).join(' ')}</p></div>`:''}
         </div>`;
     }).join('') : '';
+
+  const secProcOft = procOft.length ? sec('🏥','Procedimientos Oftalmológicos','#0369a1') + `
+    <table><thead><tr><th>Fecha</th><th>Procedimiento</th><th>Ojo</th><th>Estado</th><th>Profesional</th></tr></thead><tbody>
+      ${procOft.map(x=>`<tr><td>${formatFecha(x.fecha)}</td><td><strong>${escAttr(x.procedimiento)}</strong><br><span style="font-size:10px;color:#64748b">${escAttr(x.categoria||'')}</span></td><td>${escAttr(x.ojo==='no_aplica'?'—':x.ojo)}</td><td>${escAttr(PROC_OFT_ESTADO_LABEL[x.estado]||x.estado)}</td><td>${escAttr(x.profesionalNombre||'—')}</td></tr>`).join('')}
+    </tbody></table>` : '';
 
   const pie = `
     <div style="text-align:center;margin-top:30px;padding-top:12px;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:11px">
       Lumea Med — Sistema de Gestión Clínica | lumeamed.net · ${new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'})}
     </div>`;
 
-  const body = cabecera + secPaciente + secExp + secExamen + secCitas + secMeds + secNotas + pie;
+  const body = cabecera + secPaciente + secExp + secExamen + secProcOft + secCitas + secMeds + secNotas + pie;
   pdfAbrir(`Expediente — ${p.nombre} ${p.apellidos}`, body, {orientation:'portrait'});
 }
 
 function switchTab(tabId, btn){
   if(tabId==='tab-examenes' && currentPatientId) renderExamenes(currentPatientId);
-  ['tab-info','tab-citas-p','tab-meds-p','tab-notas-p','tab-expediente','tab-examenes','tab-historial-dental','tab-odontograma','tab-periodontograma','tab-procedimientos-p'].forEach(id=>{ const e=document.getElementById(id); if(e) e.style.display='none'; });
+  ['tab-info','tab-citas-p','tab-meds-p','tab-notas-p','tab-expediente','tab-examenes','tab-historial-dental','tab-odontograma','tab-periodontograma','tab-procedimientos-p','tab-proc-oft-p'].forEach(id=>{ const e=document.getElementById(id); if(e) e.style.display='none'; });
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.getElementById(tabId).style.display='block';
   if(btn) btn.classList.add('active');
@@ -2306,12 +2416,12 @@ function setMascotaSelect(mid) {
 }
 
 function fillMedicoSelect(selId, selectedId) {
-  const medicos = C.prof.filter(p => ['medico','medico_admin','dr','dra','admin'].includes(p.rol));
+  const medicos = C.prof.filter(p => ['medico','medico_admin','dr','dra','admin','optometrista','oftalmologo'].includes(p.rol));
   const sel = document.getElementById(selId);
   sel.innerHTML = '<option value="">Sin asignar</option>' +
     medicos.map(m=>`<option value="${m.id}">${m.icono||'👨‍⚕️'} ${m.nombre}</option>`).join('');
   if (selectedId) sel.value = selectedId;
-  else if (['medico','medico_admin','admin'].includes(currentUser?.key)) sel.value = currentUser.id;
+  else if (['medico','medico_admin','admin','optometrista','oftalmologo'].includes(currentUser?.key)) sel.value = currentUser.id;
 }
 
 // ════════════════════ HORARIOS Y DISPONIBILIDAD ════════════════════
@@ -2441,7 +2551,7 @@ function formatHora12(h24) {
 }
 
 function openModalCita(id){
-  const isMedico = currentUser?.key === 'medico';
+  const isMedico = ['medico','optometrista','oftalmologo'].includes(currentUser?.key);
   const esVet = esVeterinaria();
   editingCitaId=id||null;
   document.getElementById('modal-cita-title').textContent=id?'✏️ Editar Cita':'📅 Nueva Cita';
@@ -2540,7 +2650,7 @@ async function guardarCita(){
     const minH = _getMinHoraHoy();
     if(minH && hora < minH){ toast('No se puede agendar en un horario ya pasado','error'); return; }
   }
-  const isMedico = currentUser?.key === 'medico';
+  const isMedico = ['medico','optometrista','oftalmologo'].includes(currentUser?.key);
   const medicoId = (isMedico && !isSuperAdmin()) ? currentUser.id : (document.getElementById('c-medico').value||null);
   const duracionMin = esVet ? (parseInt(document.getElementById('c-duracion').value) || 30) : 30;
   const tipoCita = tipoElegido;
@@ -3069,7 +3179,7 @@ function renderNotas(){
         <div class="actions-cell" style="gap:3px;flex-wrap:nowrap">
           <button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})">🖨️</button>
           <button class="btn btn-secondary btn-sm" onclick="verNota(${n.id})">👁️</button>
-          <button class="btn btn-secondary btn-sm" onclick="openModalNota(${n.id})">✏️</button>
+          <button class="btn btn-secondary btn-sm" onclick="editarNota(${n.id})">✏️</button>
           <button class="btn btn-danger btn-sm" onclick="eliminarNota(${n.id})">🗑️</button>
         </div>
       </div>
@@ -3249,6 +3359,11 @@ function openModalNota(id){
 }
 function openModalNotaP(pid){ openModalNota(); setPacienteSelect('n-paciente', pid); }
 function openModalNotaMascota(mid){ openModalNota(); setMascotaSelectNota(mid); }
+function editarNota(id) {
+  const n=C.n.find(x=>x.id===id);
+  if(n?.tipo==='examen_visual' && n.pacienteId) abrirExamenVisual(n.pacienteId,n.id);
+  else openModalNota(id);
+}
 
 async function guardarNota(){
   if(!currentClinicaId){ toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
@@ -3353,7 +3468,7 @@ function parseExamenVisual(contenido) {
 function imprimirExamenVisual(n, p, cfg, fmtF, ini2) {
   const ev = parseExamenVisual(n.contenido);
   const h = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const sec = k => ev[k] || {datos:{},texto:[]};
+  const sec = (...ks) => ks.map(k => ev[normalizarOptico(k)]).find(Boolean) || {datos:{},texto:[]};
   const campo = (s, lbl) => s.datos[lbl] || s.datos[normalizarOptico(lbl)] || '';
   const dato = (k, lbl, fallback='') => campo(sec(k), lbl) || fallback;
   const texto = (k, fallback='') => sec(k).texto.join('\n') || fallback;
@@ -3366,9 +3481,10 @@ function imprimirExamenVisual(n, p, cfg, fmtF, ini2) {
   const avSc = sec('AGUDEZA VISUAL SIN CORRECCION');
   const avCc = sec('AGUDEZA VISUAL CON CORRECCION');
   const adapt = sec('PARAMETROS DE ADAPTACION');
-  const correccion = texto('CORRECCION RECOMENDADA', '—');
-  const material = dato('CORRECCION RECOMENDADA', 'Material');
-  const tratamientos = dato('CORRECCION RECOMENDADA', 'Tratamientos');
+  const servicios = sec('SERVICIOS VISUALES','CORRECCION RECOMENDADA');
+  const correccion = servicios.texto[0] || campo(servicios,'Corrección') || '—';
+  const material = campo(servicios, 'Material');
+  const tratamientos = campo(servicios, 'Tratamientos');
 
   const body = '<div class="badge-tipo" style="background:#0369A1">&#128065; EXAMEN VISUAL / ORDEN OPTICA</div>'
     + '<div style="font-size:11px;color:#64748B;font-weight:600;margin-bottom:18px">Fecha de emision: '+fmtF(n.fecha)+' &middot; N&deg; EV-'+n.id+'</div>'
@@ -3427,9 +3543,9 @@ function imprimirExamenVisual(n, p, cfg, fmtF, ini2) {
     + '</tbody></table>'
     + (texto('DIAGNOSTICO')?'<div class="section-title">&#128203; Diagnostico</div><div class="note-box"><div class="note-body">'+h(texto('DIAGNOSTICO'))+'</div></div>':'')
     + (texto('OBSERVACIONES')||campo(avCc,'Observaciones')?'<div class="section-title">&#9998; Observaciones</div><div class="note-box"><div class="note-body">'+h([campo(avCc,'Observaciones'),texto('OBSERVACIONES')].filter(Boolean).join('\n'))+'</div></div>':'')
-    + '<div class="sig-wrap"><div class="sig-box"><div style="height:46px"></div><div class="sig-line"></div>'
+    + '<div class="sig-wrap"><div class="sig-box">'+_firmaImgHTML(46)+'<div class="sig-line"></div>'
     +   '<div class="sig-name">'+h(currentUser?.name||cfg.nombreDoctor||'Profesional Responsable')+'</div>'
-    +   (cfg.especialidad?'<div class="sig-role">'+h(cfg.especialidad)+'</div>':'')
+    +   (especialidadFirma(cfg)?'<div class="sig-role">'+h(especialidadFirma(cfg))+'</div>':'')
     +   (cfg.registro?'<div class="sig-role">Reg. Med. '+h(cfg.registro)+'</div>':'')
     + '</div></div>';
 
@@ -3630,7 +3746,7 @@ let _examenFiltro    = '';
 
 // Subir y borrar exámenes queda reservado al personal médico
 function puedeGestionarExamenes() {
-  return isSuperAdmin() || ['medico','medico_admin','odontologo'].includes(currentUser?.key);
+  return isSuperAdmin() || ['medico','medico_admin','odontologo','optometrista','oftalmologo'].includes(currentUser?.key);
 }
 
 const fromExamen = r => ({
@@ -4779,6 +4895,8 @@ function closeModal(id){
   else if(id==='modal-medicacion') editingMedId=null;
   else if(id==='modal-nota') editingNotaId=null;
   else if(id==='modal-procedimiento') editingProcId=null;
+  else if(id==='modal-proc-oft') { editingProcOftId=null; procOftAdjuntosActuales=[]; delete document.getElementById(id).dataset.citaId; }
+  else if(id==='modal-examen-visual') editingExamenVisualId=null;
   else if(id==='modal-odontograma') _odoCurrentPid=null;
   else if(id==='modal-hosp') editingHospId=null;
   else if(id==='modal-vacuna') editingVacunaId=null;
@@ -5088,7 +5206,7 @@ async function cargarUsuariosLogin() { /* reemplazado por login email+password *
 let selAgendasDoc = null;
 let selAgendasDate = hoy();
 
-const rolLabel2 = r => ({admin:'Administración',medico:'Médico',medico_admin:'Médico Adm.',dr:'Dr.',dra:'Dra.',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',farmaceutico:'Farmacéutico'}[r]||r);
+const rolLabel2 = r => ({admin:'Administración',medico:'Médico',medico_admin:'Médico Adm.',dr:'Dr.',dra:'Dra.',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',farmaceutico:'Farmacéutico',odontologo:'Odontólogo',optometrista:'Optometrista',oftalmologo:'Oftalmólogo'}[r]||r);
 
 function renderAgendas() {
   selAgendasDate = hoy();
@@ -7212,6 +7330,312 @@ function imprimirPeriodontograma(pid) {
   pdfAbrir(`Periodontograma — ${p ? p.nombre+' '+p.apellidos : 'Paciente'}`, body, cfg);
 }
 
+// ════════════════════ OFTALMOLOGÍA — PROCEDIMIENTOS / QUIRÓFANO ════════════════════
+let editingProcOftId = null;
+let procOftAdjuntosActuales = [];
+let procOftFiltroEstado = 'activos';
+let procOftFiltroTipo = '';
+
+function _faltaTablaProcOft(error) {
+  return /procedimientos_oftalmologicos.*does not exist|could not find the table.*procedimientos_oftalmologicos|relation .*procedimientos_oftalmologicos/i.test(error?.message||'');
+}
+function _procOftCatalogoItem(nombre) {
+  for(const grupo of CATALOGO_PROCEDIMIENTOS_OFTALMO) {
+    if(grupo.procs.includes(nombre)) return {nombre, categoria:grupo.cat, tipo:grupo.tipo};
+  }
+  return null;
+}
+
+function _procOftCatalogoOptions(selected='') {
+  const conocido = _procOftCatalogoItem(selected);
+  const extra = selected && !conocido
+    ? `<option value="${escAttr(selected)}" data-cat="Otro" data-tipo="otro" selected>${escAttr(selected)}</option>` : '';
+  return extra + CATALOGO_PROCEDIMIENTOS_OFTALMO.map(grupo =>
+    `<optgroup label="${escAttr(grupo.cat)}">${grupo.procs.map(nombre =>
+      `<option value="${escAttr(nombre)}" data-cat="${escAttr(grupo.cat)}" data-tipo="${grupo.tipo}"${nombre===selected?' selected':''}>${escAttr(nombre)}</option>`
+    ).join('')}</optgroup>`
+  ).join('');
+}
+
+function _procOftEstadoTag(estado) {
+  return ({
+    programado:'tag-blue', preparacion:'tag-orange', en_procedimiento:'tag-cyan',
+    recuperacion:'tag-orange', completado:'tag-green', cancelado:'tag-red'
+  })[estado] || 'tag-gray';
+}
+
+function _procOftIcon(tipo) {
+  return ({optometrico:'👓',diagnostico:'🔬',laser:'✨',invasivo:'💉',cirugia:'🏥'})[tipo] || '👁️';
+}
+
+function _procOftCardHTML(proc, compacto=false) {
+  const p = C.p.find(x=>x.id===proc.pacienteId);
+  const paciente = p ? `${p.nombre} ${p.apellidos}` : 'Paciente no disponible';
+  const control = proc.seguimientoRequerido && proc.fechaProximoControl
+    ? `<div><span>Próximo control</span><strong>${formatFecha(proc.fechaProximoControl)}</strong></div>` : '';
+  return `<article class="proc-oft-card">
+    <div class="proc-oft-head">
+      <div class="proc-oft-icon">${_procOftIcon(proc.tipo)}</div>
+      <div style="flex:1;min-width:0">
+        <div class="proc-oft-title">${escAttr(proc.procedimiento)}</div>
+        <div class="proc-oft-meta">${escAttr(proc.categoria||PROC_OFT_TIPO_LABEL[proc.tipo]||'Procedimiento')} · ${formatFecha(proc.fecha)}${proc.hora?' · '+escAttr(proc.hora):''}</div>
+        ${compacto?'':`<a href="#" onclick="navigate('paciente-detalle',${proc.pacienteId});return false" style="font-size:11.5px;color:var(--primary);font-weight:700">${escAttr(paciente)}</a>`}
+      </div>
+      <span class="tag ${_procOftEstadoTag(proc.estado)}">${escAttr(PROC_OFT_ESTADO_LABEL[proc.estado]||proc.estado)}</span>
+    </div>
+    <div class="proc-oft-data">
+      <div><span>Ojo</span><strong>${escAttr(proc.ojo==='no_aplica'?'No aplica':proc.ojo)}</strong></div>
+      <div><span>Responsable</span><strong>${escAttr(proc.profesionalNombre||'—')}</strong></div>
+      ${proc.sala?`<div><span>Sala</span><strong>${escAttr(proc.sala)}</strong></div>`:''}
+      ${control}
+    </div>
+    ${proc.diagnosticoIndicacion?`<p style="font-size:11.5px;color:var(--text-light);line-height:1.5;margin:7px 0">${escAttr(proc.diagnosticoIndicacion)}</p>`:''}
+    <div class="proc-oft-actions">
+      <button class="btn btn-secondary btn-sm" onclick="openModalProcOft(${proc.id})">✏️ Editar</button>
+      <button class="btn btn-secondary btn-sm" onclick="imprimirProcedimientoOft(${proc.id})">🖨️ Imprimir</button>
+      <button class="btn btn-danger btn-sm" onclick="eliminarProcedimientoOft(${proc.id})">🗑️</button>
+    </div>
+  </article>`;
+}
+
+function renderProcedimientosOftView() {
+  const el = document.getElementById('view-procedimientos-oftalmo');
+  if(!el) return;
+  if(procOftLoadError) {
+    el.innerHTML = `<div class="proc-oft-empty-db"><div style="font-size:28px;margin-bottom:8px">🗄️</div><strong>Módulo preparado, falta crear su tabla</strong><p style="margin-top:5px;font-size:12px">Ejecuta la sección “OFTALMOLOGIA - procedimientos y quirofano” de rls_setup.sql en Supabase.</p></div>`;
+    return;
+  }
+  const hoyStr = hoy();
+  const activas = C.procOft.filter(p=>!['completado','cancelado'].includes(p.estado));
+  const cirugias = activas.filter(p=>p.tipo==='cirugia');
+  const completados = C.procOft.filter(p=>p.estado==='completado');
+  const controles = C.procOft.filter(p=>p.seguimientoRequerido&&p.fechaProximoControl&&p.fechaProximoControl>=hoyStr);
+  let lista = [...C.procOft];
+  if(procOftFiltroEstado==='activos') lista=lista.filter(p=>!['completado','cancelado'].includes(p.estado));
+  else if(procOftFiltroEstado) lista=lista.filter(p=>p.estado===procOftFiltroEstado);
+  if(procOftFiltroTipo) lista=lista.filter(p=>p.tipo===procOftFiltroTipo);
+  const ascAgenda=procOftFiltroEstado==='activos'||['programado','preparacion','en_procedimiento','recuperacion'].includes(procOftFiltroEstado);
+  lista.sort((a,b)=>ascAgenda
+    ? (a.fecha||'').localeCompare(b.fecha||'')||(a.hora||'').localeCompare(b.hora||'')
+    : (b.fecha||'').localeCompare(a.fecha||'')||(b.hora||'').localeCompare(a.hora||''));
+  const filtro = (valor,label) => `<button class="chip${procOftFiltroEstado===valor?' active':''}" onclick="procOftFiltroEstado='${valor}';renderProcedimientosOftView()">${label}</button>`;
+  el.innerHTML = `
+    <div class="stats-grid" style="margin-bottom:18px">
+      <div class="stat-card"><div class="stat-icon si-blue">📅</div><div class="stat-info"><h3>${activas.length}</h3><p>En agenda</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-purple">🏥</div><div class="stat-info"><h3>${cirugias.length}</h3><p>Cirugías activas</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-green">✅</div><div class="stat-info"><h3>${completados.length}</h3><p>Completados</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-orange">🔔</div><div class="stat-info"><h3>${controles.length}</h3><p>Controles próximos</p></div></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div><h3>👁️ Procedimientos y Quirófano</h3><p class="text-light" style="font-size:12px;margin-top:3px">Agenda, nota clínica y seguimiento oftalmológico</p></div><button class="btn btn-primary" onclick="openModalProcOft()">+ Nuevo procedimiento</button></div>
+      <div class="proc-oft-filters">
+        ${filtro('activos','Activos')}${filtro('programado','Programados')}${filtro('en_procedimiento','En procedimiento')}${filtro('completado','Completados')}${filtro('','Todos')}
+        <select onchange="procOftFiltroTipo=this.value;renderProcedimientosOftView()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:20px;background:var(--card);color:var(--text);font-size:12px">
+          <option value="">Todos los tipos</option>${Object.entries(PROC_OFT_TIPO_LABEL).map(([v,l])=>`<option value="${v}"${procOftFiltroTipo===v?' selected':''}>${l}</option>`).join('')}
+        </select>
+      </div>
+      ${lista.length?`<div class="proc-oft-grid">${lista.map(p=>_procOftCardHTML(p)).join('')}</div>`:'<div class="empty-state"><div class="empty-icon">👁️</div><p>No hay procedimientos con estos filtros.</p></div>'}
+    </div>`;
+}
+
+function renderProcedimientosOftTab(pid) {
+  const el = document.getElementById('tab-proc-oft-p');
+  if(!el) return;
+  if(procOftLoadError) {
+    el.innerHTML = '<div class="proc-oft-empty-db">Falta ejecutar la sección de oftalmología de <strong>rls_setup.sql</strong>.</div>';
+    return;
+  }
+  const lista=(C.procOft||[]).filter(p=>p.pacienteId===pid).sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''));
+  el.innerHTML=`<div class="card"><div class="card-header"><h3>👁️ Procedimientos oftalmológicos</h3><button class="btn btn-primary btn-sm" onclick="openModalProcOft(null,${pid})">+ Nuevo</button></div>
+    ${lista.length?`<div class="proc-oft-grid">${lista.map(p=>_procOftCardHTML(p,true)).join('')}</div>`:'<div class="empty-state"><div class="empty-icon">👁️</div><p>Sin procedimientos registrados.</p></div>'}</div>`;
+}
+
+function onProcOftCatalogoChange() {
+  const sel=document.getElementById('po-procedimiento');
+  const opt=sel?.options[sel.selectedIndex];
+  const cat=opt?.dataset?.cat||'';
+  const tipo=opt?.dataset?.tipo||'';
+  document.getElementById('po-categoria').value=cat;
+  document.getElementById('po-tipo').value=tipo;
+  document.getElementById('po-tipo-label').value=PROC_OFT_TIPO_LABEL[tipo]||tipo;
+  if(!document.getElementById('po-especialidad').value) {
+    document.getElementById('po-especialidad').value=tipo==='optometrico'?'Optometría':'Oftalmología';
+  }
+}
+
+function syncProcOftSeguimiento() {
+  const on=document.getElementById('po-seguimiento')?.checked;
+  const wrap=document.getElementById('po-control-wrap');
+  if(wrap) wrap.style.opacity=on?'1':'.45';
+  const input=document.getElementById('po-control');
+  if(input) input.disabled=!on;
+}
+
+function syncProcOftConsentimiento() {
+  const on=document.getElementById('po-consentimiento')?.checked;
+  const wrap=document.getElementById('po-consent-fecha-wrap');
+  if(wrap) wrap.style.opacity=on?'1':'.45';
+  const input=document.getElementById('po-consent-fecha');
+  if(input) { input.disabled=!on; if(on&&!input.value) input.value=hoy(); }
+}
+
+function _renderAdjuntosProcOft() {
+  const el=document.getElementById('po-adjuntos-existentes');
+  if(!el) return;
+  el.innerHTML=procOftAdjuntosActuales.map((a,i)=>`<span class="proc-adjunto"><a href="${escAttr(a.url)}" target="_blank" rel="noopener">📎 ${escAttr(a.nombre||'Adjunto')}</a><button type="button" onclick="quitarAdjuntoProcOft(${i})" title="Quitar" style="border:0;background:none;color:#DC2626;cursor:pointer">✕</button></span>`).join('');
+}
+
+function quitarAdjuntoProcOft(index) {
+  procOftAdjuntosActuales.splice(index,1);
+  _renderAdjuntosProcOft();
+}
+
+function openModalProcOft(id=null, pacienteId=null, citaId=null) {
+  editingProcOftId=id||null;
+  const proc=id?(C.procOft||[]).find(x=>x.id===id):null;
+  document.getElementById('modal-proc-oft-title').textContent=proc?'✏️ Editar procedimiento':'👁️ Nuevo procedimiento / quirófano';
+  const selPac=document.getElementById('po-paciente');
+  selPac.innerHTML='<option value="">Seleccionar paciente...</option>'+C.p.map(p=>`<option value="${p.id}">${escAttr(p.nombre+' '+p.apellidos)}</option>`).join('');
+  selPac.value=String(proc?.pacienteId||pacienteId||'');
+  const selProc=document.getElementById('po-procedimiento');
+  selProc.innerHTML='<option value="">Seleccionar procedimiento...</option>'+_procOftCatalogoOptions(proc?.procedimiento||'');
+  selProc.value=proc?.procedimiento||'';
+  const valores={
+    'po-fecha':proc?.fecha||hoy(),'po-hora':proc?.hora||'','po-estado':proc?.estado||'programado',
+    'po-prioridad':proc?.prioridad||'normal','po-ojo':proc?.ojo||'no_aplica','po-sala':proc?.sala||'',
+    'po-especialidad':proc?.especialidad||currentUser?.especialidad||(esOftalmologia()?'Oftalmología':''),
+    'po-diagnostico':proc?.diagnosticoIndicacion||'','po-hallazgos-previos':proc?.hallazgosPrevios||'',
+    'po-realizado':proc?.procedimientoRealizado||'','po-tecnica':proc?.tecnicaUtilizada||'',
+    'po-anestesia':proc?.anestesia||'ninguna','po-equipo':proc?.equipoUtilizado||'',
+    'po-materiales':proc?.materialesImplantes||'','po-dispositivo':proc?.dispositivoImplantado||'',
+    'po-medicamento':proc?.medicamentoAdministrado||'','po-hallazgos-posteriores':proc?.hallazgosPosteriores||'',
+    'po-complicaciones':proc?.complicaciones||'Ninguna','po-resultado':proc?.resultadoInmediato||'',
+    'po-indicaciones':proc?.indicacionesPosteriores||'','po-control':proc?.fechaProximoControl||'',
+    'po-referencia':proc?.referencia||'','po-consent-fecha':proc?.consentimientoFecha||''
+  };
+  Object.entries(valores).forEach(([idCampo,v])=>{const e=document.getElementById(idCampo);if(e)e.value=v;});
+  document.getElementById('po-profesional').value=(proc?.profesionalNombre||currentUser?.name||'')+(proc?.rolProfesional?` · ${rolLabel2(proc.rolProfesional)}`:'');
+  document.getElementById('po-seguimiento').checked=proc?.seguimientoRequerido===true;
+  document.getElementById('po-consentimiento').checked=proc?.consentimientoInformado===true;
+  document.getElementById('po-adjuntos').value='';
+  procOftAdjuntosActuales=[...(proc?.adjuntos||[])];
+  _renderAdjuntosProcOft();
+  onProcOftCatalogoChange();
+  syncProcOftSeguimiento();
+  syncProcOftConsentimiento();
+  openModalOverlay('modal-proc-oft');
+  document.getElementById('modal-proc-oft').dataset.citaId=citaId||proc?.citaId||'';
+}
+
+async function subirAdjuntoProcOft(file,pacienteId,procId) {
+  if(file.size>10*1024*1024) throw new Error(`${file.name}: supera 10 MB`);
+  const ext=(file.name.split('.').pop()||'dat').toLowerCase().replace(/[^a-z0-9]/g,'');
+  const path=`procedimientos/${currentClinicaId}/${pacienteId}/${procId}/${Date.now()}-${crypto.randomUUID().slice(0,8)}.${ext}`;
+  const {error}=await sb.storage.from(STORAGE_BUCKET).upload(path,file,{upsert:false,contentType:file.type});
+  if(error) throw error;
+  const {data}=sb.storage.from(STORAGE_BUCKET).getPublicUrl(path);
+  return {nombre:file.name,url:data.publicUrl,path,tipo:file.type||null,tamano:file.size};
+}
+
+function _leerProcOftForm(procActual) {
+  const g=id=>(document.getElementById(id)?.value||'').trim();
+  return {
+    pacienteId:parseInt(g('po-paciente'))||null,
+    citaId:parseInt(document.getElementById('modal-proc-oft')?.dataset.citaId)||null,
+    procedimiento:g('po-procedimiento'),categoria:g('po-categoria'),tipo:g('po-tipo'),
+    especialidad:g('po-especialidad'),fecha:g('po-fecha'),hora:g('po-hora'),
+    profesionalId:procActual?.profesionalId||currentUser?.id||null,
+    profesionalNombre:procActual?.profesionalNombre||currentUser?.name||'',
+    rolProfesional:procActual?.rolProfesional||currentUser?.key||'',
+    firmaUrl:procActual?.firmaUrl||currentUser?.firmaUrl||currentClinica?.firma_url||null,
+    estado:g('po-estado'),prioridad:g('po-prioridad'),sala:g('po-sala'),ojo:g('po-ojo'),
+    diagnosticoIndicacion:g('po-diagnostico'),procedimientoRealizado:g('po-realizado'),
+    tecnicaUtilizada:g('po-tecnica'),hallazgosPrevios:g('po-hallazgos-previos'),
+    anestesia:g('po-anestesia'),equipoUtilizado:g('po-equipo'),materialesImplantes:g('po-materiales'),
+    dispositivoImplantado:g('po-dispositivo'),medicamentoAdministrado:g('po-medicamento'),
+    hallazgosPosteriores:g('po-hallazgos-posteriores'),complicaciones:g('po-complicaciones')||'Ninguna',
+    resultadoInmediato:g('po-resultado'),indicacionesPosteriores:g('po-indicaciones'),
+    seguimientoRequerido:document.getElementById('po-seguimiento').checked,
+    fechaProximoControl:document.getElementById('po-seguimiento').checked?g('po-control'):null,
+    referencia:g('po-referencia'),consentimientoInformado:document.getElementById('po-consentimiento').checked,
+    consentimientoFecha:document.getElementById('po-consentimiento').checked?g('po-consent-fecha'):null,
+    adjuntos:procOftAdjuntosActuales
+  };
+}
+
+async function guardarProcedimientoOft() {
+  if(!puedeGestionarProcOft()){toast('No tienes permiso para gestionar procedimientos','error');return;}
+  const eraEdicion=!!editingProcOftId;
+  const actual=editingProcOftId?(C.procOft||[]).find(x=>x.id===editingProcOftId):null;
+  const obj=_leerProcOftForm(actual);
+  if(!obj.pacienteId||!obj.procedimiento||!obj.fecha||!obj.diagnosticoIndicacion){toast('Completa paciente, procedimiento, fecha y diagnóstico/indicación','error');return;}
+  if(obj.estado==='completado'&&!obj.procedimientoRealizado){toast('Describe el procedimiento realizado antes de marcarlo como completado','error');return;}
+  const files=Array.from(document.getElementById('po-adjuntos').files||[]);
+  setLoading(true);
+  let error,guardadoId=editingProcOftId;
+  if(editingProcOftId){
+    ({error}=await sb.from('procedimientos_oftalmologicos').update({...toProcOft(obj),actualizado_en:new Date().toISOString()}).eq('id',editingProcOftId));
+  }else{
+    const r=await sb.from('procedimientos_oftalmologicos').insert([toProcOft(obj)]).select('id').single();
+    error=r.error;guardadoId=r.data?.id||null;
+  }
+  if(error){setLoading(false);toast(_faltaTablaProcOft(error)?'Falta ejecutar la sección de oftalmología de rls_setup.sql':'Error al guardar: '+error.message,'error');return;}
+  let avisoAdjunto='';
+  const quitados=(actual?.adjuntos||[]).filter(a=>a.path&&!procOftAdjuntosActuales.some(b=>b.path===a.path)).map(a=>a.path);
+  if(quitados.length)try{await sb.storage.from(STORAGE_BUCKET).remove(quitados);}catch(e){avisoAdjunto=' El registro se guardó, pero no se pudo borrar un adjunto retirado.';}
+  if(files.length&&guardadoId){
+    try{
+      for(const file of files) procOftAdjuntosActuales.push(await subirAdjuntoProcOft(file,obj.pacienteId,guardadoId));
+      const r=await sb.from('procedimientos_oftalmologicos').update({adjuntos:procOftAdjuntosActuales,actualizado_en:new Date().toISOString()}).eq('id',guardadoId);
+      if(r.error) avisoAdjunto=' El registro se guardó, pero no se asociaron los adjuntos.';
+    }catch(e){avisoAdjunto=' El registro se guardó, pero falló un adjunto: '+(e.message||e);}
+  }
+  setLoading(false);
+  closeModal('modal-proc-oft');
+  toast((eraEdicion?'Procedimiento actualizado':'Procedimiento registrado ✅')+avisoAdjunto,avisoAdjunto?'warning':'success');
+  logActivity('procedimiento_oftalmologico');
+  await loadAll();
+  if(currentView==='paciente-detalle')renderDetalleP(currentPatientId);else renderProcedimientosOftView();
+}
+
+async function eliminarProcedimientoOft(id) {
+  const proc=(C.procOft||[]).find(x=>x.id===id);if(!proc)return;
+  const ok=await customConfirm({icon:'👁️',title:'Eliminar procedimiento',msg:`¿Eliminar <strong>${escAttr(proc.procedimiento)}</strong>? La nota y sus adjuntos dejarán de estar disponibles.`,okText:'Eliminar',danger:true});
+  if(!ok)return;
+  setLoading(true);
+  const {error}=await sb.from('procedimientos_oftalmologicos').delete().eq('id',id);
+  if(!error){
+    const paths=(proc.adjuntos||[]).map(a=>a.path).filter(Boolean);
+    if(paths.length)try{await sb.storage.from(STORAGE_BUCKET).remove(paths);}catch(e){}
+  }
+  setLoading(false);
+  if(error){toast('Error al eliminar: '+error.message,'error');return;}
+  toast('Procedimiento eliminado');await loadAll();
+  if(currentView==='paciente-detalle')renderDetalleP(currentPatientId);else renderProcedimientosOftView();
+}
+
+function imprimirProcedimientoOft(id) {
+  const proc=(C.procOft||[]).find(x=>x.id===id);if(!proc)return;
+  const p=C.p.find(x=>x.id===proc.pacienteId);const cfg=getClinicaConfig();
+  const h=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const firmaUrl=proc.firmaUrl||((proc.profesionalId&&proc.profesionalId===currentUser?.id)?currentUser?.firmaUrl:null)||cfg.firmaUrl||null;
+  const firmaHTML=firmaUrl?`<div style="height:52px;display:flex;align-items:flex-end;justify-content:center"><img src="${h(firmaUrl)}" alt="Firma" style="max-height:52px;max-width:210px;object-fit:contain;mix-blend-mode:multiply;filter:brightness(1.25) contrast(1.7)"></div>`:'<div style="height:52px"></div>';
+  const fila=(lbl,val)=>val?`<tr><td style="width:28%;font-weight:700;color:#475569">${h(lbl)}</td><td>${h(val)}</td></tr>`:'';
+  const seccion=(titulo,contenido)=>contenido?`<div class="section-title">${titulo}</div><table><tbody>${contenido}</tbody></table>`:'';
+  const pNombre=p?`${p.nombre} ${p.apellidos}`:'Paciente no disponible';
+  const body=`<div class="badge-tipo" style="background:#0369A1">👁️ NOTA DE PROCEDIMIENTO</div>
+    <div style="font-size:11px;color:#64748B;font-weight:600;margin-bottom:16px">N.º PO-${proc.id} · ${formatFecha(proc.fecha)}${proc.hora?' · '+h(proc.hora):''}</div>
+    <div class="patient-box"><div class="patient-av">${h(p?((p.nombre||'?')[0]+(p.apellidos||'')[0]).toUpperCase():'?')}</div><div><div class="patient-name">${h(pNombre)}</div><div class="patient-meta">${p?.identificacion?'<span>ID: '+h(p.identificacion)+'</span>':''}${p?.fechaNac?'<span>'+h(calcEdad(p.fechaNac))+'</span>':''}${p?.telefono?'<span>Tel. '+h(p.telefono)+'</span>':''}</div></div></div>
+    ${seccion('📋 Identificación',fila('Procedimiento',proc.procedimiento)+fila('Categoría',proc.categoria)+fila('Tipo',PROC_OFT_TIPO_LABEL[proc.tipo]||proc.tipo)+fila('Especialidad',proc.especialidad)+fila('Ojo',proc.ojo==='no_aplica'?'No aplica':proc.ojo)+fila('Estado',PROC_OFT_ESTADO_LABEL[proc.estado]||proc.estado)+fila('Sala / Quirófano',proc.sala)+fila('Profesional',proc.profesionalNombre)+(proc.rolProfesional?fila('Rol profesional',rolLabel2(proc.rolProfesional)):''))}
+    ${seccion('🔎 Evaluación clínica',fila('Diagnóstico / indicación',proc.diagnosticoIndicacion)+fila('Hallazgos previos',proc.hallazgosPrevios))}
+    ${seccion('🛠️ Procedimiento y técnica',fila('Procedimiento realizado',proc.procedimientoRealizado)+fila('Técnica utilizada',proc.tecnicaUtilizada)+fila('Anestesia',proc.anestesia)+fila('Equipo utilizado',proc.equipoUtilizado)+fila('Materiales / implantes',proc.materialesImplantes)+fila('LIO / dispositivo',proc.dispositivoImplantado)+fila('Medicamento administrado',proc.medicamentoAdministrado))}
+    ${seccion('✅ Hallazgos y resultado',fila('Hallazgos posteriores',proc.hallazgosPosteriores)+fila('Complicaciones',proc.complicaciones||'Ninguna')+fila('Resultado inmediato',proc.resultadoInmediato))}
+    ${seccion('📅 Indicaciones y seguimiento',fila('Indicaciones posteriores',proc.indicacionesPosteriores)+fila('Seguimiento requerido',proc.seguimientoRequerido?'Sí':'No')+fila('Próximo control',proc.fechaProximoControl?formatFecha(proc.fechaProximoControl):'')+fila('Referencia / contrarreferencia',proc.referencia)+fila('Consentimiento informado',proc.consentimientoInformado?'Sí'+(proc.consentimientoFecha?' · '+formatFecha(proc.consentimientoFecha):''):'No'))}
+    ${(proc.adjuntos||[]).length?`<div class="section-title">📎 Documentos adjuntos</div><p style="font-size:11px;color:#475569">${proc.adjuntos.map(a=>h(a.nombre||'Adjunto')).join(' · ')}</p>`:''}
+    <div class="sig-wrap"><div class="sig-box">${firmaHTML}<div class="sig-line"></div><div class="sig-name">${h(proc.profesionalNombre||currentUser?.name||cfg.nombreDoctor||'Profesional responsable')}</div>${proc.especialidad?`<div class="sig-role">${h(proc.especialidad)}</div>`:''}${cfg.registro?`<div class="sig-role">Reg. Med. ${h(cfg.registro)}</div>`:''}</div></div>`;
+  pdfAbrir(`Nota de Procedimiento - ${proc.procedimiento} - ${pNombre}`,body,cfg);
+}
+
 // ════════════════════ ODONTOLOGÍA — PROCEDIMIENTOS ════════════════════
 let editingProcId = null;
 
@@ -7724,6 +8148,11 @@ function isSuperAdmin() {
 }
 function isFarmaceutico() { return currentUser?.key === 'farmaceutico'; }
 function isOdontologo()   { return currentUser?.key === 'odontologo'; }
+function esProfesionalOftalmo() { return ['optometrista','oftalmologo'].includes(currentUser?.key); }
+function esOftalmologia() { return currentClinica?.tipo === 'oftalmologia'; }
+function puedeGestionarProcOft() {
+  return isSuperAdmin() || ((esOftalmologia() || esProfesionalOftalmo()) && hasPermiso('proc_oftalmo'));
+}
 // La clínica veterinaria trabaja con clientes y mascotas en lugar de pacientes.
 // Se distingue por el tipo de clínica, igual que farmacia y óptica.
 function esVeterinaria()  { return currentClinica?.tipo === 'veterinaria'; }
@@ -7749,6 +8178,7 @@ function applyRoleMenu() {
   const isEnf    = role === 'enfermeria';
   const isFarm   = role === 'farmaceutico';
   const isOdonto = isOdontologo();
+  const isOft    = esOftalmologia() || esProfesionalOftalmo();
   const esFarmacia  = currentClinica?.tipo === 'farmacia';
   const modoFarmacia = isFarm || esFarmacia;
 
@@ -7782,6 +8212,7 @@ function applyRoleMenu() {
   vis('menu-notas',            hasClinica && hasPermiso('notas'));
   vis('menu-atendidos',        hasClinica && hasPermiso('atendidos') && !isOdonto);
   vis('menu-procedimientos',   hasClinica && (isOdonto || sa));
+  vis('menu-procedimientos-oftalmo', hasClinica && (sa || (isOft && hasPermiso('proc_oftalmo'))));
 
   // ─ Sección Gestión
   // Sin atajos por tipo de clínica: el menú refleja exactamente los permisos
@@ -7892,8 +8323,8 @@ function renderAdminClinicas() {
 function renderAdminUsuarios() {
   const el = document.getElementById('admin-usuarios-list');
   if(!el) return;
-  const rolLabel = r => ({admin:'Administración',medico:'Médico',medico_admin:'Médico Adm.',dr:'Dr.',dra:'Dra.',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',farmaceutico:'Farmacéutico'}[r]||r);
-  const rolTag   = r => ({admin:'tag-blue',medico:'tag-cyan',medico_admin:'tag-cyan',dr:'tag-cyan',dra:'tag-cyan',recepcion:'tag-orange',enfermeria:'tag-green',farmaceutico:'tag-emerald'}[r]||'tag-gray');
+  const rolLabel = r => ({admin:'Administración',medico:'Médico',medico_admin:'Médico Adm.',dr:'Dr.',dra:'Dra.',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',farmaceutico:'Farmacéutico',odontologo:'Odontólogo',optometrista:'Optometrista',oftalmologo:'Oftalmólogo'}[r]||r);
+  const rolTag   = r => ({admin:'tag-blue',medico:'tag-cyan',medico_admin:'tag-cyan',dr:'tag-cyan',dra:'tag-cyan',recepcion:'tag-orange',enfermeria:'tag-green',farmaceutico:'tag-emerald',odontologo:'tag-blue',optometrista:'tag-cyan',oftalmologo:'tag-blue'}[r]||'tag-gray');
   if(!adminUsuarios.length) {
     el.innerHTML = `<div class="empty-state"><div class="empty-icon">👥</div><p>No hay usuarios registrados.<br>Crea el primero con <strong>+ Nuevo Usuario</strong></p></div>`;
     return;
@@ -8057,7 +8488,9 @@ function renderTimeline(desde) {
 }
 
 // ── Examen Visual (Óptica) ──
-function abrirExamenVisual(pacienteId) {
+let editingExamenVisualId = null;
+function abrirExamenVisual(pacienteId, examenId=null) {
+  editingExamenVisualId=examenId||null;
   document.getElementById('ev-paciente-id').value = pacienteId;
   const campos = ['lm-esf-od','lm-cil-od','lm-eje-od','lm-add-od',
     'lm-esf-oi','lm-cil-oi','lm-eje-oi','lm-add-oi',
@@ -8077,7 +8510,48 @@ function abrirExamenVisual(pacienteId) {
     const el=document.getElementById(id); if(el) el.checked=false;
   });
   document.getElementById('ev-correccion').value = 'Ninguna por ahora';
-  document.getElementById('modal-examen-visual').classList.add('open');
+  const examen=examenId?C.n.find(n=>n.id===examenId&&n.tipo==='examen_visual'):null;
+  if(examen) {
+    const ev=parseExamenVisual(examen.contenido);
+    const sec=(...ks)=>ks.map(k=>ev[normalizarOptico(k)]).find(Boolean)||{datos:{},texto:[]};
+    const campo=(s,lbl)=>s.datos[lbl]||s.datos[normalizarOptico(lbl)]||'';
+    const limpio=v=>String(v||'').replace(/^—$/,'').replace(/\s*(?:mm|°)\s*$/i,'').trim();
+    const set=(id,v)=>{const el=document.getElementById(id);if(el)el.value=limpio(v);};
+    const poner=(s,m)=>Object.entries(m).forEach(([id,lbl])=>set(id,campo(s,lbl)));
+    poner(sec('LENSOMETRIA (ANTEOJOS ACTUALES)'),{
+      'lm-esf-od':'OD Esfera','lm-cil-od':'OD Cilindro','lm-eje-od':'OD Eje','lm-add-od':'OD Adición',
+      'lm-esf-oi':'OI Esfera','lm-cil-oi':'OI Cilindro','lm-eje-oi':'OI Eje','lm-add-oi':'OI Adición'
+    });
+    const avSc=sec('AGUDEZA VISUAL SIN CORRECCION');
+    poner(avSc,{'av-sc-od':'OD','av-sc-oi':'OI','av-sc-ao':'AO'});
+    const ae=campo(avSc,'Agujero estenopeico — OD');
+    if(ae){const m=ae.match(/^(.*?)\s+OI:\s*(.*)$/i);set('ae-od',m?m[1]:ae);set('ae-oi',m?m[2]:'');}
+    poner(sec('COVER TEST'),{'ev-cover':'Resultado','ev-cover-obs':'Observación'});
+    poner(sec('MOTILIDAD OCULAR EXTRINSECA'),{'ev-moe-obs':'Observaciones'});
+    poner(sec('EXAMINACION DE ACOMODACION'),{'ev-ppc':'PPC','ev-ppa':'PPA','ev-acomo-obs':'Observaciones'});
+    poner(sec('REFRACCION'),{
+      'rx-esf-od':'OD Esfera','rx-cil-od':'OD Cilindro','rx-eje-od':'OD Eje','rx-add-od':'OD Adición',
+      'rx-esf-oi':'OI Esfera','rx-cil-oi':'OI Cilindro','rx-eje-oi':'OI Eje','rx-add-oi':'OI Adición'
+    });
+    poner(sec('PARAMETROS DE ADAPTACION'),{
+      'pa-dip':'DIP General','pa-dip-od':'DIP OD','pa-dip-oi':'DIP OI','pa-altura':'Altura pupilar',
+      'pa-vertice':'Dist. al vértice','pa-pantoscopico':'Áng. pantoscópico','pa-panoramico':'Áng. panorámico',
+      'pa-horizontal':'Dist. horizontal','pa-vertical':'Dist. vertical','pa-diagonal':'Dist. diagonal','pa-puente':'Puente','pa-obs':'Observaciones'
+    });
+    poner(sec('AGUDEZA VISUAL CON CORRECCION'),{'av-cc-od':'OD','av-cc-oi':'OI','av-cc-ao':'AO','av-cc-obs':'Observaciones'});
+    poner(sec('REFLEJOS PUPILARES'),{'ev-rp-od':'OD','ev-rp-oi':'OI','ev-rp-obs':'Observaciones'});
+    poner(sec('BIOMICROSCOPIA'),{'ev-bm-od':'OD','ev-bm-oi':'OI','ev-bm-obs-od':'Obs. OD','ev-bm-obs-oi':'Obs. OI'});
+    poner(sec('FONDO DE OJO'),{'ev-fo-od':'OD','ev-fo-oi':'OI','ev-fo-obs':'Observaciones'});
+    const servicios=sec('SERVICIOS VISUALES','CORRECCION RECOMENDADA');
+    set('ev-correccion',servicios.texto[0]||campo(servicios,'Corrección')||'Ninguna por ahora');
+    set('ev-material',campo(servicios,'Material'));
+    const tratamientos=normalizarOptico(campo(servicios,'Tratamientos'));
+    [['tr-blueray','BLUE RAY'],['tr-fotocrom','FOTOCROMATICO'],['tr-antireflejo','ANTIRREFLEJO'],['tr-amarillo','FILTRO AMARILLO'],['tr-polarizado','POLARIZADO']].forEach(([id,t])=>{document.getElementById(id).checked=tratamientos.includes(t);});
+    set('ev-recomendaciones',sec('OBSERVACIONES').texto.join('\n'));
+  }
+  document.getElementById('modal-examen-visual-title').textContent=examen?'✏️ Editar Examen Visual':'👁️ Examen Visual Completo';
+  document.getElementById('btn-guardar-examen-visual').textContent=examen?'💾 Actualizar Examen':'💾 Guardar Examen Visual';
+  openModalOverlay('modal-examen-visual');
 }
 
 async function guardarExamenVisual() {
@@ -8154,18 +8628,23 @@ async function guardarExamenVisual() {
     g('ev-recomendaciones') ? `\n▸ OBSERVACIONES\n  ${g('ev-recomendaciones')}` : '',
   ].filter(l => l !== '').join('\n');
 
-  setLoading(true);
-  const {error} = await sb.from('notas').insert([toN({
+  const existente=editingExamenVisualId?C.n.find(n=>n.id===editingExamenVisualId):null;
+  const payload=toN({
     pacienteId: Number(pid), tipo:'examen_visual',
-    fecha: hoy(), titulo:`Examen Visual — ${formatFecha(hoy())}`, contenido
-  })]);
+    fecha: existente?.fecha||hoy(), titulo:existente?.titulo||`Examen Visual — ${formatFecha(hoy())}`, contenido
+  });
+  const eraEdicion=!!editingExamenVisualId;
+  setLoading(true);
+  const {error} = eraEdicion
+    ? await sb.from('notas').update(payload).eq('id',editingExamenVisualId)
+    : await sb.from('notas').insert([payload]);
   setLoading(false);
   if(error){ toast('Error al guardar: '+error.message,'error'); return; }
-  toast('Examen visual guardado ✅','success');
+  toast(eraEdicion?'Examen visual actualizado ✅':'Examen visual guardado ✅','success');
   closeModal('modal-examen-visual');
   await loadAll();
   if(currentView==='paciente-detalle') renderDetalleP(currentPatientId);
-  logActivity('nota');
+  if(!eraEdicion) logActivity('nota');
 }
 
 // ── logActivity ──
@@ -8406,8 +8885,8 @@ function renderDetallePanel(tab) {
 
   if(tab === 'usuarios') {
     const usuarios = adminUsuarios.filter(u=>u.clinica_id===id);
-    const rolLabel = r => ({admin:'Administrador',medico:'Médico',medico_admin:'Médico Adm.',recepcion:'Recepcionista',enfermeria:'Enfermería',farmaceutico:'Farmacéutico',superadmin:'Super Admin'}[r]||r);
-    const rolTag   = r => ({admin:'tag-blue',medico:'tag-cyan',medico_admin:'tag-cyan',recepcion:'tag-orange',enfermeria:'tag-green',farmaceutico:'tag-emerald'}[r]||'tag-gray');
+    const rolLabel = r => ({admin:'Administrador',medico:'Médico',medico_admin:'Médico Adm.',recepcion:'Recepcionista',enfermeria:'Enfermería',farmaceutico:'Farmacéutico',superadmin:'Super Admin',odontologo:'Odontólogo',optometrista:'Optometrista',oftalmologo:'Oftalmólogo'}[r]||r);
+    const rolTag   = r => ({admin:'tag-blue',medico:'tag-cyan',medico_admin:'tag-cyan',recepcion:'tag-orange',enfermeria:'tag-green',farmaceutico:'tag-emerald',odontologo:'tag-blue',optometrista:'tag-cyan',oftalmologo:'tag-blue'}[r]||'tag-gray');
     document.getElementById('detalle-panel-usuarios').innerHTML = usuarios.length
       ? `<div class="table-wrap"><table>
           <thead><tr><th>Usuario</th><th>Email</th><th>Rol</th></tr></thead>
@@ -8591,7 +9070,7 @@ function _firmaImgHTML(alto) {
 }
 
 // Roles clínicos que ejercen una especialidad; el resto no muestra el campo.
-const ROLES_CON_ESPECIALIDAD = ['medico','medico_admin','odontologo','enfermeria'];
+const ROLES_CON_ESPECIALIDAD = ['medico','medico_admin','odontologo','enfermeria','optometrista','oftalmologo'];
 
 // La columna profiles.especialidad puede no existir todavía. Si es así, se
 // guarda el resto del usuario igual en lugar de fallar el formulario entero.
@@ -11437,7 +11916,7 @@ function renderDetalleMascota(mid) {
           ${n.contenido?`<p style="white-space:pre-wrap;line-height:1.7">${escAttr(n.contenido)}</p>`:''}
           <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
             <button class="btn btn-secondary btn-sm" onclick="verNota(${n.id})">👁️ Ver</button>
-            <button class="btn btn-secondary btn-sm" onclick="openModalNota(${n.id})">✏️ Editar</button>
+            <button class="btn btn-secondary btn-sm" onclick="editarNota(${n.id})">✏️ Editar</button>
             <button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})">🖨️</button>
             <button class="btn btn-danger btn-sm" onclick="eliminarNota(${n.id})">🗑️</button>
           </div>
@@ -11724,7 +12203,7 @@ function renderVistaDia() {
   const citasDia = C.c.filter(c => c.fecha === fecha && _citaActiva(c));
 
   // Profesionales con citas ese día; si hay pocos, se muestran todos
-  const medicos = C.prof.filter(p => ['medico','medico_admin','dr','dra','admin','odontologo'].includes(p.rol));
+  const medicos = C.prof.filter(p => ['medico','medico_admin','dr','dra','admin','odontologo','optometrista','oftalmologo'].includes(p.rol));
   let columnas = medicos.filter(p => citasDia.some(c => c.medicoId == p.id));
   if(columnas.length === 0) columnas = medicos.slice(0, 4);
   if(columnas.length === 0) columnas = [{ id:null, nombre:'Sin asignar' }];
@@ -11781,7 +12260,7 @@ function renderVistaSemana() {
   const el = document.getElementById('cal-semana');
   if(!el) return;
   const dias = _diasSemana(selCalDate);
-  const medicos = C.prof.filter(p => ['medico','medico_admin','dr','dra','admin','odontologo'].includes(p.rol));
+  const medicos = C.prof.filter(p => ['medico','medico_admin','dr','dra','admin','odontologo','optometrista','oftalmologo'].includes(p.rol));
   const mid = _semanaMedicoId || '';
   const citasSemana = C.c.filter(c => dias.includes(c.fecha) && _citaActiva(c)
     && (mid ? c.medicoId == mid : true));
@@ -11868,6 +12347,7 @@ function _accionesCitaHTML(c, { conHoja = true } = {}) {
     abierta ? `<button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;font-size:11px;font-weight:700;white-space:nowrap" onclick="event.stopPropagation();marcarCitaCompletada(${c.id})">✅ Atendido</button>` : '',
     (abierta && esPasada) ? `<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();marcarNoAsistio(${c.id})" title="No asistió">🚷</button>` : '',
     conHoja ? `<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();verResumenCita(${c.id})" title="Ver hoja">📄</button>` : '',
+    (puedeGestionarProcOft() && c.pacienteId && c.estado!=='cancelada') ? `<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openModalProcOft(null,${c.pacienteId},${c.id})" title="Programar procedimiento / abrir nota">👁️</button>` : '',
     abierta ? `<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();reprogramarCita(${c.id})" title="Reprogramar">🔄</button>` : '',
     `<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openModalCita(${c.id})" title="Editar">✏️</button>`,
     abierta ? `<button class="btn btn-danger btn-sm" onclick="event.stopPropagation();cancelarCita(${c.id})" title="Cancelar cita">🚫</button>` : '',

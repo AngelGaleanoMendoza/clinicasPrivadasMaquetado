@@ -1529,3 +1529,37 @@ body.dark .hosp-card{background:#0F172A}
 /* Servicios no clínicos (grooming, guardería, baño): otro color en la agenda
    para distinguirlos de un vistazo de la atención médica */
 .cal-ev.no-clinico{background:linear-gradient(135deg,#8B5CF6,#7C3AED)}
+
+/* ══ OFTALMOLOGÍA: PROCEDIMIENTOS Y QUIRÓFANO ══ */
+.proc-oft-modal{max-width:920px!important}
+.proc-oft-section{border:1.5px solid var(--border);border-radius:14px;padding:15px 16px;margin-bottom:14px;background:var(--bg)}
+.proc-oft-section>h3{font-size:12px;font-weight:900;color:var(--primary);text-transform:uppercase;letter-spacing:.06em;margin-bottom:13px}
+.proc-check{display:flex!important;align-items:center;gap:8px;min-height:38px;cursor:pointer;color:var(--text)!important;font-weight:700!important}
+.proc-check input{width:17px;height:17px;accent-color:var(--primary)}
+.proc-adjuntos{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.proc-adjunto{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border:1px solid var(--border);border-radius:8px;background:var(--card);font-size:11px;color:var(--primary);text-decoration:none;max-width:100%}
+.proc-oft-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.proc-oft-card{border:1.5px solid var(--border);border-radius:14px;background:var(--card);padding:14px;transition:border-color .18s,box-shadow .18s}
+.proc-oft-card:hover{border-color:#0EA5E9;box-shadow:0 5px 18px rgba(14,165,233,.1)}
+.proc-oft-head{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px}
+.proc-oft-icon{width:40px;height:40px;border-radius:11px;background:linear-gradient(135deg,#E0F2FE,#BAE6FD);display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0}
+.proc-oft-title{font-size:13.5px;font-weight:800;color:var(--text)}
+.proc-oft-meta{font-size:11.5px;color:var(--text-light);margin-top:2px}
+.proc-oft-data{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:9px 0}
+.proc-oft-data>div{background:var(--bg);border-radius:8px;padding:7px 9px;min-width:0}
+.proc-oft-data span{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-light);font-weight:800}
+.proc-oft-data strong{display:block;font-size:11.5px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.proc-oft-actions{display:flex;gap:6px;flex-wrap:wrap;padding-top:9px;border-top:1px solid var(--border)}
+.proc-oft-actions .btn{flex:1;justify-content:center;min-width:72px}
+.proc-oft-filters{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}
+.proc-oft-empty-db{padding:22px;border:1.5px dashed #F59E0B;border-radius:14px;background:#FFFBEB;color:#92400E;text-align:center}
+body.dark .proc-oft-section,body.dark .proc-oft-data>div{background:#0F172A}
+body.dark .proc-oft-empty-db{background:rgba(245,158,11,.1);color:#FCD34D}
+
+@media(max-width:600px){
+  .proc-oft-modal{padding:18px 12px!important}
+  .proc-oft-section{padding:12px 10px}
+  .proc-oft-grid{grid-template-columns:1fr}
+  .proc-oft-data{grid-template-columns:1fr 1fr}
+  .proc-oft-actions .btn{font-size:11px;padding:8px 9px}
+}

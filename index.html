@@ -10,7 +10,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
-<link rel="stylesheet" href="css/styles.css?v=20260825d">
+<link rel="stylesheet" href="css/styles.css?v=20260827a">
 </head>
 <body>
 <script>
@@ -97,6 +97,7 @@
       <div class="menu-item active" onclick="navigate('dashboard')"><span class="icon">📊</span> Dashboard</div>
       <div class="menu-item" id="menu-expedientes" onclick="navigate('expedientes')"><span class="icon">📋</span> Expedientes</div>
       <div class="menu-item" id="menu-procedimientos" onclick="navigate('procedimientos')" style="display:none"><span class="icon">🦷</span> Procedimientos</div>
+      <div class="menu-item" id="menu-procedimientos-oftalmo" onclick="navigate('procedimientos-oftalmo')" style="display:none"><span class="icon">👁️</span> Procedimientos / Quirófano</div>
       <div class="menu-item" id="menu-farmacia" onclick="navigate('farmacia')" style="display:none"><span class="icon">💊</span> Farmacia</div>
       <div class="menu-section" id="menu-clinica-section">Clínica</div>
       <div class="menu-item" id="menu-clientes" onclick="navigate('clientes')" style="display:none"><span class="icon">🧑‍🤝‍🧑</span> Clientes <span class="badge" id="badge-clientes">0</span></div>
@@ -406,6 +407,7 @@
           <button class="tab" id="tab-btn-odontograma" onclick="switchTab('tab-odontograma',this)" style="display:none">🗺️ Odontograma</button>
           <button class="tab" id="tab-btn-periodontograma" onclick="switchTab('tab-periodontograma',this)" style="display:none">📏 Periodontograma</button>
           <button class="tab" id="tab-btn-procedimientos-p" onclick="switchTab('tab-procedimientos-p',this)" style="display:none">📋 Plan Tratamiento</button>
+          <button class="tab" id="tab-btn-proc-oft-p" onclick="switchTab('tab-proc-oft-p',this)" style="display:none">👁️ Procedimientos</button>
         </div>
         <div id="tab-info"></div>
         <div id="tab-citas-p" style="display:none"></div>
@@ -417,6 +419,7 @@
         <div id="tab-odontograma" style="display:none"></div>
         <div id="tab-periodontograma" style="display:none"></div>
         <div id="tab-procedimientos-p" style="display:none"></div>
+        <div id="tab-proc-oft-p" style="display:none"></div>
       </div>
 
       <!-- EXPEDIENTES -->
@@ -518,6 +521,9 @@
 
       <!-- PROCEDIMIENTOS ODONTOLÓGICOS -->
       <div id="view-procedimientos" class="view"></div>
+
+      <!-- PROCEDIMIENTOS OFTALMOLÓGICOS / QUIRÓFANO -->
+      <div id="view-procedimientos-oftalmo" class="view"></div>
 
       <!-- FARMACIA -->
       <div id="view-farmacia" class="view">
@@ -1302,7 +1308,7 @@
 <!-- MODAL EXAMEN VISUAL (Óptica) -->
 <div class="modal-overlay" id="modal-examen-visual">
   <div class="modal modal-lg" style="max-width:720px">
-    <h2>👁️ Examen Visual Completo</h2>
+    <h2 id="modal-examen-visual-title">👁️ Examen Visual Completo</h2>
     <input type="hidden" id="ev-paciente-id">
 
     <!-- Lensometría -->
@@ -1569,7 +1575,7 @@
 
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-examen-visual')">Cancelar</button>
-      <button class="btn btn-primary" onclick="guardarExamenVisual()">💾 Guardar Examen Visual</button>
+      <button class="btn btn-primary" id="btn-guardar-examen-visual" onclick="guardarExamenVisual()">💾 Guardar Examen Visual</button>
     </div>
   </div>
 </div>
@@ -1588,6 +1594,7 @@
         <select id="cl-tipo">
           <option value="clinica">🏥 Clínica General</option>
           <option value="optica">👁️ Óptica / Optometría</option>
+          <option value="oftalmologia">🔬 Clínica Oftalmológica</option>
           <option value="dental">🦷 Clínica Dental</option>
           <option value="especialidad">🩺 Clínica de Especialidad</option>
           <option value="veterinaria">🐾 Clínica Veterinaria</option>
@@ -1648,6 +1655,8 @@
           <option value="farmaceutico">💊 Farmacéutico</option>
           <option value="enfermeria">Enfermería</option>
           <option value="odontologo">🦷 Odontólogo</option>
+          <option value="optometrista">👁️ Optometrista</option>
+          <option value="oftalmologo">🔬 Oftalmólogo</option>
         </select>
       </div>
       <div class="form-group" id="u-especialidad-wrap">
@@ -2153,6 +2162,98 @@
   </div>
 </div>
 
+<!-- MODAL PROCEDIMIENTO OFTALMOLÓGICO / QUIRÓFANO -->
+<div class="modal-overlay" id="modal-proc-oft">
+  <div class="modal modal-xl proc-oft-modal">
+    <button class="modal-close-btn" onclick="closeModal('modal-proc-oft')" title="Cerrar">✕</button>
+    <h2 id="modal-proc-oft-title">👁️ Nuevo Procedimiento</h2>
+
+    <section class="proc-oft-section">
+      <h3>1. Identificación y agenda</h3>
+      <div class="form-grid">
+        <div class="form-group full"><label>Paciente *</label><select id="po-paciente"></select></div>
+        <div class="form-group full"><label>Procedimiento *</label><select id="po-procedimiento" onchange="onProcOftCatalogoChange()"></select></div>
+        <div class="form-group"><label>Categoría</label><input type="text" id="po-categoria" readonly></div>
+        <div class="form-group"><label>Tipo</label><input type="text" id="po-tipo-label" readonly><input type="hidden" id="po-tipo"></div>
+        <div class="form-group"><label>Fecha *</label><input type="date" id="po-fecha"></div>
+        <div class="form-group"><label>Hora</label><input type="time" id="po-hora"></div>
+        <div class="form-group"><label>Estado</label><select id="po-estado">
+          <option value="programado">Programado</option><option value="preparacion">En preparación</option>
+          <option value="en_procedimiento">En procedimiento</option><option value="recuperacion">Recuperación</option>
+          <option value="completado">Completado</option><option value="cancelado">Cancelado</option>
+        </select></div>
+        <div class="form-group"><label>Prioridad</label><select id="po-prioridad">
+          <option value="normal">Normal</option><option value="preferente">Preferente</option><option value="urgente">Urgente</option>
+        </select></div>
+        <div class="form-group"><label>Ojo</label><select id="po-ojo">
+          <option value="OD">OD — Ojo derecho</option><option value="OI">OI — Ojo izquierdo</option>
+          <option value="AO">AO — Ambos ojos</option><option value="no_aplica">No aplica</option>
+        </select></div>
+        <div class="form-group"><label>Sala / Quirófano</label><input type="text" id="po-sala" placeholder="Ej: Quirófano 1"></div>
+        <div class="form-group"><label>Especialidad</label><input type="text" id="po-especialidad" placeholder="Oftalmología, Retina..."></div>
+        <div class="form-group"><label>Profesional responsable</label><input type="text" id="po-profesional" readonly></div>
+      </div>
+    </section>
+
+    <section class="proc-oft-section">
+      <h3>2. Evaluación clínica</h3>
+      <div class="form-grid">
+        <div class="form-group full"><label>Diagnóstico / indicación *</label><textarea id="po-diagnostico" placeholder="Diagnóstico que justifica el procedimiento..."></textarea></div>
+        <div class="form-group full"><label>Hallazgos previos</label><textarea id="po-hallazgos-previos" placeholder="Evaluación previa al procedimiento..."></textarea></div>
+      </div>
+    </section>
+
+    <section class="proc-oft-section">
+      <h3>3. Técnica y recursos</h3>
+      <div class="form-grid">
+        <div class="form-group full"><label>Procedimiento realizado</label><textarea id="po-realizado" placeholder="Descripción de lo realizado..."></textarea></div>
+        <div class="form-group full"><label>Técnica utilizada</label><textarea id="po-tecnica" placeholder="Técnica, abordaje y parámetros utilizados..."></textarea></div>
+        <div class="form-group"><label>Anestesia</label><select id="po-anestesia">
+          <option value="ninguna">Ninguna</option><option value="topica">Tópica</option><option value="local">Local</option>
+          <option value="sedacion">Sedación</option><option value="general">General</option>
+        </select></div>
+        <div class="form-group"><label>Equipo utilizado</label><input type="text" id="po-equipo"></div>
+        <div class="form-group full"><label>Materiales / implantes</label><textarea id="po-materiales"></textarea></div>
+        <div class="form-group"><label>LIO o dispositivo implantado</label><input type="text" id="po-dispositivo"></div>
+        <div class="form-group"><label>Medicamento administrado</label><input type="text" id="po-medicamento"></div>
+      </div>
+    </section>
+
+    <section class="proc-oft-section">
+      <h3>4. Hallazgos y resultado</h3>
+      <div class="form-grid">
+        <div class="form-group full"><label>Hallazgos posteriores</label><textarea id="po-hallazgos-posteriores"></textarea></div>
+        <div class="form-group full"><label>Complicaciones</label><textarea id="po-complicaciones" placeholder="Ninguna"></textarea></div>
+        <div class="form-group full"><label>Resultado inmediato</label><textarea id="po-resultado"></textarea></div>
+      </div>
+    </section>
+
+    <section class="proc-oft-section">
+      <h3>5. Indicaciones y seguimiento</h3>
+      <div class="form-grid">
+        <div class="form-group full"><label>Indicaciones posteriores</label><textarea id="po-indicaciones"></textarea></div>
+        <div class="form-group"><label class="proc-check"><input type="checkbox" id="po-seguimiento" onchange="syncProcOftSeguimiento()"> Requiere seguimiento</label></div>
+        <div class="form-group" id="po-control-wrap"><label>Próximo control</label><input type="date" id="po-control"></div>
+        <div class="form-group full"><label>Referencia / contrarreferencia</label><textarea id="po-referencia"></textarea></div>
+      </div>
+    </section>
+
+    <section class="proc-oft-section">
+      <h3>6. Consentimiento y documentos</h3>
+      <div class="form-grid">
+        <div class="form-group"><label class="proc-check"><input type="checkbox" id="po-consentimiento" onchange="syncProcOftConsentimiento()"> Consentimiento informado verificado</label></div>
+        <div class="form-group" id="po-consent-fecha-wrap"><label>Fecha del consentimiento</label><input type="date" id="po-consent-fecha"></div>
+        <div class="form-group full"><label>Documentos / imágenes adjuntas</label><input type="file" id="po-adjuntos" multiple accept="image/*,.pdf,.doc,.docx"><div id="po-adjuntos-existentes" class="proc-adjuntos"></div></div>
+      </div>
+    </section>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-proc-oft')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarProcedimientoOft()">💾 Guardar procedimiento</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL PROCEDIMIENTO ODONTOLÓGICO -->
 <div class="modal-overlay" id="modal-procedimiento">
   <div class="modal">
@@ -2364,7 +2465,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260825d"></script>
+<script src="js/app.js?v=20260827a"></script>
 </body>
 </html>
 
