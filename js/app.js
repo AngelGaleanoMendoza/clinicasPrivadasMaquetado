@@ -7339,6 +7339,9 @@ let procOftFiltroTipo = '';
 function _faltaTablaProcOft(error) {
   return /procedimientos_oftalmologicos.*does not exist|could not find the table.*procedimientos_oftalmologicos|relation .*procedimientos_oftalmologicos/i.test(error?.message||'');
 }
+function _esErrorRlsProcOft(error) {
+  return error?.code === '42501' || /row[- ]level security/i.test(error?.message||'');
+}
 function _procOftCatalogoItem(nombre) {
   for(const grupo of CATALOGO_PROCEDIMIENTOS_OFTALMO) {
     if(grupo.procs.includes(nombre)) return {nombre, categoria:grupo.cat, tipo:grupo.tipo};
@@ -7565,6 +7568,9 @@ function _leerProcOftForm(procActual) {
 
 async function guardarProcedimientoOft() {
   if(!puedeGestionarProcOft()){toast('No tienes permiso para gestionar procedimientos','error');return;}
+  if(!currentClinicaId){toast('Tu usuario no tiene una clínica asignada. Asígnala antes de guardar el procedimiento.','error');return;}
+  const {data:{user:authUser},error:authError}=await sb.auth.getUser();
+  if(authError||!authUser){toast('Tu sesión de Supabase venció. Cierra sesión y vuelve a ingresar antes de guardar.','error');return;}
   const eraEdicion=!!editingProcOftId;
   const actual=editingProcOftId?(C.procOft||[]).find(x=>x.id===editingProcOftId):null;
   const obj=_leerProcOftForm(actual);
@@ -7579,7 +7585,15 @@ async function guardarProcedimientoOft() {
     const r=await sb.from('procedimientos_oftalmologicos').insert([toProcOft(obj)]).select('id').single();
     error=r.error;guardadoId=r.data?.id||null;
   }
-  if(error){setLoading(false);toast(_faltaTablaProcOft(error)?'Falta ejecutar la sección de oftalmología de rls_setup.sql':'Error al guardar: '+error.message,'error');return;}
+  if(error){
+    setLoading(false);
+    const msg=_faltaTablaProcOft(error)
+      ? 'Falta ejecutar la sección de oftalmología de rls_setup.sql'
+      : _esErrorRlsProcOft(error)
+        ? 'Supabase no reconoce esta sesión para la clínica activa. Vuelve a iniciar sesión; si continúa, ejecuta la corrección RLS de oftalmología.'
+        : 'Error al guardar: '+error.message;
+    toast(msg,'error');return;
+  }
   let avisoAdjunto='';
   const quitados=(actual?.adjuntos||[]).filter(a=>a.path&&!procOftAdjuntosActuales.some(b=>b.path===a.path)).map(a=>a.path);
   if(quitados.length)try{await sb.storage.from(STORAGE_BUCKET).remove(quitados);}catch(e){avisoAdjunto=' El registro se guardó, pero no se pudo borrar un adjunto retirado.';}
