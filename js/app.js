@@ -3315,6 +3315,127 @@ function verNota(id){
   document.getElementById('modal-ver-nota').classList.add('open');
 }
 
+function normalizarOptico(v) {
+  return (v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim();
+}
+
+function parseExamenVisual(contenido) {
+  const secciones = {};
+  let actual = null;
+
+  (contenido||'').split(/\r?\n/).forEach(raw => {
+    const line = raw.trim();
+    if(!line) return;
+    const limpio = line.replace(/[╔═╗║╚╝]/g,'').trim();
+    if(!limpio || limpio === 'EXAMEN VISUAL COMPLETO') return;
+
+    const sec = limpio.match(/^▸\s*(.+)$/);
+    if(sec) {
+      actual = normalizarOptico(sec[1]);
+      secciones[actual] = { titulo: sec[1].trim(), datos: {}, texto: [] };
+      return;
+    }
+    if(!actual) return;
+
+    const dato = raw.match(/^\s*([^:]+?)\s*:\s*(.*)$/);
+    if(dato) {
+      const label = dato[1].replace(/\s+/g,' ').trim();
+      secciones[actual].datos[label] = dato[2].trim();
+      secciones[actual].datos[normalizarOptico(label)] = dato[2].trim();
+    } else {
+      secciones[actual].texto.push(limpio);
+    }
+  });
+
+  return secciones;
+}
+
+function imprimirExamenVisual(n, p, cfg, fmtF, ini2) {
+  const ev = parseExamenVisual(n.contenido);
+  const h = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const sec = k => ev[k] || {datos:{},texto:[]};
+  const campo = (s, lbl) => s.datos[lbl] || s.datos[normalizarOptico(lbl)] || '';
+  const dato = (k, lbl, fallback='') => campo(sec(k), lbl) || fallback;
+  const texto = (k, fallback='') => sec(k).texto.join('\n') || fallback;
+  const celda = v => h(v || '—');
+  const pNombre = p ? `${p.nombre} ${p.apellidos}` : 'Paciente no registrado';
+  const pIni = p ? ini2(p.nombre,p.apellidos) : '?';
+
+  const rx = sec('REFRACCION');
+  const lm = sec('LENSOMETRIA (ANTEOJOS ACTUALES)');
+  const avSc = sec('AGUDEZA VISUAL SIN CORRECCION');
+  const avCc = sec('AGUDEZA VISUAL CON CORRECCION');
+  const adapt = sec('PARAMETROS DE ADAPTACION');
+  const correccion = texto('CORRECCION RECOMENDADA', '—');
+  const material = dato('CORRECCION RECOMENDADA', 'Material');
+  const tratamientos = dato('CORRECCION RECOMENDADA', 'Tratamientos');
+
+  const body = '<div class="badge-tipo" style="background:#0369A1">&#128065; EXAMEN VISUAL / ORDEN OPTICA</div>'
+    + '<div style="font-size:11px;color:#64748B;font-weight:600;margin-bottom:18px">Fecha de emision: '+fmtF(n.fecha)+' &middot; N&deg; EV-'+n.id+'</div>'
+    + '<div class="patient-box">'
+    +   '<div class="patient-av">'+h(pIni)+'</div>'
+    +   '<div style="flex:1">'
+    +     '<div class="patient-name">'+h(pNombre)+'</div>'
+    +     '<div class="patient-meta">'
+    +       (p?.identificacion?'<span>&#128266; '+h(p.identificacion)+'</span>':'')
+    +       (p?.fechaNac?'<span>&#127874; '+h(calcEdad(p.fechaNac))+'</span>':'')
+    +       (p?.sexo?'<span>'+(p.sexo==='M'?'&#9794; Masculino':p.sexo==='F'?'&#9792; Femenino':h(p.sexo))+'</span>':'')
+    +       (p?.telefono?'<span>&#128222; '+h(p.telefono)+'</span>':'')
+    +     '</div>'
+    +     (p?.alergias?'<div style="margin-top:6px;background:#FEF2F2;border:1px solid #FECACA;border-radius:6px;padding:5px 10px;font-size:11px;color:#DC2626;font-weight:600">&#9888; Alergias: '+h(p.alergias)+'</div>':'')
+    +   '</div>'
+    + '</div>'
+    + '<div class="section-title">&#128083; Prescripcion optica</div>'
+    + '<table class="rx-table"><thead><tr><th>Ojo</th><th>Esfera</th><th>Cilindro</th><th>Eje</th><th>Adicion</th><th>DIP</th><th>AV CC</th></tr></thead><tbody>'
+    +   '<tr><td class="rx-eye">OD</td><td>'+celda(campo(rx,'OD Esfera'))+'</td><td>'+celda(campo(rx,'OD Cilindro'))+'</td><td>'+celda(campo(rx,'OD Eje'))+'</td><td>'+celda(campo(rx,'OD Adicion'))+'</td><td>'+celda(campo(adapt,'DIP OD'))+'</td><td>'+celda(campo(avCc,'OD'))+'</td></tr>'
+    +   '<tr><td class="rx-eye">OI</td><td>'+celda(campo(rx,'OI Esfera'))+'</td><td>'+celda(campo(rx,'OI Cilindro'))+'</td><td>'+celda(campo(rx,'OI Eje'))+'</td><td>'+celda(campo(rx,'OI Adicion'))+'</td><td>'+celda(campo(adapt,'DIP OI'))+'</td><td>'+celda(campo(avCc,'OI'))+'</td></tr>'
+    + '</tbody></table>'
+    + '<div class="opt-summary">'
+    +   '<div class="opt-chip"><span>Correccion</span><strong>'+h(correccion)+'</strong></div>'
+    +   '<div class="opt-chip"><span>Material</span><strong>'+celda(material)+'</strong></div>'
+    +   '<div class="opt-chip"><span>Tratamientos</span><strong>'+celda(tratamientos)+'</strong></div>'
+    + '</div>'
+    + '<div class="opt-grid">'
+    +   '<div class="opt-card"><h3>Agudeza visual</h3><table><tbody>'
+    +     '<tr><td>AV sin correccion OD</td><td>'+celda(campo(avSc,'OD'))+'</td></tr>'
+    +     '<tr><td>AV sin correccion OI</td><td>'+celda(campo(avSc,'OI'))+'</td></tr>'
+    +     '<tr><td>AV sin correccion AO</td><td>'+celda(campo(avSc,'AO'))+'</td></tr>'
+    +     '<tr><td>AV con correccion OD</td><td>'+celda(campo(avCc,'OD'))+'</td></tr>'
+    +     '<tr><td>AV con correccion OI</td><td>'+celda(campo(avCc,'OI'))+'</td></tr>'
+    +     '<tr><td>AV con correccion AO</td><td>'+celda(campo(avCc,'AO'))+'</td></tr>'
+    +   '</tbody></table></div>'
+    +   '<div class="opt-card"><h3>Lensometria actual</h3><table><tbody>'
+    +     '<tr><td>OD</td><td>Esf. '+celda(campo(lm,'OD Esfera'))+' / Cil. '+celda(campo(lm,'OD Cilindro'))+' / Eje '+celda(campo(lm,'OD Eje'))+' / Add '+celda(campo(lm,'OD Adicion'))+'</td></tr>'
+    +     '<tr><td>OI</td><td>Esf. '+celda(campo(lm,'OI Esfera'))+' / Cil. '+celda(campo(lm,'OI Cilindro'))+' / Eje '+celda(campo(lm,'OI Eje'))+' / Add '+celda(campo(lm,'OI Adicion'))+'</td></tr>'
+    +   '</tbody></table></div>'
+    + '</div>'
+    + '<div class="section-title">&#128207; Parametros de adaptacion</div>'
+    + '<table><tbody>'
+    +   '<tr><td>DIP general</td><td>'+celda(campo(adapt,'DIP General'))+'</td><td>Altura pupilar</td><td>'+celda(campo(adapt,'Altura pupilar'))+'</td></tr>'
+    +   '<tr><td>Dist. al vertice</td><td>'+celda(campo(adapt,'Dist. al vertice'))+'</td><td>Puente</td><td>'+celda(campo(adapt,'Puente'))+'</td></tr>'
+    +   '<tr><td>Ang. pantoscopico</td><td>'+celda(campo(adapt,'Ang. pantoscopico'))+'</td><td>Ang. panoramico</td><td>'+celda(campo(adapt,'Ang. panoramico'))+'</td></tr>'
+    +   '<tr><td>Distancias</td><td colspan="3">Horizontal: '+celda(campo(adapt,'Dist. horizontal'))+' &middot; Vertical: '+celda(campo(adapt,'Dist. vertical'))+' &middot; Diagonal: '+celda(campo(adapt,'Dist. diagonal'))+'</td></tr>'
+    +   (campo(adapt,'Observaciones')?'<tr><td>Observaciones</td><td colspan="3">'+h(campo(adapt,'Observaciones'))+'</td></tr>':'')
+    + '</tbody></table>'
+    + '<div class="section-title">&#128269; Evaluacion clinica</div>'
+    + '<table><tbody>'
+    +   '<tr><td>Cover test</td><td>'+celda(dato('COVER TEST','Resultado'))+'</td><td>Obs.</td><td>'+celda(dato('COVER TEST','Observación'))+'</td></tr>'
+    +   '<tr><td>Motilidad ocular</td><td colspan="3">'+celda(dato('MOTILIDAD OCULAR EXTRINSECA','Observaciones'))+'</td></tr>'
+    +   '<tr><td>PPC</td><td>'+celda(dato('EXAMINACION DE ACOMODACION','PPC'))+'</td><td>PPA</td><td>'+celda(dato('EXAMINACION DE ACOMODACION','PPA'))+'</td></tr>'
+    +   '<tr><td>Reflejos pupilares</td><td>OD: '+celda(dato('REFLEJOS PUPILARES','OD'))+' / OI: '+celda(dato('REFLEJOS PUPILARES','OI'))+'</td><td>Fondo de ojo</td><td>OD: '+celda(dato('FONDO DE OJO','OD'))+' / OI: '+celda(dato('FONDO DE OJO','OI'))+'</td></tr>'
+    +   '<tr><td>Biomicroscopia</td><td colspan="3">OD: '+celda(dato('BIOMICROSCOPIA','OD'))+' '+h(dato('BIOMICROSCOPIA','Obs. OD'))+' / OI: '+celda(dato('BIOMICROSCOPIA','OI'))+' '+h(dato('BIOMICROSCOPIA','Obs. OI'))+'</td></tr>'
+    + '</tbody></table>'
+    + (texto('DIAGNOSTICO')?'<div class="section-title">&#128203; Diagnostico</div><div class="note-box"><div class="note-body">'+h(texto('DIAGNOSTICO'))+'</div></div>':'')
+    + (texto('OBSERVACIONES')||campo(avCc,'Observaciones')?'<div class="section-title">&#9998; Observaciones</div><div class="note-box"><div class="note-body">'+h([campo(avCc,'Observaciones'),texto('OBSERVACIONES')].filter(Boolean).join('\n'))+'</div></div>':'')
+    + '<div class="sig-wrap"><div class="sig-box"><div style="height:46px"></div><div class="sig-line"></div>'
+    +   '<div class="sig-name">'+h(currentUser?.name||cfg.nombreDoctor||'Profesional Responsable')+'</div>'
+    +   (cfg.especialidad?'<div class="sig-role">'+h(cfg.especialidad)+'</div>':'')
+    +   (cfg.registro?'<div class="sig-role">Reg. Med. '+h(cfg.registro)+'</div>':'')
+    + '</div></div>';
+
+  pdfAbrir('Examen Visual - '+pNombre, body, cfg);
+}
+
 function imprimirNota(id) {
   const n = C.n.find(x => x.id === id); if(!n) return;
   const p = C.p.find(x => x.id === n.pacienteId);
@@ -3323,6 +3444,7 @@ function imprimirNota(id) {
   const tipoColor = {evolucion:'#1D4ED8',resumen_clinico:'#0E7490',diagnostico:'#7C3AED',tratamiento:'#059669',laboratorio:'#D97706',imagen:'#0891B2',cirugia:'#DC2626',alta:'#065F46',otro:'#475569'}[n.tipo]||'#1D4ED8';
 
   const ini2 = (a,b) => ((a||'')[0]||'').toUpperCase()+((b||'')[0]||'').toUpperCase();
+  if(n.tipo === 'examen_visual') { imprimirExamenVisual(n, p, cfg, fmtF, ini2); return; }
   const tipoTxt = (n.tipo||'').replace(/_/g,' ').toUpperCase();
   const body = '<div class="badge-tipo" style="background:'+tipoColor+'">📝 '+tipoTxt+'</div>'
     + (n.titulo?'<div style="font-size:20px;font-weight:900;color:#0F172A;margin-bottom:6px">'+n.titulo+'</div>':'')
@@ -7376,6 +7498,17 @@ td{padding:9px 14px;border-bottom:1px solid #E2E8F0;font-size:12px;color:#1E293B
 .note-box{border-left:4px solid #1D4ED8;border-radius:0 12px 12px 0;background:#F8FAFC;padding:18px 20px;margin-bottom:16px}
 .note-title{font-size:16px;font-weight:800;color:#0F172A;margin-bottom:10px}
 .note-body{white-space:pre-wrap;font-size:13px;line-height:1.85;color:#1E293B}
+.opt-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0 18px}
+.opt-chip{border:1px solid #BAE6FD;background:#F0F9FF;border-radius:12px;padding:12px}
+.opt-chip span{display:block;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:#0369A1;margin-bottom:5px}
+.opt-chip strong{font-size:12px;color:#0F172A}
+.opt-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px}
+.opt-card{border:1px solid #E2E8F0;border-radius:12px;background:#FAFBFC;padding:12px 14px}
+.opt-card h3{font-size:12px;font-weight:900;color:#0F172A;margin-bottom:10px}
+.opt-muted{color:#94A3B8}
+.rx-table td,.rx-table th{text-align:center}
+.rx-eye{font-weight:900;color:#1D4ED8;text-align:left!important}
+@media(max-width:720px){.opt-summary,.opt-grid{grid-template-columns:1fr}}
 @media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}.page{padding:20px 24px}}
 `;
 
