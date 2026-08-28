@@ -582,3 +582,47 @@ SELECT p.email, p.rol, p.clinica_id,
 FROM public.profiles p
 LEFT JOIN auth.users u ON lower(u.email) = lower(p.email)
 ORDER BY p.email;
+
+
+-- ============================================================
+-- PASO 9: Archivos adjuntos (Storage)
+--
+-- El bucket `Pacientes` guarda fotos de paciente, firmas, exámenes
+-- digitalizados, fotos de mascota y los adjuntos de los procedimientos
+-- oftalmológicos. Las políticas de Storage se habían creado a mano en el
+-- Dashboard y solo cubrían las rutas que existían entonces, así que cada
+-- carpeta nueva fallaba con "new row violates row-level security policy".
+-- Aquí quedan escritas para que no se repita al añadir la siguiente.
+--
+-- El nombre del bucket lleva mayúscula: Supabase distingue caja.
+-- Se puede ejecutar varias veces sin error.
+-- ============================================================
+
+DROP POLICY IF EXISTS "pacientes_subir"     ON storage.objects;
+DROP POLICY IF EXISTS "pacientes_reemplazar" ON storage.objects;
+DROP POLICY IF EXISTS "pacientes_borrar"    ON storage.objects;
+
+-- Subir: cualquier usuario autenticado, en cualquier carpeta del bucket.
+-- No se acota por clínica porque las rutas antiguas no la llevan en el nombre
+-- (la foto del paciente se guarda como "<id>.jpg" en la raíz).
+CREATE POLICY "pacientes_subir" ON storage.objects FOR INSERT
+  TO authenticated
+  WITH CHECK (bucket_id = 'Pacientes');
+
+-- Reemplazar: hace falta para las subidas con upsert (foto de paciente,
+-- firma del usuario, logo y firma de la clínica, foto de mascota).
+CREATE POLICY "pacientes_reemplazar" ON storage.objects FOR UPDATE
+  TO authenticated
+  USING (bucket_id = 'Pacientes')
+  WITH CHECK (bucket_id = 'Pacientes');
+
+-- Borrar: al quitar un adjunto de un procedimiento o eliminar el registro.
+CREATE POLICY "pacientes_borrar" ON storage.objects FOR DELETE
+  TO authenticated
+  USING (bucket_id = 'Pacientes');
+
+-- La LECTURA se deja como está. La aplicación usa getPublicUrl() en todas
+-- partes, así que el bucket es público de lectura: quien tenga el enlace ve el
+-- archivo sin iniciar sesión. Cambiarlo a privado exigiría pasar toda la app a
+-- URLs firmadas (createSignedUrl) y romper los enlaces ya guardados en la base;
+-- queda anotado como pendiente porque aquí se almacenan imágenes clínicas.
