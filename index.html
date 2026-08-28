@@ -10,7 +10,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
-<link rel="stylesheet" href="css/styles.css?v=20260827a">
+<link rel="stylesheet" href="css/styles.css?v=20260828e">
 </head>
 <body>
 <script>
@@ -1887,8 +1887,8 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-cliente')">Cancelar</button>
-      <button class="btn btn-secondary" onclick="guardarCliente(false)">💾 Guardar</button>
-      <button class="btn btn-primary" onclick="guardarCliente(true)">🐾 Guardar y agregar mascota</button>
+      <button class="btn btn-secondary" id="cli-btn-guardar" onclick="guardarCliente(false)">💾 Guardar</button>
+      <button class="btn btn-primary" id="cli-btn-guardar-mascota" onclick="guardarCliente(true)">🐾 Guardar y agregar mascota</button>
     </div>
   </div>
 </div>
@@ -1914,7 +1914,11 @@
     </div>
     <div class="form-grid">
       <div class="form-group full"><label>Dueño *</label>
-        <select id="mas-cliente"><option value="">Selecciona el cliente...</option></select>
+        <div class="campo-con-accion">
+          <select id="mas-cliente"><option value="">Selecciona el cliente...</option></select>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="nuevoClienteDesdeMascota()" title="Registrar un dueño nuevo sin salir de aquí">+ Nuevo</button>
+        </div>
+        <small id="mas-cliente-ayuda" class="campo-ayuda" style="display:none">Todavía no hay clientes. Pulsa <strong>+ Nuevo</strong> para registrar al dueño.</small>
       </div>
       <div class="form-group"><label>Nombre *</label><input type="text" id="mas-nombre" placeholder="Firulais"></div>
       <div class="form-group"><label>Especie *</label><select id="mas-especie" onchange="onEspecieMascotaChange()"><option value="">Seleccionar...</option></select></div>
@@ -2466,7 +2470,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260828d"></script>
+<script src="js/app.js?v=20260828e"></script>
 </body>
 </html>
 

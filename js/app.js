@@ -4966,7 +4966,7 @@ function closeModal(id){
   else if(id==='modal-hosp') editingHospId=null;
   else if(id==='modal-vacuna') editingVacunaId=null;
   else if(id==='modal-desp') editingDespId=null;
-  else if(id==='modal-cliente') editingClienteId=null;
+  else if(id==='modal-cliente') { editingClienteId=null; _clienteDesdeMascota=false; }
   else if(id==='modal-mascota') { editingMascotaId=null; _fotoMascotaFile=null; }
   else editingId=null;
   // solo quitar scroll-lock si no queda otro modal abierto
@@ -11618,6 +11618,7 @@ function calcEdadMascota(fn) {
 }
 
 let editingClienteId  = null;
+let _clienteDesdeMascota = false;  // el modal de cliente se abrió desde una mascota
 let editingMascotaId  = null;
 let _fotoMascotaFile  = null;
 let _fotoMascotaUrl   = null;
@@ -11701,6 +11702,12 @@ function openModalCliente(id) {
   document.getElementById('cli-direccion').value     = c?.direccion || '';
   document.getElementById('cli-estado').value        = c?.estado || 'activo';
   document.getElementById('cli-notas').value         = c?.notas || '';
+  // Viniendo del modal de mascota, "Guardar y agregar mascota" daría vueltas en
+  // círculo sobre la ficha que ya está abierta detrás.
+  const btnMas = document.getElementById('cli-btn-guardar-mascota');
+  if(btnMas) btnMas.style.display = _clienteDesdeMascota ? 'none' : '';
+  const btnGuardar = document.getElementById('cli-btn-guardar');
+  if(btnGuardar) btnGuardar.classList.toggle('btn-primary', _clienteDesdeMascota);
   openModalOverlay('modal-cliente');
 }
 
@@ -11731,11 +11738,19 @@ async function guardarCliente(irAMascota) {
   setLoading(false);
   if(error) { toast('Error al guardar: ' + error.message, 'error'); return; }
   toast(editingClienteId ? 'Cliente actualizado ✅' : 'Cliente registrado ✅');
+  // closeModal limpia la bandera, así que hay que leerla antes de cerrar.
+  const volverAMascota = _clienteDesdeMascota;
   closeModal('modal-cliente');
   await loadAll();
   _pintarClientes();
   updateBadges();
-  if(irAMascota && nuevoId) openModalMascota(null, nuevoId);
+  if(volverAMascota) {
+    // El modal de mascota sigue abierto con sus datos: solo se recarga el
+    // desplegable y se deja elegido el dueño recién creado.
+    fillClienteSelect(nuevoId || null);
+  } else if(irAMascota && nuevoId) {
+    openModalMascota(null, nuevoId);
+  }
 }
 
 async function eliminarCliente(id) {
@@ -11835,9 +11850,21 @@ function _pintarMascotas() {
 function fillClienteSelect(selectedId) {
   const sel = document.getElementById('mas-cliente');
   if(!sel) return;
-  sel.innerHTML = '<option value="">Selecciona el cliente...</option>'
+  const vacio = !C.cli.length;
+  sel.innerHTML = `<option value="">${vacio ? 'No hay clientes registrados' : 'Selecciona el cliente...'}</option>`
     + C.cli.slice().sort((a,b) => nombreCliente(a).localeCompare(nombreCliente(b)))
         .map(c => `<option value="${c.id}"${c.id===selectedId?' selected':''}>${escAttr(nombreCliente(c))}${c.telefono?' — '+escAttr(c.telefono):''}</option>`).join('');
+  // Sin clientes, el campo obligatorio sería un callejón sin salida: se explica
+  // dónde está la salida en vez de dejar el desplegable mudo.
+  const ayuda = document.getElementById('mas-cliente-ayuda');
+  if(ayuda) ayuda.style.display = vacio ? 'block' : 'none';
+}
+
+// Registrar al dueño sin salir de la ficha de la mascota. El modal de mascota
+// se queda abierto debajo: reabrirlo al volver borraría lo ya escrito.
+function nuevoClienteDesdeMascota() {
+  _clienteDesdeMascota = true;
+  openModalCliente();
 }
 
 function fillEspecieSelect(selected) {

@@ -323,6 +323,12 @@ body.dark .fact-item-row input,body.dark .fact-item-row select{background:#0F172
 .form-group input,.form-group select,.form-group textarea{padding:10px 14px;border:1.5px solid var(--border);border-radius:12px;font-size:14px;font-family:inherit;color:var(--text);background:var(--card);outline:none;transition:all .2s}
 .form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.08)}
 .form-group textarea{resize:vertical;min-height:90px}
+/* Campo con un botón de alta al lado (p. ej. Dueño + "Nuevo"). El select se
+   encoge con min-width:0 para que en 360 px el botón no lo empuje fuera. */
+.campo-con-accion{display:flex;gap:8px;align-items:stretch}
+.campo-con-accion>select,.campo-con-accion>input{flex:1;min-width:0}
+.campo-con-accion>.btn{flex-shrink:0;white-space:nowrap;align-self:stretch;padding-top:0;padding-bottom:0}
+.campo-ayuda{font-size:11.5px;color:var(--text-light);line-height:1.5}
 
 /* TOAST */
 .toast-container{position:fixed;bottom:22px;right:22px;z-index:9999;display:flex;flex-direction:column;gap:8px}
