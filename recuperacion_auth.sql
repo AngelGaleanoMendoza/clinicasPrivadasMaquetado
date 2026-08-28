@@ -75,6 +75,15 @@ AS $$
   LIMIT 1;
 $$;
 
+-- Antes de nada, asegurar el rol del Super Admin. Si su fila tiene `rol` vacío,
+-- la función de abajo le negaría el acceso a todas las tablas en cuanto se
+-- reemplace. La app ya fija al Super Admin por correo (SUPER_ADMIN_EMAIL), así
+-- que aquí se refleja la misma regla.
+UPDATE public.profiles
+SET rol = 'superadmin'
+WHERE lower(btrim(email)) = 'sebasgale65@gmail.com'
+  AND coalesce(rol, '') <> 'superadmin';
+
 CREATE OR REPLACE FUNCTION public.is_superadmin()
 RETURNS boolean LANGUAGE sql SECURITY DEFINER STABLE SET search_path = ''
 AS $$
@@ -83,7 +92,13 @@ AS $$
     WHERE auth.uid() IS NOT NULL
       AND (p.id = auth.uid()
            OR lower(p.email) = lower(nullif(auth.jwt() ->> 'email', '')))
-      AND p.rol = 'superadmin'
+      AND (
+        p.rol = 'superadmin'
+        -- Red de seguridad: el Super Admin está fijado por correo en la app
+        -- (SUPER_ADMIN_EMAIL). Sin esto, borrarle el rol por accidente lo dejaría
+        -- sin acceso a nada y sin forma de devolvérselo desde la interfaz.
+        OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'sebasgale65@gmail.com'
+      )
   );
 $$;
 
