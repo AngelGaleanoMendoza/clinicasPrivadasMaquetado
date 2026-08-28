@@ -9396,9 +9396,18 @@ async function restablecerPasswordAdmin(id, nombre) {
     // El detalle útil viaja en el cuerpo de la respuesta, no en el mensaje del SDK,
     // que para cualquier fallo dice sólo "Edge Function returned a non-2xx status".
     let detalle = datos?.error || errFn?.message || 'error desconocido';
+    let estado = errFn?.context?.status;
     try { if(errFn?.context?.json) detalle = (await errFn.context.json())?.error || detalle; } catch(e) {}
-    if(/not found|404|Failed to send a request/i.test(detalle)) {
+
+    if(estado === 404 || /\bnot found\b/i.test(detalle)) {
       toast('Falta desplegar la función «cambiar-password» en Supabase → Edge Functions. Mientras tanto: Authentication → Users → Reset password.','error');
+    } else if(/Failed to send a request|Failed to fetch|NetworkError|load failed/i.test(detalle)) {
+      // No distingue "no existe" de "no se pudo llegar": el navegador informa
+      // igual de ambos. Lo más habitual con la función ya desplegada es que
+      // "Verify JWT" esté activo: el gateway rechaza la petición previa de CORS,
+      // que por diseño viaja sin cabecera de autorización, antes de que el código
+      // llegue a ejecutarse.
+      toast('No se pudo contactar la función «cambiar-password». Si ya la desplegaste, desactiva «Verify JWT» en su configuración: la función comprueba el token por su cuenta. Mientras tanto: Authentication → Users → Reset password.','error');
     } else {
       toast('No se pudo cambiar la contraseña: '+detalle,'error');
     }
