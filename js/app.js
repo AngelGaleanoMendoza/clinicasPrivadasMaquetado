@@ -33,6 +33,7 @@ const PERMISOS_DEFECTO = {
   odontologo:   ['pacientes','examenes','citas','medicaciones','notas'],
   optometrista: ['pacientes','examenes','citas','agendas','notas','proc_oftalmo'],
   oftalmologo:  ['pacientes','examenes','citas','agendas','medicaciones','notas','atendidos','proc_oftalmo'],
+  dermatologo:  ['pacientes','examenes','citas','agendas','medicaciones','notas','atendidos'],
 };
 
 // ════════════════════ PROCEDIMIENTOS OFTALMOLÓGICOS ════════════════════
@@ -816,7 +817,7 @@ async function entrarConPerfil(profile) {
     mostrarLoginAuthError('No existe una sesión válida de Supabase Auth.<br><small>Inicia sesión nuevamente o usa <strong>¿Olvidaste tu contraseña?</strong>.</small>');
     return false;
   }
-  const rolLabel = {admin:'Administración',medico:'Médico',medico_admin:'Médico Adm.',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',farmaceutico:'Farmacéutico',odontologo:'Odontólogo',optometrista:'Optometrista',oftalmologo:'Oftalmólogo'}[profile.rol]||profile.rol;
+  const rolLabel = {admin:'Administración',medico:'Médico',medico_admin:'Médico Adm.',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',farmaceutico:'Farmacéutico',odontologo:'Odontólogo',optometrista:'Optometrista',oftalmologo:'Oftalmólogo',dermatologo:'Dermatólogo'}[profile.rol]||profile.rol;
   currentClinicaId = profile.clinica_id || null;
   // Obtener email desde todas las fuentes disponibles
   let emailFinal = (profile.email || '').trim().toLowerCase() || authUser.email?.trim().toLowerCase() || null;
@@ -1253,7 +1254,7 @@ function renderDashboardSA() {
   const ingresosH     = C.fin.filter(f=>f.fecha===h&&f.tipo==='ingreso').reduce((s,f)=>s+Number(f.monto||0),0);
   const egresosH      = C.fin.filter(f=>f.fecha===h&&f.tipo==='egreso').reduce((s,f)=>s+Number(f.monto||0),0);
   const sinStock      = C.inv.filter(p=>p.stock<=0).length;
-  const medicos       = C.prof.filter(p=>['medico','medico_admin','admin','recepcion','enfermeria','optometrista','oftalmologo'].includes(p.rol));
+  const medicos       = C.prof.filter(p=>['medico','medico_admin','admin','recepcion','enfermeria','optometrista','oftalmologo','dermatologo'].includes(p.rol));
 
   const view = document.getElementById('view-dashboard');
   view.innerHTML = `
@@ -1480,7 +1481,7 @@ function renderDashboardPorUsuario() {
   const el = document.getElementById('dash-por-usuario');
   if(!el) return;
   if(currentUser?.key === 'medico') { el.style.display='none'; return; }
-  const medicos = C.prof.filter(p => ['medico','medico_admin','admin','enfermeria','recepcion','optometrista','oftalmologo'].includes(p.rol));
+  const medicos = C.prof.filter(p => ['medico','medico_admin','admin','enfermeria','recepcion','optometrista','oftalmologo','dermatologo'].includes(p.rol));
   if(!medicos.length) { el.style.display='none'; return; }
   el.style.display='';
   const citasHoy = C.c.filter(c => c.fecha === h);
@@ -1492,7 +1493,7 @@ function renderDashboardPorUsuario() {
           const atendidas = citasHoy.filter(c => c.medicoId === u.id && c.estado === 'completada').length;
           const pendientes = citasHoy.filter(c => c.medicoId === u.id && (c.estado === 'pendiente'||c.estado==='confirmada')).length;
           const total = citasHoy.filter(c => c.medicoId === u.id).length;
-          const rolLabel = {admin:'Administración',medico:'Médico',medico_admin:'Médico Adm.',recepcion:'Recepcionista',enfermeria:'Enfermería',farmaceutico:'Farmacéutico',optometrista:'Optometrista',oftalmologo:'Oftalmólogo'}[u.rol]||u.rol;
+          const rolLabel = {admin:'Administración',medico:'Médico',medico_admin:'Médico Adm.',recepcion:'Recepcionista',enfermeria:'Enfermería',farmaceutico:'Farmacéutico',optometrista:'Optometrista',oftalmologo:'Oftalmólogo',dermatologo:'Dermatólogo'}[u.rol]||u.rol;
           const pct = total ? Math.round(atendidas/total*100) : 0;
           return `<div style="background:var(--bg);border-radius:12px;padding:14px;border:1.5px solid var(--border)">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
@@ -2499,12 +2500,12 @@ function setMascotaSelect(mid) {
 }
 
 function fillMedicoSelect(selId, selectedId) {
-  const medicos = C.prof.filter(p => ['medico','medico_admin','dr','dra','admin','optometrista','oftalmologo'].includes(p.rol));
+  const medicos = C.prof.filter(p => ['medico','medico_admin','dr','dra','admin','optometrista','oftalmologo','dermatologo'].includes(p.rol));
   const sel = document.getElementById(selId);
   sel.innerHTML = '<option value="">Sin asignar</option>' +
     medicos.map(m=>`<option value="${m.id}">${m.icono||'👨‍⚕️'} ${m.nombre}</option>`).join('');
   if (selectedId) sel.value = selectedId;
-  else if (['medico','medico_admin','admin','optometrista','oftalmologo'].includes(currentUser?.key)) sel.value = currentUser.id;
+  else if (['medico','medico_admin','admin','optometrista','oftalmologo','dermatologo'].includes(currentUser?.key)) sel.value = currentUser.id;
 }
 
 // ════════════════════ HORARIOS Y DISPONIBILIDAD ════════════════════
@@ -2634,7 +2635,7 @@ function formatHora12(h24) {
 }
 
 function openModalCita(id){
-  const isMedico = ['medico','optometrista','oftalmologo'].includes(currentUser?.key);
+  const isMedico = ['medico','optometrista','oftalmologo','dermatologo'].includes(currentUser?.key);
   const esVet = esVeterinaria();
   editingCitaId=id||null;
   document.getElementById('modal-cita-title').textContent=id?'✏️ Editar Cita':'📅 Nueva Cita';
@@ -2666,11 +2667,16 @@ function openModalCita(id){
   fillServicioSelect(esVet ? 'consulta' : (esOptica ? 'examen_visual' : isOdontologo() ? 'odontologia' : 'consulta'));
   const motivoInput = document.getElementById('c-motivo');
   if(motivoInput && isOdontologo()) motivoInput.placeholder = 'Escribe el procedimiento dental (ej: limpieza, conducto...)';
+  else if(motivoInput && modoDermatologia()) motivoInput.placeholder = 'Escribe el diagnóstico o la lesión (ej: acné, tiña, psoriasis...)';
+  // El catálogo completo solo estorba fuera de dermatología
+  const btnDerma = document.getElementById('btn-catalogo-derma');
+  if(btnDerma) btnDerma.style.display = modoDermatologia() ? '' : 'none';
   // La etiqueta se reescribe SIEMPRE: si no, una clínica que abrió el modal como
   // veterinaria dejaba "Observaciones" pegado para el resto de la sesión.
   const motivoLabel = motivoWrap?.querySelector('label');
   if(motivoLabel) {
     motivoLabel.textContent = isOdontologo() ? 'Procedimiento / Motivo *'
+      : modoDermatologia() ? 'Motivo / Diagnóstico *'
       : (esVet && _esServicioNoClinico(document.getElementById('c-tipo').value)) ? 'Observaciones'
       : 'Motivo de Consulta *';
   }
@@ -2733,7 +2739,7 @@ async function guardarCita(){
     const minH = _getMinHoraHoy();
     if(minH && hora < minH){ toast('No se puede agendar en un horario ya pasado','error'); return; }
   }
-  const isMedico = ['medico','optometrista','oftalmologo'].includes(currentUser?.key);
+  const isMedico = ['medico','optometrista','oftalmologo','dermatologo'].includes(currentUser?.key);
   const medicoId = (isMedico && !isSuperAdmin()) ? currentUser.id : (document.getElementById('c-medico').value||null);
   const duracionMin = esVet ? (parseInt(document.getElementById('c-duracion').value) || 30) : 30;
   const tipoCita = tipoElegido;
@@ -3906,7 +3912,7 @@ let _examenModuloPacId = null;
 
 // Subir y borrar exámenes queda reservado al personal médico
 function puedeGestionarExamenes() {
-  return isSuperAdmin() || ['medico','medico_admin','odontologo','optometrista','oftalmologo'].includes(currentUser?.key);
+  return isSuperAdmin() || ['medico','medico_admin','odontologo','optometrista','oftalmologo','dermatologo'].includes(currentUser?.key);
 }
 
 function _clasificacionExamenGuardada(r) {
@@ -5600,7 +5606,7 @@ async function cargarUsuariosLogin() { /* reemplazado por login email+password *
 let selAgendasDoc = null;
 let selAgendasDate = hoy();
 
-const rolLabel2 = r => ({admin:'Administración',medico:'Médico',medico_admin:'Médico Adm.',dr:'Dr.',dra:'Dra.',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',farmaceutico:'Farmacéutico',odontologo:'Odontólogo',optometrista:'Optometrista',oftalmologo:'Oftalmólogo'}[r]||r);
+const rolLabel2 = r => ({admin:'Administración',medico:'Médico',medico_admin:'Médico Adm.',dr:'Dr.',dra:'Dra.',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',farmaceutico:'Farmacéutico',odontologo:'Odontólogo',optometrista:'Optometrista',oftalmologo:'Oftalmólogo',dermatologo:'Dermatólogo'}[r]||r);
 
 function renderAgendas() {
   selAgendasDate = hoy();
@@ -7080,6 +7086,36 @@ const DX_MAP_VET = {
 };
 
 // El catálogo depende del tipo de clínica
+// Catálogo dermatológico: 22 grupos con sus diagnósticos. Mismo molde que
+// PROCEDIMIENTOS_DENTALES para poder reutilizar el buscador y el desplegable.
+// Algunos diagnósticos aparecen en dos grupos a propósito (la onicomicosis es
+// micosis y a la vez patología ungueal): así se encuentran por cualquiera de
+// los dos caminos.
+const DIAGNOSTICOS_DERMA = [
+  { cat:'1. Acné y trastornos foliculares', dxs:['Acné vulgar','Acné comedónico','Acné papulopustuloso','Acné nodular','Acné noduloquístico','Acné conglobata','Acné inducido por medicamentos','Acné hormonal','Foliculitis','Foliculitis bacteriana','Foliculitis por Malassezia','Pseudofoliculitis de la barba','Hidradenitis supurativa','Queratosis pilar'] },
+  { cat:'2. Dermatitis / Eccemas', dxs:['Dermatitis atópica','Dermatitis de contacto irritativa','Dermatitis de contacto alérgica','Dermatitis seborreica','Dermatitis numular','Dermatitis por estasis','Dermatitis perioral','Dermatitis de manos','Dermatitis del pañal','Eccema dishidrótico','Liquen simple crónico','Fotodermatitis'] },
+  { cat:'3. Psoriasis y enfermedades papuloescamosas', dxs:['Psoriasis en placas','Psoriasis guttata','Psoriasis inversa','Psoriasis pustulosa','Psoriasis eritrodérmica','Psoriasis ungueal','Pitiriasis rosada','Pitiriasis rubra pilaris','Liquen plano','Liquen plano pigmentoso'] },
+  { cat:'4. Rosácea y trastornos vasculares', dxs:['Rosácea eritematotelangiectásica','Rosácea papulopustulosa','Rosácea fimatosa','Rosácea ocular','Eritema facial','Telangiectasias','Angiomas rubí','Hemangioma','Malformaciones vasculares'] },
+  { cat:'5. Infecciones bacterianas', dxs:['Impétigo','Ectima','Erisipela','Celulitis','Forúnculo','Carbunco','Absceso cutáneo','Foliculitis bacteriana','Eritrasma','Infección secundaria de heridas'] },
+  { cat:'6. Infecciones micóticas', dxs:['Tiña corporal','Tiña del cuero cabelludo','Tiña inguinal','Tiña de los pies','Tiña de las manos','Tiña facial','Onicomicosis','Candidiasis cutánea','Intertrigo candidiásico','Pitiriasis versicolor','Otras micosis cutáneas'] },
+  { cat:'7. Infecciones virales', dxs:['Verruga vulgar','Verruga plantar','Verruga plana','Verruga filiforme','Condiloma acuminado','Molusco contagioso','Herpes simple','Herpes zóster','Varicela','Enfermedad mano-pie-boca'] },
+  { cat:'8. Enfermedades parasitarias', dxs:['Escabiosis','Pediculosis capitis','Pediculosis corporis','Pediculosis pubis','Larva migrans cutánea','Tungiasis','Otras parasitosis cutáneas'] },
+  { cat:'9. Trastornos de pigmentación', dxs:['Melasma','Vitíligo','Hiperpigmentación postinflamatoria','Hipopigmentación postinflamatoria','Lentigos solares','Efélides','Acantosis nigricans','Hipomelanosis guttata','Alteraciones pigmentarias inespecíficas'] },
+  { cat:'10. Cabello y cuero cabelludo', dxs:['Alopecia androgenética','Alopecia areata','Efluvio telógeno','Efluvio anágeno','Alopecia por tracción','Alopecia cicatricial','Tricotilomanía','Dermatitis seborreica del cuero cabelludo','Psoriasis del cuero cabelludo','Foliculitis del cuero cabelludo'] },
+  { cat:'11. Enfermedades de las uñas', dxs:['Onicomicosis','Onicocriptosis / Uña encarnada','Paroniquia','Onicólisis','Distrofia ungueal','Psoriasis ungueal','Melanoniquia','Leuconiquia','Traumatismo ungueal'] },
+  { cat:'12. Urticaria y reacciones alérgicas', dxs:['Urticaria aguda','Urticaria crónica','Urticaria física','Angioedema','Reacción medicamentosa','Exantema medicamentoso','Dermatitis alérgica'] },
+  { cat:'13. Enfermedades autoinmunes / ampollares', dxs:['Lupus eritematoso cutáneo','Lupus discoide','Dermatomiositis','Esclerodermia / Morfea','Pénfigo vulgar','Penfigoide ampolloso','Dermatitis herpetiforme','Vasculitis cutánea'] },
+  { cat:'14. Lesiones benignas', dxs:['Nevo melanocítico','Nevo congénito','Nevo azul','Queratosis seborreica','Acrocordón','Dermatofibroma','Lipoma','Quiste epidérmico','Quiste sebáceo','Quiste pilar','Hiperplasia sebácea','Milia','Granuloma piógeno','Angioma rubí'] },
+  { cat:'15. Lesiones premalignas', dxs:['Queratosis actínica','Queilitis actínica','Enfermedad de Bowen','Nevo displásico','Lesión melanocítica atípica'] },
+  { cat:'16. Cáncer de piel', dxs:['Carcinoma basocelular','Carcinoma escamocelular','Melanoma','Melanoma in situ','Carcinoma de células de Merkel','Dermatofibrosarcoma protuberans','Linfoma cutáneo','Otros tumores malignos cutáneos'] },
+  { cat:'17. Trastornos de queratinización', dxs:['Queratosis pilar','Ictiosis','Hiperqueratosis','Callosidades','Helomas','Queratodermia palmoplantar'] },
+  { cat:'18. Trastornos de sudoración', dxs:['Hiperhidrosis','Hipohidrosis','Anhidrosis','Miliaria'] },
+  { cat:'19. Cicatrices', dxs:['Cicatriz hipertrófica','Queloide','Cicatriz atrófica','Cicatriz postacné','Cicatriz traumática','Cicatriz posquirúrgica'] },
+  { cat:'20. Úlceras y heridas', dxs:['Úlcera por presión','Úlcera venosa','Úlcera arterial','Úlcera diabética','Herida crónica','Herida traumática','Infección de herida'] },
+  { cat:'21. Alteraciones por exposición solar', dxs:['Quemadura solar','Fotoenvejecimiento','Lentigos solares','Elastosis solar','Queratosis actínica','Fotodermatosis'] },
+  { cat:'22. Otros', dxs:['Xerosis cutánea','Prurito','Intertrigo','Estrías','Alteraciones cutáneas no especificadas','Diagnóstico pendiente / En estudio'] },
+];
+
 function _dxMapActivo() { return esVeterinaria() ? DX_MAP_VET : DX_MAP; }
 
 const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
@@ -7115,9 +7151,96 @@ function buscarProcedimientosDentales(q) {
   return results;
 }
 
+// ── Catálogo dermatológico navegable ──
+// Escribiendo no se descubren 188 diagnósticos repartidos en 22 grupos, así que
+// se pueden recorrer plegados por grupo. Se abren solos al buscar.
+let _dermaGruposAbiertos = new Set();
+
+function abrirCatalogoDerma() {
+  _dermaGruposAbiertos = new Set();
+  const b = document.getElementById('derma-buscar');
+  if(b) b.value = '';
+  renderCatalogoDerma('');
+  openModalOverlay('modal-catalogo-derma');
+  if(b) setTimeout(() => b.focus(), 80);
+}
+
+function toggleGrupoDerma(i) {
+  _dermaGruposAbiertos.has(i) ? _dermaGruposAbiertos.delete(i) : _dermaGruposAbiertos.add(i);
+  renderCatalogoDerma(document.getElementById('derma-buscar')?.value || '');
+}
+
+function renderCatalogoDerma(filtro) {
+  const cont = document.getElementById('derma-lista');
+  const cnt  = document.getElementById('derma-conteo');
+  if(!cont) return;
+  const q = norm((filtro || '').trim());
+  const grupos = DIAGNOSTICOS_DERMA.map((g, i) => {
+    const coincideGrupo = q && norm(g.cat).includes(q);
+    const dxs = q ? (coincideGrupo ? g.dxs : g.dxs.filter(d => norm(d).includes(q))) : g.dxs;
+    return { ...g, i, dxs, abierto: q ? true : _dermaGruposAbiertos.has(i) };
+  }).filter(g => g.dxs.length);
+
+  const total = grupos.reduce((n, g) => n + g.dxs.length, 0);
+  if(cnt) cnt.textContent = q
+    ? (total ? `${total} diagnóstico${total>1?'s':''} en ${grupos.length} grupo${grupos.length>1?'s':''}` : '')
+    : `188 diagnósticos en 22 grupos · pulsa un grupo para desplegarlo`;
+
+  if(!grupos.length) {
+    cont.innerHTML = `<div class="empty-state" style="padding:30px"><div class="empty-icon">🔍</div><p>Ningún diagnóstico coincide con la búsqueda</p></div>`;
+    return;
+  }
+
+  cont.innerHTML = grupos.map(g => `
+    <div style="border:1px solid var(--border);border-radius:12px;margin-bottom:8px;overflow:hidden">
+      <button type="button" onclick="toggleGrupoDerma(${g.i})" style="width:100%;display:flex;align-items:center;gap:8px;padding:11px 13px;background:var(--bg);border:none;cursor:pointer;font-family:inherit;text-align:left;color:var(--text);min-height:44px">
+        <span style="flex:1;font-size:13px;font-weight:700;min-width:0">${escAttr(g.cat)}</span>
+        <span class="tag tag-gray" style="font-size:10px;flex-shrink:0">${g.dxs.length}</span>
+        <span style="flex-shrink:0;color:var(--text-light);font-size:11px">${g.abierto?'▲':'▼'}</span>
+      </button>
+      ${g.abierto ? `<div style="padding:6px">${g.dxs.map(d => `
+        <button type="button" onclick="elegirDxDerma('${escAttr(d).replace(/'/g,"\\'")}')" style="display:block;width:100%;text-align:left;padding:9px 12px;background:none;border:none;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;color:var(--text);min-height:40px"
+          onmouseover="this.style.background='var(--primary-light)'" onmouseout="this.style.background='none'">${escAttr(d)}</button>`).join('')}</div>` : ''}
+    </div>`).join('');
+}
+
+function elegirDxDerma(dx) {
+  seleccionarDx(dx);
+  closeModal('modal-catalogo-derma');
+  toast(`Diagnóstico agregado: ${dx}`, 'success');
+}
+
+function buscarDiagnosticosDerma(q) {
+  if(!q || q.length < 2) return [];
+  const lq = norm(q);
+  const res = [], vistos = new Set();
+  for(const g of DIAGNOSTICOS_DERMA) {
+    for(const dx of g.dxs) {
+      if(norm(dx).includes(lq) && !vistos.has(dx)) {   // sin repetir los que están en dos grupos
+        vistos.add(dx);
+        res.push({ label: dx, cat: g.cat });
+        if(res.length >= 10) return res;
+      }
+    }
+  }
+  return res;
+}
+
 function mostrarSugerenciasDx(query) {
   const el = document.getElementById('dx-suggestions');
   if(!el) return;
+  if(modoDermatologia()) {
+    const dxs = buscarDiagnosticosDerma(query);
+    if(!dxs.length){ el.style.display='none'; return; }
+    el.style.display = 'block';
+    el.innerHTML = dxs.map(d =>
+      `<div onmousedown="seleccionarDx('${d.label.replace(/'/g,"\\'")}')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:2px" onmouseover="this.style.background='var(--primary-light)'" onmouseout="this.style.background=''">
+        <span style="font-weight:600;font-size:13px">\u{1FA79} ${escAttr(d.label)}</span>
+        <span style="font-size:11px;color:var(--text-light)">${escAttr(d.cat)}</span>
+      </div>`
+    ).join('');
+    return;
+  }
   if(isOdontologo()) {
     const procs = buscarProcedimientosDentales(query);
     if(!procs.length){ el.style.display='none'; return; }
@@ -8556,8 +8679,13 @@ function isSuperAdmin() {
 }
 function isFarmaceutico() { return currentUser?.key === 'farmaceutico'; }
 function isOdontologo()   { return currentUser?.key === 'odontologo'; }
-function esProfesionalOftalmo() { return ['optometrista','oftalmologo'].includes(currentUser?.key); }
+function esProfesionalOftalmo() { return ['optometrista','oftalmologo','dermatologo'].includes(currentUser?.key); }
 function esOftalmologia() { return currentClinica?.tipo === 'oftalmologia'; }
+// Dermatología aplica tanto si la clínica entera lo es como si quien atiende es
+// dermatólogo dentro de una clínica general: el catálogo le sirve igual.
+function esDermatologia() { return currentClinica?.tipo === 'dermatologia'; }
+function isDermatologo()  { return currentUser?.key === 'dermatologo'; }
+function modoDermatologia() { return esDermatologia() || isDermatologo(); }
 function puedeGestionarProcOft() {
   return isSuperAdmin() || ((esOftalmologia() || esProfesionalOftalmo()) && hasPermiso('proc_oftalmo'));
 }
@@ -8732,8 +8860,8 @@ function renderAdminClinicas() {
 function renderAdminUsuarios() {
   const el = document.getElementById('admin-usuarios-list');
   if(!el) return;
-  const rolLabel = r => ({admin:'Administración',medico:'Médico',medico_admin:'Médico Adm.',dr:'Dr.',dra:'Dra.',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',farmaceutico:'Farmacéutico',odontologo:'Odontólogo',optometrista:'Optometrista',oftalmologo:'Oftalmólogo'}[r]||r);
-  const rolTag   = r => ({admin:'tag-blue',medico:'tag-cyan',medico_admin:'tag-cyan',dr:'tag-cyan',dra:'tag-cyan',recepcion:'tag-orange',enfermeria:'tag-green',farmaceutico:'tag-emerald',odontologo:'tag-blue',optometrista:'tag-cyan',oftalmologo:'tag-blue'}[r]||'tag-gray');
+  const rolLabel = r => ({admin:'Administración',medico:'Médico',medico_admin:'Médico Adm.',dr:'Dr.',dra:'Dra.',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',farmaceutico:'Farmacéutico',odontologo:'Odontólogo',optometrista:'Optometrista',oftalmologo:'Oftalmólogo',dermatologo:'Dermatólogo'}[r]||r);
+  const rolTag   = r => ({admin:'tag-blue',medico:'tag-cyan',medico_admin:'tag-cyan',dr:'tag-cyan',dra:'tag-cyan',recepcion:'tag-orange',enfermeria:'tag-green',farmaceutico:'tag-emerald',odontologo:'tag-blue',optometrista:'tag-cyan',oftalmologo:'tag-blue',dermatologo:'tag-purple'}[r]||'tag-gray');
   if(!adminUsuarios.length) {
     el.innerHTML = `<div class="empty-state"><div class="empty-icon">👥</div><p>No hay usuarios registrados.<br>Crea el primero con <strong>+ Nuevo Usuario</strong></p></div>`;
     return;
@@ -9294,8 +9422,8 @@ function renderDetallePanel(tab) {
 
   if(tab === 'usuarios') {
     const usuarios = adminUsuarios.filter(u=>u.clinica_id===id);
-    const rolLabel = r => ({admin:'Administrador',medico:'Médico',medico_admin:'Médico Adm.',recepcion:'Recepcionista',enfermeria:'Enfermería',farmaceutico:'Farmacéutico',superadmin:'Super Admin',odontologo:'Odontólogo',optometrista:'Optometrista',oftalmologo:'Oftalmólogo'}[r]||r);
-    const rolTag   = r => ({admin:'tag-blue',medico:'tag-cyan',medico_admin:'tag-cyan',recepcion:'tag-orange',enfermeria:'tag-green',farmaceutico:'tag-emerald',odontologo:'tag-blue',optometrista:'tag-cyan',oftalmologo:'tag-blue'}[r]||'tag-gray');
+    const rolLabel = r => ({admin:'Administrador',medico:'Médico',medico_admin:'Médico Adm.',recepcion:'Recepcionista',enfermeria:'Enfermería',farmaceutico:'Farmacéutico',superadmin:'Super Admin',odontologo:'Odontólogo',optometrista:'Optometrista',oftalmologo:'Oftalmólogo',dermatologo:'Dermatólogo'}[r]||r);
+    const rolTag   = r => ({admin:'tag-blue',medico:'tag-cyan',medico_admin:'tag-cyan',recepcion:'tag-orange',enfermeria:'tag-green',farmaceutico:'tag-emerald',odontologo:'tag-blue',optometrista:'tag-cyan',oftalmologo:'tag-blue',dermatologo:'tag-purple'}[r]||'tag-gray');
     document.getElementById('detalle-panel-usuarios').innerHTML = usuarios.length
       ? `<div class="table-wrap"><table>
           <thead><tr><th>Usuario</th><th>Email</th><th>Rol</th></tr></thead>
@@ -9479,7 +9607,7 @@ function _firmaImgHTML(alto) {
 }
 
 // Roles clínicos que ejercen una especialidad; el resto no muestra el campo.
-const ROLES_CON_ESPECIALIDAD = ['medico','medico_admin','odontologo','enfermeria','optometrista','oftalmologo'];
+const ROLES_CON_ESPECIALIDAD = ['medico','medico_admin','odontologo','enfermeria','optometrista','oftalmologo','dermatologo'];
 
 // La columna profiles.especialidad puede no existir todavía. Si es así, se
 // guarda el resto del usuario igual en lugar de fallar el formulario entero.
@@ -12756,7 +12884,7 @@ function renderVistaDia() {
   const citasDia = C.c.filter(c => c.fecha === fecha && _citaActiva(c));
 
   // Profesionales con citas ese día; si hay pocos, se muestran todos
-  const medicos = C.prof.filter(p => ['medico','medico_admin','dr','dra','admin','odontologo','optometrista','oftalmologo'].includes(p.rol));
+  const medicos = C.prof.filter(p => ['medico','medico_admin','dr','dra','admin','odontologo','optometrista','oftalmologo','dermatologo'].includes(p.rol));
   let columnas = medicos.filter(p => citasDia.some(c => c.medicoId == p.id));
   if(columnas.length === 0) columnas = medicos.slice(0, 4);
   if(columnas.length === 0) columnas = [{ id:null, nombre:'Sin asignar' }];
@@ -12813,7 +12941,7 @@ function renderVistaSemana() {
   const el = document.getElementById('cal-semana');
   if(!el) return;
   const dias = _diasSemana(selCalDate);
-  const medicos = C.prof.filter(p => ['medico','medico_admin','dr','dra','admin','odontologo','optometrista','oftalmologo'].includes(p.rol));
+  const medicos = C.prof.filter(p => ['medico','medico_admin','dr','dra','admin','odontologo','optometrista','oftalmologo','dermatologo'].includes(p.rol));
   const mid = _semanaMedicoId || '';
   const citasSemana = C.c.filter(c => dias.includes(c.fecha) && _citaActiva(c)
     && (mid ? c.medicoId == mid : true));

@@ -10,7 +10,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
-<link rel="stylesheet" href="css/styles.css?v=20260828h">
+<link rel="stylesheet" href="css/styles.css?v=20260828i">
 </head>
 <body>
 <script>
@@ -1603,6 +1603,7 @@
           <option value="optica">👁️ Óptica / Optometría</option>
           <option value="oftalmologia">🔬 Clínica Oftalmológica</option>
           <option value="dental">🦷 Clínica Dental</option>
+          <option value="dermatologia">🩹 Clínica Dermatológica</option>
           <option value="especialidad">🩺 Clínica de Especialidad</option>
           <option value="veterinaria">🐾 Clínica Veterinaria</option>
           <option value="farmacia">💊 Farmacia</option>
@@ -1664,6 +1665,7 @@
           <option value="odontologo">🦷 Odontólogo</option>
           <option value="optometrista">👁️ Optometrista</option>
           <option value="oftalmologo">🔬 Oftalmólogo</option>
+          <option value="dermatologo">🩹 Dermatólogo</option>
         </select>
       </div>
       <div class="form-group" id="u-especialidad-wrap">
@@ -1890,6 +1892,19 @@
       <button class="btn btn-secondary" id="btn-guardar-y-citar" onclick="guardarPaciente(false,true)" style="display:none">📅 Guardar y citar</button>
       <button class="btn btn-primary" onclick="guardarPaciente(true,false)">📋 Guardar y abrir expediente</button>
     </div>
+  </div>
+</div>
+
+<!-- CATÁLOGO DERMATOLÓGICO — navegable por grupos -->
+<div class="modal-overlay" id="modal-catalogo-derma">
+  <div class="modal" style="max-width:640px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden">
+    <button class="modal-close-btn" onclick="closeModal('modal-catalogo-derma')" title="Cerrar">✕</button>
+    <h2>🩹 Diagnósticos dermatológicos</h2>
+    <div class="form-group" style="margin-bottom:10px">
+      <input type="search" id="derma-buscar" placeholder="Buscar diagnóstico o grupo..." autocomplete="off" oninput="renderCatalogoDerma(this.value)">
+    </div>
+    <div id="derma-conteo" style="font-size:12px;color:var(--text-light);margin-bottom:8px"></div>
+    <div id="derma-lista" style="overflow-y:auto;flex:1;min-height:0"></div>
   </div>
 </div>
 
@@ -2128,7 +2143,10 @@
         <option value="90">1 hora 30 min</option>
       </select></div>
       <div id="c-motivo-wrap" class="form-group full" style="position:relative">
-        <label>Motivo de Consulta *</label>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+          <label style="margin:0">Motivo de Consulta *</label>
+          <button type="button" id="btn-catalogo-derma" onclick="abrirCatalogoDerma()" style="display:none;background:none;border:none;color:var(--primary);font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;padding:2px 0">🩹 Ver los 188 diagnósticos</button>
+        </div>
         <input type="text" id="c-motivo" placeholder="Ej: dolor de cabeza, fiebre, control..." autocomplete="off" oninput="mostrarSugerenciasDx(this.value)" onblur="setTimeout(()=>ocultarSugerenciasDx(),180)">
         <div id="dx-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;z-index:300;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.15);margin-top:4px"></div>
       </div>
@@ -2494,7 +2512,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260828h"></script>
+<script src="js/app.js?v=20260828i"></script>
 </body>
 </html>
 
