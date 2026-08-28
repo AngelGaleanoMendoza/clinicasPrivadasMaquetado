@@ -140,6 +140,24 @@ CREATE POLICY "examenes_clinica" ON public.examenes
   USING (is_superadmin() OR clinica_id = get_my_clinica_id())
   WITH CHECK (is_superadmin() OR clinica_id = get_my_clinica_id());
 
+-- Clasificación y contexto clínico de los documentos digitalizados.
+-- Se mantienen `tipo`, `titulo` y `notas` para compatibilidad con registros
+-- anteriores; las nuevas columnas permiten filtrar y relacionar cada estudio.
+ALTER TABLE public.examenes ADD COLUMN IF NOT EXISTS categoria TEXT;
+ALTER TABLE public.examenes ADD COLUMN IF NOT EXISTS origen TEXT;
+ALTER TABLE public.examenes ADD COLUMN IF NOT EXISTS centro_laboratorio TEXT;
+ALTER TABLE public.examenes ADD COLUMN IF NOT EXISTS profesional_responsable TEXT;
+ALTER TABLE public.examenes ADD COLUMN IF NOT EXISTS hallazgos TEXT;
+ALTER TABLE public.examenes ADD COLUMN IF NOT EXISTS conclusion TEXT;
+ALTER TABLE public.examenes ADD COLUMN IF NOT EXISTS relacion_tipo TEXT;
+-- Es TEXT porque puede apuntar a citas, notas o tablas de procedimientos y se
+-- guarda con prefijo, por ejemplo: cita:25, nota:18, odonto:7 u oft:4.
+ALTER TABLE public.examenes ADD COLUMN IF NOT EXISTS relacion_id TEXT;
+ALTER TABLE public.examenes ADD COLUMN IF NOT EXISTS relacion_descripcion TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_examenes_clinica_paciente_fecha
+  ON public.examenes (clinica_id, paciente_id, fecha DESC);
+
 -- ============================================================
 -- PASO 3: Columnas de configuración de clínica
 -- La pantalla de Configuración guarda estos datos en Supabase (antes solo

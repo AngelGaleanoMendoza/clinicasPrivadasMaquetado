@@ -3792,15 +3792,89 @@ function imprimirRecetaMascota(mid) {
 }
 
 // ════════════════════ EXÁMENES DIGITALIZADOS ════════════════════
-const EXAMEN_TIPOS = {
-  laboratorio:        { lbl:'Laboratorio',        icon:'🧪' },
-  ultrasonido:        { lbl:'Ultrasonido',        icon:'🌊' },
-  radiografia:        { lbl:'Radiografía',        icon:'🩻' },
-  tomografia:         { lbl:'Tomografía',         icon:'🧠' },
-  resonancia:         { lbl:'Resonancia',         icon:'🧲' },
-  electrocardiograma: { lbl:'Electrocardiograma', icon:'💓' },
-  biopsia:            { lbl:'Biopsia / Patología',icon:'🔬' },
-  otro:               { lbl:'Otro',               icon:'📄' },
+const EXAMEN_CATEGORIAS = {
+  laboratorio: {
+    lbl:'Laboratorio clínico', icon:'🧪',
+    def:'Estudios realizados sobre sangre, orina, heces u otras muestras biológicas para apoyar la prevención, el diagnóstico y el seguimiento.',
+    tipos:{
+      hematologia:{lbl:'Hematología',def:'Evalúa células sanguíneas y coagulación; incluye hemograma, frotis y pruebas relacionadas.'},
+      quimica_sanguinea:{lbl:'Química sanguínea',def:'Mide glucosa, lípidos, enzimas, electrolitos y otros componentes para valorar la función orgánica.'},
+      uroanalisis:{lbl:'Uroanálisis',def:'Examina características físicas, químicas y microscópicas de la orina.'},
+      coprologia:{lbl:'Coprología',def:'Analiza muestras de heces para identificar alteraciones digestivas, parásitos, sangre u otros hallazgos.'},
+      serologia:{lbl:'Serología',def:'Detecta antígenos o anticuerpos asociados con infecciones, inmunidad u otras condiciones.'},
+      hormonas:{lbl:'Hormonas',def:'Cuantifica hormonas para evaluar funciones endocrinas, metabólicas o reproductivas.'},
+      microbiologia:{lbl:'Microbiología',def:'Identifica microorganismos mediante cultivos, tinciones u otras técnicas y puede incluir sensibilidad antimicrobiana.'},
+      otro_laboratorio:{lbl:'Otros estudios de laboratorio',def:'Prueba de laboratorio que no corresponde a los grupos anteriores.'}
+    }
+  },
+  imagenes: {
+    lbl:'Imágenes diagnósticas', icon:'🩻',
+    def:'Estudios que producen imágenes del interior del cuerpo para valorar estructuras, lesiones y cambios anatómicos o funcionales.',
+    tipos:{
+      radiografia:{lbl:'Radiografía',def:'Utiliza rayos X para obtener imágenes, especialmente de huesos, tórax y otras estructuras.'},
+      ultrasonido:{lbl:'Ultrasonido',def:'Emplea ondas sonoras para visualizar órganos, tejidos, flujo y estructuras en tiempo real.'},
+      tomografia:{lbl:'Tomografía / TAC',def:'Genera imágenes seccionales detalladas mediante rayos X y procesamiento computarizado.'},
+      resonancia:{lbl:'Resonancia magnética',def:'Produce imágenes detalladas con campos magnéticos y radiofrecuencia, sin radiación ionizante.'},
+      mamografia:{lbl:'Mamografía',def:'Radiografía especializada de mama utilizada para detección y evaluación diagnóstica.'},
+      otra_imagen:{lbl:'Otras imágenes diagnósticas',def:'Estudio de imagen que no corresponde a los tipos anteriores.'}
+    }
+  },
+  cardiologia: {
+    lbl:'Cardiología', icon:'❤️',
+    def:'Pruebas orientadas a evaluar la actividad eléctrica, la estructura y el funcionamiento del corazón y la circulación.',
+    tipos:{
+      electrocardiograma:{lbl:'Electrocardiograma',def:'Registra la actividad eléctrica del corazón para valorar ritmo, conducción y posibles alteraciones.'},
+      ecocardiograma:{lbl:'Ecocardiograma',def:'Ultrasonido del corazón que evalúa cámaras, válvulas, movimiento y flujo sanguíneo.'},
+      holter:{lbl:'Holter',def:'Registra de forma continua el ritmo cardíaco durante 24 horas o más.'},
+      mapa:{lbl:'MAPA',def:'Monitorea la presión arterial de forma ambulatoria durante un periodo prolongado, usualmente 24 horas.'},
+      prueba_esfuerzo:{lbl:'Prueba de esfuerzo',def:'Evalúa la respuesta cardiovascular durante ejercicio controlado o estimulación equivalente.'}
+    }
+  },
+  neurologia: {
+    lbl:'Neurología', icon:'🧠',
+    def:'Estudios funcionales del cerebro, los nervios y los músculos para investigar alteraciones neurológicas.',
+    tipos:{
+      electroencefalograma:{lbl:'Electroencefalograma',def:'Registra la actividad eléctrica cerebral mediante electrodos colocados en el cuero cabelludo.'},
+      electromiografia:{lbl:'Electromiografía',def:'Evalúa la actividad eléctrica muscular y, según el estudio, la conducción de los nervios periféricos.'},
+      otro_neurologia:{lbl:'Otros estudios neurológicos',def:'Prueba neurológica que no corresponde a los tipos anteriores.'}
+    }
+  },
+  neumologia: {
+    lbl:'Neumología', icon:'🫁',
+    def:'Pruebas destinadas a evaluar la función respiratoria, la capacidad pulmonar y el flujo de aire.',
+    tipos:{
+      espirometria:{lbl:'Espirometría',def:'Mide volúmenes y flujos respiratorios para valorar la función pulmonar.'},
+      otro_neumologia:{lbl:'Otros estudios neumológicos',def:'Prueba respiratoria o pulmonar que no corresponde a la espirometría.'}
+    }
+  },
+  patologia: {
+    lbl:'Anatomía patológica', icon:'🔬',
+    def:'Analiza células y tejidos para identificar cambios inflamatorios, infecciosos, precancerosos o tumorales.',
+    tipos:{
+      biopsia:{lbl:'Biopsia',def:'Examina una muestra de tejido obtenida de una lesión u órgano.'},
+      citologia:{lbl:'Citología',def:'Estudia células aisladas o pequeños grupos celulares obtenidos de líquidos, raspados o punciones.'},
+      histopatologia:{lbl:'Histopatología',def:'Evalúa microscópicamente la arquitectura de tejidos procesados para establecer un diagnóstico.'},
+      otro_patologia:{lbl:'Otros estudios de patología',def:'Estudio anatomopatológico que no corresponde a los tipos anteriores.'}
+    }
+  },
+  otros: {
+    lbl:'Otros medios diagnósticos', icon:'📄',
+    def:'Procedimientos diagnósticos que complementan la evaluación clínica y no pertenecen a las categorías anteriores.',
+    tipos:{
+      endoscopia:{lbl:'Endoscopía',def:'Explora visualmente cavidades u órganos internos mediante un endoscopio.'},
+      colonoscopia:{lbl:'Colonoscopía',def:'Examina el colon y el recto mediante un endoscopio flexible.'},
+      otro:{lbl:'Otro medio diagnóstico',def:'Documento o estudio diagnóstico no contemplado en las categorías anteriores.'}
+    }
+  }
+};
+
+// Traduce los tipos usados por la versión anterior para que los documentos ya
+// guardados aparezcan dentro de la nueva clasificación sin tener que migrarlos.
+const EXAMEN_TIPOS_LEGACY = {
+  laboratorio:['laboratorio','otro_laboratorio'], ultrasonido:['imagenes','ultrasonido'],
+  radiografia:['imagenes','radiografia'], tomografia:['imagenes','tomografia'],
+  resonancia:['imagenes','resonancia'], electrocardiograma:['cardiologia','electrocardiograma'],
+  biopsia:['patologia','biopsia'], otro:['otros','otro']
 };
 const EXAMEN_MAX_BYTES = 10 * 1024 * 1024;
 
@@ -3808,17 +3882,45 @@ let _examenes        = [];     // exámenes del paciente abierto
 let _examenPacId     = null;
 let _examenArchivo   = null;   // archivo elegido, se sube al guardar
 let _examenFiltro    = '';
+let _examenCategoriaFiltro = '';
 
 // Subir y borrar exámenes queda reservado al personal médico
 function puedeGestionarExamenes() {
   return isSuperAdmin() || ['medico','medico_admin','odontologo','optometrista','oftalmologo'].includes(currentUser?.key);
 }
 
-const fromExamen = r => ({
-  id:r.id, pacienteId:r.paciente_id, tipo:r.tipo||'otro', titulo:r.titulo||'',
-  notas:r.notas||'', fecha:r.fecha, url:r.archivo_url, mime:r.archivo_tipo||'',
-  nombre:r.archivo_nombre||'', tamano:Number(r.tamano||0), subidoPor:r.subido_por||''
-});
+function _clasificacionExamenGuardada(r) {
+  const legado = EXAMEN_TIPOS_LEGACY[r.tipo] || ['otros','otro'];
+  if(r.categoria) return [r.categoria,r.tipo||'otro'];
+  const notas = r.notas || '';
+  const catTexto = (notas.match(/^Categoría:\s*(.+)$/mi)||[])[1]?.trim();
+  const tipoTexto = (notas.match(/^Tipo de examen:\s*(.+)$/mi)||[])[1]?.trim();
+  const catKey = Object.keys(EXAMEN_CATEGORIAS).find(k=>k===catTexto || EXAMEN_CATEGORIAS[k].lbl===catTexto) || legado[0];
+  const cat = _categoriaExamen(catKey);
+  const tipoKey = Object.keys(cat.tipos).find(k=>k===tipoTexto || cat.tipos[k].lbl===tipoTexto) || legado[1];
+  return [catKey,tipoKey];
+}
+
+const fromExamen = r => {
+  const clasificacion = _clasificacionExamenGuardada(r);
+  return {
+    id:r.id, pacienteId:r.paciente_id, categoria:clasificacion[0],
+    tipo:clasificacion[1], titulo:r.titulo||'',
+    notas:r.notas||'', fecha:r.fecha, origen:r.origen||'',
+    centro:r.centro_laboratorio||'', profesional:r.profesional_responsable||'',
+    hallazgos:r.hallazgos||'', conclusion:r.conclusion||'',
+    relacionTipo:r.relacion_tipo||'', relacionId:r.relacion_id||'',
+    relacionDescripcion:r.relacion_descripcion||'', url:r.archivo_url,
+    mime:r.archivo_tipo||'', nombre:r.archivo_nombre||'',
+    tamano:Number(r.tamano||0), subidoPor:r.subido_por||''
+  };
+};
+
+function _categoriaExamen(key) { return EXAMEN_CATEGORIAS[key] || EXAMEN_CATEGORIAS.otros; }
+function _tipoExamen(categoria, tipo) {
+  const cat = _categoriaExamen(categoria);
+  return cat.tipos[tipo] || { lbl:tipo||'Otro medio diagnóstico', def:'Documento clínico digitalizado.' };
+}
 
 function _esImagenExamen(mime) { return (mime||'').startsWith('image/'); }
 function _pesoLegible(b) {
@@ -3829,6 +3931,10 @@ function _pesoLegible(b) {
 async function renderExamenes(pid) {
   const el = document.getElementById('tab-examenes');
   if(!el) return;
+  if(_examenPacId !== pid) {
+    _examenFiltro = '';
+    _examenCategoriaFiltro = '';
+  }
   _examenPacId = pid;
   el.innerHTML = '<div class="card"><p class="text-light" style="text-align:center;padding:26px">Cargando exámenes…</p></div>';
 
@@ -3854,32 +3960,36 @@ function _pintarExamenes() {
   const el = document.getElementById('tab-examenes');
   if(!el) return;
   const puede = puedeGestionarExamenes();
-  const q = _examenFiltro.toLowerCase();
-  const lista = _examenes.filter(x => !q
-    || x.titulo.toLowerCase().includes(q)
-    || x.notas.toLowerCase().includes(q)
-    || (EXAMEN_TIPOS[x.tipo]?.lbl||'').toLowerCase().includes(q));
+  const q = _examenFiltro.toLowerCase().trim();
+  const lista = _examenes.filter(x => {
+    const cat = _categoriaExamen(x.categoria), tipo = _tipoExamen(x.categoria,x.tipo);
+    const texto = [x.titulo,x.notas,x.hallazgos,x.conclusion,x.centro,x.profesional,cat.lbl,tipo.lbl].join(' ').toLowerCase();
+    return (!_examenCategoriaFiltro || x.categoria===_examenCategoriaFiltro) && (!q || texto.includes(q));
+  });
 
-  const chips = ['', ...Object.keys(EXAMEN_TIPOS)]
-    .filter(t => !t || _examenes.some(x => x.tipo === t))
-    .map(t => `<span class="chip${_examenFiltro===(EXAMEN_TIPOS[t]?.lbl||'')&&t?' active':(!t&&!_examenFiltro?' active':'')}"
-      onclick="filtrarExamenes('${t?EXAMEN_TIPOS[t].lbl:''}')">${t?EXAMEN_TIPOS[t].icon+' '+EXAMEN_TIPOS[t].lbl:'Todos'}</span>`).join('');
+  const chips = ['', ...Object.keys(EXAMEN_CATEGORIAS)]
+    .filter(c => !c || _examenes.some(x => x.categoria === c))
+    .map(c => {
+      const cat = c ? EXAMEN_CATEGORIAS[c] : null;
+      return `<button type="button" class="chip${_examenCategoriaFiltro===c?' active':''}" onclick="filtrarCategoriaExamen('${c}')">${cat?cat.icon+' '+cat.lbl:'Todos'}</button>`;
+    }).join('');
 
   el.innerHTML = `<div class="card">
     <div class="card-header">
       <h3>🔬 Exámenes digitalizados ${_examenes.length?`<span class="tag tag-blue" style="font-size:11px">${_examenes.length}</span>`:''}</h3>
-      ${puede?`<button class="btn btn-primary btn-sm" onclick="openModalExamen(${_examenPacId})">+ Subir examen</button>`:''}
+      ${puede?`<button class="btn btn-primary btn-sm" onclick="openModalExamen(${_examenPacId})">+ Nuevo examen</button>`:''}
     </div>
+    <div class="ex-modulo-intro"><span>🗂️</span><div><strong>Archivo diagnóstico del paciente</strong><p>Organiza informes escaneados por categoría, registra sus hallazgos y relaciónalos con la atención clínica.</p></div></div>
     ${_examenes.length?`<div class="search-bar" style="margin-bottom:12px">
-      <input class="search-bar-input" type="text" placeholder="Buscar por título, tipo u observaciones..."
-        value="${_examenFiltro}" oninput="filtrarExamenes(this.value)">
+      <input class="search-bar-input" type="text" placeholder="Buscar por estudio, centro, profesional o hallazgo..."
+        value="${escAttr(_examenFiltro)}" oninput="filtrarExamenes(this.value)">
     </div>
     <div class="filter-chips" style="margin-bottom:14px">${chips}</div>`:''}
     ${lista.length ? `<div class="ex-grid">${lista.map(_examenCardHTML).join('')}</div>`
       : `<div class="empty-state" style="padding:36px">
           <div class="empty-icon">🔬</div>
           <p>${_examenes.length ? 'Ningún examen coincide con la búsqueda'
-            : puede ? 'Sin exámenes cargados.<br>Usa <strong>+ Subir examen</strong> para agregar un PDF o una foto.'
+            : puede ? 'Sin exámenes digitalizados.<br>Usa <strong>+ Nuevo examen</strong> para incorporar el primer documento.'
                     : 'Este paciente aún no tiene exámenes cargados.'}</p>
         </div>`}
     ${!puede&&_examenes.length?'<p style="font-size:11px;color:var(--text-light);text-align:center;margin-top:12px">Solo el personal médico puede subir o eliminar exámenes.</p>':''}
@@ -3887,21 +3997,25 @@ function _pintarExamenes() {
 }
 
 function _examenCardHTML(x) {
-  const t = EXAMEN_TIPOS[x.tipo] || EXAMEN_TIPOS.otro;
+  const cat = _categoriaExamen(x.categoria), tipo = _tipoExamen(x.categoria,x.tipo);
   const esImg = _esImagenExamen(x.mime);
   const puede = puedeGestionarExamenes();
+  const resumen = x.hallazgos || x.conclusion || x.notas;
   return `<div class="ex-card">
     <div class="ex-thumb" onclick="abrirExamen(${x.id})" title="Abrir examen">
-      ${esImg ? `<img src="${x.url}" alt="${x.titulo}" loading="lazy">` : '<span class="ex-pdf">📕</span>'}
-      <span class="ex-badge">${t.icon} ${t.lbl}</span>
+      ${esImg ? `<img src="${escAttr(x.url)}" alt="${escAttr(x.titulo)}" loading="lazy">` : '<span class="ex-pdf">📕</span>'}
+      <span class="ex-badge">${cat.icon} ${escAttr(cat.lbl)}</span>
     </div>
     <div class="ex-body">
-      <div class="ex-titulo">${x.titulo||'Sin título'}</div>
+      <div class="ex-tipo">${escAttr(tipo.lbl)}</div>
+      <div class="ex-titulo">${escAttr(x.titulo||'Sin título')}</div>
       <div class="ex-meta">${formatFecha(x.fecha)}${x.tamano?' · '+_pesoLegible(x.tamano):''}</div>
-      ${x.notas?`<div class="ex-notas">${x.notas}</div>`:''}
-      ${x.subidoPor?`<div class="ex-meta" style="margin-top:3px">Subido por ${x.subidoPor}</div>`:''}
+      ${x.origen||x.centro?`<div class="ex-origen"><span>${x.origen==='interno'?'🏥 Interno':'📤 Externo'}</span>${x.centro?` · ${escAttr(x.centro)}`:''}</div>`:''}
+      ${resumen?`<div class="ex-notas">${escAttr(resumen)}</div>`:''}
+      ${x.relacionDescripcion?`<div class="ex-relacion">🔗 ${escAttr(x.relacionDescripcion)}</div>`:''}
+      ${x.subidoPor?`<div class="ex-meta" style="margin-top:3px">Subido por ${escAttr(x.subidoPor)}</div>`:''}
       <div class="ex-acciones">
-        <button class="btn btn-secondary btn-sm" onclick="abrirExamen(${x.id})">👁️ Ver</button>
+        <button class="btn btn-secondary btn-sm" onclick="abrirExamen(${x.id})">👁️ Abrir documento</button>
         ${puede?`<button class="btn btn-danger btn-sm" onclick="eliminarExamen(${x.id})">🗑️</button>`:''}
       </div>
     </div>
@@ -3909,6 +4023,7 @@ function _examenCardHTML(x) {
 }
 
 function filtrarExamenes(v) { _examenFiltro = v || ''; _pintarExamenes(); }
+function filtrarCategoriaExamen(v) { _examenCategoriaFiltro = v || ''; _pintarExamenes(); }
 
 function abrirExamen(id) {
   const x = _examenes.find(e => e.id === id);
@@ -3919,22 +4034,93 @@ function openModalExamen(pid) {
   if(!puedeGestionarExamenes()) { toast('Solo el personal médico puede subir exámenes','error'); return; }
   _examenPacId = pid || _examenPacId;
   _examenArchivo = null;
-  document.getElementById('ex-tipo').value = 'laboratorio';
+  const categoria = document.getElementById('ex-categoria');
+  categoria.innerHTML = Object.entries(EXAMEN_CATEGORIAS)
+    .map(([key,c])=>`<option value="${key}">${c.icon} ${c.lbl}</option>`).join('');
+  categoria.value = 'laboratorio';
   document.getElementById('ex-fecha').value = hoy();
+  document.getElementById('ex-origen').value = 'externo';
+  document.getElementById('ex-centro').value = '';
+  document.getElementById('ex-profesional').value = '';
   document.getElementById('ex-titulo').value = '';
-  document.getElementById('ex-notas').value = '';
+  document.getElementById('ex-titulo').dataset.auto = '1';
+  document.getElementById('ex-hallazgos').value = '';
+  document.getElementById('ex-conclusion').value = '';
+  document.getElementById('ex-relacion-tipo').value = '';
   document.getElementById('ex-archivo').value = '';
   document.getElementById('ex-drop-vacio').style.display = '';
   document.getElementById('ex-drop-lleno').style.display = 'none';
+  actualizarTiposExamen();
+  actualizarOrigenExamen();
+  poblarRelacionesExamen();
   openModalOverlay('modal-examen');
   setTimeout(initDatePickers, 50);
+}
+
+function actualizarTiposExamen() {
+  const catKey = document.getElementById('ex-categoria').value || 'laboratorio';
+  const cat = _categoriaExamen(catKey);
+  const select = document.getElementById('ex-tipo');
+  select.innerHTML = Object.entries(cat.tipos).map(([key,t])=>`<option value="${key}">${t.lbl}</option>`).join('');
+  document.getElementById('ex-categoria-def').innerHTML = `<strong>${cat.icon} ${cat.lbl}:</strong> ${cat.def}`;
+  actualizarDefinicionExamen();
+}
+
+function actualizarDefinicionExamen() {
+  const catKey = document.getElementById('ex-categoria').value || 'laboratorio';
+  const tipoKey = document.getElementById('ex-tipo').value;
+  const tipo = _tipoExamen(catKey,tipoKey);
+  document.getElementById('ex-tipo-def').innerHTML = `<strong>${tipo.lbl}:</strong> ${tipo.def}`;
+  const titulo = document.getElementById('ex-titulo');
+  if(titulo && (!titulo.value.trim() || titulo.dataset.auto==='1')) {
+    titulo.value = tipo.lbl;
+    titulo.dataset.auto = '1';
+  }
+}
+
+function actualizarOrigenExamen() {
+  const origen = document.getElementById('ex-origen').value;
+  const centro = document.getElementById('ex-centro');
+  const nombreClinica = currentClinica?.nombre || '';
+  document.getElementById('ex-centro-label').textContent = origen==='externo' ? '5. Centro / laboratorio *' : '5. Área / centro interno';
+  centro.placeholder = origen==='externo' ? 'Nombre del centro o laboratorio externo' : 'Área o servicio que realizó el examen';
+  centro.required = origen==='externo';
+  if(origen==='interno' && !centro.value.trim()) centro.value = nombreClinica;
+  if(origen==='externo' && centro.value.trim()===nombreClinica) centro.value = '';
+}
+
+function poblarRelacionesExamen() {
+  const tipo = document.getElementById('ex-relacion-tipo').value;
+  const select = document.getElementById('ex-relacion-id');
+  let opciones = [];
+  if(tipo==='consulta') {
+    opciones = C.c.filter(x=>x.pacienteId===_examenPacId)
+      .sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''))
+      .map(x=>({id:`cita:${x.id}`,lbl:`${formatFecha(x.fecha)} · ${x.motivo||'Consulta'}`}));
+  } else if(tipo==='diagnostico') {
+    opciones = C.n.filter(x=>x.pacienteId===_examenPacId && x.tipo==='diagnostico')
+      .sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''))
+      .map(x=>({id:`nota:${x.id}`,lbl:`${formatFecha(x.fecha)} · ${x.titulo||'Diagnóstico'}`}));
+  } else if(tipo==='procedimiento') {
+    const notas = C.n.filter(x=>x.pacienteId===_examenPacId && x.tipo==='procedimiento')
+      .map(x=>({id:`nota:${x.id}`,lbl:`${formatFecha(x.fecha)} · ${x.titulo||'Procedimiento médico'}`}));
+    const odonto = (C.proc||[]).filter(x=>x.pacienteId===_examenPacId)
+      .map(x=>({id:`odonto:${x.id}`,lbl:`${formatFecha(x.fecha)} · ${x.procedimiento}`}));
+    const oft = (C.procOft||[]).filter(x=>x.pacienteId===_examenPacId)
+      .map(x=>({id:`oft:${x.id}`,lbl:`${formatFecha(x.fecha)} · ${x.procedimiento}`}));
+    opciones = notas.concat(odonto,oft).sort((a,b)=>b.lbl.localeCompare(a.lbl));
+  }
+  select.disabled = !tipo || !opciones.length;
+  select.innerHTML = opciones.length
+    ? '<option value="">Seleccionar registro...</option>'+opciones.map(x=>`<option value="${escAttr(x.id)}">${escAttr(x.lbl)}</option>`).join('')
+    : `<option value="">${tipo?'No hay registros disponibles':'Selecciona primero el tipo de relación'}</option>`;
 }
 
 function onExamenArchivo(input) {
   const f = input.files && input.files[0];
   if(!f) return;
-  const ok = f.type === 'application/pdf' || /^image\/(png|jpeg|webp)$/.test(f.type);
-  if(!ok) { toast('Solo se admiten PDF o imágenes PNG, JPG y WEBP','error'); input.value=''; return; }
+  const ok = f.type === 'application/pdf' || /^image\/(png|jpeg)$/.test(f.type);
+  if(!ok) { toast('Solo se admiten archivos PDF, JPG o PNG','error'); input.value=''; return; }
   if(f.size > EXAMEN_MAX_BYTES) { toast('El archivo supera los 10 MB','error'); input.value=''; return; }
   _examenArchivo = f;
   document.getElementById('ex-drop-vacio').style.display = 'none';
@@ -3951,7 +4137,10 @@ function onExamenArchivo(input) {
   }
   // Sugerir un título a partir del nombre del archivo si aún está vacío
   const tit = document.getElementById('ex-titulo');
-  if(tit && !tit.value.trim()) tit.value = f.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
+  if(tit && !tit.value.trim()) {
+    tit.value = f.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
+    tit.dataset.auto = '1';
+  }
 }
 
 async function subirArchivoExamen(file, pacienteId) {
@@ -3963,12 +4152,55 @@ async function subirArchivoExamen(file, pacienteId) {
   return { url:data.publicUrl, path };
 }
 
+function _resumenCompatibilidadExamen(x) {
+  const cat = _categoriaExamen(x.categoria), tipo = _tipoExamen(x.categoria,x.tipo);
+  return [
+    `Categoría: ${cat.lbl}`,
+    `Tipo de examen: ${tipo.lbl}`,
+    `Origen: ${x.origen==='interno'?'Interno':'Externo'}`,
+    x.centro ? `Centro / laboratorio: ${x.centro}` : '',
+    x.profesional ? `Profesional responsable: ${x.profesional}` : '',
+    x.relacionDescripcion ? `Relacionado con: ${x.relacionDescripcion}` : '',
+    x.hallazgos ? `\nResultado / hallazgos:\n${x.hallazgos}` : '',
+    x.conclusion ? `\nConclusión:\n${x.conclusion}` : ''
+  ].filter(Boolean).join('\n');
+}
+
+function _errorColumnasExamen(error) {
+  return /categoria|origen|centro_laboratorio|profesional_responsable|hallazgos|conclusion|relacion_tipo|relacion_id|relacion_descripcion/i.test(error?.message||'');
+}
+
+async function _borrarArchivoExamen(path) {
+  if(!path) return;
+  try { await sb.storage.from(STORAGE_BUCKET).remove([path]); } catch(e) {}
+}
+
 async function guardarExamen() {
   if(!puedeGestionarExamenes()) { toast('Solo el personal médico puede subir exámenes','error'); return; }
   if(!currentClinicaId) { toast('Sin clínica asignada','error'); return; }
+  if(!_examenPacId) { toast('No se encontró el paciente del expediente','error'); return; }
+  const categoria = document.getElementById('ex-categoria').value;
+  const tipo = document.getElementById('ex-tipo').value;
+  const fecha = document.getElementById('ex-fecha').value;
+  const origen = document.getElementById('ex-origen').value;
+  const centro = document.getElementById('ex-centro').value.trim();
   const titulo = document.getElementById('ex-titulo').value.trim();
+  if(!categoria || !tipo) { toast('Selecciona la categoría y el tipo de examen','error'); return; }
+  if(!fecha) { toast('Indica la fecha del examen','error'); return; }
+  if(origen==='externo' && !centro) { toast('Indica el centro o laboratorio de origen','error'); return; }
   if(!titulo) { toast('Ponle un título al examen','error'); return; }
   if(!_examenArchivo) { toast('Elige el archivo del examen','error'); return; }
+  const relacionSelect = document.getElementById('ex-relacion-id');
+  const relacionId = relacionSelect.value || '';
+  const relacionDescripcion = relacionId ? relacionSelect.selectedOptions[0]?.textContent.trim()||'' : '';
+  const examen = {
+    categoria, tipo, fecha, origen, centro, titulo,
+    profesional:document.getElementById('ex-profesional').value.trim(),
+    hallazgos:document.getElementById('ex-hallazgos').value.trim(),
+    conclusion:document.getElementById('ex-conclusion').value.trim(),
+    relacionTipo:relacionId ? document.getElementById('ex-relacion-tipo').value : '',
+    relacionId, relacionDescripcion
+  };
   const btn = document.querySelector('[onclick="guardarExamen()"]');
   if(!_lockSubmit('examen', btn)) return;
   setLoading(true);
@@ -3981,18 +4213,44 @@ async function guardarExamen() {
     return;
   }
 
-  const { error } = await sb.from('examenes').insert({
+  const fila = {
     paciente_id:_examenPacId, clinica_id:currentClinicaId,
-    tipo:document.getElementById('ex-tipo').value,
-    titulo, notas:document.getElementById('ex-notas').value.trim() || null,
-    fecha:document.getElementById('ex-fecha').value || hoy(),
+    categoria:examen.categoria, tipo:examen.tipo, titulo:examen.titulo,
+    fecha:examen.fecha, origen:examen.origen,
+    centro_laboratorio:examen.centro||null,
+    profesional_responsable:examen.profesional||null,
+    hallazgos:examen.hallazgos||null, conclusion:examen.conclusion||null,
+    relacion_tipo:examen.relacionTipo||null, relacion_id:examen.relacionId||null,
+    relacion_descripcion:examen.relacionDescripcion||null,
+    notas:examen.hallazgos||examen.conclusion||null,
     archivo_url:subido.url, archivo_tipo:_examenArchivo.type,
     archivo_nombre:_examenArchivo.name, tamano:_examenArchivo.size,
     subido_por:currentUser?.name || null
-  });
+  };
+  let { error } = await sb.from('examenes').insert(fila);
+  let guardadoCompatible = false;
+  // Una clínica que aún no ejecutó la migración sigue pudiendo trabajar: la
+  // clasificación completa queda conservada en notas y se recupera al leerla.
+  if(error && _errorColumnasExamen(error)) {
+    const legado = {
+      paciente_id:_examenPacId, clinica_id:currentClinicaId,
+      tipo:examen.tipo, titulo:examen.titulo, fecha:examen.fecha,
+      notas:_resumenCompatibilidadExamen(examen),
+      archivo_url:subido.url, archivo_tipo:_examenArchivo.type,
+      archivo_nombre:_examenArchivo.name, tamano:_examenArchivo.size,
+      subido_por:currentUser?.name || null
+    };
+    const reintento = await sb.from('examenes').insert(legado);
+    error = reintento.error;
+    guardadoCompatible = !error;
+  }
   setLoading(false); _unlockSubmit('examen', btn);
-  if(error) { toast('Error al guardar: '+error.message,'error'); return; }
-  toast('Examen guardado 🔬');
+  if(error) {
+    await _borrarArchivoExamen(subido.path);
+    toast('Error al guardar: '+error.message,'error');
+    return;
+  }
+  toast(guardadoCompatible?'Examen guardado; falta aplicar la migración de campos clínicos':'Examen guardado en el expediente 🔬', guardadoCompatible?'warning':undefined);
   closeModal('modal-examen');
   renderExamenes(_examenPacId);
 }

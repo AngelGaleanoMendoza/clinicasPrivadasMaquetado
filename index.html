@@ -403,7 +403,7 @@
           <button class="tab" onclick="switchTab('tab-meds-p',this)">💊 Medicaciones</button>
           <button class="tab" onclick="switchTab('tab-notas-p',this)">📝 Notas</button>
           <button class="tab" onclick="switchTab('tab-expediente',this)">📁 Expediente</button>
-          <button class="tab" onclick="switchTab('tab-examenes',this)">🔬 Exámenes</button>
+          <button class="tab" onclick="switchTab('tab-examenes',this)">🔬 Exámenes digitalizados</button>
           <button class="tab" id="tab-btn-historial-dental" onclick="switchTab('tab-historial-dental',this)" style="display:none">🦷 Historia Dental</button>
           <button class="tab" id="tab-btn-odontograma" onclick="switchTab('tab-odontograma',this)" style="display:none">🗺️ Odontograma</button>
           <button class="tab" id="tab-btn-periodontograma" onclick="switchTab('tab-periodontograma',this)" style="display:none">📏 Periodontograma</button>
@@ -1748,33 +1748,51 @@
 
 <!-- MODAL EXAMEN DIGITALIZADO -->
 <div class="modal-overlay" id="modal-examen">
-  <div class="modal" style="max-width:560px">
+  <div class="modal" style="max-width:780px">
     <button class="modal-close-btn" onclick="closeModal('modal-examen')" title="Cerrar">✕</button>
-    <h2 id="modal-examen-title">🔬 Subir Examen</h2>
+    <h2 id="modal-examen-title">🔬 Nuevo examen digitalizado</h2>
+    <div class="ex-contexto-clinico">
+      <strong>Expediente clínico · Exámenes y medios diagnósticos</strong>
+      <span>Clasifica el estudio y conserva el documento original junto con sus datos clínicos.</span>
+    </div>
     <div class="form-grid">
-      <div class="form-group"><label>Tipo de examen</label>
-        <select id="ex-tipo">
-          <option value="laboratorio">🧪 Laboratorio</option>
-          <option value="ultrasonido">🌊 Ultrasonido</option>
-          <option value="radiografia">🩻 Radiografía</option>
-          <option value="tomografia">🧠 Tomografía</option>
-          <option value="resonancia">🧲 Resonancia</option>
-          <option value="electrocardiograma">💓 Electrocardiograma</option>
-          <option value="biopsia">🔬 Biopsia / Patología</option>
-          <option value="otro">📄 Otro</option>
+      <div class="form-group full"><label>1. Categoría diagnóstica *</label>
+        <select id="ex-categoria" onchange="actualizarTiposExamen()"></select>
+        <div class="ex-definicion" id="ex-categoria-def"></div>
+      </div>
+      <div class="form-group full"><label>2. Tipo de examen *</label>
+        <select id="ex-tipo" onchange="actualizarDefinicionExamen()"></select>
+        <div class="ex-definicion ex-definicion-tipo" id="ex-tipo-def"></div>
+      </div>
+      <div class="form-group"><label>3. Fecha del examen *</label><input type="date" id="ex-fecha"></div>
+      <div class="form-group"><label>4. Origen *</label>
+        <select id="ex-origen" onchange="actualizarOrigenExamen()">
+          <option value="interno">🏥 Interno</option>
+          <option value="externo">📤 Externo</option>
         </select>
       </div>
-      <div class="form-group"><label>Fecha del examen</label><input type="date" id="ex-fecha"></div>
-      <div class="form-group full"><label>Título *</label><input type="text" id="ex-titulo" placeholder="Perfil tiroideo (TSH, T3, T4)"></div>
-      <div class="form-group full"><label>Observaciones</label><textarea id="ex-notas" placeholder="Hallazgos, laboratorio de procedencia, comentarios..." style="min-height:64px"></textarea></div>
+      <div class="form-group"><label id="ex-centro-label">5. Centro / laboratorio *</label><input type="text" id="ex-centro" placeholder="Nombre del centro o laboratorio"></div>
+      <div class="form-group"><label>6. Profesional responsable</label><input type="text" id="ex-profesional" placeholder="Nombre y especialidad"></div>
+      <div class="form-group full"><label>Título del documento *</label><input type="text" id="ex-titulo" placeholder="Ej. Hemograma completo — control anual" oninput="this.dataset.auto='0'"></div>
+      <div class="form-group full"><label>7. Resultado / hallazgos</label><textarea id="ex-hallazgos" placeholder="Transcribe los resultados relevantes o describe los hallazgos principales..." style="min-height:82px"></textarea></div>
+      <div class="form-group full"><label>8. Conclusión</label><textarea id="ex-conclusion" placeholder="Impresión diagnóstica o conclusión consignada en el informe..." style="min-height:68px"></textarea></div>
+      <div class="form-group"><label>9. Relacionar con</label>
+        <select id="ex-relacion-tipo" onchange="poblarRelacionesExamen()">
+          <option value="">Sin relación específica</option>
+          <option value="consulta">Consulta</option>
+          <option value="diagnostico">Diagnóstico</option>
+          <option value="procedimiento">Procedimiento</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Registro relacionado</label><select id="ex-relacion-id" disabled><option value="">Selecciona primero el tipo de relación</option></select></div>
       <div class="form-group full">
-        <label>Archivo * <span style="font-size:11px;color:var(--text-light);font-weight:400">— PDF o imagen, máx. 10 MB</span></label>
-        <input type="file" id="ex-archivo" accept="application/pdf,image/png,image/jpeg,image/webp" style="display:none" onchange="onExamenArchivo(this)">
+        <label>10. Documento digitalizado * <span style="font-size:11px;color:var(--text-light);font-weight:400">— PDF, JPG o PNG, máx. 10 MB</span></label>
+        <input type="file" id="ex-archivo" accept="application/pdf,image/png,image/jpeg" style="display:none" onchange="onExamenArchivo(this)">
         <div class="ex-drop" id="ex-drop" onclick="document.getElementById('ex-archivo').click()">
           <div id="ex-drop-vacio">
             <div style="font-size:30px">📎</div>
-            <div style="font-size:13px;font-weight:700;margin-top:5px">Toca para elegir un archivo</div>
-            <div style="font-size:11px;color:var(--text-light);margin-top:2px">Desde la galería, la cámara o el equipo</div>
+            <div style="font-size:13px;font-weight:700;margin-top:5px">Seleccionar documento digitalizado</div>
+            <div style="font-size:11px;color:var(--text-light);margin-top:2px">Desde la galería, la cámara o el equipo · PDF, JPG o PNG</div>
           </div>
           <div id="ex-drop-lleno" style="display:none">
             <img id="ex-thumb" style="display:none">
