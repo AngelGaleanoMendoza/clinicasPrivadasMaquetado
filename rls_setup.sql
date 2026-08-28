@@ -598,9 +598,18 @@ ORDER BY p.email;
 -- Se puede ejecutar varias veces sin error.
 -- ============================================================
 
+DROP POLICY IF EXISTS "pacientes_leer"      ON storage.objects;
 DROP POLICY IF EXISTS "pacientes_subir"     ON storage.objects;
 DROP POLICY IF EXISTS "pacientes_reemplazar" ON storage.objects;
 DROP POLICY IF EXISTS "pacientes_borrar"    ON storage.objects;
+
+-- Leer: hace falta para las subidas con upsert. Antes de escribir, Storage
+-- comprueba si el objeto ya existe, y esa consulta va contra storage.objects
+-- bajo la sesión del usuario. Sin esta política el upsert se rechaza entero.
+-- Que el bucket sea público rige el enlace de descarga, no esta comprobación.
+CREATE POLICY "pacientes_leer" ON storage.objects FOR SELECT
+  TO authenticated
+  USING (bucket_id = 'Pacientes');
 
 -- Subir: cualquier usuario autenticado, en cualquier carpeta del bucket.
 -- No se acota por clínica porque las rutas antiguas no la llevan en el nombre
