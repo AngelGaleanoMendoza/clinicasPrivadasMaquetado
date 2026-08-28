@@ -8,6 +8,7 @@ const sb = supabase.createClient(SURL, SKEY, {
 // ════════════════════ PERMISOS ════════════════════
 const ALL_PERMISOS = [
   { id:'pacientes',    label:'Pacientes',          icon:'👥' },
+  { id:'examenes',     label:'Exámenes digitaliz.',icon:'🔬' },
   { id:'citas',        label:'Citas',               icon:'📅' },
   { id:'agendas',      label:'Agendas',             icon:'🗓️' },
   { id:'medicaciones', label:'Recetas / Medicac.',  icon:'💊' },
@@ -23,15 +24,15 @@ const ALL_PERMISOS = [
 // Inventario y Finanzas NUNCA se otorgan por rol: el administrador debe marcarlos
 // explícitamente al crear o editar el usuario.
 const PERMISOS_DEFECTO = {
-  medico:       ['pacientes','citas','agendas','medicaciones','notas','proc_oftalmo'],
-  medico_admin: ['pacientes','citas','agendas','medicaciones','notas','atendidos','estadisticas','exportar','proc_oftalmo'],
-  admin:        ['pacientes','citas','agendas','medicaciones','notas','atendidos','estadisticas','exportar','proc_oftalmo'],
+  medico:       ['pacientes','examenes','citas','agendas','medicaciones','notas','proc_oftalmo'],
+  medico_admin: ['pacientes','examenes','citas','agendas','medicaciones','notas','atendidos','estadisticas','exportar','proc_oftalmo'],
+  admin:        ['pacientes','examenes','citas','agendas','medicaciones','notas','atendidos','estadisticas','exportar','proc_oftalmo'],
   recepcion:    ['pacientes','citas'],
   enfermeria:   ['pacientes','medicaciones','notas'],
   farmaceutico: ['inventario','finanzas','farmacia'],
-  odontologo:   ['pacientes','citas','medicaciones','notas'],
-  optometrista: ['pacientes','citas','agendas','notas','proc_oftalmo'],
-  oftalmologo:  ['pacientes','citas','agendas','medicaciones','notas','atendidos','proc_oftalmo'],
+  odontologo:   ['pacientes','examenes','citas','medicaciones','notas'],
+  optometrista: ['pacientes','examenes','citas','agendas','notas','proc_oftalmo'],
+  oftalmologo:  ['pacientes','examenes','citas','agendas','medicaciones','notas','atendidos','proc_oftalmo'],
 };
 
 // ════════════════════ PROCEDIMIENTOS OFTALMOLÓGICOS ════════════════════
@@ -847,6 +848,8 @@ async function entrarConPerfil(profile) {
   setLoading(true);
   const {data:clData} = await sb.from('clinicas').select('*').eq('id',currentClinicaId).single();
   currentClinica = clData || null;
+  // Recalcular el menú ahora que ya conocemos el tipo real de clínica.
+  applyRoleMenu();
   await loadAll();
   setLoading(false);
   const lastView = localStorage.getItem('lm_last_view');
@@ -1012,7 +1015,7 @@ async function navigate(view, patientId) {
   if(el) el.classList.add('active');
   const mi=document.querySelector(`.menu-item[onclick*="'${view}'"]`);
   if(mi) mi.classList.add('active');
-  const titles={dashboard:'Dashboard',expedientes:'Expedientes Clínicos',pacientes:'Pacientes',citas:'Citas',agendas:'Agendas',medicaciones:'Medicaciones',notas:'Notas Clínicas',atendidos:'Atendidos por Día',estadisticas:'Estadísticas',configuracion:'Configuración Clínica',exportar:'Exportar / Enviar','paciente-detalle':'Expediente del Paciente',admin:'Administración',inventario:'Inventario',finanzas:'Finanzas',procedimientos:'Procedimientos Odontológicos','procedimientos-oftalmo':'Procedimientos y Quirófano',farmacia:'Farmacia',clientes:'Clientes',mascotas:'Mascotas','mascota-detalle':'Ficha de la Mascota',hospitalizacion:'Hospitalización'};
+  const titles={dashboard:'Dashboard',expedientes:'Expedientes Clínicos','examenes-digitalizados':'Exámenes digitalizados',pacientes:'Pacientes',citas:'Citas',agendas:'Agendas',medicaciones:'Medicaciones',notas:'Notas Clínicas',atendidos:'Atendidos por Día',estadisticas:'Estadísticas',configuracion:'Configuración Clínica',exportar:'Exportar / Enviar','paciente-detalle':'Expediente del Paciente',admin:'Administración',inventario:'Inventario',finanzas:'Finanzas',procedimientos:'Procedimientos Odontológicos','procedimientos-oftalmo':'Procedimientos y Quirófano',farmacia:'Farmacia',clientes:'Clientes',mascotas:'Mascotas','mascota-detalle':'Ficha de la Mascota',hospitalizacion:'Hospitalización'};
   document.getElementById('page-title').textContent = titles[view]||view;
   currentView=view;
   if(patientId) { if(view==='mascota-detalle') currentMascotaId=patientId; else currentPatientId=patientId; }
@@ -1035,6 +1038,7 @@ async function navigate(view, patientId) {
   if(view==='medicaciones' && !hasPermiso('medicaciones')) { navigate('dashboard'); return; }
   if(view==='notas'        && !hasPermiso('notas'))        { navigate('dashboard'); return; }
   if(view==='atendidos'    && !hasPermiso('atendidos'))    { navigate('dashboard'); return; }
+  if(view==='examenes-digitalizados' && (!hasPermiso('examenes') || esVeterinaria() || esFarmacia)) { navigate('dashboard'); return; }
   if(view==='pacientes' && (role==='farmaceutico' || esFarmacia)) { navigate('farmacia'); return; }
   if(view==='expedientes' && (role==='farmaceutico' || esFarmacia)) { navigate('farmacia'); return; }
   if(view==='procedimientos' && !isOdontologo() && !isSuperAdmin()) { navigate('dashboard'); return; }
@@ -1067,6 +1071,7 @@ function renderView(v) {
   switch(v){
     case 'dashboard': renderDashboard(); break;
     case 'expedientes': renderExpedientes(); break;
+    case 'examenes-digitalizados': renderModuloExamenes(); break;
     case 'pacientes': renderPacientes(); break;
     case 'citas': renderCitas(); break;
     case 'agendas': renderAgendas(); break;
@@ -1208,6 +1213,7 @@ function renderNavQuickGrid(cv) {
     { view:'mascotas',     icon:'🐾', label:'Mascotas',     show: esVet && hasPermiso('pacientes') },
     { view:'hospitalizacion', icon:'🏥', label:'Hospital.',  show: esVet && hasPermiso('pacientes') },
     { view:'pacientes',    icon:'👥', label:'Pacientes',    show: !esVet && hasPermiso('pacientes') },
+    { view:'examenes-digitalizados', icon:'🔬', label:'Exámenes', show: !esVet && hasPermiso('examenes') },
     { view:'citas',        icon:'📅', label:'Citas',        show: hasPermiso('citas') },
     { view:'agendas',      icon:'🗓️', label:'Agendas',      show: hasPermiso('agendas') },
     { view:'medicaciones', icon:'💊', label:'Recetas',      show: hasPermiso('medicaciones') },
@@ -1362,6 +1368,7 @@ function renderDashboardSA() {
           <div class="sa-quick-grid">
             ${[
               {icon:'👥',lbl:'Pacientes',v:'pacientes'},
+              {icon:'🔬',lbl:'Exámenes',v:'examenes-digitalizados'},
               {icon:'📅',lbl:'Citas',v:'citas'},
               {icon:'💊',lbl:'Recetas',v:'medicaciones'},
               {icon:'📝',lbl:'Notas',v:'notas'},
@@ -3894,6 +3901,8 @@ let _examenPacId     = null;
 let _examenArchivo   = null;   // archivo elegido, se sube al guardar
 let _examenFiltro    = '';
 let _examenCategoriaFiltro = '';
+let _examenRenderTarget = 'tab-examenes';
+let _examenModuloPacId = null;
 
 // Subir y borrar exámenes queda reservado al personal médico
 function puedeGestionarExamenes() {
@@ -3939,8 +3948,40 @@ function _pesoLegible(b) {
   return b < 1024*1024 ? Math.round(b/1024)+' KB' : (b/(1024*1024)).toFixed(1)+' MB';
 }
 
-async function renderExamenes(pid) {
-  const el = document.getElementById('tab-examenes');
+function renderModuloExamenes() {
+  const el = document.getElementById('view-examenes-digitalizados');
+  if(!el) return;
+  const pacientes = [...C.p].sort((a,b)=>(a.nombre+' '+a.apellidos).localeCompare(b.nombre+' '+b.apellidos));
+  const seleccionado = pacientes.find(p=>p.id===_examenModuloPacId) || null;
+  if(!seleccionado) _examenModuloPacId = null;
+  el.innerHTML = `<div class="card exmod-selector-card">
+    <div class="card-header"><h3>🔬 Exámenes digitalizados</h3></div>
+    <div class="ex-modulo-intro"><span>🗂️</span><div><strong>Repositorio diagnóstico central</strong><p>Selecciona un paciente para consultar o incorporar documentos a su expediente clínico.</p></div></div>
+    ${pacientes.length ? `<div class="exmod-selector-row">
+      <div class="form-group" style="margin:0;flex:1"><label>Paciente *</label>
+        <select id="exmod-paciente" onchange="seleccionarPacienteModuloExamenes(this.value)">
+          <option value="">Seleccionar paciente...</option>
+          ${pacientes.map(p=>`<option value="${p.id}"${p.id===_examenModuloPacId?' selected':''}>${escAttr(p.nombre+' '+p.apellidos)} · Exp. ${escAttr(getExpedienteNum(p.id))}</option>`).join('')}
+        </select>
+      </div>
+      ${seleccionado?`<button class="btn btn-secondary" onclick="navigate('paciente-detalle',${seleccionado.id})">📋 Abrir expediente</button>`:''}
+    </div>` : `<div class="empty-state" style="padding:30px"><div class="empty-icon">👥</div><p>No hay pacientes registrados.<br>Registra un paciente antes de agregar exámenes.</p></div>`}
+  </div>
+  <div id="exmod-contenido"></div>`;
+  if(seleccionado) renderExamenes(seleccionado.id,'exmod-contenido');
+  else if(pacientes.length) document.getElementById('exmod-contenido').innerHTML = '<div class="card"><div class="empty-state" style="padding:42px"><div class="empty-icon">🔬</div><p>Selecciona un paciente para ver sus exámenes digitalizados.</p></div></div>';
+}
+
+function seleccionarPacienteModuloExamenes(value) {
+  _examenModuloPacId = Number(value) || null;
+  _examenFiltro = '';
+  _examenCategoriaFiltro = '';
+  renderModuloExamenes();
+}
+
+async function renderExamenes(pid, targetId='tab-examenes') {
+  _examenRenderTarget = targetId;
+  const el = document.getElementById(targetId);
   if(!el) return;
   if(_examenPacId !== pid) {
     _examenFiltro = '';
@@ -3964,11 +4005,11 @@ async function renderExamenes(pid) {
     return;
   }
   _examenes = (data||[]).map(fromExamen);
-  _pintarExamenes();
+  _pintarExamenes(targetId);
 }
 
-function _pintarExamenes() {
-  const el = document.getElementById('tab-examenes');
+function _pintarExamenes(targetId=_examenRenderTarget) {
+  const el = document.getElementById(targetId);
   if(!el) return;
   const puede = puedeGestionarExamenes();
   const q = _examenFiltro.toLowerCase().trim();
@@ -4263,7 +4304,7 @@ async function guardarExamen() {
   }
   toast(guardadoCompatible?'Examen guardado; falta aplicar la migración de campos clínicos':'Examen guardado en el expediente 🔬', guardadoCompatible?'warning':undefined);
   closeModal('modal-examen');
-  renderExamenes(_examenPacId);
+  renderExamenes(_examenPacId,_examenRenderTarget);
 }
 
 async function eliminarExamen(id) {
@@ -4285,7 +4326,7 @@ async function eliminarExamen(id) {
   } catch(e) {}
   setLoading(false);
   toast('Examen eliminado');
-  renderExamenes(_examenPacId);
+  renderExamenes(_examenPacId,_examenRenderTarget);
 }
 
 // ════════════════════ FOTO PACIENTE ════════════════════
@@ -8562,6 +8603,7 @@ function applyRoleMenu() {
 
   // ─ Expedientes: oculto en modo farmacia y en veterinaria (lo cubre Mascotas)
   vis('menu-expedientes', !modoFarmacia && !esVet);
+  vis('menu-examenes-digitalizados', !modoFarmacia && !esVet && (sa || hasPermiso('examenes')));
 
   // ─ Módulo Farmacia
   vis('menu-farmacia', modoFarmacia || sa || hasPermiso('farmacia'));

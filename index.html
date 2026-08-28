@@ -97,6 +97,7 @@
       <div class="menu-section">Principal</div>
       <div class="menu-item active" onclick="navigate('dashboard')"><span class="icon">📊</span> Dashboard</div>
       <div class="menu-item" id="menu-expedientes" onclick="navigate('expedientes')"><span class="icon">📋</span> Expedientes</div>
+      <div class="menu-item" id="menu-examenes-digitalizados" onclick="navigate('examenes-digitalizados')" style="display:none"><span class="icon">🔬</span> Exámenes digitalizados</div>
       <div class="menu-item" id="menu-procedimientos" onclick="navigate('procedimientos')" style="display:none"><span class="icon">🦷</span> Procedimientos</div>
       <div class="menu-item" id="menu-procedimientos-oftalmo" onclick="navigate('procedimientos-oftalmo')" style="display:none"><span class="icon">👁️</span> Procedimientos / Quirófano</div>
       <div class="menu-item" id="menu-farmacia" onclick="navigate('farmacia')" style="display:none"><span class="icon">💊</span> Farmacia</div>
@@ -240,6 +241,9 @@
           <div id="pacientes-empty" class="empty-state" style="display:none"><div class="empty-icon">👥</div><p>No hay pacientes registrados.<br>Haz clic en <strong>+ Nuevo Paciente</strong> para comenzar.</p></div>
         </div>
       </div>
+
+      <!-- EXÁMENES DIGITALIZADOS -->
+      <div id="view-examenes-digitalizados" class="view"></div>
 
       <!-- CLIENTES (VETERINARIA) -->
       <div id="view-clientes" class="view">
