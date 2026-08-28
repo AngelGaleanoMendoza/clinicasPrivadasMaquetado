@@ -445,17 +445,14 @@ ALTER TABLE public.clinicas     ADD COLUMN IF NOT EXISTS horario JSONB;
 -- Queda fuera de v1 porque el error de constraint llega sin traducir al formulario.
 
 
--- ============================================================
--- PASO 8: Acceso al propio perfil (arreglo de bloqueo de login)
--- Se puede ejecutar varias veces sin error.
--- ============================================================
-DROP POLICY IF EXISTS "profiles_select" ON public.profiles;
-CREATE POLICY "profiles_select" ON public.profiles FOR SELECT
-  USING (id = auth.uid() OR is_superadmin() OR clinica_id = get_my_clinica_id());
+-- Aquí vivía un "PASO 8" que volvía a crear profiles_select SIN reconocer al
+-- usuario por el correo de su token. Ejecutado suelto deshacía el arreglo del
+-- paso siguiente y dejaba a la gente fuera; se eliminó para que no vuelva a
+-- pasar. La versión buena es la de abajo.
 
 
 -- ============================================================
--- PASO 9: Desbloqueo definitivo del login (candado circular)
+-- PASO 8: Desbloqueo definitivo del login (candado circular)
 --
 -- El problema: si `profiles.id` no coincide con el UUID de Supabase Auth,
 -- ninguna de las tres ramas de la política deja leer la fila —

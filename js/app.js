@@ -460,7 +460,8 @@ async function verificarLogin() {
     errEl.innerHTML = 'Tu contraseña es correcta, pero <strong>no se pudo cargar tu perfil</strong>.'
       + '<br><small>Tu fila en <code>profiles</code> existe pero la política RLS no la deja leer, '
       + 'casi siempre porque su <code>id</code> no coincide con el de Auth.'
-      + '<br>Solución: ejecutar el <strong>PASO 8</strong> de <code>rls_setup.sql</code> en Supabase.'
+      + '<br>Solución: ejecutar <code>recuperacion_auth.sql</code> en Supabase (bloques 1 y 5), '
+      + 'o el archivo <code>rls_setup.sql</code> <strong>entero</strong> — nunca un paso suelto.'
       + '<br>Id de Auth: <code>' + authData.user.id + '</code>' + detalle + '</small>';
     errEl.style.display = 'block';
     document.getElementById('login-password').value = '';
@@ -519,8 +520,16 @@ async function verificarLogin() {
   document.getElementById('login-password').value = '';
 }
 
-// Busca perfil por Auth UUID; si no lo encuentra por ID, lo busca por email y sincroniza
+// Busca perfil por Auth UUID; si no lo encuentra por ID, lo busca por el correo
 let _ultimoErrorPerfil = null;
+// Se enciende cuando algún perfil entró por el correo en vez de por su id. No
+// impide trabajar; lo avisa el panel de administración para poder alinearlo.
+let _perfilesDesalineados = false;
+
+// En ILIKE, "_" y "%" son comodines. Un correo como "a_b@clinica.com" traería
+// también el perfil de "axb@clinica.com", y el login entraría con la fila de otra
+// persona. Se escapan antes de buscar.
+function _escLike(s) { return String(s || '').replace(/([\\%_])/g, '\\$1'); }
 
 async function resolverPerfil(authId, email) {
   _ultimoErrorPerfil = null;
@@ -530,16 +539,20 @@ async function resolverPerfil(authId, email) {
   // El id de la fila no coincide con el de Auth: buscarla por email. `ilike` y no
   // `eq` porque el email pudo guardarse con otra caja ("Ana@..." vs "ana@...") y
   // entonces el usuario quedaba fuera sin que nada lo explicara.
-  const { data: p2, error: e2 } = await _consultaPerfil(cols => sb.from('profiles').select(cols).ilike('email', email).limit(1).maybeSingle());
+  const { data: p2, error: e2 } = await _consultaPerfil(cols => sb.from('profiles').select(cols).ilike('email', _escLike(email)).limit(1).maybeSingle());
   if(e2) _ultimoErrorPerfil = e2;
-  if(p2) {
-    // Sincronizar el id para que la próxima vez entre por la vía rápida. Si la
-    // política RLS no deja escribir, se entra igual: no es motivo para bloquear.
-    const { error: errSync } = await sb.from('profiles').update({ id: authId }).eq('id', p2.id);
-    if(errSync) { console.warn('No se pudo sincronizar el id del perfil:', errSync.message); return p2; }
-    return { ...p2, id: authId };
-  }
-  return null;
+  if(!p2) return null;
+  // Aquí se reescribía profiles.id con el de Auth. Se quitó a propósito: mover la
+  // clave primaria desde el navegador NO arrastra las columnas que apuntan a ella
+  // sin clave foránea (citas.medico_id, actividad_usuarios.user_id, los
+  // veterinario_id…), así que dejaba citas e historial huérfanos en silencio. Y si
+  // RLS filtraba la escritura, el UPDATE devolvía cero filas sin error y la app se
+  // quedaba con un id inexistente, rompiendo después toda inserción con FK al
+  // profesional. El desajuste no impide trabajar —las políticas reconocen al
+  // usuario por el correo de su token—; se corrige de una vez, y arrastrando las
+  // tablas hijas, con el BLOQUE 5 de recuperacion_auth.sql.
+  if(p2.id !== authId) _perfilesDesalineados = true;
+  return p2;
 }
 
 // ════════════════════ INACTIVIDAD ════════════════════
@@ -5191,7 +5204,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     if(session?.user) {
       // Guardar email del auth para isSuperAdmin()
       if(session.user.email) _authEmail = session.user.email.trim().toLowerCase();
-      const { data: profile } = await _consultaPerfil(cols => sb.from('profiles').select(cols).eq('id', session.user.id).maybeSingle());
+      // Mismo camino que el login: buscar por id y, si no coincide, por el correo
+      // del token. Buscar solo por id expulsaba al recargar a cualquiera cuyo
+      // profiles.id no estuviera sincronizado, aunque acabara de entrar bien.
+      const profile = await resolverPerfil(session.user.id, session.user.email || _authEmail);
       if(profile) {
         if(!profile.email && session.user.email) profile.email = session.user.email;
         await entrarConPerfil(profile); return;
@@ -9218,16 +9234,27 @@ async function guardarUsuario() {
       catch(e) { toast('No se pudo subir la firma: '+(e.message||e),'error'); setLoading(false); return; }
     }
     const upd = {nombre,email:email||null,rol,icono,clinica_id,permisos,especialidad,firma_url};
-    // Solo el Super Admin puede cambiar contraseñas de otros usuarios
-    if(password && isSuperAdmin()) {
-      const { data: { session: adminSess } } = await sb.auth.getSession();
-      // Actualizar en Auth: el usuario debe estar autenticado — usamos signUp si ya existe
-      const { error: authUpd } = await sb.from('profiles').update({password}).eq('id', editingUsuarioId);
-      // Intentar actualizar via auth admin (si el usuario existe en Auth)
-      upd.password = password;
-    } else if(password && !isSuperAdmin()) {
-      toast('Solo el Super Admin puede cambiar contraseñas de otros usuarios','error');
-      setLoading(false); return;
+    // La contraseña real vive en Supabase Auth. Desde el navegador solo se puede
+    // cambiar la PROPIA (updateUser); la de otra persona exigiría la clave de
+    // servicio, que no debe viajar al cliente. Lo que había aquí escribía
+    // profiles.password —columna que el login ya no consulta— así que daba la
+    // impresión de cambiar la clave sin cambiar nada.
+    let avisoPass = '';
+    if(password) {
+      const esPropia = currentUser && currentUser.id === editingUsuarioId;
+      if(!esPropia && !isSuperAdmin()) {
+        toast('Solo el Super Admin puede cambiar contraseñas de otros usuarios','error');
+        setLoading(false); return;
+      }
+      if(esPropia) {
+        const { error: errPass } = await sb.auth.updateUser({ password });
+        if(errPass) { toast('No se pudo cambiar tu contraseña: '+errPass.message,'error'); setLoading(false); return; }
+        avisoPass = ' Tu contraseña se actualizó.';
+      } else {
+        // Se guardan igual los demás cambios: perder el resto de la edición por
+        // esto sería peor que avisar.
+        avisoPass = ' La contraseña NO se cambió: usa el botón 🔑 Contraseña de la lista, que le envía un enlace.';
+      }
     }
     let {error} = await sb.from('profiles').update(upd).eq('id',editingUsuarioId);
     if(error && (_faltaColumnaEspecialidad(error) || _faltaColumna(error,'firma_url'))) {
@@ -9239,15 +9266,32 @@ async function guardarUsuario() {
     }
     if(error){ toast('Error al actualizar: '+error.message,'error'); setLoading(false); return; }
     if(currentUser && currentUser.id === editingUsuarioId) currentUser.firmaUrl = firma_url || null;
-    toast('Usuario actualizado','success');
+    toast('Usuario actualizado.'+avisoPass, avisoPass.includes('NO se cambió') ? 'warning' : 'success');
   } else {
-    // Crear en Supabase Auth y restaurar sesión del super admin
-    const { data: { session: adminSess } } = await sb.auth.getSession();
-    const { data: newAuth, error: authErr } = await sb.auth.signUp({ email, password });
-    if(adminSess) await sb.auth.setSession(adminSess);
-    if(authErr){ toast('Error Auth: '+authErr.message,'error'); setLoading(false); return; }
-    const newId = newAuth?.user?.id || crypto.randomUUID();
-    const nuevo = {id:newId,nombre,email:email||null,rol,icono,clinica_id,password,permisos,especialidad};
+    // Sin correo no hay forma de iniciar sesión: todo el login se articula por él.
+    if(!email){ toast('El correo es obligatorio: sin él la persona no podrá entrar','error'); setLoading(false); return; }
+    const emailNorm = email.trim().toLowerCase();
+    // Cliente aislado: dar de alta a otro usuario no debe reemplazar la sesión
+    // del Super Admin en la aplicación principal, como sí hacía antes.
+    const authTmp = supabase.createClient(SURL, SKEY, {
+      auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}
+    });
+    const { data: newAuth, error: authErr } = await authTmp.auth.signUp({ email: emailNorm, password });
+    if(authErr){ toast('No se pudo crear la cuenta de acceso: '+authErr.message,'error'); setLoading(false); return; }
+    // Cuando el correo ya está registrado, Supabase devuelve un usuario
+    // "ofuscado" sin identidades y SIN error, para no revelar quién existe.
+    // Guardar ese id dejaba un perfil que nunca iba a poder iniciar sesión.
+    if(!(newAuth?.user?.identities||[]).length){
+      toast('Ya existe una cuenta con ese correo. Usa otro, o edita el usuario que ya lo tiene.','error');
+      setLoading(false); return;
+    }
+    const newId = newAuth.user.id;
+    const faltaConfirmar = !newAuth.user.email_confirmed_at && !newAuth.session;
+    // La contraseña NO se guarda en profiles: la fuente de verdad es Supabase
+    // Auth, que la almacena cifrada. Guardarla aquí la dejaría legible para
+    // cualquier compañero de la misma clínica y volvería a marcar al usuario
+    // como "pendiente de migrar" desde el primer día.
+    const nuevo = {id:newId,nombre,email:emailNorm,rol,icono,clinica_id,permisos,especialidad};
     let {error} = await sb.from('profiles').insert(nuevo);
     if(error && _faltaColumnaEspecialidad(error)) {
       const {especialidad:_omitida, ...sinEsp} = nuevo;
@@ -9255,7 +9299,8 @@ async function guardarUsuario() {
       if(!error) _avisarFaltaColumnaEspecialidad();
     }
     if(error){ toast('Error al crear: '+error.message,'error'); setLoading(false); return; }
-    toast('Usuario creado exitosamente','success');
+    if(faltaConfirmar) toast(`Usuario creado, pero ${emailNorm} debe confirmar su correo antes de poder entrar. Para evitarlo, desactiva "Confirm email" en Supabase → Authentication → Settings.`,'warning');
+    else toast('Usuario creado exitosamente','success');
   }
   closeModal('modal-usuario');
   await loadAdminData();
@@ -9293,28 +9338,40 @@ async function desbloquearUsuario(id) {
   await loadAdminData(); renderAdminUsuarios(); renderAdminStats(); setLoading(false);
 }
 
+// Antes esto pedía una contraseña nueva y la escribía en profiles.password. Esa
+// columna ya no la consulta el login, así que el usuario seguía sin poder entrar
+// y encima su clave quedaba en texto plano. Cambiar la contraseña de OTRA persona
+// exige la clave de servicio de Supabase, que no puede viajar al navegador; lo
+// que sí se puede hacer desde aquí es enviarle el enlace de restablecimiento.
 async function restablecerPasswordAdmin(id, nombre) {
+  const u = adminUsuarios.find(x => x.id === id);
+  const email = (u?.email || '').trim().toLowerCase();
+  if(!email) {
+    toast(`${nombre} no tiene correo registrado. Agrégaselo desde ✏️ Editar antes de restablecer su contraseña.`,'error');
+    return;
+  }
   const ok = await customConfirm({
     icon:'🔑', title:`Restablecer contraseña — ${nombre}`,
-    msg:`Ingresa la nueva contraseña temporal para <strong>${nombre}</strong>:<br><br>
-      <div style="margin-top:10px">
-        <div style="position:relative">
-          <input id="_nueva-pass" type="password" placeholder="Nueva contraseña (mín. 6 caracteres)"
-            style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;background:var(--card);color:var(--text);box-sizing:border-box">
-        </div>
-        <button type="button" onclick="const i=document.getElementById('_nueva-pass');i.type=i.type==='password'?'text':'password';this.textContent=i.type==='password'?'👁 Mostrar':'🙈 Ocultar'"
-          style="margin-top:8px;font-size:12px;background:none;border:none;color:var(--primary);cursor:pointer;font-weight:600;padding:0">👁 Mostrar</button>
-        <div style="font-size:11px;color:var(--text-light);margin-top:6px">Al guardar, el usuario también quedará desbloqueado si estaba bloqueado.</div>
+    msg:`Se enviará un enlace a <strong>${escAttr(email)}</strong> para que ${escAttr(nombre)} elija su nueva contraseña.
+      La cuenta también quedará desbloqueada.<br><br>
+      <div style="font-size:12px;color:var(--text-light);line-height:1.6;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px">
+        <strong>¿No le llega el correo?</strong> Puedes fijársela tú en
+        Supabase → Authentication → Users → busca <em>${escAttr(email)}</em> → menú de tres puntos → Reset password.
       </div>`,
-    okText:'🔑 Restablecer contraseña', danger:false
+    okText:'📧 Enviar enlace', danger:false
   });
   if(!ok) return;
-  const pass = document.getElementById('_nueva-pass')?.value?.trim();
-  if(!pass || pass.length < 6){ toast('La contraseña debe tener al menos 6 caracteres','error'); return; }
   setLoading(true);
-  const {error} = await sb.from('profiles').update({ password: pass, bloqueado: false, intentos_fallidos: 0 }).eq('id', id);
-  if(error){ toast('Error al restablecer: '+error.message,'error'); setLoading(false); return; }
-  toast(`🔑 Contraseña de ${nombre} restablecida · La cuenta quedó desbloqueada`);
+  const redirectTo = window.location.origin + window.location.pathname;
+  const { error: errMail } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
+  if(errMail){
+    setLoading(false);
+    toast('No se pudo enviar el correo: '+errMail.message+' · Fíjala desde Supabase → Authentication → Users.','error');
+    return;
+  }
+  const {error} = await sb.from('profiles').update({ bloqueado: false, intentos_fallidos: 0 }).eq('id', id);
+  if(error) toast(`📧 Enlace enviado a ${email}, pero no se pudo desbloquear la cuenta: `+error.message,'warning');
+  else toast(`📧 Enlace enviado a ${email} · La cuenta quedó desbloqueada`);
   await loadAdminData(); renderAdminUsuarios(); renderAdminStats(); setLoading(false);
 }
 
@@ -9472,12 +9529,18 @@ async function verificarEstadoAuth() {
   const sinAuth = profiles.filter(p => idsPendientes.has(p.id));
   const badge = document.getElementById('auth-status-badge');
   const prog  = document.getElementById('migracion-progress');
+  // "Migrado" aquí solo significa que ya no queda clave en texto plano. Que la
+  // cuenta de Auth funcione de verdad se comprueba con el BLOQUE 0 de
+  // recuperacion_auth.sql, que sí puede mirar auth.users.
+  const aviso = _perfilesDesalineados
+    ? ' Algún perfil entró por su correo porque su id no coincide con el de Auth: alinéalos con el BLOQUE 5 de recuperacion_auth.sql.'
+    : '';
   if(sinAuth.length === 0) {
     if(badge) { badge.textContent = '✅ Migrado'; badge.className = 'tag tag-green'; }
-    if(prog) prog.textContent = `Todos los usuarios (${profiles.length}) usan Supabase Auth.`;
+    if(prog) prog.textContent = `Todos los usuarios (${profiles.length}) usan Supabase Auth.` + aviso;
   } else {
     if(badge) { badge.textContent = 'Pendiente'; badge.className = 'tag tag-orange'; }
-    if(prog) prog.textContent = `${conAuth.length}/${profiles.length} migrados. ${sinAuth.length} pendiente(s).`;
+    if(prog) prog.textContent = `${conAuth.length}/${profiles.length} migrados. ${sinAuth.length} pendiente(s).` + aviso;
   }
 }
 
@@ -9512,7 +9575,7 @@ async function migrarUsuariosAAuth() {
     if(log) log.innerHTML += `<div style="color:${ok?'#10B981':'#EF4444'}">${msg}</div>`;
   };
 
-  let migrados = 0, errores = 0;
+  let migrados = 0, errores = 0, desalineados = 0;
   const emailAdmin = (adminAuth.email || '').trim().toLowerCase();
 
   for(const p of pendientes) {
@@ -9527,8 +9590,9 @@ async function migrarUsuariosAAuth() {
     // La cuenta que está ejecutando la migración ya quedó validada por getUser().
     // Su clave legacy puede retirarse sin volver a conocer la nueva contraseña.
     if(email === emailAdmin) {
-      const {error:updError}=await sb.from('profiles').update({password:null}).eq('id',p.id);
+      const {data:limpio,error:updError}=await sb.from('profiles').update({password:null}).eq('id',p.id).select('id');
       if(updError) { addLog(`❌ ${email} — no se pudo retirar la clave antigua: ${updError.message}`,false); errores++; }
+      else if(!limpio?.length) { addLog(`❌ ${email} — la política RLS no dejó retirar la clave antigua`,false); errores++; }
       else { addLog(`✅ ${p.nombre || email} — sesión Auth verificada`); migrados++; }
       continue;
     }
@@ -9548,12 +9612,20 @@ async function migrarUsuariosAAuth() {
 
     if(prueba?.user && !errPrueba) {
       // Solo ahora se borra el texto plano: la misma clave acaba de funcionar
-      // contra Supabase Auth. El id del perfil no se cambia para no afectar FKs.
-      const {error:updError}=await sb.from('profiles').update({password:null}).eq('id',p.id);
+      // contra Supabase Auth. El id NO se toca aquí: moverlo desde el navegador
+      // dejaría huérfanas las columnas que apuntan a él sin clave foránea. Se
+      // avisa para alinearlo con el BLOQUE 5 de recuperacion_auth.sql.
+      const {data:limpio,error:updError}=await sb.from('profiles').update({password:null}).eq('id',p.id).select('id');
       if(updError) {
         addLog(`❌ ${email} — Auth funciona, pero no se pudo limpiar la clave antigua: ${updError.message}`,false);
         errores++;
+      } else if(!limpio?.length) {
+        // Un UPDATE que RLS filtra devuelve cero filas SIN error: sin comprobarlo
+        // se daba por migrado a alguien cuya fila no se tocó.
+        addLog(`❌ ${email} — Auth funciona, pero la política RLS no dejó limpiar su clave antigua`,false);
+        errores++;
       } else {
+        if(prueba.user.id !== p.id) desalineados++;
         addLog(`✅ ${p.nombre || email} — conservó su contraseña actual`);
         migrados++;
       }
@@ -9562,7 +9634,13 @@ async function migrarUsuariosAAuth() {
 
     const identidadNueva=(alta?.user?.identities||[]).length>0;
     if(identidadNueva && /confirm/i.test(errPrueba?.message||'')) {
-      addLog(`⚠️ ${email} — cuenta creada; falta confirmar el correo. La clave antigua sigue intacta.`,false);
+      // "Confirm email" está activada: signUp creó la cuenta pero Auth la rechaza
+      // hasta que se confirme el correo, y signUp ya no podrá recrearla. Seguir el
+      // bucle dejaría una cuenta a medias por cada usuario, así que se corta aquí.
+      addLog(`⚠️ ${email} — cuenta creada pero sin confirmar. La clave antigua sigue intacta.`,false);
+      addLog(`⛔ Migración detenida: "Confirm email" está ACTIVADA en Supabase. Desactívala en Authentication → Settings → Email y vuelve a migrar. Las cuentas ya creadas se confirman con el BLOQUE 2 de recuperacion_auth.sql.`,false);
+      errores++;
+      break;
     } else if(authErr && !/already registered|already been registered/i.test(authErr.message||'')) {
       addLog(`❌ ${email} — ${authErr.message}. La clave antigua sigue intacta.`,false);
     } else {
@@ -9572,6 +9650,7 @@ async function migrarUsuariosAAuth() {
   }
 
   if(prog) prog.textContent = `Completado: ${migrados} migrados, ${errores} error(es).`;
+  if(desalineados) addLog(`ℹ️ ${desalineados} perfil(es) tienen su id distinto al de Auth. Se puede trabajar igual, pero conviene alinearlo con el BLOQUE 5 de recuperacion_auth.sql.`, false);
   toast(`Migración completada: ${migrados} usuario(s) migrados`, migrados > 0 ? 'success' : 'warning');
   await loadAdminData();
   await verificarEstadoAuth();
