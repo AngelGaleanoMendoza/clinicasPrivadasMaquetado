@@ -10,7 +10,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
-<link rel="stylesheet" href="css/styles.css?v=20260828e">
+<link rel="stylesheet" href="css/styles.css?v=20260828h">
 </head>
 <body>
 <script>
@@ -1077,7 +1077,7 @@
       <button id="mov-tab-entrada" class="btn btn-primary btn-sm" onclick="switchMovTab('entrada')">📥 Entrada</button>
       <button id="mov-tab-salida"  class="btn btn-secondary btn-sm" onclick="switchMovTab('salida')">📤 Salida</button>
     </div>
-    <div style="display:flex;gap:8px;margin-bottom:10px">
+    <div class="fila-buscar-accion" style="display:flex;gap:8px;margin-bottom:10px">
       <input type="search" id="mov-search" placeholder="Buscar producto..." oninput="filtrarInventarioMov(this.value)" style="flex:1;padding:9px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;background:var(--bg);color:var(--text)">
       <button class="btn btn-secondary btn-sm" onclick="seleccionarVisiblesMov()">Seleccionar visibles</button>
     </div>
@@ -1115,7 +1115,7 @@
 <div class="modal-overlay" id="modal-minsa-selector">
   <div class="modal" style="max-width:700px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden">
     <h2>📋 Catálogo MINSA — Seleccionar Medicamentos</h2>
-    <div style="display:flex;gap:8px;margin-bottom:12px">
+    <div class="fila-buscar-accion" style="display:flex;gap:8px;margin-bottom:12px">
       <input type="search" id="minsa-search" placeholder="Buscar por nombre, código o grupo..." oninput="filtrarCatalogoMINSA(this.value)" style="flex:1;padding:9px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;background:var(--bg);color:var(--text)">
       <button class="btn btn-secondary btn-sm" onclick="seleccionarTodoMINSA()">Seleccionar visibles</button>
     </div>
@@ -1270,6 +1270,7 @@
           <button class="btn btn-primary btn-sm" onclick="addFacturaItem()">+ Agregar línea</button>
         </div>
       </div>
+      <div class="fact-items-scroll">
       <div class="fact-items-header">
         <span style="width:110px">Tipo</span>
         <span style="flex:1">Descripción</span>
@@ -1279,6 +1280,7 @@
         <span style="width:32px"></span>
       </div>
       <div id="fact-items-list"></div>
+      </div>
     </div>
 
     <!-- Totales -->
@@ -2488,7 +2490,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260828f"></script>
+<script src="js/app.js?v=20260828h"></script>
 </body>
 </html>
 

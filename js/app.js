@@ -2217,12 +2217,23 @@ function imprimirExpedienteCompleto(pid) {
   pdfAbrir(`Expediente — ${p.nombre} ${p.apellidos}`, body, {orientation:'portrait'});
 }
 
+// Con la fila de pestañas deslizable, la activa puede quedar fuera de vista al
+// cambiarla desde otro sitio. Se acerca sola, sin saltos bruscos.
+function _verPestanaActiva(tab){
+  if(!tab || !tab.parentElement) return;
+  const fila = tab.parentElement;
+  if(fila.scrollWidth <= fila.clientWidth) return;   // caben todas: nada que hacer
+  const t = tab.getBoundingClientRect(), f = fila.getBoundingClientRect();
+  if(t.left < f.left || t.right > f.right)
+    fila.scrollTo({ left: tab.offsetLeft - (fila.clientWidth - tab.offsetWidth)/2, behavior:'smooth' });
+}
+
 function switchTab(tabId, btn){
   if(tabId==='tab-examenes' && currentPatientId) renderExamenes(currentPatientId);
   ['tab-info','tab-citas-p','tab-meds-p','tab-notas-p','tab-expediente','tab-examenes','tab-historial-dental','tab-odontograma','tab-periodontograma','tab-procedimientos-p','tab-proc-oft-p'].forEach(id=>{ const e=document.getElementById(id); if(e) e.style.display='none'; });
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.getElementById(tabId).style.display='block';
-  if(btn) btn.classList.add('active');
+  if(btn){ btn.classList.add('active'); _verPestanaActiva(btn); }
 }
 
 // ════════════════════ CITAS ════════════════════
@@ -8613,7 +8624,7 @@ function switchAdminTab(tab) {
     const panel = document.getElementById('admin-panel-'+t);
     const tabEl = document.getElementById('tab-admin-'+t);
     if(panel) panel.style.display = t===tab ? 'block' : 'none';
-    if(tabEl) tabEl.classList.toggle('active', t===tab);
+    if(tabEl){ tabEl.classList.toggle('active', t===tab); if(t===tab) _verPestanaActiva(tabEl); }
   });
   const btn = document.getElementById('btn-admin-add');
   const noAdd = ['productividad','global'].includes(tab);
@@ -12312,7 +12323,7 @@ function switchTabMascota(tabId, btn) {
   ['mtab-info', 'mtab-citas', 'mtab-consultas', 'mtab-recetas', 'mtab-vacunas', 'mtab-expediente'].forEach(id => { const e = document.getElementById(id); if(e) e.style.display = 'none'; });
   document.querySelectorAll('#view-mascota-detalle .tab').forEach(t => t.classList.remove('active'));
   document.getElementById(tabId).style.display = 'block';
-  if(btn) btn.classList.add('active');
+  if(btn){ btn.classList.add('active'); _verPestanaActiva(btn); }
 }
 
 function renderDetalleMascota(mid) {
