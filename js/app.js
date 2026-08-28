@@ -556,8 +556,12 @@ async function resolverPerfil(authId, email) {
 }
 
 // ════════════════════ INACTIVIDAD ════════════════════
-const INAC_TOTAL = 2 * 60 * 1000;   // 2 minutos
-const INAC_AVISO  = 30 * 1000;       // aviso 30s antes
+// 2 minutos echaban a la gente a media consulta: leer un expediente o pensar
+// frente a un formulario largo ya pasa de ese margen, y sólo el ratón y el
+// teclado reinician la cuenta. 15 minutos siguen protegiendo la computadora de
+// recepción sin interrumpir el trabajo.
+const INAC_TOTAL = 15 * 60 * 1000;  // 15 minutos
+const INAC_AVISO  = 60 * 1000;       // aviso 1 min antes
 
 let _inacTimer    = null;
 let _inacCuenta   = null;
@@ -587,6 +591,10 @@ function _inacAviso() {
 }
 
 function iniciarInactividad() {
+  // El Super Admin no se cierra por inactividad. Es quien desbloquea cuentas y
+  // restablece contraseñas: si el sistema lo deja fuera a mitad de una gestión,
+  // no hay nadie por encima que pueda devolverle el acceso.
+  if(isSuperAdmin()) { _inacActivo = false; return; }
   _inacActivo = true;
   ['click','mousemove','keydown','touchstart','scroll'].forEach(e =>
     document.addEventListener(e, _inacReset, { passive: true }));

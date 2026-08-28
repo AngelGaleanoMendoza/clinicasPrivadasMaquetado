@@ -626,3 +626,111 @@ CREATE POLICY "pacientes_borrar" ON storage.objects FOR DELETE
 -- archivo sin iniciar sesión. Cambiarlo a privado exigiría pasar toda la app a
 -- URLs firmadas (createSignedUrl) y romper los enlaces ya guardados en la base;
 -- queda anotado como pendiente porque aquí se almacenan imágenes clínicas.
+
+
+-- ============================================================
+-- PASO 10: Blindaje del Super Admin
+--
+-- El rol del Super Admin se había quedado vacío más de una vez, y con él
+-- vacío is_superadmin() lo deja fuera de todas las tablas. Como es la única
+-- cuenta que puede desbloquear a los demás, no hay nadie por encima que pueda
+-- devolverle el acceso: hay que entrar por SQL a repararlo.
+--
+-- Aquí se garantiza por base de datos, no por costumbre:
+--   · su rol siempre vuelve a 'superadmin'
+--   · nunca queda bloqueado ni acumula intentos fallidos
+--   · su fila no se puede borrar
+--   · nadie más puede otorgarse el rol 'superadmin' a sí mismo
+--
+-- Se puede ejecutar varias veces sin error.
+-- ============================================================
+
+-- El correo va en una sola función para no repetirlo por el archivo. Es el
+-- mismo que la app fija en SUPER_ADMIN_EMAIL.
+CREATE OR REPLACE FUNCTION public.super_admin_email()
+RETURNS text LANGUAGE sql IMMUTABLE AS $$
+  SELECT 'sebasgale65@gmail.com';
+$$;
+
+-- Distingue una petición del navegador de una ejecución desde el SQL Editor.
+-- Sin esto, los propios arreglos por SQL quedarían bloqueados por el candado.
+CREATE OR REPLACE FUNCTION public.es_peticion_del_navegador()
+RETURNS boolean LANGUAGE sql STABLE AS $$
+  SELECT nullif(current_setting('request.jwt.claims', true), '') IS NOT NULL;
+$$;
+
+CREATE OR REPLACE FUNCTION public.proteger_super_admin()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+BEGIN
+  -- 1) La fila del Super Admin conserva su rol pase lo que pase
+  IF lower(btrim(coalesce(OLD.email, NEW.email))) = public.super_admin_email() THEN
+    NEW.rol := 'superadmin';
+    NEW.bloqueado := FALSE;
+    NEW.intentos_fallidos := 0;
+    -- Cambiarle el correo desharía el anclaje: sólo se permite desde SQL,
+    -- donde hace falta un acto deliberado y no un descuido de la interfaz.
+    IF public.es_peticion_del_navegador() THEN
+      NEW.email := OLD.email;
+    END IF;
+  END IF;
+
+  -- 2) Nadie se asciende a sí mismo. Sólo un Super Admin puede repartir el rol,
+  -- y desde el SQL Editor se permite para poder reparar la instalación.
+  IF NEW.rol = 'superadmin'
+     AND coalesce(OLD.rol, '') <> 'superadmin'
+     AND lower(btrim(coalesce(NEW.email, ''))) <> public.super_admin_email()
+     AND public.es_peticion_del_navegador()
+     AND NOT public.is_superadmin() THEN
+    RAISE EXCEPTION 'Solo un Super Admin puede otorgar el rol superadmin';
+  END IF;
+
+  RETURN NEW;
+END $$;
+
+DROP TRIGGER IF EXISTS trg_proteger_super_admin ON public.profiles;
+CREATE TRIGGER trg_proteger_super_admin
+  BEFORE UPDATE ON public.profiles
+  FOR EACH ROW EXECUTE FUNCTION public.proteger_super_admin();
+
+-- Mismo candado al crear usuarios: no se puede nacer con el rol
+CREATE OR REPLACE FUNCTION public.proteger_alta_superadmin()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+BEGIN
+  IF NEW.rol = 'superadmin'
+     AND lower(btrim(coalesce(NEW.email, ''))) <> public.super_admin_email()
+     AND public.es_peticion_del_navegador()
+     AND NOT public.is_superadmin() THEN
+    RAISE EXCEPTION 'Solo un Super Admin puede crear otro Super Admin';
+  END IF;
+  RETURN NEW;
+END $$;
+
+DROP TRIGGER IF EXISTS trg_proteger_alta_superadmin ON public.profiles;
+CREATE TRIGGER trg_proteger_alta_superadmin
+  BEFORE INSERT ON public.profiles
+  FOR EACH ROW EXECUTE FUNCTION public.proteger_alta_superadmin();
+
+-- Y su fila no se borra
+CREATE OR REPLACE FUNCTION public.impedir_borrar_super_admin()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+BEGIN
+  IF lower(btrim(coalesce(OLD.email, ''))) = public.super_admin_email() THEN
+    RAISE EXCEPTION 'No se puede eliminar la cuenta del Super Admin';
+  END IF;
+  RETURN OLD;
+END $$;
+
+DROP TRIGGER IF EXISTS trg_impedir_borrar_super_admin ON public.profiles;
+CREATE TRIGGER trg_impedir_borrar_super_admin
+  BEFORE DELETE ON public.profiles
+  FOR EACH ROW EXECUTE FUNCTION public.impedir_borrar_super_admin();
+
+-- Dejar la fila en su sitio ahora mismo
+UPDATE public.profiles
+SET rol = 'superadmin'
+WHERE lower(btrim(email)) = public.super_admin_email();
+
+-- Comprobación: debe devolver rol='superadmin', bloqueado=false
+SELECT email, rol, bloqueado, intentos_fallidos
+FROM public.profiles
+WHERE lower(btrim(email)) = public.super_admin_email();
