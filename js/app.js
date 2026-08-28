@@ -403,16 +403,24 @@ async function solicitarRecuperacionPassword() {
     emailEl?.focus();
     return;
   }
-  setLoading(true);
-  const redirectTo = window.location.origin + window.location.pathname;
-  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
-  setLoading(false);
-  if(error) {
-    errEl.textContent = 'No se pudo enviar la recuperación: ' + error.message;
-    errEl.style.display = 'block';
-    return;
-  }
-  errEl.innerHTML = 'Si la cuenta existe en Supabase Auth, recibirás un enlace en <strong>' + escAttr(email) + '</strong>.';
+  // No se usa el correo automático de Supabase: el proyecto no tiene servidor de
+  // envío propio y el integrado apenas manda unos pocos mensajes por hora, así
+  // que la gente se quedaba esperando un enlace que no llegaba. La solicitud la
+  // manda la propia persona desde su correo y el Super Admin fija la clave desde
+  // el panel, que es lo que de verdad funciona hoy.
+  const asunto = 'Solicitud de cambio de contraseña — Lumea Med';
+  const cuerpo = `Hola,\n\nSolicito el cambio de mi contraseña de Lumea Med.\n\nCorreo de mi cuenta: ${email}\n\nGracias.`;
+  const enlace = 'mailto:' + encodeURIComponent(SUPER_ADMIN_EMAIL)
+    + '?subject=' + encodeURIComponent(asunto)
+    + '&body=' + encodeURIComponent(cuerpo);
+  window.location.href = enlace;
+
+  // Se muestra igual la dirección: en muchos teléfonos y en el navegador de
+  // escritorio sin cliente de correo configurado, `mailto:` no abre nada.
+  errEl.innerHTML = 'Escríbele al administrador a <strong>' + escAttr(SUPER_ADMIN_EMAIL) + '</strong> '
+    + 'indicando tu correo (<strong>' + escAttr(email) + '</strong>).'
+    + '<br><small>Él te asigna una contraseña nueva y te la hace llegar. '
+    + 'Si no se abrió tu aplicación de correo, copia esa dirección a mano.</small>';
   errEl.style.color = '#6EE7B7';
   errEl.style.display = 'block';
 }
@@ -9346,41 +9354,59 @@ async function desbloquearUsuario(id) {
   await loadAdminData(); renderAdminUsuarios(); renderAdminStats(); setLoading(false);
 }
 
-// Antes esto pedía una contraseña nueva y la escribía en profiles.password. Esa
-// columna ya no la consulta el login, así que el usuario seguía sin poder entrar
-// y encima su clave quedaba en texto plano. Cambiar la contraseña de OTRA persona
-// exige la clave de servicio de Supabase, que no puede viajar al navegador; lo
-// que sí se puede hacer desde aquí es enviarle el enlace de restablecimiento.
+// El Super Admin fija aquí la contraseña, sin depender del envío de correos.
+// El cambio no lo hace el navegador: la contraseña real vive en Supabase Auth y
+// cambiar la de otra persona exige la clave de servicio, que no puede estar en el
+// cliente. La pone la Edge Function `cambiar-password`, que guarda esa clave del
+// lado del servidor y comprueba por su cuenta quién llama.
 async function restablecerPasswordAdmin(id, nombre) {
   const u = adminUsuarios.find(x => x.id === id);
   const email = (u?.email || '').trim().toLowerCase();
   if(!email) {
-    toast(`${nombre} no tiene correo registrado. Agrégaselo desde ✏️ Editar antes de restablecer su contraseña.`,'error');
+    toast(`${nombre} no tiene correo registrado. Agrégaselo desde ✏️ Editar antes de cambiar su contraseña.`,'error');
     return;
   }
   const ok = await customConfirm({
-    icon:'🔑', title:`Restablecer contraseña — ${nombre}`,
-    msg:`Se enviará un enlace a <strong>${escAttr(email)}</strong> para que ${escAttr(nombre)} elija su nueva contraseña.
-      La cuenta también quedará desbloqueada.<br><br>
-      <div style="font-size:12px;color:var(--text-light);line-height:1.6;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px">
-        <strong>¿No le llega el correo?</strong> Puedes fijársela tú en
-        Supabase → Authentication → Users → busca <em>${escAttr(email)}</em> → menú de tres puntos → Reset password.
+    icon:'🔑', title:`Cambiar contraseña — ${nombre}`,
+    msg:`Nueva contraseña para <strong>${escAttr(nombre)}</strong> (<em>${escAttr(email)}</em>):<br>
+      <div style="margin-top:10px">
+        <input id="_nueva-pass" type="password" placeholder="Mínimo 6 caracteres" autocomplete="new-password"
+          style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;background:var(--card);color:var(--text);box-sizing:border-box">
+        <button type="button" onclick="const i=document.getElementById('_nueva-pass');i.type=i.type==='password'?'text':'password';this.textContent=i.type==='password'?'👁 Mostrar':'🙈 Ocultar'"
+          style="margin-top:8px;font-size:12px;background:none;border:none;color:var(--primary);cursor:pointer;font-weight:600;padding:0">👁 Mostrar</button>
+        <div style="font-size:11px;color:var(--text-light);margin-top:8px;line-height:1.5">
+          Se aplica de inmediato en Supabase Auth. La cuenta queda desbloqueada.<br>
+          Dísela por un medio seguro y pídele que la cambie desde su propio perfil.
+        </div>
       </div>`,
-    okText:'📧 Enviar enlace', danger:false
+    okText:'🔑 Cambiar contraseña', danger:false
   });
   if(!ok) return;
+  const pass = document.getElementById('_nueva-pass')?.value?.trim();
+  if(!pass || pass.length < 6){ toast('La contraseña debe tener al menos 6 caracteres','error'); return; }
+
   setLoading(true);
-  const redirectTo = window.location.origin + window.location.pathname;
-  const { error: errMail } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
-  if(errMail){
-    setLoading(false);
-    toast('No se pudo enviar el correo: '+errMail.message+' · Fíjala desde Supabase → Authentication → Users.','error');
+  let datos, errFn;
+  try {
+    ({ data: datos, error: errFn } = await sb.functions.invoke('cambiar-password', { body: { email, password: pass } }));
+  } catch(e) { errFn = e; }
+  setLoading(false);
+
+  if(errFn || !datos?.ok) {
+    // El detalle útil viaja en el cuerpo de la respuesta, no en el mensaje del SDK,
+    // que para cualquier fallo dice sólo "Edge Function returned a non-2xx status".
+    let detalle = datos?.error || errFn?.message || 'error desconocido';
+    try { if(errFn?.context?.json) detalle = (await errFn.context.json())?.error || detalle; } catch(e) {}
+    if(/not found|404|Failed to send a request/i.test(detalle)) {
+      toast('Falta desplegar la función «cambiar-password» en Supabase → Edge Functions. Mientras tanto: Authentication → Users → Reset password.','error');
+    } else {
+      toast('No se pudo cambiar la contraseña: '+detalle,'error');
+    }
     return;
   }
-  const {error} = await sb.from('profiles').update({ bloqueado: false, intentos_fallidos: 0 }).eq('id', id);
-  if(error) toast(`📧 Enlace enviado a ${email}, pero no se pudo desbloquear la cuenta: `+error.message,'warning');
-  else toast(`📧 Enlace enviado a ${email} · La cuenta quedó desbloqueada`);
-  await loadAdminData(); renderAdminUsuarios(); renderAdminStats(); setLoading(false);
+
+  toast(`🔑 Contraseña de ${nombre} cambiada · La cuenta quedó desbloqueada`,'success');
+  await loadAdminData(); renderAdminUsuarios(); renderAdminStats();
 }
 
 // ════════════════════ ESTADÍSTICAS ════════════════════
