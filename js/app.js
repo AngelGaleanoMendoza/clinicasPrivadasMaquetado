@@ -2412,16 +2412,41 @@ const DURACION_SERVICIO = {
 };
 // El HTML solo trae los tipos humanos; se guardan aquí para poder restaurarlos
 // si una clínica veterinaria ya reescribió el select en esta misma sesión.
-const SERVICIOS_HUMANO = [
+// Los cinco primeros valen para cualquier consulta; los de especialidad solo
+// aparecen donde tienen sentido (un dermatólogo no agenda "Odontología").
+const SERVICIOS_BASE = [
   ['consulta','Consulta general'], ['control','Control'], ['urgencia','Urgencia'],
-  ['cirugia','Cirugía'], ['examen','Examen'], ['optometria','Optometría / Examen visual'],
-  ['odontologia','Odontología']
+  ['cirugia','Cirugía'], ['examen','Examen']
 ];
+const SERV_OPTOMETRIA  = ['optometria','Optometría / Examen visual'];
+const SERV_ODONTOLOGIA = ['odontologia','Odontología'];
+// Catálogo completo, solo para poner nombre a un tipo guardado que ya no se
+// ofrece (una cita vieja, o una clínica que cambió de tipo).
+const SERVICIOS_HUMANO = [...SERVICIOS_BASE, SERV_OPTOMETRIA, SERV_ODONTOLOGIA];
+
+function _serviciosActivos() {
+  if(esVeterinaria()) return SERVICIOS_VET;
+  const tipo = currentClinica?.tipo;
+  const extra = [];
+  // Por tipo de clínica o por quién atiende: un optometrista en una clínica
+  // general sigue necesitando su examen visual.
+  if(tipo === 'optica' || tipo === 'oftalmologia' || esProfesionalOftalmo()) extra.push(SERV_OPTOMETRIA);
+  if(tipo === 'dental' || isOdontologo()) extra.push(SERV_ODONTOLOGIA);
+  return [...SERVICIOS_BASE, ...extra];
+}
+
 function fillServicioSelect(selected) {
   const sel = document.getElementById('c-tipo');
   if(!sel) return;
-  const opciones = esVeterinaria() ? SERVICIOS_VET : SERVICIOS_HUMANO;
-  sel.innerHTML = opciones.map(([v,l]) => `<option value="${v}">${l}</option>`).join('');
+  const opciones = _serviciosActivos().slice();
+  // Al editar una cita cuyo tipo ya no se ofrece, se añade igualmente: si no,
+  // el select quedaría vacío y guardar le cambiaría el tipo sin avisar.
+  if(selected && !opciones.some(([v]) => v === selected)) {
+    const todos = [...SERVICIOS_HUMANO, ...SERVICIOS_VET];
+    const conocido = todos.find(([v]) => v === selected);
+    opciones.push(conocido || [selected, selected]);
+  }
+  sel.innerHTML = opciones.map(([v,l]) => `<option value="${escAttr(v)}">${escAttr(l)}</option>`).join('');
   if(selected) sel.value = selected;
   sel.onchange = esVeterinaria() ? onServicioChange : null;
 }
@@ -2664,7 +2689,12 @@ function openModalCita(id){
   const esOptica = currentClinica?.tipo === 'optica';
   const motivoWrap = document.getElementById('c-motivo-wrap');
   if(motivoWrap) motivoWrap.style.display = esOptica ? 'none' : '';
-  fillServicioSelect(esVet ? 'consulta' : (esOptica ? 'examen_visual' : isOdontologo() ? 'odontologia' : 'consulta'));
+  // 'examen_visual' es un tipo de NOTA, no de cita: al pasarlo aquí el select se
+  // quedaba sin selección en las ópticas. El valor correcto es 'optometria'.
+  fillServicioSelect(esVet ? 'consulta'
+    : (esOptica || esOftalmologia()) ? 'optometria'
+    : isOdontologo() ? 'odontologia'
+    : 'consulta');
   const motivoInput = document.getElementById('c-motivo');
   if(motivoInput && isOdontologo()) motivoInput.placeholder = 'Escribe el procedimiento dental (ej: limpieza, conducto...)';
   else if(motivoInput && modoDermatologia()) motivoInput.placeholder = 'Escribe el diagnóstico o la lesión (ej: acné, tiña, psoriasis...)';
@@ -2708,7 +2738,7 @@ function openModalCita(id){
       if(c.medicoId) medicoSel.value=c.medicoId;
       fillHoraSelect(c.hora, null, { medicoId:c.medicoId, fecha:c.fecha, duracion:c.duracionMin||30, excluirId:id });
       document.getElementById('c-motivo').value=c.motivo;
-      if(esVet) fillServicioSelect(c.tipo); else document.getElementById('c-tipo').value=c.tipo;
+      fillServicioSelect(c.tipo);   // conserva el tipo aunque ya no se ofrezca aquí
       document.getElementById('c-estado').value=c.estado;
       document.getElementById('c-notas').value=c.notas||'';
     }
@@ -8679,7 +8709,7 @@ function isSuperAdmin() {
 }
 function isFarmaceutico() { return currentUser?.key === 'farmaceutico'; }
 function isOdontologo()   { return currentUser?.key === 'odontologo'; }
-function esProfesionalOftalmo() { return ['optometrista','oftalmologo','dermatologo'].includes(currentUser?.key); }
+function esProfesionalOftalmo() { return ['optometrista','oftalmologo'].includes(currentUser?.key); }
 function esOftalmologia() { return currentClinica?.tipo === 'oftalmologia'; }
 // Dermatología aplica tanto si la clínica entera lo es como si quien atiende es
 // dermatólogo dentro de una clínica general: el catálogo le sirve igual.
