@@ -4953,9 +4953,25 @@ function setPacienteSelect(sid, pid) {
   if(hiddenEl) hiddenEl.value = pid || '';
   if(txtEl) txtEl.value = p ? p.nombre+' '+p.apellidos : '';
 }
-function openModalOverlay(id){ document.getElementById(id).classList.add('open'); document.body.classList.add('modal-open'); }
+function openModalOverlay(id){
+  const el = document.getElementById(id);
+  if(!el) return;
+  // Un modal abierto sobre otro (Cliente desde Mascota, p. ej.) quedaría detrás:
+  // todos comparten z-index y pinta encima el que va último en el HTML. Se eleva
+  // el que entra por encima de los que ya estaban.
+  const abiertos = document.querySelectorAll('.modal-overlay.open');
+  if(abiertos.length){
+    let tope = 200;
+    abiertos.forEach(m => { tope = Math.max(tope, parseInt(getComputedStyle(m).zIndex, 10) || 200); });
+    el.style.zIndex = tope + 10;
+  }
+  el.classList.add('open');
+  document.body.classList.add('modal-open');
+}
 function closeModal(id){
-  document.getElementById(id).classList.remove('open');
+  const _el = document.getElementById(id);
+  _el.classList.remove('open');
+  _el.style.zIndex = '';   // se elevó al apilarse: no dejar el valor pegado
   if(id==='modal-cita') { editingCitaId=null; _reprogramandoDesde=null; }
   else if(id==='modal-medicacion') editingMedId=null;
   else if(id==='modal-nota') editingNotaId=null;
@@ -11706,8 +11722,13 @@ function openModalCliente(id) {
   // círculo sobre la ficha que ya está abierta detrás.
   const btnMas = document.getElementById('cli-btn-guardar-mascota');
   if(btnMas) btnMas.style.display = _clienteDesdeMascota ? 'none' : '';
+  // Al ocultar el otro botón, Guardar pasa a ser la acción principal. Hay que
+  // quitar btn-secondary: en la hoja va después y ganaría por orden.
   const btnGuardar = document.getElementById('cli-btn-guardar');
-  if(btnGuardar) btnGuardar.classList.toggle('btn-primary', _clienteDesdeMascota);
+  if(btnGuardar){
+    btnGuardar.classList.toggle('btn-secondary', !_clienteDesdeMascota);
+    btnGuardar.classList.toggle('btn-primary',    _clienteDesdeMascota);
+  }
   openModalOverlay('modal-cliente');
 }
 
