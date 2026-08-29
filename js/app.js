@@ -381,6 +381,8 @@ let currentUser = null;
 let selectedEmail = '';
 let _authEmail = ''; // email capturado en login o desde Supabase Auth
 
+let _errorRestaurarSesion = null;
+
 function mostrarLoginAuthError(html) {
   setLoading(false);
   currentUser = null;
@@ -427,7 +429,31 @@ async function solicitarRecuperacionPassword() {
   errEl.style.display = 'block';
 }
 
+// Cualquier fallo inesperado durante el acceso —un perfil con un campo vacío,
+// una consulta que no responde— dejaba la pantalla de carga puesta para siempre
+// y sin decir nada: solo se veía "cargando". Ahora siempre se informa, con el
+// detalle técnico, que es lo único que permite diagnosticarlo a distancia.
 async function verificarLogin() {
+  try {
+    await _verificarLogin();
+  } catch(e) {
+    console.error('Login:', e);
+    mostrarLoginAuthError('No se pudo completar el inicio de sesión.'
+      + '<br><small>Detalle: <code>' + escAttr(e?.message || String(e)) + '</code>'
+      + '<br>Si se repite, envíale este texto al Super Admin.</small>');
+  }
+}
+
+// Una petición que nunca responde deja la sesión a medias sin error visible.
+function _conLimite(promesa, ms, queEs) {
+  return Promise.race([
+    promesa,
+    new Promise((_, rechazar) => setTimeout(
+      () => rechazar(new Error(`${queEs} no respondió en ${Math.round(ms/1000)} s. Revisa tu conexión.`)), ms))
+  ]);
+}
+
+async function _verificarLogin() {
   const email = document.getElementById('login-email').value.trim();
   _authEmail = email.toLowerCase();
   const password = document.getElementById('login-password').value;
@@ -445,7 +471,9 @@ async function verificarLogin() {
 
   // ── PASO 0: verificar si la cuenta está bloqueada (el Super Admin nunca se bloquea) ──
   const esSuperAdminEmail = email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
-  const { data: profilePre } = await sb.from('profiles').select('id,bloqueado,intentos_fallidos').eq('email', email.toLowerCase()).maybeSingle();
+  const { data: profilePre } = await _conLimite(
+    sb.from('profiles').select('id,bloqueado,intentos_fallidos').eq('email', email.toLowerCase()).maybeSingle(),
+    15000, 'La consulta de tu perfil');
   if(profilePre?.bloqueado && !esSuperAdminEmail) {
     setLoading(false);
     shakeLogin();
@@ -456,7 +484,8 @@ async function verificarLogin() {
   }
 
   // ── PASO 1: login directo en Supabase Auth ──
-  const { data: authData } = await sb.auth.signInWithPassword({ email, password });
+  const { data: authData } = await _conLimite(
+    sb.auth.signInWithPassword({ email, password }), 20000, 'El servidor de acceso');
   if(authData?.user) {
     const profile = await resolverPerfil(authData.user.id, email);
     if(profile) { await entrarConPerfil(profile); return; }
@@ -828,7 +857,7 @@ async function entrarConPerfil(profile) {
     name:     profile.nombre,
     nombre:   profile.nombre,
     role:     rolLabel,
-    avatar:   profile.icono || profile.nombre[0].toUpperCase(),
+    avatar:   profile.icono || (profile.nombre || '').trim()[0]?.toUpperCase() || '?',
     email:    emailFinal,
     key:      profile.rol,
     especialidad: profile.especialidad || null,
@@ -847,7 +876,8 @@ async function entrarConPerfil(profile) {
   document.getElementById('sf-avatar').textContent = currentUser.avatar;
   applyRoleMenu();
   setLoading(true);
-  const {data:clData} = await sb.from('clinicas').select('*').eq('id',currentClinicaId).single();
+  const {data:clData} = await _conLimite(
+    sb.from('clinicas').select('*').eq('id',currentClinicaId).single(), 15000, 'La consulta de tu clínica');
   currentClinica = clData || null;
   // Recalcular el menú ahora que ya conocemos el tipo real de clínica.
   applyRoleMenu();
@@ -5595,10 +5625,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Los perfiles legacy sin JWT no pueden operar con RLS. Se elimina cualquier
     // sesión antigua guardada por versiones previas y se solicita login real.
     sessionStorage.removeItem('lm_user');
-  } catch(e) { sessionStorage.removeItem('lm_user'); }
+  } catch(e) {
+    // Se tragaba el error y solo aparecía el login, sin pista de por qué se
+    // había perdido la sesión. Se guarda para mostrarlo bajo el formulario.
+    console.error('Restaurar sesión:', e);
+    _errorRestaurarSesion = e?.message || String(e);
+    sessionStorage.removeItem('lm_user');
+  }
 
   // Sin sesión — mostrar login
   if(lo) lo.classList.remove('show');
+  if(_errorRestaurarSesion) {
+    const err = document.getElementById('login-error');
+    if(err) {
+      err.style.color = '#fbbf24';
+      err.innerHTML = 'Tu sesión anterior no pudo restaurarse; vuelve a entrar.'
+        + '<br><small>Detalle: <code>' + escAttr(_errorRestaurarSesion) + '</code></small>';
+      err.style.display = 'block';
+    }
+    _errorRestaurarSesion = null;
+  }
   if(ls) {
     ls.style.cssText = 'display:flex;opacity:0;transition:opacity .35s';
     setTimeout(() => { ls.style.opacity = '1'; }, 20);
