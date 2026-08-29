@@ -433,14 +433,53 @@ async function solicitarRecuperacionPassword() {
 // una consulta que no responde— dejaba la pantalla de carga puesta para siempre
 // y sin decir nada: solo se veía "cargando". Ahora siempre se informa, con el
 // detalle técnico, que es lo único que permite diagnosticarlo a distancia.
+// Cuando el acceso falla hay que saber DÓNDE está el problema. La base de datos
+// y el servicio de autenticación son piezas distintas del mismo proyecto y una
+// puede caerse sola: si no se distinguen, un mensaje genérico de "revisa tu
+// conexión" manda a buscar en la red del usuario cuando lo caído es el servidor.
+async function _dondeFallaElAcceso() {
+  try {
+    // PostgREST responde aunque Auth esté muerto. Cualquier respuesta HTTP sirve:
+    // lo que importa es que el servidor conteste, no qué conteste.
+    await _conLimite(fetch(SURL + '/rest/v1/', { headers:{ apikey: SKEY } }), 8000, 'La base de datos');
+    return 'auth';        // hay servidor, pero el acceso no responde
+  } catch(e) {
+    return 'servidor';    // no responde nada: proyecto caído o sin conexión
+  }
+}
+
 async function verificarLogin() {
   try {
     await _verificarLogin();
   } catch(e) {
     console.error('Login:', e);
-    mostrarLoginAuthError('No se pudo completar el inicio de sesión.'
-      + '<br><small>Detalle: <code>' + escAttr(e?.message || String(e)) + '</code>'
-      + '<br>Si se repite, envíale este texto al Super Admin.</small>');
+    const esCorte = /no respondió en|failed to fetch|networkerror|load failed/i.test(e?.message || '');
+    // Un parpadeo de unos segundos se resuelve solo: se reintenta una vez, corto,
+    // antes de dar la cara. Si de verdad está caído, se pierde poco.
+    if(esCorte) {
+      try {
+        await new Promise(r => setTimeout(r, 2000));
+        await _verificarLogin();
+        return;
+      } catch(e2) { console.error('Login (reintento):', e2); }
+    }
+    const donde = esCorte ? await _dondeFallaElAcceso() : null;
+    if(donde === 'auth') {
+      mostrarLoginAuthError('El <strong>servicio de autenticación</strong> del servidor no responde.'
+        + '<br><small>Tu conexión y la base de datos funcionan: lo caído es el inicio de sesión, '
+        + 'y no se arregla desde aquí.'
+        + '<br>El Super Admin debe entrar en el panel de Supabase, comprobar el estado del proyecto '
+        + 'y reiniciarlo si aparece como <em>Unhealthy</em>.'
+        + '<br><a href="https://supabase.com/dashboard/project/ckpskotpdkmojgaqxyht" target="_blank" rel="noopener" style="color:#93C5FD">Abrir el panel de Supabase</a></small>');
+    } else if(donde === 'servidor') {
+      mostrarLoginAuthError('No hay respuesta del servidor.'
+        + '<br><small>Puede ser tu conexión a internet o que el proyecto esté detenido. '
+        + 'Comprueba si otras páginas cargan; si cargan, avisa al Super Admin.</small>');
+    } else {
+      mostrarLoginAuthError('No se pudo completar el inicio de sesión.'
+        + '<br><small>Detalle: <code>' + escAttr(e?.message || String(e)) + '</code>'
+        + '<br>Si se repite, envíale este texto al Super Admin.</small>');
+    }
   }
 }
 
