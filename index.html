@@ -10,7 +10,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
-<link rel="stylesheet" href="css/styles.css?v=20260829j">
+<link rel="stylesheet" href="css/styles.css?v=20260829k">
 </head>
 <body>
 <script>
@@ -1753,6 +1753,18 @@
             <div class="form-group full"><label>Especialidad / subtítulo</label><input type="text" id="u-rec-subtitulo" placeholder="Endocrinología" oninput="actualizarPreviewRecetario()"></div>
             <div class="form-group"><label>Registro médico</label><input type="text" id="u-rec-registro" placeholder="MINSA 0000" oninput="actualizarPreviewRecetario()"></div>
             <div class="form-group"><label>Institución</label><input type="text" id="u-rec-institucion" placeholder="Hospital / Clínica" oninput="actualizarPreviewRecetario()"></div>
+            <div class="form-group full"><label>Logo del recetario</label>
+              <div class="recetario-logo-editor">
+                <div id="u-rec-logo-preview" class="recetario-logo-preview">Sin logo</div>
+                <div class="recetario-logo-actions">
+                  <input type="file" id="u-rec-logo-file" accept="image/png,image/jpeg,image/webp,image/svg+xml" style="display:none" onchange="onLogoRecetarioSeleccionado(this)">
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('u-rec-logo-file').click()">📤 Cargar logo</button>
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="usarLogoClinicaRecetario()">🏥 Usar logo clínica</button>
+                  <button type="button" class="btn btn-danger btn-sm" id="u-rec-logo-remove" style="display:none" onclick="quitarLogoRecetario()">✕ Quitar</button>
+                </div>
+              </div>
+            </div>
+            <div class="form-group"><label>Posición del logo</label><select id="u-rec-logo-pos" onchange="actualizarPreviewRecetario()"><option value="left">Izquierda</option><option value="center">Centro</option><option value="right">Derecha</option></select></div>
             <div class="form-group full"><label>Lista lateral <span style="font-size:10px;font-weight:400;color:var(--text-light)">— un elemento por línea</span></label><textarea id="u-rec-lista" rows="5" placeholder="Diabetes tipo 1&#10;Diabetes tipo 2&#10;Hipotiroidismo" oninput="actualizarPreviewRecetario()"></textarea></div>
             <div class="form-group full"><label>Pie del recetario</label><input type="text" id="u-rec-pie" placeholder="Teléfono · Dirección · Correo" oninput="actualizarPreviewRecetario()"></div>
             <p style="font-size:11px;color:var(--text-light);line-height:1.5;margin:0">La vista previa es completamente digital. Los datos del paciente y de la prescripción se insertarán dentro de estas secciones, sin usar una imagen de fondo.</p>
@@ -2544,7 +2556,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260829d"></script>
+<script src="js/app.js?v=20260829e"></script>
 </body>
 </html>
 
