@@ -1797,7 +1797,7 @@ function renderPacientesList(lista){
   if(!lista.length){ el.innerHTML=''; if(empty) empty.style.display='block'; return; }
   if(empty) empty.style.display='none';
   el.innerHTML=lista.map(x=>`<div class="pac-row" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)">
-    ${x.fotoUrl?`<img src="${x.fotoUrl}" style="width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--border)" alt="foto">`:`<div class="patient-avatar" style="background:${colAvatar(x.id)};width:38px;height:38px;flex-shrink:0">${ini(x.nombre,x.apellidos)}</div>`}
+    ${x.fotoUrl?`<img src="${x.fotoUrl}" loading="lazy" style="width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--border)" alt="foto">`:`<div class="patient-avatar" style="background:${colAvatar(x.id)};width:38px;height:38px;flex-shrink:0">${ini(x.nombre,x.apellidos)}</div>`}
     <div style="flex:1;min-width:0">
       <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.nombre} ${x.apellidos}</div>
       <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
@@ -13921,7 +13921,7 @@ function renderHospitalizacion() {
       const dias = _diasIngresado(h);
       return `<div class="hosp-card">
         <div class="hosp-head">
-          <div class="hosp-avatar" style="background:${colAvatar(m?.id||0)}">${m?.fotoUrl?`<img src="${escAttr(m.fotoUrl)}" alt="">`:especieIcon(m?.especie)}</div>
+          <div class="hosp-avatar" style="background:${colAvatar(m?.id||0)}">${m?.fotoUrl?`<img src="${escAttr(m.fotoUrl)}" loading="lazy" alt="">`:especieIcon(m?.especie)}</div>
           <div style="flex:1;min-width:0">
             <div class="hosp-nombre">${m?escAttr(m.nombre):'—'}</div>
             <div class="hosp-meta">${m?escAttr([m.especie,m.raza].filter(Boolean).join(' · ')):''}</div>

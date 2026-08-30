@@ -778,3 +778,43 @@ WHERE lower(btrim(email)) = public.super_admin_email();
 SELECT email, rol, bloqueado, intentos_fallidos
 FROM public.profiles
 WHERE lower(btrim(email)) = public.super_admin_email();
+
+
+-- ============================================================
+-- PASO 11: Índices de rendimiento — las tablas núcleo nunca los tuvieron
+--
+-- loadAll() filtra por clinica_id en 10 consultas paralelas, y se llama en
+-- 47 sitios del código (cada vez que se guarda un paciente, una cita, una
+-- nota...). Sin índice, cada una de esas consultas es un recorrido completo
+-- de la tabla ENTERA del sistema —de todas las clínicas juntas—, no solo de
+-- la fila que cambió. Crece con el sistema entero, no con lo que usa cada
+-- clínica. pacientes, citas, medicaciones, notas y expediente se traen SIN
+-- límite en cada llamada; profiles, inventario, finanzas, facturas e
+-- inventario_movimientos también se consultan por clinica_id, con límite las
+-- tres últimas. Ninguna de las nueve tenía índice: son anteriores a este
+-- archivo y las que se añadieron después (veterinaria, exámenes,
+-- oftalmología) sí lo llevaban.
+--
+-- Aparte y seguro de ejecutar solo, sin afectar datos ni políticas.
+-- ============================================================
+
+CREATE INDEX IF NOT EXISTS idx_pacientes_clinica    ON public.pacientes(clinica_id);
+CREATE INDEX IF NOT EXISTS idx_citas_clinica         ON public.citas(clinica_id);
+CREATE INDEX IF NOT EXISTS idx_notas_clinica         ON public.notas(clinica_id);
+CREATE INDEX IF NOT EXISTS idx_expediente_clinica    ON public.expediente(clinica_id);
+CREATE INDEX IF NOT EXISTS idx_profiles_clinica      ON public.profiles(clinica_id);
+CREATE INDEX IF NOT EXISTS idx_inventario_clinica    ON public.inventario(clinica_id);
+CREATE INDEX IF NOT EXISTS idx_finanzas_clinica      ON public.finanzas(clinica_id);
+CREATE INDEX IF NOT EXISTS idx_facturas_clinica      ON public.facturas(clinica_id);
+CREATE INDEX IF NOT EXISTS idx_medicaciones_clinica  ON public.medicaciones(clinica_id);
+CREATE INDEX IF NOT EXISTS idx_inv_mov_clinica_fecha ON public.inventario_movimientos(clinica_id, fecha DESC);
+
+-- profiles.email: is_superadmin() y get_my_clinica_id() lo consultan en
+-- CADA fila de CADA tabla protegida por RLS, es decir, en casi cada consulta
+-- de la aplicación entera.
+CREATE INDEX IF NOT EXISTS idx_profiles_email ON public.profiles(lower(btrim(email)));
+
+-- Comprobación: deben aparecer los 11 índices nuevos
+SELECT indexname, tablename FROM pg_indexes
+WHERE schemaname = 'public' AND indexname LIKE 'idx_%'
+ORDER BY tablename;

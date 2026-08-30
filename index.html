@@ -6,10 +6,19 @@
 <title>Lumea Med — Gestión Clínica</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="shortcut icon" href="favicon.svg">
+<!-- Abrir la conexión a estos dominios mientras el HTML sigue llegando, en vez
+     de esperar a toparse con cada <link>/<script> para empezar el DNS+TLS. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- defer: se descargan en paralelo mientras el navegador sigue construyendo
+     la página, y se ejecutan en este mismo orden justo antes de que el HTML
+     termine de parsearse. Nada del <script> inline de más abajo depende de
+     que supabase/flatpickr ya existan de forma síncrona. -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
-<script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js" defer></script>
 <link rel="stylesheet" href="css/styles.css?v=20260829k">
 </head>
 <body>
@@ -2556,7 +2565,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260829e"></script>
+<script src="js/app.js?v=20260829e" defer></script>
 </body>
 </html>
 
