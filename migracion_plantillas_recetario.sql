@@ -1,19 +1,19 @@
--- Plantillas personalizadas de recetario por médico
--- Ejecutar una vez en Supabase > SQL Editor.
+-- Configuración personal del recetario por médico
+-- Esta migración se conserva por compatibilidad. El diseño actual es digital y
+-- utiliza recetario_config; recetario_url queda como columna legacy sin uso.
 
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS recetario_url TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS recetario_config JSONB;
 
--- La receta conserva una instantánea. Si el médico cambia su plantilla mañana,
--- las recetas ya emitidas continúan imprimiéndose con el formato original.
+-- La receta conserva una instantánea de la configuración digital.
 ALTER TABLE public.medicaciones ADD COLUMN IF NOT EXISTS recetario_url TEXT;
 ALTER TABLE public.medicaciones ADD COLUMN IF NOT EXISTS recetario_config JSONB;
 
 COMMENT ON COLUMN public.profiles.recetario_url IS
-  'Imagen de fondo del recetario personal del médico';
+  'Columna legacy; el recetario digital no usa imágenes de fondo';
 COMMENT ON COLUMN public.profiles.recetario_config IS
-  'Área imprimible en milímetros: top, side y bottom';
+  'Configuración estructurada del recetario digital del médico';
 COMMENT ON COLUMN public.medicaciones.recetario_url IS
-  'Instantánea de la plantilla usada al emitir la receta';
+  'Columna legacy; no se usa en nuevas recetas';
 COMMENT ON COLUMN public.medicaciones.recetario_config IS
-  'Instantánea de la calibración usada al emitir la receta';
+  'Instantánea del diseño digital usado al emitir la receta';

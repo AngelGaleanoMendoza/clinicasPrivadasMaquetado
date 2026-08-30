@@ -192,6 +192,7 @@ const fromM = r => ({
   prescriptorId:r.prescriptor_id||null, prescriptorNombre:r.prescriptor_nombre||'',
   prescriptorEspecialidad:r.prescriptor_especialidad||'', prescriptorFirmaUrl:r.prescriptor_firma_url||null,
   recetarioUrl:r.recetario_url||null, recetarioConfig:r.recetario_config||null,
+  diagnostico:r.diagnostico||'', recetaNotas:r.receta_notas||'', proximaCita:r.proxima_cita||null,
   nombre:r.nombre, dosis:r.dosis, frecuencia:r.frecuencia, inicio:r.inicio, fin:r.fin,
   via:r.via, estado:r.estado, indicaciones:r.indicaciones
 });
@@ -201,6 +202,7 @@ const toM   = x => ({
   prescriptor_id:x.prescriptorId||null, prescriptor_nombre:x.prescriptorNombre||null,
   prescriptor_especialidad:x.prescriptorEspecialidad||null, prescriptor_firma_url:x.prescriptorFirmaUrl||null,
   recetario_url:x.recetarioUrl||null, recetario_config:x.recetarioConfig||null,
+  diagnostico:x.diagnostico||null, receta_notas:x.recetaNotas||null, proxima_cita:x.proximaCita||null,
   nombre:x.nombre, dosis:x.dosis, frecuencia:x.frecuencia, inicio:x.inicio||null,
   fin:x.fin||null, via:x.via||'oral', estado:x.estado||'activa',
   indicaciones:x.indicaciones||null, clinica_id:currentClinicaId
@@ -3183,9 +3185,9 @@ function _llenarPrescriptorMed(receta) {
 function _prescriptorSeleccionado() {
   const id = document.getElementById('m-prescriptor')?.value;
   if(!id) return null;
+  if(String(currentUser?.id) === String(id)) return {id:String(id), nombre:currentUser.name||'', especialidad:currentUser.especialidad||'', firmaUrl:currentUser.firmaUrl||null, recetarioUrl:currentUser.recetarioUrl||null, recetarioConfig:currentUser.recetarioConfig||null};
   const p = C.prof.find(x => String(x.id) === String(id));
   if(p) return {id:String(p.id), nombre:p.nombre||'', especialidad:p.especialidad||'', firmaUrl:p.firma_url||null, recetarioUrl:p.recetario_url||null, recetarioConfig:p.recetario_config||null};
-  if(String(currentUser?.id) === String(id)) return {id:String(id), nombre:currentUser.name||'', especialidad:currentUser.especialidad||'', firmaUrl:currentUser.firmaUrl||null, recetarioUrl:currentUser.recetarioUrl||null, recetarioConfig:currentUser.recetarioConfig||null};
   return null;
 }
 
@@ -3195,7 +3197,7 @@ function _nuevoRecetaId() {
 
 function openModalMedicacion(id) {
   editingMedId = id || null;
-  document.getElementById('modal-med-title').textContent = id ? '✏️ Editar Medicación' : '💊 Nueva Receta';
+  document.getElementById('modal-med-title').textContent = id ? '✏️ Editar Receta' : '💊 Nueva Receta';
   fillSelect('m-paciente');
   // En veterinaria la receta es de una mascota, y las dosis salen de su peso
   const esVet = esVeterinaria();
@@ -3207,6 +3209,9 @@ function openModalMedicacion(id) {
   document.getElementById('m-estado').value = 'activa';
   document.getElementById('m-inicio').value = hoy();
   document.getElementById('m-fin').value = '';
+  document.getElementById('m-diagnostico').value = '';
+  document.getElementById('m-receta-notas').value = '';
+  document.getElementById('m-proxima-cita').value = '';
   if(id) {
     const m = C.m.find(x => x.id === id);
     if(m) {
@@ -3215,14 +3220,17 @@ function openModalMedicacion(id) {
       document.getElementById('m-inicio').value = m.inicio || '';
       document.getElementById('m-fin').value = m.fin || '';
       document.getElementById('m-estado').value = m.estado;
-      const dp = parseDosisStr(m.dosis);
-      medItems = [{nombre:m.nombre, dosisQty:dp.qty, dosisUnit:dp.unit, frecuencia:m.frecuencia, via:m.via||'oral', indicaciones:m.indicaciones||''}];
+      document.getElementById('m-diagnostico').value = m.diagnostico || '';
+      document.getElementById('m-receta-notas').value = m.recetaNotas || '';
+      document.getElementById('m-proxima-cita').value = m.proximaCita || '';
+      const grupo = m.recetaId ? C.m.filter(x => x.recetaId === m.recetaId) : [m];
+      medItems = grupo.map(x => { const dp=parseDosisStr(x.dosis); return {id:x.id,nombre:x.nombre,dosisQty:dp.qty,dosisUnit:dp.unit,frecuencia:x.frecuencia,via:x.via||'oral',indicaciones:x.indicaciones||''}; });
     }
   } else {
     _llenarPrescriptorMed(null);
     medItems = [{nombre:'', dosisQty:'1', dosisUnit:'tableta(s)', frecuencia:_frecuenciasActivas()[esVeterinaria()?1:1], via:'oral', indicaciones:''}];
   }
-  document.getElementById('btn-add-med-item').style.display = editingMedId ? 'none' : 'inline-flex';
+  document.getElementById('btn-add-med-item').style.display = 'inline-flex';
   renderMedItems();
   openModalOverlay('modal-medicacion');
 }
@@ -3333,38 +3341,55 @@ async function guardarMedicacion() {
   const inicio = document.getElementById('m-inicio').value;
   const fin = document.getElementById('m-fin').value;
   const estado = document.getElementById('m-estado').value;
+  const diagnostico = document.getElementById('m-diagnostico').value.trim();
+  const recetaNotas = document.getElementById('m-receta-notas').value.trim();
+  const proximaCita = document.getElementById('m-proxima-cita').value || null;
   const prescriptor = editingMedId ? null : _prescriptorSeleccionado();
   if(!editingMedId && !prescriptor) { toast('Selecciona el médico que emite la receta','error'); return; }
   const buildDosis = item => ((item.dosisQty||'1') + ' ' + (item.dosisUnit||'tableta(s)')).trim();
   if(editingMedId) {
-    const item = medItems[0];
-    if(!item.nombre||!item.dosisQty||!item.frecuencia) { toast('Completa nombre, dosificación y frecuencia','error'); return; }
     const anterior = C.m.find(x => x.id === editingMedId);
-    const obj = {...anterior,pacienteId:pid,mascotaId:mid,nombre:item.nombre,dosis:buildDosis(item),frecuencia:item.frecuencia,inicio,fin,via:item.via,estado,indicaciones:item.indicaciones};
+    const valid = medItems.filter(item => item.nombre && item.dosisQty && item.frecuencia);
+    if(!valid.length) { toast('Agrega al menos un medicamento completo','error'); return; }
+    const recetaId = anterior.recetaId || _nuevoRecetaId();
+    const existentes = anterior.recetaId ? C.m.filter(x => x.recetaId === anterior.recetaId) : [anterior];
+    const base = {...anterior,recetaId,pacienteId:pid,mascotaId:mid,inicio,fin,estado,diagnostico,recetaNotas,proximaCita};
     setLoading(true);
-    const {error} = await sb.from('medicaciones').update(toM(obj)).eq('id',editingMedId);
+    let error = null;
+    for(const item of valid) {
+      const fila=toM({...base,nombre:item.nombre,dosis:buildDosis(item),frecuencia:item.frecuencia,via:item.via,indicaciones:item.indicaciones});
+      const r=item.id ? await sb.from('medicaciones').update(fila).eq('id',item.id) : await sb.from('medicaciones').insert(fila);
+      if(r.error){error=r.error;break;}
+    }
+    if(!error) {
+      const conservar=new Set(valid.map(x=>x.id).filter(Boolean));
+      const quitar=existentes.filter(x=>!conservar.has(x.id)).map(x=>x.id);
+      if(quitar.length){const r=await sb.from('medicaciones').delete().in('id',quitar);error=r.error;}
+    }
     setLoading(false);
     if(error) {
+      const faltaDigital = ['diagnostico','receta_notas','proxima_cita'].some(c => _faltaColumna(error,c));
       const faltaPlantilla = ['recetario_url','recetario_config'].some(c => _faltaColumna(error,c));
       const faltaMigracion = ['receta_id','fecha_emision','prescriptor_id','prescriptor_nombre','prescriptor_especialidad','prescriptor_firma_url'].some(c => _faltaColumna(error,c));
-      toast(faltaPlantilla ? 'Falta ejecutar migracion_plantillas_recetario.sql en Supabase' : faltaMigracion ? 'Falta ejecutar migracion_recetas_por_medico.sql en Supabase' : 'Error: '+error.message,'error');
+      toast(faltaDigital ? 'Falta ejecutar migracion_recetario_digital.sql en Supabase' : faltaPlantilla ? 'Falta ejecutar migracion_plantillas_recetario.sql en Supabase' : faltaMigracion ? 'Falta ejecutar migracion_recetas_por_medico.sql en Supabase' : 'Error: '+error.message,'error');
       return;
     }
-    toast('Medicación actualizada');
+    toast('Receta actualizada');
     logActivity('medicacion');
   } else {
     const valid = medItems.filter(item => item.nombre && item.dosisQty && item.frecuencia);
     if(!valid.length) { toast('Agrega al menos un medicamento con nombre, dosificación y frecuencia','error'); return; }
     const recetaId = _nuevoRecetaId();
-    const recetaBase = {recetaId,fechaEmision:hoy(),prescriptorId:prescriptor.id,prescriptorNombre:prescriptor.nombre,prescriptorEspecialidad:prescriptor.especialidad,prescriptorFirmaUrl:prescriptor.firmaUrl,recetarioUrl:prescriptor.recetarioUrl,recetarioConfig:prescriptor.recetarioConfig};
+    const recetaBase = {recetaId,fechaEmision:hoy(),prescriptorId:prescriptor.id,prescriptorNombre:prescriptor.nombre,prescriptorEspecialidad:prescriptor.especialidad,prescriptorFirmaUrl:prescriptor.firmaUrl,recetarioUrl:null,recetarioConfig:prescriptor.recetarioConfig,diagnostico,recetaNotas,proximaCita};
     const rows = valid.map(item => toM({...recetaBase,pacienteId:pid,mascotaId:mid,nombre:item.nombre,dosis:buildDosis(item),frecuencia:item.frecuencia,inicio,fin,via:item.via,estado,indicaciones:item.indicaciones}));
     setLoading(true);
     const {error} = await sb.from('medicaciones').insert(rows);
     setLoading(false);
     if(error) {
+      const faltaDigital = ['diagnostico','receta_notas','proxima_cita'].some(c => _faltaColumna(error,c));
       const faltaPlantilla = ['recetario_url','recetario_config'].some(c => _faltaColumna(error,c));
       const faltaMigracion = ['receta_id','fecha_emision','prescriptor_id','prescriptor_nombre','prescriptor_especialidad','prescriptor_firma_url'].some(c => _faltaColumna(error,c));
-      toast(faltaPlantilla ? 'Falta ejecutar migracion_plantillas_recetario.sql en Supabase' : faltaMigracion ? 'Falta ejecutar migracion_recetas_por_medico.sql en Supabase' : 'Error: '+error.message,'error');
+      toast(faltaDigital ? 'Falta ejecutar migracion_recetario_digital.sql en Supabase' : faltaPlantilla ? 'Falta ejecutar migracion_plantillas_recetario.sql en Supabase' : faltaMigracion ? 'Falta ejecutar migracion_recetas_por_medico.sql en Supabase' : 'Error: '+error.message,'error');
       return;
     }
     toast(rows.length > 1 ? rows.length+' medicamentos registrados ✅' : 'Medicación registrada ✅');
@@ -3898,6 +3923,33 @@ function _seleccionarReceta(tipo, sujetoId, meds) {
   return null;
 }
 
+function _disenoRecetarioDigital(receta, cfg) {
+  const d = receta?.recetarioConfig?.version===2 ? receta.recetarioConfig : {};
+  return {
+    layout:d.layout==='clasico'?'clasico':'lateral', color:d.color||'#be185d',
+    titulo:d.titulo||receta?.prescriptorNombre||cfg.nombreDoctor||'Profesional responsable',
+    subtitulo:d.subtitulo||receta?.prescriptorEspecialidad||cfg.especialidad||'',
+    registro:d.registro||cfg.registro||'', institucion:d.institucion||cfg.institucion||cfg.nombreClinica||'',
+    lista:Array.isArray(d.lista)?d.lista:[], pie:d.pie||[cfg.telefono,cfg.email,cfg.direccion].filter(Boolean).join(' · ')
+  };
+}
+
+function abrirRecetaDigital({titulo,receta,cfg,sujeto,meds,esVeterinaria=false}) {
+  const d=_disenoRecetarioDigital(receta,cfg);
+  const fmt=f=>f?new Date(f+'T12:00:00').toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'}):'—';
+  const via=v=>({oral:'Oral',inyectable:'Inyectable',topica:'Tópica',inhalada:'Inhalada',sublingual:'Sublingual',otra:'Otra'})[v||'oral']||v||'Oral';
+  const campos=(sujeto.campos||[]).filter(x=>x[1]).map(([l,v,wide])=>`<div class="drx-field${wide?' wide':''}"><label>${escAttr(l)}</label><div>${escAttr(String(v))}</div></div>`).join('');
+  const lateral=d.layout==='lateral'?`<aside class="drx-side"><h3>${esVeterinaria?'Información clínica':'Áreas de atención'}</h3>${d.lista.map(x=>`<div class="drx-side-item"><i></i>${escAttr(x)}</div>`).join('')}${sujeto.alerta?`<div class="drx-alert">⚠ ${escAttr(sujeto.alerta)}</div>`:''}</aside>`:'';
+  const medHtml=meds.map((m,i)=>`<div class="drx-med"><div class="drx-num">${i+1}</div><div class="drx-med-main"><strong>${escAttr(m.nombre||'')}</strong>${m.indicaciones?`<p>${escAttr(m.indicaciones)}</p>`:''}</div><div class="drx-med-data"><span><b>Dosis</b>${escAttr(m.dosis||'')}</span><span><b>Frecuencia</b>${escAttr(m.frecuencia||'')}</span><span><b>Vía</b>${escAttr(via(m.via))}</span><span><b>Duración</b>${m.fin?fmt(m.inicio)+' – '+fmt(m.fin):'Según indicación'}</span></div></div>`).join('');
+  const firma=_firmaImgUrlHTML(receta.prescriptorFirmaUrl||cfg.firmaUrl,42);
+  const html=`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>${escAttr(titulo)}</title><style>
+  @page{size:A4;margin:0}*{box-sizing:border-box}body{margin:0;background:#eef2f7;font-family:Arial,sans-serif;color:#172033}.drx-page{--rx:${d.color};width:210mm;min-height:297mm;margin:0 auto;background:#fff;padding:14mm 13mm 10mm;display:flex;flex-direction:column}.drx-head{display:grid;grid-template-columns:1fr auto;gap:15px;border-bottom:3px solid var(--rx);padding-bottom:9px}.drx-head h1{font-size:24px;color:var(--rx);margin:0 0 3px}.drx-head h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;margin:0}.drx-head p{font-size:10px;margin:3px 0 0;color:#64748b}.drx-meta{text-align:right;font-size:10px}.drx-meta strong{display:block;font-size:12px;margin-bottom:4px}.drx-grid{display:grid;grid-template-columns:${d.layout==='lateral'?'43mm 1fr':'1fr'};flex:1}.drx-side{background:color-mix(in srgb,var(--rx) 10%,white);border-right:1px solid color-mix(in srgb,var(--rx) 30%,white);padding:14px 11px;margin-left:-13mm}.drx-side h3{font-size:10px;text-transform:uppercase;color:var(--rx);letter-spacing:.7px;margin:0 0 12px}.drx-side-item{font-size:10px;margin:10px 0;display:flex;gap:6px}.drx-side-item i{width:7px;height:7px;border:1.5px solid var(--rx);border-radius:50%;flex:none;margin-top:2px}.drx-alert{margin-top:18px;padding:8px;background:#fff;border:1px solid #fecaca;color:#b91c1c;font-size:9px;border-radius:5px}.drx-main{padding:14px ${d.layout==='lateral'?'0 0 13px':'0'}}.drx-patient{display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px 12px;padding-bottom:11px;border-bottom:1px solid #cbd5e1}.drx-field label,.drx-section-label{display:block;font-size:8px;font-weight:800;text-transform:uppercase;color:var(--rx);letter-spacing:.5px}.drx-field div{font-size:12px;font-weight:600;padding:4px 0;border-bottom:1px solid #94a3b8;min-height:24px}.drx-field.wide{grid-column:span 2}.drx-dx{margin:13px 0;padding:9px 11px;border-left:4px solid var(--rx);background:#f8fafc}.drx-dx div{font-size:12px;margin-top:3px}.drx-rx-title{font-size:21px;font-family:Georgia,serif;color:var(--rx);margin:12px 0 6px}.drx-med{display:grid;grid-template-columns:25px 1fr;gap:7px;border-bottom:1px solid #dbe3ec;padding:9px 0}.drx-num{width:22px;height:22px;border-radius:50%;background:var(--rx);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800}.drx-med-main strong{font-size:12px}.drx-med-main p{font-size:9.5px;color:#475569;margin:3px 0}.drx-med-data{grid-column:2;display:grid;grid-template-columns:repeat(4,1fr);gap:5px}.drx-med-data span{font-size:9px}.drx-med-data b{display:block;color:var(--rx);font-size:7px;text-transform:uppercase;margin-bottom:2px}.drx-notes{margin-top:13px;padding:10px;border:1px solid #cbd5e1;border-radius:6px;min-height:45px;font-size:10px;white-space:pre-wrap}.drx-bottom{display:grid;grid-template-columns:1fr 230px;gap:25px;align-items:end;margin-top:22px}.drx-next{font-size:10px;border-bottom:1px solid #64748b;padding-bottom:5px}.drx-sign{text-align:center}.drx-sign-line{border-top:1px solid #334155;padding-top:5px;font-size:11px;font-weight:800}.drx-sign small{display:block;color:#64748b;margin-top:2px}.drx-foot{text-align:center;border-top:1px solid #cbd5e1;padding-top:7px;margin-top:12px;font-size:8px;color:#64748b}@media print{body{background:#fff}.drx-page{margin:0;print-color-adjust:exact;-webkit-print-color-adjust:exact}}
+  </style></head><body><div class="drx-page"><header class="drx-head"><div><h1>${escAttr(d.titulo)}</h1><h2>${escAttr(d.subtitulo)}</h2><p>${escAttr(d.institucion)}</p></div><div class="drx-meta"><strong>RECETA MÉDICA</strong><span>${fmt(receta.fechaEmision||receta.inicio||hoy())}</span><br><span>${_numeroReceta(receta)}</span></div></header><div class="drx-grid">${lateral}<main class="drx-main"><section class="drx-patient"><div class="drx-field wide"><label>${esVeterinaria?'Paciente / Mascota':'Paciente'}</label><div>${escAttr(sujeto.nombre)}</div></div>${campos}</section><section class="drx-dx"><span class="drx-section-label">Diagnóstico</span><div>${escAttr(receta.diagnostico||'—')}</div></section><div class="drx-rx-title">℞ Prescripción</div>${medHtml}${receta.recetaNotas?`<section><span class="drx-section-label" style="margin-top:14px">Indicaciones generales</span><div class="drx-notes">${escAttr(receta.recetaNotas)}</div></section>`:''}<div class="drx-bottom"><div class="drx-next"><b>Próxima cita:</b> ${fmt(receta.proximaCita)}</div><div class="drx-sign">${firma}<div class="drx-sign-line">${escAttr(receta.prescriptorNombre||d.titulo)}</div><small>${escAttr(receta.prescriptorEspecialidad||d.subtitulo)}${d.registro?' · '+escAttr(d.registro):''}</small></div></div></main></div><footer class="drx-foot">${escAttr(d.pie)}</footer></div><script>window.onload=function(){window.print()}<\/script></body></html>`;
+  const w=window.open('','_blank','width=900,height=1100');
+  if(!w){toast('El navegador bloqueó la ventana de impresión','warning');return;}
+  w.document.write(html);w.document.close();
+}
+
 function imprimirRecetaPaciente(pid, recetaClave) {
   const p = C.p.find(x => x.id === pid);
   const e = C.e.find(x => x.pacienteId === pid);
@@ -3960,7 +4012,7 @@ function imprimirRecetaPaciente(pid, recetaClave) {
     + '</div></div>'
     + _padecimientosHTML(cfg);
 
-  pdfAbrir('Receta Electrónica — '+pNombre, body, cfg, {url:receta.recetarioUrl,config:receta.recetarioConfig});
+  abrirRecetaDigital({titulo:'Receta médica — '+pNombre,receta,cfg,meds,sujeto:{nombre:pNombre,alerta:p?.alergias?'Alergias: '+p.alergias:'',campos:[['Identificación',p?.identificacion||''],['Edad',pEdad],['Sexo',p?.sexo||''],['Teléfono',p?.telefono||''],['Peso',e?.peso?e.peso+' kg':'']]}});
 }
 
 
@@ -4028,7 +4080,7 @@ function imprimirRecetaMascota(mid, recetaClave) {
     + '</div></div>'
     + _padecimientosHTML(cfg);
 
-  pdfAbrir('Receta Veterinaria — '+m.nombre, body, cfg, {url:receta.recetarioUrl,config:receta.recetarioConfig});
+  abrirRecetaDigital({titulo:'Receta veterinaria — '+m.nombre,receta,cfg,meds,esVeterinaria:true,sujeto:{nombre:m.nombre,alerta:m.alergias?'Alergias: '+m.alergias:'',campos:[['Especie',m.especie||''],['Raza',m.raza||''],['Sexo',m.sexo||''],['Peso',peso?peso.kg+' kg':''],['Propietario',dueno?nombreCliente(dueno):'',true],['Teléfono',dueno?.telefono||'']]}});
 }
 
 // ════════════════════ EXÁMENES DIGITALIZADOS ════════════════════
@@ -4597,17 +4649,6 @@ async function subirFirmaUsuario(file, usuarioId) {
   if(error) throw error;
   const { data } = sb.storage.from(STORAGE_BUCKET).getPublicUrl(path);
   // El parámetro evita que el navegador siga mostrando la firma anterior en caché
-  return data.publicUrl + '?v=' + Date.now();
-}
-
-async function subirRecetarioUsuario(file, usuarioId) {
-  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-  // Cada versión ocupa una ruta nueva. Las recetas guardan esta URL y deben
-  // conservar su fondo aunque el médico cargue otra plantilla en el futuro.
-  const path = `recetarios/${usuarioId}/${Date.now()}.${ext}`;
-  const { error } = await sb.storage.from(STORAGE_BUCKET).upload(path, file, { upsert: false, contentType: file.type });
-  if(error) throw error;
-  const { data } = sb.storage.from(STORAGE_BUCKET).getPublicUrl(path);
   return data.publicUrl + '?v=' + Date.now();
 }
 
@@ -8741,30 +8782,12 @@ function pdfFooter(cfg) {
   </div>`;
 }
 
-function pdfAbrir(titulo, body, cfg, recetario) {
+function pdfAbrir(titulo, body, cfg) {
   const w = window.open('','_blank','width=900,height=1100');
   if(!w) { toast('El navegador bloqueó la ventana de impresión','warning'); return; }
-  const personalizado = !!recetario?.url;
-  const rc = {...{top:58,side:12,bottom:28},...(recetario?.config||{})};
-  const n = (v,min,max,def) => Math.min(max,Math.max(min,Number(v)||def));
-  rc.top=n(rc.top,20,130,58); rc.side=n(rc.side,5,35,12); rc.bottom=n(rc.bottom,10,80,28);
-  const pagina = personalizado
-    ? `<div class="page recetario-personalizado" style="padding:${rc.top}mm ${rc.side}mm ${rc.bottom}mm">
-         <img class="recetario-fondo" src="${escAttr(recetario.url)}" alt="">
-         <div class="recetario-contenido">${body}</div>
-       </div>`
-    : `<div class="page">${pdfHeader(cfg)}${body}${pdfFooter(cfg)}</div>`;
-  const cssPersonalizado = personalizado ? `
-    @page{size:A4;margin:0}
-    body{margin:0;background:#fff}
-    .page.recetario-personalizado{position:relative;width:210mm;min-height:297mm;max-width:none;margin:0;overflow:hidden}
-    .recetario-fondo{position:absolute;inset:0;width:210mm;height:297mm;object-fit:fill;z-index:0}
-    .recetario-contenido{position:relative;z-index:1}
-    @media print{.page.recetario-personalizado{padding:${rc.top}mm ${rc.side}mm ${rc.bottom}mm!important}}
-  ` : '';
   w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>${titulo}</title>
-    <style>${PDF_CSS}${cssPersonalizado}</style></head><body>
-    ${pagina}
+    <style>${PDF_CSS}</style></head><body>
+    <div class="page">${pdfHeader(cfg)}${body}${pdfFooter(cfg)}</div>
     <script>window.onload=function(){window.print()}<\/script>
     </body></html>`);
   w.document.close();
@@ -9810,9 +9833,6 @@ function togglePermLabel(id) {
 let _pendingFirmaFile = null;   // archivo elegido, se sube al guardar
 let _firmaUrlActual   = null;   // firma ya guardada del usuario en edición
 let _firmaQuitar      = false;  // el usuario pidió borrar la firma existente
-let _pendingRecetarioFile = null;
-let _recetarioUrlActual = null;
-let _recetarioQuitar = false;
 
 function _pintarFirma(url) {
   const img = document.getElementById('u-firma-img');
@@ -9860,69 +9880,50 @@ function quitarFirmaUsuario() {
 }
 
 function _configRecetarioFormulario() {
-  const limitar = (v,min,max,def) => Math.min(max,Math.max(min,Number(v)||def));
   return {
-    top: limitar(document.getElementById('u-rec-top')?.value,20,130,58),
-    side: limitar(document.getElementById('u-rec-side')?.value,5,35,12),
-    bottom: limitar(document.getElementById('u-rec-bottom')?.value,10,80,28)
+    version:2,
+    layout:document.getElementById('u-rec-layout')?.value||'lateral',
+    color:document.getElementById('u-rec-color')?.value||'#be185d',
+    titulo:document.getElementById('u-rec-titulo')?.value.trim()||'',
+    subtitulo:document.getElementById('u-rec-subtitulo')?.value.trim()||'',
+    registro:document.getElementById('u-rec-registro')?.value.trim()||'',
+    institucion:document.getElementById('u-rec-institucion')?.value.trim()||'',
+    lista:(document.getElementById('u-rec-lista')?.value||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean),
+    pie:document.getElementById('u-rec-pie')?.value.trim()||''
   };
 }
 
 function actualizarPreviewRecetario() {
   const cfg = _configRecetarioFormulario();
-  const zona = document.getElementById('u-recetario-zona');
-  document.getElementById('u-rec-top-val').textContent = cfg.top+' mm';
-  document.getElementById('u-rec-side-val').textContent = cfg.side+' mm';
-  document.getElementById('u-rec-bottom-val').textContent = cfg.bottom+' mm';
-  if(zona) {
-    zona.style.top = (cfg.top/297*100)+'%';
-    zona.style.left = (cfg.side/210*100)+'%';
-    zona.style.right = (cfg.side/210*100)+'%';
-    zona.style.bottom = (cfg.bottom/297*100)+'%';
-  }
+  const box = document.getElementById('u-recetario-preview');
+  if(!box) return;
+  const titulo=cfg.titulo||document.getElementById('u-nombre')?.value||'Nombre del médico';
+  const subtitulo=cfg.subtitulo||document.getElementById('u-especialidad')?.value||'Especialidad médica';
+  const side = cfg.layout==='lateral' ? '<aside class="rdp-side"><b>ÁREAS DE ATENCIÓN</b>'+(cfg.lista.length?cfg.lista:['Diagnóstico uno','Diagnóstico dos','Diagnóstico tres']).map(x=>'<div>○ '+escAttr(x)+'</div>').join('')+'</aside>' : '';
+  box.style.setProperty('--rdp',cfg.color);
+  box.innerHTML='<div class="rdp-head"><strong>'+escAttr(titulo)+'</strong><span>'+escAttr(subtitulo)+'</span><span>'+escAttr(cfg.institucion||'Clínica / Institución')+'</span></div>'
+    +'<div class="rdp-body '+cfg.layout+'">'+side+'<main class="rdp-main">'
+    +'<div class="rdp-line"><span class="rdp-label">Paciente</span><br>Nombre y apellidos</div>'
+    +'<div class="rdp-line"><span class="rdp-label">Fecha · Identificación · Edad</span><br>Datos dentro de su sección</div>'
+    +'<div class="rdp-line"><span class="rdp-label">Diagnóstico</span><br>Diagnóstico de la consulta</div>'
+    +'<span class="rdp-rx">℞</span><div class="rdp-med"><b>Medicamento 500 mg</b><br>Dosis · Frecuencia · Vía</div>'
+    +'<div class="rdp-med"><b>Indicaciones generales</b><br>Recomendaciones para el paciente</div>'
+    +'<div class="rdp-line" style="margin-top:9px"><span class="rdp-label">Próxima cita</span><br>Fecha de control</div>'
+    +'<div class="rdp-sign">Firma · '+escAttr(cfg.registro||'Registro médico')+'</div></main></div>'
+    +'<div class="rdp-foot">'+escAttr(cfg.pie||'Información de contacto del profesional')+'</div>';
 }
 
-function _pintarRecetario(url) {
-  const img = document.getElementById('u-recetario-img');
-  const ph = document.getElementById('u-recetario-placeholder');
-  const zona = document.getElementById('u-recetario-zona');
-  const del = document.getElementById('u-recetario-remove');
-  if(!img || !ph || !zona) return;
-  if(url) { img.src=url; img.style.display=''; ph.style.display='none'; zona.style.display='flex'; }
-  else { img.removeAttribute('src'); img.style.display='none'; ph.style.display='flex'; zona.style.display='none'; }
-  if(del) del.style.display = url ? '' : 'none';
+function _resetRecetarioUsuario(_url, config) {
+  const cfg = {...{version:2,layout:'lateral',color:'#be185d',titulo:'',subtitulo:'',registro:'',institucion:'',lista:[],pie:''},...(config?.version===2?config:{})};
+  document.getElementById('u-rec-layout').value=cfg.layout;
+  document.getElementById('u-rec-color').value=cfg.color;
+  document.getElementById('u-rec-titulo').value=cfg.titulo;
+  document.getElementById('u-rec-subtitulo').value=cfg.subtitulo;
+  document.getElementById('u-rec-registro').value=cfg.registro;
+  document.getElementById('u-rec-institucion').value=cfg.institucion;
+  document.getElementById('u-rec-lista').value=Array.isArray(cfg.lista)?cfg.lista.join('\n'):'';
+  document.getElementById('u-rec-pie').value=cfg.pie;
   actualizarPreviewRecetario();
-}
-
-function _resetRecetarioUsuario(url, config) {
-  const cfg = {...{top:58,side:12,bottom:28},...(config||{})};
-  _pendingRecetarioFile = null;
-  _recetarioUrlActual = url || null;
-  _recetarioQuitar = false;
-  const file = document.getElementById('u-recetario-file'); if(file) file.value='';
-  document.getElementById('u-rec-top').value = cfg.top;
-  document.getElementById('u-rec-side').value = cfg.side;
-  document.getElementById('u-rec-bottom').value = cfg.bottom;
-  _pintarRecetario(_recetarioUrlActual);
-}
-
-function onRecetarioSeleccionado(input) {
-  const file = input.files && input.files[0];
-  if(!file) return;
-  if(!/^image\/(png|jpeg|webp)$/.test(file.type)) { toast('La plantilla debe ser PNG, JPG o WEBP','error'); input.value=''; return; }
-  if(file.size > 5*1024*1024) { toast('La plantilla supera los 5 MB','error'); input.value=''; return; }
-  _pendingRecetarioFile = file;
-  _recetarioQuitar = false;
-  const lector = new FileReader();
-  lector.onload = e => _pintarRecetario(e.target.result);
-  lector.readAsDataURL(file);
-}
-
-function quitarRecetarioUsuario() {
-  _pendingRecetarioFile = null;
-  _recetarioQuitar = !!_recetarioUrlActual;
-  const file = document.getElementById('u-recetario-file'); if(file) file.value='';
-  _pintarRecetario(null);
 }
 
 // Imagen de la firma sobre la línea; si no hay, deja el espacio en blanco de siempre.
@@ -10043,12 +10044,8 @@ async function guardarUsuario() {
       try { firma_url = await subirFirmaUsuario(_pendingFirmaFile, editingUsuarioId); }
       catch(e) { toast('No se pudo subir la firma: '+(e.message||e),'error'); setLoading(false); return; }
     }
-    let recetario_url = _recetarioQuitar ? null : _recetarioUrlActual;
-    if(_pendingRecetarioFile) {
-      try { recetario_url = await subirRecetarioUsuario(_pendingRecetarioFile, editingUsuarioId); }
-      catch(e) { toast('No se pudo subir la plantilla: '+(e.message||e),'error'); setLoading(false); return; }
-    }
-    const recetario_config = recetario_url ? _configRecetarioFormulario() : null;
+    const recetario_url = null; // las recetas nuevas son digitales, sin imagen de fondo
+    const recetario_config = ROLES_PRESCRIPTORES.includes(rol) ? _configRecetarioFormulario() : null;
     const upd = {nombre,email:email||null,rol,icono,clinica_id,permisos,especialidad,firma_url,recetario_url,recetario_config};
     // La contraseña real vive en Supabase Auth. Desde el navegador solo se puede
     // cambiar la PROPIA (updateUser); la de otra persona exigiría la clave de
@@ -10073,7 +10070,7 @@ async function guardarUsuario() {
       }
     }
     let {error} = await sb.from('profiles').update(upd).eq('id',editingUsuarioId);
-    if(error && (_faltaColumna(error,'recetario_url') || _faltaColumna(error,'recetario_config'))) {
+    if(error && _faltaColumna(error,'recetario_config')) {
       toast('Falta ejecutar migracion_plantillas_recetario.sql en Supabase','error');
       setLoading(false); return;
     }
@@ -10086,10 +10083,15 @@ async function guardarUsuario() {
     }
     if(error){ toast('Error al actualizar: '+error.message,'error'); setLoading(false); return; }
     if(currentUser && currentUser.id === editingUsuarioId) {
+      currentUser.name = nombre;
+      currentUser.nombre = nombre;
+      currentUser.especialidad = especialidad;
       currentUser.firmaUrl = firma_url || null;
       currentUser.recetarioUrl = recetario_url || null;
       currentUser.recetarioConfig = recetario_config;
     }
+    const profCache=C.prof.find(x=>String(x.id)===String(editingUsuarioId));
+    if(profCache) Object.assign(profCache,{nombre,rol,especialidad,firma_url,recetario_url:null,recetario_config});
     toast('Usuario actualizado.'+avisoPass, avisoPass.includes('NO se cambió') ? 'warning' : 'success');
   } else {
     // Sin correo no hay forma de iniciar sesión: todo el login se articula por él.
@@ -10115,7 +10117,8 @@ async function guardarUsuario() {
     // Auth, que la almacena cifrada. Guardarla aquí la dejaría legible para
     // cualquier compañero de la misma clínica y volvería a marcar al usuario
     // como "pendiente de migrar" desde el primer día.
-    const nuevo = {id:newId,nombre,email:emailNorm,rol,icono,clinica_id,permisos,especialidad};
+    const recetario_config = ROLES_PRESCRIPTORES.includes(rol) ? _configRecetarioFormulario() : null;
+    const nuevo = {id:newId,nombre,email:emailNorm,rol,icono,clinica_id,permisos,especialidad,recetario_config};
     let {error} = await sb.from('profiles').insert(nuevo);
     if(error && _faltaColumnaEspecialidad(error)) {
       const {especialidad:_omitida, ...sinEsp} = nuevo;
@@ -10123,16 +10126,6 @@ async function guardarUsuario() {
       if(!error) _avisarFaltaColumnaEspecialidad();
     }
     if(error){ toast('Error al crear: '+error.message,'error'); setLoading(false); return; }
-    if(_pendingRecetarioFile) {
-      try {
-        const recetario_url = await subirRecetarioUsuario(_pendingRecetarioFile, newId);
-        const {error:errRec} = await sb.from('profiles').update({recetario_url,recetario_config:_configRecetarioFormulario()}).eq('id',newId);
-        if(errRec) throw errRec;
-      } catch(e) {
-        const falta = _faltaColumna(e,'recetario_url') || _faltaColumna(e,'recetario_config');
-        toast(falta?'Usuario creado, pero falta ejecutar migracion_plantillas_recetario.sql':'Usuario creado, pero no se pudo guardar su plantilla: '+(e.message||e),'warning');
-      }
-    }
     if(faltaConfirmar) toast(`Usuario creado, pero ${emailNorm} debe confirmar su correo antes de poder entrar. Para evitarlo, desactiva "Confirm email" en Supabase → Authentication → Settings.`,'warning');
     else toast('Usuario creado exitosamente','success');
   }

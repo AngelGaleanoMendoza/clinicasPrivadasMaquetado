@@ -1743,26 +1743,19 @@
         <span style="font-size:11px;color:var(--text-light);margin-top:5px">Ideal: firma sobre fondo blanco o PNG con fondo transparente. Máx. 2 MB.</span>
       </div>
       <div class="form-group full" id="u-recetario-wrap">
-        <label>🧾 Plantilla personal del recetario <span style="font-size:11px;color:var(--text-light);font-weight:400">— se usa únicamente en las recetas de este médico</span></label>
+        <label>🧾 Diseño digital del recetario <span style="font-size:11px;color:var(--text-light);font-weight:400">— estructura propia de las recetas de este médico</span></label>
         <div class="recetario-editor-grid">
-          <div id="u-recetario-preview" style="position:relative;aspect-ratio:210/297;background:#fff;border:1.5px dashed var(--border);border-radius:9px;overflow:hidden;box-shadow:0 3px 12px rgba(15,23,42,.08)">
-            <img id="u-recetario-img" alt="Plantilla del recetario" style="display:none;position:absolute;inset:0;width:100%;height:100%;object-fit:fill">
-            <div id="u-recetario-placeholder" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:18px;color:var(--text-light);font-size:12px">Sube una foto o escaneo limpio del recetario</div>
-            <div id="u-recetario-zona" style="display:none;position:absolute;border:2px dashed #2563EB;background:rgba(37,99,235,.08);color:#1D4ED8;font-size:10px;font-weight:800;align-items:center;justify-content:center;text-align:center">ÁREA DE DATOS<br>DE LA RECETA</div>
-          </div>
-          <div>
-            <input type="file" id="u-recetario-file" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="onRecetarioSeleccionado(this)">
-            <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:13px">
-              <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('u-recetario-file').click()">📤 Subir plantilla</button>
-              <button type="button" class="btn btn-danger btn-sm" id="u-recetario-remove" style="display:none" onclick="quitarRecetarioUsuario()">🗑️ Quitar</button>
-            </div>
-            <label style="font-size:11px">Inicio del contenido: <strong id="u-rec-top-val">58 mm</strong></label>
-            <input type="range" id="u-rec-top" min="20" max="130" value="58" oninput="actualizarPreviewRecetario()" style="width:100%">
-            <label style="font-size:11px;margin-top:8px">Margen lateral: <strong id="u-rec-side-val">12 mm</strong></label>
-            <input type="range" id="u-rec-side" min="5" max="35" value="12" oninput="actualizarPreviewRecetario()" style="width:100%">
-            <label style="font-size:11px;margin-top:8px">Final del contenido: <strong id="u-rec-bottom-val">28 mm</strong></label>
-            <input type="range" id="u-rec-bottom" min="10" max="80" value="28" oninput="actualizarPreviewRecetario()" style="width:100%">
-            <p style="font-size:11px;color:var(--text-light);margin-top:9px;line-height:1.5">PNG, JPG o WEBP · máximo 5 MB. Los controles delimitan el espacio blanco donde se imprimirán paciente, medicamentos y firma.</p>
+          <div id="u-recetario-preview" class="recetario-digital-preview"></div>
+          <div class="recetario-config-campos">
+            <div class="form-group"><label>Distribución</label><select id="u-rec-layout" onchange="actualizarPreviewRecetario()"><option value="lateral">Panel lateral + receta</option><option value="clasico">Clásica a una columna</option></select></div>
+            <div class="form-group"><label>Color principal</label><input type="color" id="u-rec-color" value="#be185d" oninput="actualizarPreviewRecetario()"></div>
+            <div class="form-group full"><label>Título profesional</label><input type="text" id="u-rec-titulo" placeholder="Dra. Nombre Apellido" oninput="actualizarPreviewRecetario()"></div>
+            <div class="form-group full"><label>Especialidad / subtítulo</label><input type="text" id="u-rec-subtitulo" placeholder="Endocrinología" oninput="actualizarPreviewRecetario()"></div>
+            <div class="form-group"><label>Registro médico</label><input type="text" id="u-rec-registro" placeholder="MINSA 0000" oninput="actualizarPreviewRecetario()"></div>
+            <div class="form-group"><label>Institución</label><input type="text" id="u-rec-institucion" placeholder="Hospital / Clínica" oninput="actualizarPreviewRecetario()"></div>
+            <div class="form-group full"><label>Lista lateral <span style="font-size:10px;font-weight:400;color:var(--text-light)">— un elemento por línea</span></label><textarea id="u-rec-lista" rows="5" placeholder="Diabetes tipo 1&#10;Diabetes tipo 2&#10;Hipotiroidismo" oninput="actualizarPreviewRecetario()"></textarea></div>
+            <div class="form-group full"><label>Pie del recetario</label><input type="text" id="u-rec-pie" placeholder="Teléfono · Dirección · Correo" oninput="actualizarPreviewRecetario()"></div>
+            <p style="font-size:11px;color:var(--text-light);line-height:1.5;margin:0">La vista previa es completamente digital. Los datos del paciente y de la prescripción se insertarán dentro de estas secciones, sin usar una imagen de fondo.</p>
           </div>
         </div>
       </div>
@@ -2224,6 +2217,9 @@
       <div class="form-group"><label>Fecha Fin</label><input type="date" id="m-fin"></div>
       <div class="form-group"><label>Estado</label><select id="m-estado"><option value="activa">Activa</option><option value="finalizada">Finalizada</option><option value="suspendida">Suspendida</option></select></div>
       <div class="form-group"><label>Médico prescriptor *</label><select id="m-prescriptor"></select></div>
+      <div class="form-group full"><label>Diagnóstico</label><input type="text" id="m-diagnostico" placeholder="Diagnóstico principal de esta receta"></div>
+      <div class="form-group full"><label>Indicaciones generales</label><textarea id="m-receta-notas" placeholder="Recomendaciones generales, cuidados y observaciones..."></textarea></div>
+      <div class="form-group"><label>Próxima cita</label><input type="date" id="m-proxima-cita"></div>
     </div>
     <div id="med-items-list"></div>
     <button id="btn-add-med-item" class="btn btn-secondary btn-sm" onclick="addMedItem()" style="margin-bottom:16px">+ Agregar medicamento</button>
@@ -2548,7 +2544,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260829c"></script>
+<script src="js/app.js?v=20260829d"></script>
 </body>
 </html>
 

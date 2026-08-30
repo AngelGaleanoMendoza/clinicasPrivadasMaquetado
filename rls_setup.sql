@@ -465,6 +465,9 @@ ALTER TABLE public.profiles     ADD COLUMN IF NOT EXISTS recetario_url TEXT;
 ALTER TABLE public.profiles     ADD COLUMN IF NOT EXISTS recetario_config JSONB;
 ALTER TABLE public.medicaciones ADD COLUMN IF NOT EXISTS recetario_url TEXT;
 ALTER TABLE public.medicaciones ADD COLUMN IF NOT EXISTS recetario_config JSONB;
+ALTER TABLE public.medicaciones ADD COLUMN IF NOT EXISTS diagnostico TEXT;
+ALTER TABLE public.medicaciones ADD COLUMN IF NOT EXISTS receta_notas TEXT;
+ALTER TABLE public.medicaciones ADD COLUMN IF NOT EXISTS proxima_cita DATE;
 ALTER TABLE public.clinicas     ADD COLUMN IF NOT EXISTS horario JSONB;
 
 -- Nota para v2: la validación de solapes de citas es de cliente. Para cerrarla
