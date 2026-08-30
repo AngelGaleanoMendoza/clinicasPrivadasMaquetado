@@ -1742,6 +1742,30 @@
         </div>
         <span style="font-size:11px;color:var(--text-light);margin-top:5px">Ideal: firma sobre fondo blanco o PNG con fondo transparente. Máx. 2 MB.</span>
       </div>
+      <div class="form-group full" id="u-recetario-wrap">
+        <label>🧾 Plantilla personal del recetario <span style="font-size:11px;color:var(--text-light);font-weight:400">— se usa únicamente en las recetas de este médico</span></label>
+        <div class="recetario-editor-grid">
+          <div id="u-recetario-preview" style="position:relative;aspect-ratio:210/297;background:#fff;border:1.5px dashed var(--border);border-radius:9px;overflow:hidden;box-shadow:0 3px 12px rgba(15,23,42,.08)">
+            <img id="u-recetario-img" alt="Plantilla del recetario" style="display:none;position:absolute;inset:0;width:100%;height:100%;object-fit:fill">
+            <div id="u-recetario-placeholder" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:18px;color:var(--text-light);font-size:12px">Sube una foto o escaneo limpio del recetario</div>
+            <div id="u-recetario-zona" style="display:none;position:absolute;border:2px dashed #2563EB;background:rgba(37,99,235,.08);color:#1D4ED8;font-size:10px;font-weight:800;align-items:center;justify-content:center;text-align:center">ÁREA DE DATOS<br>DE LA RECETA</div>
+          </div>
+          <div>
+            <input type="file" id="u-recetario-file" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="onRecetarioSeleccionado(this)">
+            <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:13px">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('u-recetario-file').click()">📤 Subir plantilla</button>
+              <button type="button" class="btn btn-danger btn-sm" id="u-recetario-remove" style="display:none" onclick="quitarRecetarioUsuario()">🗑️ Quitar</button>
+            </div>
+            <label style="font-size:11px">Inicio del contenido: <strong id="u-rec-top-val">58 mm</strong></label>
+            <input type="range" id="u-rec-top" min="20" max="130" value="58" oninput="actualizarPreviewRecetario()" style="width:100%">
+            <label style="font-size:11px;margin-top:8px">Margen lateral: <strong id="u-rec-side-val">12 mm</strong></label>
+            <input type="range" id="u-rec-side" min="5" max="35" value="12" oninput="actualizarPreviewRecetario()" style="width:100%">
+            <label style="font-size:11px;margin-top:8px">Final del contenido: <strong id="u-rec-bottom-val">28 mm</strong></label>
+            <input type="range" id="u-rec-bottom" min="10" max="80" value="28" oninput="actualizarPreviewRecetario()" style="width:100%">
+            <p style="font-size:11px;color:var(--text-light);margin-top:9px;line-height:1.5">PNG, JPG o WEBP · máximo 5 MB. Los controles delimitan el espacio blanco donde se imprimirán paciente, medicamentos y firma.</p>
+          </div>
+        </div>
+      </div>
       <div class="form-group full">
         <label>Módulos accesibles <span style="font-size:11px;color:var(--text-light);font-weight:400">— marca lo que puede ver este usuario</span></label>
         <div id="u-permisos-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:7px;margin-top:6px"></div>
@@ -2199,6 +2223,7 @@
       <div class="form-group"><label>Fecha Inicio</label><input type="date" id="m-inicio"></div>
       <div class="form-group"><label>Fecha Fin</label><input type="date" id="m-fin"></div>
       <div class="form-group"><label>Estado</label><select id="m-estado"><option value="activa">Activa</option><option value="finalizada">Finalizada</option><option value="suspendida">Suspendida</option></select></div>
+      <div class="form-group"><label>Médico prescriptor *</label><select id="m-prescriptor"></select></div>
     </div>
     <div id="med-items-list"></div>
     <button id="btn-add-med-item" class="btn btn-secondary btn-sm" onclick="addMedItem()" style="margin-bottom:16px">+ Agregar medicamento</button>
@@ -2206,6 +2231,17 @@
       <button class="btn btn-secondary" onclick="closeModal('modal-medicacion')">Cancelar</button>
       <button class="btn btn-primary" onclick="guardarMedicacion()">💾 Guardar</button>
     </div>
+  </div>
+</div>
+
+<!-- MODAL SELECTOR DE RECETA (evita mezclar prescripciones de médicos distintos) -->
+<div class="modal-overlay" id="modal-receta-picker">
+  <div class="modal" style="max-width:560px">
+    <button class="modal-close-btn" onclick="closeModal('modal-receta-picker')" title="Cerrar">✕</button>
+    <h2>🧾 Seleccionar receta</h2>
+    <p style="font-size:13px;color:var(--text-light);margin-bottom:16px">Cada receta conserva el médico y los medicamentos con los que fue emitida.</p>
+    <div id="receta-picker-lista"></div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-receta-picker')">Cerrar</button></div>
   </div>
 </div>
 
@@ -2512,7 +2548,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260829a"></script>
+<script src="js/app.js?v=20260829c"></script>
 </body>
 </html>
 

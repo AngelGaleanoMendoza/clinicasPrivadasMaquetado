@@ -448,9 +448,23 @@ ALTER TABLE public.citas        ADD COLUMN IF NOT EXISTS motivo_cancelacion TEXT
 ALTER TABLE public.citas ALTER COLUMN paciente_id DROP NOT NULL;
 ALTER TABLE public.notas        ADD COLUMN IF NOT EXISTS mascota_id BIGINT REFERENCES public.mascotas(id) ON DELETE CASCADE;
 ALTER TABLE public.medicaciones ADD COLUMN IF NOT EXISTS mascota_id BIGINT REFERENCES public.mascotas(id) ON DELETE CASCADE;
+-- Cada lote de medicamentos pertenece a una receta y conserva una instantánea
+-- del profesional que la emitió. No se usa FK en prescriptor_id para que una
+-- receta histórica sobreviva si el perfil del médico se elimina o migra.
+ALTER TABLE public.medicaciones ADD COLUMN IF NOT EXISTS receta_id TEXT;
+ALTER TABLE public.medicaciones ADD COLUMN IF NOT EXISTS fecha_emision DATE;
+ALTER TABLE public.medicaciones ADD COLUMN IF NOT EXISTS prescriptor_id TEXT;
+ALTER TABLE public.medicaciones ADD COLUMN IF NOT EXISTS prescriptor_nombre TEXT;
+ALTER TABLE public.medicaciones ADD COLUMN IF NOT EXISTS prescriptor_especialidad TEXT;
+ALTER TABLE public.medicaciones ADD COLUMN IF NOT EXISTS prescriptor_firma_url TEXT;
+CREATE INDEX IF NOT EXISTS medicaciones_receta_id_idx ON public.medicaciones(receta_id);
 ALTER TABLE public.examenes     ADD COLUMN IF NOT EXISTS mascota_id BIGINT REFERENCES public.mascotas(id) ON DELETE CASCADE;
 ALTER TABLE public.facturas     ADD COLUMN IF NOT EXISTS cliente_id BIGINT REFERENCES public.clientes(id) ON DELETE SET NULL;
 ALTER TABLE public.profiles     ADD COLUMN IF NOT EXISTS horario JSONB;
+ALTER TABLE public.profiles     ADD COLUMN IF NOT EXISTS recetario_url TEXT;
+ALTER TABLE public.profiles     ADD COLUMN IF NOT EXISTS recetario_config JSONB;
+ALTER TABLE public.medicaciones ADD COLUMN IF NOT EXISTS recetario_url TEXT;
+ALTER TABLE public.medicaciones ADD COLUMN IF NOT EXISTS recetario_config JSONB;
 ALTER TABLE public.clinicas     ADD COLUMN IF NOT EXISTS horario JSONB;
 
 -- Nota para v2: la validación de solapes de citas es de cliente. Para cerrarla

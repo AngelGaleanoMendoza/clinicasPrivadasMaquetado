@@ -1375,6 +1375,8 @@ button:focus-visible,a:focus-visible,[onclick]:focus-visible{outline:2px solid v
 .firma-box{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--bg);border:1.5px solid var(--border);border-radius:12px;padding:12px 14px;margin-top:6px}
 .firma-preview{flex:1;min-width:170px;height:78px;background:#fff;border:1.5px dashed var(--border);border-radius:9px;display:flex;align-items:center;justify-content:center;overflow:hidden}
 .firma-preview img{max-width:100%;max-height:100%;object-fit:contain;mix-blend-mode:multiply;filter:brightness(1.25) contrast(1.7)}
+.recetario-editor-grid{display:grid;grid-template-columns:minmax(210px,280px) 1fr;gap:16px;margin-top:7px;align-items:start}
+@media(max-width:680px){.recetario-editor-grid{grid-template-columns:1fr}.recetario-editor-grid>div:first-child{max-width:280px;margin:0 auto;width:100%}}
 #u-firma-placeholder{font-size:12px;color:#94a3b8;font-weight:600}
 .firma-actions{display:flex;flex-direction:column;gap:6px;flex-shrink:0}
 @media(max-width:480px){
