@@ -8988,10 +8988,10 @@ function _especialidadActivaNormalizada() {
   ].filter(Boolean).join(' '));
 }
 function modoOdontologia() {
-  return /odont|dental|ortodon|periodon/.test(_especialidadActivaNormalizada());
+  return /ODONT|DENTAL|ORTODON|PERIODON/.test(_especialidadActivaNormalizada());
 }
 function modoAtencionVisual() {
-  return /optica|optometr|oftalm/.test(_especialidadActivaNormalizada());
+  return /OPTICA|OPTOMETR|OFTALM/.test(_especialidadActivaNormalizada());
 }
 // Dermatología aplica tanto si la clínica entera lo es como si quien atiende es
 // dermatólogo dentro de una clínica general: el catálogo le sirve igual.
