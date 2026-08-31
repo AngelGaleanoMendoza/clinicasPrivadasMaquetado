@@ -1961,7 +1961,8 @@ function renderDetalleP(pid){
   if(!p){ navigate('pacientes'); return; }
   const citas=C.c.filter(c=>c.pacienteId===pid);
   const meds=C.m.filter(m=>m.pacienteId===pid);
-  const notas=C.n.filter(n=>n.pacienteId===pid);
+  const notas=C.n.filter(n=>n.pacienteId===pid)
+    .filter(n=>n.tipo!=='examen_visual' || modoAtencionVisual());
 
   document.getElementById('detalle-header').innerHTML=`
     <div class="patient-detail-header">
@@ -2035,8 +2036,9 @@ function renderDetalleP(pid){
     ${notas.length?`<div class="timeline">${notas.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(n=>`<div class="timeline-item"><div class="timeline-date">${formatFecha(n.fecha)} · <span class="tag tag-blue" style="font-size:10px">${NOTA_TIPO_ICON[n.tipo]||'📝'} ${notaTipoLabel(n.tipo)}</span></div><div class="timeline-content">${n.titulo?`<strong style="display:block;margin-bottom:5px">${n.titulo}</strong>`:''}${_signosChipsHTML(n.signos)}${n.contenido?`<p style="white-space:pre-wrap;line-height:1.7">${n.contenido}</p>`:''}<div style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-secondary btn-sm" onclick="verNota(${n.id})">👁️ Ver</button><button class="btn btn-secondary btn-sm" onclick="editarNota(${n.id})">✏️ Editar</button><button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})">🖨️</button><button class="btn btn-danger btn-sm" onclick="eliminarNota(${n.id})">🗑️</button></div></div></div>`).join('')}</div>`:'<div class="empty-state"><div class="empty-icon">📝</div><p>Sin notas</p></div>'}
   </div>`;
 
-  // Pestañas odontológicas — solo visibles para odontólogo / superadmin
-  const esOdonto = isOdontologo() || isSuperAdmin();
+  // Las áreas especializadas dependen de la especialidad activa. Un
+  // superadministrador no debe convertir un expediente general en dental.
+  const esOdonto = modoOdontologia();
   ['tab-btn-historial-dental','tab-btn-odontograma','tab-btn-periodontograma','tab-btn-procedimientos-p']
     .forEach(id => { const el=document.getElementById(id); if(el) el.style.display = esOdonto ? '' : 'none'; });
   if(esOdonto) {
@@ -2056,7 +2058,7 @@ function renderDetalleP(pid){
   <div class="card">
     <div class="card-header"><h3>📁 Expediente Médico</h3>
       <div style="display:flex;gap:8px">
-        ${(currentClinica?.tipo==='optica'||esOftalmologia()||isSuperAdmin())?`<button class="btn btn-secondary btn-sm" onclick="abrirExamenVisual(${pid})">👁️ Examen Visual</button>`:''}
+        ${modoAtencionVisual()?`<button class="btn btn-secondary btn-sm" onclick="abrirExamenVisual(${pid})">👁️ Examen Visual</button>`:''}
         <button class="btn btn-primary btn-sm" onclick="guardarExpediente(${pid})">💾 Guardar</button>
       </div>
     </div>
@@ -2244,7 +2246,7 @@ function imprimirExpedienteCompleto(pid) {
       </div>`).join('') : '';
 
   // ── EXAMEN VISUAL ──
-  const secExamen = examenes.length ? sec('👁️','Exámenes Visuales','#6d28d9') +
+  const secExamen = modoAtencionVisual() && examenes.length ? sec('👁️','Exámenes Visuales','#6d28d9') +
     examenes.map(ev => {
       // El mismo parser alimenta el expediente y la orden óptica individual.
       // Acepta títulos con/sin tildes y conserva los exámenes históricos.
@@ -2301,7 +2303,7 @@ function imprimirExpedienteCompleto(pid) {
         </div>`;
     }).join('') : '';
 
-  const secProcOft = procOft.length ? sec('🏥','Procedimientos Oftalmológicos','#0369a1') + `
+  const secProcOft = modoAtencionVisual() && procOft.length ? sec('🏥','Procedimientos Oftalmológicos','#0369a1') + `
     <table><thead><tr><th>Fecha</th><th>Procedimiento</th><th>Ojo</th><th>Estado</th><th>Profesional</th></tr></thead><tbody>
       ${procOft.map(x=>`<tr><td>${formatFecha(x.fecha)}</td><td><strong>${escAttr(x.procedimiento)}</strong><br><span style="font-size:10px;color:#64748b">${escAttr(x.categoria||'')}</span></td><td>${escAttr(x.ojo==='no_aplica'?'—':x.ojo)}</td><td>${escAttr(PROC_OFT_ESTADO_LABEL[x.estado]||x.estado)}</td><td>${escAttr(x.profesionalNombre||'—')}</td></tr>`).join('')}
     </tbody></table>` : '';
@@ -8977,13 +8979,27 @@ function isFarmaceutico() { return currentUser?.key === 'farmaceutico'; }
 function isOdontologo()   { return currentUser?.key === 'odontologo'; }
 function esProfesionalOftalmo() { return ['optometrista','oftalmologo'].includes(currentUser?.key); }
 function esOftalmologia() { return currentClinica?.tipo === 'oftalmologia'; }
+function _especialidadActivaNormalizada() {
+  return normalizarOptico([
+    currentClinica?.tipo,
+    currentClinica?.especialidad,
+    currentUser?.key,
+    currentUser?.especialidad
+  ].filter(Boolean).join(' '));
+}
+function modoOdontologia() {
+  return /odont|dental|ortodon|periodon/.test(_especialidadActivaNormalizada());
+}
+function modoAtencionVisual() {
+  return /optica|optometr|oftalm/.test(_especialidadActivaNormalizada());
+}
 // Dermatología aplica tanto si la clínica entera lo es como si quien atiende es
 // dermatólogo dentro de una clínica general: el catálogo le sirve igual.
 function esDermatologia() { return currentClinica?.tipo === 'dermatologia'; }
 function isDermatologo()  { return currentUser?.key === 'dermatologo'; }
 function modoDermatologia() { return esDermatologia() || isDermatologo(); }
 function puedeGestionarProcOft() {
-  return isSuperAdmin() || ((esOftalmologia() || esProfesionalOftalmo()) && hasPermiso('proc_oftalmo'));
+  return modoAtencionVisual() && hasPermiso('proc_oftalmo');
 }
 // La clínica veterinaria trabaja con clientes y mascotas en lugar de pacientes.
 // Se distingue por el tipo de clínica, igual que farmacia y óptica.
