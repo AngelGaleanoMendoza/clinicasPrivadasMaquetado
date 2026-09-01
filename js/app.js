@@ -3998,7 +3998,9 @@ function _disenoRecetarioDigital(receta, cfg) {
   const secciones={
     diagnostico:d.secciones?.diagnostico!==false,
     indicaciones:d.secciones?.indicaciones!==false,
-    proximaCita:d.secciones?.proximaCita!==false
+    proximaCita:d.secciones?.proximaCita!==false,
+    sexo:d.secciones?.sexo!==false,
+    telefono:d.secciones?.telefono!==false
   };
   return {
     // La receta siempre usa una sola columna; se retiró el panel de "Áreas de atención".
@@ -4018,7 +4020,9 @@ function abrirRecetaDigital({titulo,receta,cfg,sujeto,meds,esVeterinaria=false})
   const d=_disenoRecetarioDigital(receta,cfg);
   const fmt=f=>f?new Date(f+'T12:00:00').toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'}):'—';
   const via=v=>({oral:'Oral',inyectable:'Inyectable',topica:'Tópica',inhalada:'Inhalada',sublingual:'Sublingual',otra:'Otra'})[v||'oral']||v||'Oral';
-  const campos=(sujeto.campos||[]).filter(x=>x[1]).map(([l,v,wide])=>`<div class="drx-field${wide?' wide':''}"><label>${escAttr(l)}</label><div>${escAttr(String(v))}</div></div>`).join('');
+  const campos=(sujeto.campos||[])
+    .filter(([l,v])=>v && (l!=='Sexo'||d.secciones.sexo) && (l!=='Teléfono'||d.secciones.telefono))
+    .map(([l,v,wide])=>`<div class="drx-field${wide?' wide':''}"><label>${escAttr(l)}</label><div>${escAttr(String(v))}</div></div>`).join('');
   const alerta=sujeto.alerta?`<div class="drx-alert">⚠ ${escAttr(sujeto.alerta)}</div>`:'';
   const medHtml=meds.map((m,i)=>`<div class="drx-med"><div class="drx-num">${i+1}</div><div class="drx-med-main"><strong>${escAttr(m.nombre||'')}</strong>${m.indicaciones?`<p>${escAttr(m.indicaciones)}</p>`:''}</div><div class="drx-med-data"><span><b>Dosis</b>${escAttr(m.dosis||'')}</span><span><b>Frecuencia</b>${escAttr(m.frecuencia||'')}</span><span><b>Vía</b>${escAttr(via(m.via))}</span><span><b>Duración</b>${m.fin?fmt(m.inicio)+' – '+fmt(m.fin):'Según indicación'}</span></div></div>`).join('');
   const firma=_firmaImgUrlHTML(receta.prescriptorFirmaUrl||cfg.firmaUrl,42);
@@ -10029,7 +10033,9 @@ function _configRecetarioFormulario() {
     secciones:{
       diagnostico:!!document.getElementById('u-rec-sec-diagnostico')?.checked,
       indicaciones:!!document.getElementById('u-rec-sec-indicaciones')?.checked,
-      proximaCita:!!document.getElementById('u-rec-sec-proxima')?.checked
+      proximaCita:!!document.getElementById('u-rec-sec-proxima')?.checked,
+      sexo:!!document.getElementById('u-rec-sec-sexo')?.checked,
+      telefono:!!document.getElementById('u-rec-sec-telefono')?.checked
     },
     pie:document.getElementById('u-rec-pie')?.value.trim()||''
   };
@@ -10057,6 +10063,8 @@ function actualizarPreviewRecetario() {
     +'<div class="rdp-body clasico"><main class="rdp-main">'
     +'<div class="rdp-line"><span class="rdp-label">Paciente</span><br>Nombre y apellidos</div>'
     +'<div class="rdp-line"><span class="rdp-label">Fecha · Identificación · Edad</span><br>Datos dentro de su sección</div>'
+    +(cfg.secciones.sexo?'<div class="rdp-line"><span class="rdp-label">Sexo</span><br>Sexo del paciente</div>':'')
+    +(cfg.secciones.telefono?'<div class="rdp-line"><span class="rdp-label">Teléfono</span><br>Número de contacto</div>':'')
     +(cfg.secciones.diagnostico?'<div class="rdp-line"><span class="rdp-label">Diagnóstico</span><br>Diagnóstico de la consulta</div>':'')
     +'<span class="rdp-rx">℞</span><div class="rdp-med"><b>Medicamento 500 mg</b><br>Dosis · Frecuencia · Vía</div>'
     +(cfg.secciones.indicaciones?'<div class="rdp-med"><b>Indicaciones generales</b><br>Recomendaciones para el paciente</div>':'')
@@ -10066,8 +10074,8 @@ function actualizarPreviewRecetario() {
 }
 
 function _resetRecetarioUsuario(_url, config) {
-  const cfg = {...{version:2,tamano:'media',layout:'clasico',color:'#be185d',fuente:'Arial',titulo:'',subtitulo:'',registro:'',institucion:'',logoUrl:'',logoPos:'left',encabezadoCompleto:false,lista:[],secciones:{diagnostico:true,indicaciones:true,proximaCita:true},pie:''},...(config?.version===2?config:{})};
-  cfg.secciones={diagnostico:cfg.secciones?.diagnostico!==false,indicaciones:cfg.secciones?.indicaciones!==false,proximaCita:cfg.secciones?.proximaCita!==false};
+  const cfg = {...{version:2,tamano:'media',layout:'clasico',color:'#be185d',fuente:'Arial',titulo:'',subtitulo:'',registro:'',institucion:'',logoUrl:'',logoPos:'left',encabezadoCompleto:false,lista:[],secciones:{diagnostico:true,indicaciones:true,proximaCita:true,sexo:true,telefono:true},pie:''},...(config?.version===2?config:{})};
+  cfg.secciones={diagnostico:cfg.secciones?.diagnostico!==false,indicaciones:cfg.secciones?.indicaciones!==false,proximaCita:cfg.secciones?.proximaCita!==false,sexo:cfg.secciones?.sexo!==false,telefono:cfg.secciones?.telefono!==false};
   cfg.layout='clasico';
   _pendingRecetarioLogoFile=null;
   _recetarioLogoUrlActual=cfg.logoUrl||null;
@@ -10087,6 +10095,8 @@ function _resetRecetarioUsuario(_url, config) {
   document.getElementById('u-rec-sec-diagnostico').checked=cfg.secciones.diagnostico;
   document.getElementById('u-rec-sec-indicaciones').checked=cfg.secciones.indicaciones;
   document.getElementById('u-rec-sec-proxima').checked=cfg.secciones.proximaCita;
+  document.getElementById('u-rec-sec-sexo').checked=cfg.secciones.sexo;
+  document.getElementById('u-rec-sec-telefono').checked=cfg.secciones.telefono;
   document.getElementById('u-rec-pie').value=cfg.pie;
   _pintarLogoRecetario(_recetarioLogoUrlActual);
   actualizarPreviewRecetario();
