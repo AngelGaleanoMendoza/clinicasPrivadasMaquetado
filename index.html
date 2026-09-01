@@ -1764,7 +1764,7 @@
                 <option value="a4">A4 (21 × 29.7 cm) — hoja completa</option>
               </select>
             </div>
-            <div class="form-group"><label>Distribución</label><select id="u-rec-layout" onchange="actualizarPreviewRecetario()"><option value="lateral">Panel lateral + receta</option><option value="clasico">Clásica a una columna</option></select></div>
+            <input type="hidden" id="u-rec-layout" value="clasico">
             <div class="form-group"><label>Color principal</label><input type="color" id="u-rec-color" value="#be185d" oninput="actualizarPreviewRecetario()"></div>
             <div class="form-group full"><label>Título profesional</label><input type="text" id="u-rec-titulo" placeholder="Dra. Nombre Apellido" oninput="actualizarPreviewRecetario()"></div>
             <div class="form-group full"><label>Especialidad / subtítulo</label><input type="text" id="u-rec-subtitulo" placeholder="Endocrinología" oninput="actualizarPreviewRecetario()"></div>
@@ -1782,7 +1782,7 @@
               </div>
             </div>
             <div class="form-group"><label>Posición del logo</label><select id="u-rec-logo-pos" onchange="actualizarPreviewRecetario()"><option value="left">Izquierda</option><option value="center">Centro</option><option value="right">Derecha</option></select></div>
-            <div class="form-group full"><label>Lista lateral <span style="font-size:10px;font-weight:400;color:var(--text-light)">— un elemento por línea</span></label><textarea id="u-rec-lista" rows="5" placeholder="Diabetes tipo 1&#10;Diabetes tipo 2&#10;Hipotiroidismo" oninput="actualizarPreviewRecetario()"></textarea></div>
+            <textarea id="u-rec-lista" style="display:none"></textarea>
             <div class="form-group full"><label>Pie del recetario</label><input type="text" id="u-rec-pie" placeholder="Teléfono · Dirección · Correo" oninput="actualizarPreviewRecetario()"></div>
             <p style="font-size:11px;color:var(--text-light);line-height:1.5;margin:0">La vista previa es completamente digital. Los datos del paciente y de la prescripción se insertarán dentro de estas secciones, sin usar una imagen de fondo.</p>
           </div>
