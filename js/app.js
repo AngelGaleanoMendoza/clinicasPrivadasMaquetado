@@ -10716,21 +10716,37 @@ async function restablecerPasswordAdmin(id, nombre) {
   if(!pass || pass.length < 6){ toast('La contraseña debe tener al menos 6 caracteres','error'); return; }
 
   setLoading(true);
-  let datos, errFn;
+  let datos, errFn, estadoFn;
   try {
-    ({ data: datos, error: errFn } = await sb.functions.invoke('cambiar-password', { body: { email, password: pass } }));
+    const { data: sesionData } = await sb.auth.getSession();
+    const token = sesionData?.session?.access_token;
+    if(!token) throw new Error('Tu sesión no está activa. Cierra sesión y vuelve a ingresar.');
+    const respuesta = await fetch(`${SURL}/functions/v1/cambiar-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SKEY,
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ email, password: pass })
+    });
+    estadoFn = respuesta.status;
+    datos = await respuesta.json().catch(() => ({}));
+    if(!respuesta.ok) {
+      errFn = new Error(datos?.error || `La función respondió con estado ${respuesta.status}`);
+    }
   } catch(e) { errFn = e; }
   setLoading(false);
 
   if(errFn || !datos?.ok) {
-    // El detalle útil viaja en el cuerpo de la respuesta, no en el mensaje del SDK,
-    // que para cualquier fallo dice sólo "Edge Function returned a non-2xx status".
+    // El detalle útil viaja en el cuerpo de la respuesta. Con fetch directo
+    // conservamos el status real y evitamos que el SDK oculte la causa.
     let detalle = datos?.error || errFn?.message || 'error desconocido';
-    let estado = errFn?.context?.status;
+    let estado = estadoFn || errFn?.context?.status;
     try { if(errFn?.context?.json) detalle = (await errFn.context.json())?.error || detalle; } catch(e) {}
 
     if(estado === 404 || /\bnot found\b/i.test(detalle)) {
-      toast('Falta desplegar la función «cambiar-password» en Supabase → Edge Functions. Mientras tanto: Authentication → Users → Reset password.','error');
+      toast('La función «cambiar-password» no respondió desde este proyecto. Revisa que el deploy activo sea del proyecto ckpskotpdkmojgaqxyht y vuelve a desplegarla desde Edge Functions.','error');
     } else if(/Failed to send a request|Failed to fetch|NetworkError|load failed/i.test(detalle)) {
       // No distingue "no existe" de "no se pudo llegar": el navegador informa
       // igual de ambos. Lo más habitual con la función ya desplegada es que
