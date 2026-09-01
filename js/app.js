@@ -3599,22 +3599,25 @@ const NOTA_TIPO_FORM = {
 };
 
 // Cada tipo comienza vacío para que el contenido de una nota no pase a otra.
-function onTipoNotaChange(limpiarContenido=false) {
+// Cambiar el tipo NUNCA borra lo escrito. El médico redacta primero y clasifica
+// después —o se da cuenta a media nota de que era una constancia y no una
+// evolución—; perder el texto por reclasificar es la peor forma de castigar eso.
+// Lo único que cambia según el estado es SOBRE QUÉ fila se escribe:
+//   · borrador   → se reclasifica ahí mismo; todavía no es un documento clínico.
+//   · finalizada → se abre una nota nueva que hereda el texto y la original
+//                  queda intacta, porque un documento clínico terminado no
+//                  cambia de tipo por detrás.
+function onTipoNotaChange(cambioManual=false) {
   const tipo = document.getElementById('n-tipo')?.value;
   const esResumen = tipo === 'resumen_clinico';
-  if(limpiarContenido) {
-    // Cambiar el tipo desde una nota ya guardada NO la reclasifica: eso
-    // reescribiría un documento clínico existente. Se abre una nota nueva y
-    // la anterior queda intacta.
-    if(editingNotaId) {
+  if(cambioManual && editingNotaId) {
+    const nota = C.n.find(x => String(x.id) === String(editingNotaId));
+    if(nota?.estado === 'finalizada') {
       editingNotaId = null;
       document.getElementById('modal-nota-title').textContent = '📝 Nueva Nota Clínica';
       _configurarAccionesNota(null);
-      toast('Se inició una nota nueva; la anterior quedó guardada','info');
+      toast('Se inició una nota nueva con lo que llevas escrito; la nota finalizada no se modifica','info');
     }
-    document.getElementById('n-titulo').value = '';
-    document.getElementById('n-contenido').value = '';
-    _limpiarSignosNota();
   }
   const wrap = document.getElementById('n-signos-wrap');
   if(wrap) wrap.style.display = esResumen ? '' : 'none';
