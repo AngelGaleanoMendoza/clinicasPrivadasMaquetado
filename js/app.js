@@ -2043,7 +2043,7 @@ function renderDetalleP(pid){
 
   document.getElementById('tab-notas-p').innerHTML=`<div class="card">
     <div class="card-header"><h3>📝 Notas Clínicas</h3><button class="btn btn-primary btn-sm" onclick="openModalNotaP(${p.id})">+ Nueva</button></div>
-    ${notas.length?`<div class="timeline">${notas.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(n=>`<div class="timeline-item"><div class="timeline-date">${formatFecha(n.fecha)} · <span class="tag tag-blue" style="font-size:10px">${NOTA_TIPO_ICON[n.tipo]||'📝'} ${notaTipoLabel(n.tipo)}</span> ${notaEstadoTag(n)}</div><div class="timeline-content">${n.titulo?`<strong style="display:block;margin-bottom:5px">${n.titulo}</strong>`:''}${_signosChipsHTML(n.signos)}${n.contenido?`<p style="white-space:pre-wrap;line-height:1.7">${n.contenido}</p>`:''}<div style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-secondary btn-sm" onclick="verNota(${n.id})">👁️ Ver</button><button class="btn btn-secondary btn-sm" onclick="editarNota(${n.id})">✏️ Editar</button>${n.estado!=='borrador'?`<button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})">🖨️</button>`:''}<button class="btn btn-danger btn-sm" onclick="eliminarNota(${n.id})">🗑️</button></div></div></div>`).join('')}</div>`:'<div class="empty-state"><div class="empty-icon">📝</div><p>Sin notas</p></div>'}
+    ${_timelineNotasHTML(notas)}
   </div>`;
 
   // Las áreas especializadas dependen de la especialidad activa. Un
@@ -3474,6 +3474,46 @@ function notaEstadoTag(n) {
   return n?.estado === 'borrador' ? '<span class="tag tag-orange" style="font-size:10px">Borrador</span>' : '';
 }
 
+// Las notas de una misma consulta se muestran encadenadas bajo una cabecera,
+// para que se lea lo que se hizo en esa visita y no una lista suelta donde el
+// resumen clínico y su evolución parecen no tener relación.
+function _timelineNotasHTML(notas) {
+  if(!notas.length) return '<div class="empty-state"><div class="empty-icon">📝</div><p>Sin notas</p></div>';
+  const orden = [...notas].sort((a,b) => (b.fecha||'').localeCompare(a.fecha||'') || b.id - a.id);
+  const visitas = [];
+  orden.forEach(n => {
+    const clave = _claveVisita(n);
+    let g = visitas.find(v => v.clave === clave);
+    if(!g) { g = { clave, fecha:n.fecha, citaId:n.citaId||null, notas:[] }; visitas.push(g); }
+    g.notas.push(n);
+  });
+  return '<div class="timeline">' + visitas.map(v => `
+    <div class="visita-grupo">
+      <div class="visita-cabecera">
+        <span>🩺 Consulta del ${formatFecha(v.fecha)}</span>
+        <span class="visita-meta">${v.notas.length} nota${v.notas.length===1?'':'s'}${v.citaId?' · cita #'+v.citaId:''}</span>
+      </div>
+      ${v.notas.map(n => _notaItemHTML(n)).join('')}
+    </div>`).join('') + '</div>';
+}
+
+function _notaItemHTML(n) {
+  return `<div class="timeline-item">
+    <div class="timeline-date">${formatFecha(n.fecha)} · <span class="tag tag-blue" style="font-size:10px">${NOTA_TIPO_ICON[n.tipo]||'📝'} ${notaTipoLabel(n.tipo)}</span> ${notaEstadoTag(n)}</div>
+    <div class="timeline-content">
+      ${n.titulo?`<strong style="display:block;margin-bottom:5px">${escAttr(n.titulo)}</strong>`:''}
+      ${_signosChipsHTML(n.signos)}
+      ${n.contenido?`<p style="white-space:pre-wrap;line-height:1.7">${escAttr(n.contenido)}</p>`:''}
+      <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-secondary btn-sm" onclick="verNota(${n.id})">👁️ Ver</button>
+        <button class="btn btn-secondary btn-sm" onclick="editarNota(${n.id})">✏️ Editar</button>
+        ${n.estado!=='borrador'?`<button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})">🖨️</button>`:''}
+        <button class="btn btn-danger btn-sm" onclick="eliminarNota(${n.id})">🗑️</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 // Una nota ya finalizada no vuelve a borrador: se guarda y punto.
 function _configurarAccionesNota(nota) {
   const borrador = document.getElementById('btn-nota-borrador');
@@ -3599,6 +3639,65 @@ const NOTA_TIPO_FORM = {
 };
 
 // Cada tipo comienza vacío para que el contenido de una nota no pase a otra.
+// El acápite anterior, para saber CON QUÉ tipo guardar lo que ya estaba escrito
+// cuando el select ya cambió de valor.
+let _tipoNotaPrevio = 'evolucion';
+
+// Todas las notas de una misma visita comparten anclaje: la cita cuando existe
+// y, si la nota no nació de una, la fecha —que para una consulta es el mismo
+// criterio—. cita_id es clave foránea a citas, así que no cabe inventar un id
+// de sesión propio.
+function _claveVisita(n) {
+  return n.citaId ? 'cita:' + n.citaId : 'fecha:' + (n.fecha || '');
+}
+
+// Al cambiar de acápite, lo ya escrito no se pierde ni estorba: se guarda como
+// borrador y el formulario queda limpio para la siguiente nota, encadenada a la
+// misma consulta. `previa` es la nota que se estaba editando (o null si era
+// nueva); se calcula antes de llamar aquí porque también decide si el editor
+// debe desengancharse, y esa decisión es independiente de si hubo guardado.
+// Devuelve true si de verdad escribió algo en la base.
+async function _guardarComoBorradorEncadenado(previa) {
+  const titulo = document.getElementById('n-titulo')?.value.trim() || '';
+  const contenido = document.getElementById('n-contenido')?.value.trim() || '';
+  const signos = _tipoNotaPrevio === 'resumen_clinico' ? _leerSignosNota() : null;
+  if(!titulo && !contenido && !signos) return false;      // no había nada escrito
+
+  // Una nota finalizada ya vive, intacta, en su propia fila. Si nadie tocó su
+  // texto, tocar el selector de tipo no debe duplicarla en la base.
+  if(previa?.estado === 'finalizada') {
+    const sinCambios = (previa.titulo||'') === titulo && (previa.contenido||'') === contenido
+      && JSON.stringify(previa.signos||null) === JSON.stringify(signos);
+    if(sinCambios) return false;
+  }
+
+  const esVet = esVeterinaria();
+  const pid = esVet ? null : (parseInt(document.getElementById('n-paciente').value) || null);
+  const mid = esVet ? (parseInt(document.getElementById('n-mascota').value) || null) : null;
+  if(esVet ? !mid : !pid) return false;                   // sin sujeto no se puede guardar
+  if(!currentClinicaId) return false;
+
+  // Un borrador que ya existía se reclasifica en su sitio: sigue siendo la
+  // misma nota, solo cambia de tipo. Una nota nueva (o una finalizada con
+  // ediciones) siempre crea una fila propia, encadenada, y siempre en
+  // borrador — una finalizada nunca se sobrescribe ni recupera ese estado
+  // solo porque se le siguió escribiendo.
+  const sobrescribir = previa?.estado === 'borrador';
+  const payload = toN({
+    pacienteId: pid, mascotaId: mid, citaId: currentNotaCitaId, tipo: _tipoNotaPrevio,
+    fecha: document.getElementById('n-fecha').value || hoy(),
+    titulo, contenido, signos, estado: 'borrador'
+  });
+  const { error } = sobrescribir
+    ? await sb.from('notas').update(payload).eq('id', previa.id)
+    : await sb.from('notas').insert([payload]);
+  if(error) {
+    toast('No se pudo guardar el borrador: ' + error.message, 'error');
+    return false;
+  }
+  return true;
+}
+
 // Cambiar el tipo NUNCA borra lo escrito. El médico redacta primero y clasifica
 // después —o se da cuenta a media nota de que era una constancia y no una
 // evolución—; perder el texto por reclasificar es la peor forma de castigar eso.
@@ -3607,18 +3706,39 @@ const NOTA_TIPO_FORM = {
 //   · finalizada → se abre una nota nueva que hereda el texto y la original
 //                  queda intacta, porque un documento clínico terminado no
 //                  cambia de tipo por detrás.
-function onTipoNotaChange(cambioManual=false) {
+async function onTipoNotaChange(cambioManual=false) {
   const tipo = document.getElementById('n-tipo')?.value;
   const esResumen = tipo === 'resumen_clinico';
-  if(cambioManual && editingNotaId) {
-    const nota = C.n.find(x => String(x.id) === String(editingNotaId));
-    if(nota?.estado === 'finalizada') {
+  if(cambioManual) {
+    const editada = editingNotaId;
+    const previa = editada ? C.n.find(x => String(x.id) === String(editada)) : null;
+    const guardo = await _guardarComoBorradorEncadenado(previa);
+    // Un borrador reclasificado en su sitio sigue siendo la misma nota: el
+    // editor no se suelta de ella. En cualquier otro caso —nota nueva que
+    // encadenó otra, o una finalizada de la que ya no se puede seguir
+    // editando— el editor queda libre para la siguiente.
+    const debeDesenganchar = (!previa && guardo) || previa?.estado === 'finalizada';
+    if(debeDesenganchar) {
+      // El formulario arranca limpio para la nota siguiente, pero conserva
+      // paciente, fecha y cita: es la misma consulta, no una visita nueva.
       editingNotaId = null;
       document.getElementById('modal-nota-title').textContent = '📝 Nueva Nota Clínica';
       _configurarAccionesNota(null);
-      toast('Se inició una nota nueva con lo que llevas escrito; la nota finalizada no se modifica','info');
+      document.getElementById('n-titulo').value = '';
+      document.getElementById('n-contenido').value = '';
+      _limpiarSignosNota();
+      toast(guardo ? 'Nota anterior guardada en borrador; sigues en la misma consulta'
+                   : 'Se inició una nota nueva; la nota finalizada no se modifica',
+            guardo ? 'success' : 'info');
+    }
+    if(guardo) {
+      await loadAll();
+      if(currentView==='paciente-detalle') renderDetalleP(currentPatientId);
+      else if(currentView==='mascota-detalle') renderDetalleMascota(currentMascotaId);
+      else renderNotas();
     }
   }
+  _tipoNotaPrevio = tipo;
   const wrap = document.getElementById('n-signos-wrap');
   if(wrap) wrap.style.display = esResumen ? '' : 'none';
   if(esResumen && !document.getElementById('n-signos-grid')?.children.length) _pintarPanelSignos();
@@ -3725,6 +3845,7 @@ function _reiniciarFormularioNota(){
   tipo.querySelectorAll('.nota-tipo-historico').forEach(option=>option.remove());
   tipo.disabled=false;
   tipo.value='evolucion';
+  _tipoNotaPrevio='evolucion';
   document.getElementById('n-fecha').value=hoy();
   document.getElementById('n-titulo').value='';
   document.getElementById('n-contenido').value='';
@@ -13263,22 +13384,7 @@ function renderDetalleMascota(mid) {
   const notasMascota = C.n.filter(n => n.mascotaId === mid).sort((a,b) => b.fecha.localeCompare(a.fecha));
   document.getElementById('mtab-consultas').innerHTML = `<div class="card">
     <div class="card-header"><h3>📝 Consultas y notas</h3><button class="btn btn-primary btn-sm" onclick="openModalNotaMascota(${mid})">+ Nueva</button></div>
-    ${notasMascota.length ? `<div class="timeline">${notasMascota.map(n => `
-      <div class="timeline-item">
-        <div class="timeline-date">${formatFecha(n.fecha)} · <span class="tag tag-blue" style="font-size:10px">${NOTA_TIPO_ICON[n.tipo]||'📝'} ${notaTipoLabel(n.tipo)}</span> ${notaEstadoTag(n)}</div>
-        <div class="timeline-content">
-          ${n.titulo?`<strong style="display:block;margin-bottom:5px">${escAttr(n.titulo)}</strong>`:''}
-          ${_signosChipsHTML(n.signos)}
-          ${n.contenido?`<p style="white-space:pre-wrap;line-height:1.7">${escAttr(n.contenido)}</p>`:''}
-          <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
-            <button class="btn btn-secondary btn-sm" onclick="verNota(${n.id})">👁️ Ver</button>
-            <button class="btn btn-secondary btn-sm" onclick="editarNota(${n.id})">✏️ Editar</button>
-            ${n.estado!=='borrador'?`<button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})">🖨️</button>`:''}
-            <button class="btn btn-danger btn-sm" onclick="eliminarNota(${n.id})">🗑️</button>
-          </div>
-        </div>
-      </div>`).join('')}</div>`
-      : '<div class="empty-state"><div class="empty-icon">📝</div><p>Sin consultas registradas</p></div>'}
+    ${_timelineNotasHTML(notasMascota)}
   </div>`;
 
   const medsMascota = C.m.filter(x => x.mascotaId === mid);
