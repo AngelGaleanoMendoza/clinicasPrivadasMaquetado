@@ -207,8 +207,8 @@ const toM   = x => ({
   fin:x.fin||null, via:x.via||'oral', estado:x.estado||'activa',
   indicaciones:x.indicaciones||null, clinica_id:currentClinicaId
 });
-const fromN   = r => ({ id:r.id, pacienteId:r.paciente_id, mascotaId:r.mascota_id||null, tipo:r.tipo, fecha:r.fecha, titulo:r.titulo, contenido:r.contenido, signos:r.signos||null });
-const toN     = x => ({ paciente_id:x.pacienteId||null, mascota_id:x.mascotaId||null, tipo:x.tipo||'evolucion', fecha:x.fecha||hoy(), titulo:x.titulo||null, contenido:x.contenido, signos:x.signos||null, clinica_id:currentClinicaId });
+const fromN   = r => ({ id:r.id, pacienteId:r.paciente_id, mascotaId:r.mascota_id||null, citaId:r.cita_id||null, tipo:r.tipo, fecha:r.fecha, titulo:r.titulo, contenido:r.contenido, signos:r.signos||null });
+const toN     = x => ({ paciente_id:x.pacienteId||null, mascota_id:x.mascotaId||null, cita_id:x.citaId||null, tipo:x.tipo||'evolucion', fecha:x.fecha||hoy(), titulo:x.titulo||null, contenido:x.contenido, signos:x.signos||null, clinica_id:currentClinicaId });
 const fromInv = r => ({ id:r.id, nombre:r.nombre, categoria:r.categoria||'general', unidad:r.unidad||'unidad', stock:Number(r.stock_actual||0), stockMin:Number(r.stock_minimo||0), precio:r.precio_unitario!=null?Number(r.precio_unitario):null, descripcion:r.descripcion||null, codigoMinsa:r.codigo_minsa||null, fechaVenc:r.fecha_vencimiento||null, alertaMeses:r.alerta_meses_antes!=null?Number(r.alerta_meses_antes):1 });
 const toInv   = x => ({ nombre:x.nombre, categoria:x.categoria||'general', unidad:x.unidad||'unidad', stock_actual:Number(x.stock||0), stock_minimo:Number(x.stockMin||0), precio_unitario:x.precio||null, descripcion:x.descripcion||null, clinica_id:currentClinicaId, codigo_minsa:x.codigoMinsa||null, fecha_vencimiento:x.fechaVenc||null, alerta_meses_antes:Number(x.alertaMeses||1) });
 const fromMov     = r => ({ id:r.id, invId:r.inventario_id, tipo:r.tipo, cantidad:Number(r.cantidad), motivo:r.motivo||null, fecha:r.fecha, referencia:r.referencia||null, notas:r.notas||null });
@@ -1101,7 +1101,7 @@ function _confirmOk()     { document.getElementById('modal-confirm').classList.r
 function _confirmCancel() { document.getElementById('modal-confirm').classList.remove('open'); if(_confirmResolve) { _confirmResolve(false); _confirmResolve=null; } }
 
 // ════════════════════ NAVIGATION ════════════════════
-let currentView='dashboard', editingId=null, editingCitaId=null, editingMedId=null, editingNotaId=null, currentPatientId=null, currentMascotaId=null, selCalDate=hoy(), currentResumenCitaId=null, currentNotaId=null;
+let currentView='dashboard', editingId=null, editingCitaId=null, editingMedId=null, editingNotaId=null, currentNotaCitaId=null, currentPatientId=null, currentMascotaId=null, selCalDate=hoy(), currentResumenCitaId=null, currentNotaId=null;
 
 async function navigate(view, patientId) {
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
@@ -2057,7 +2057,11 @@ function renderDetalleP(pid){
   if(esOft) renderProcedimientosOftTab(pid);
 
   const exp=C.e.find(x=>x.pacienteId===pid)||{};
-  const imc=(exp.peso&&exp.talla)?(exp.peso/((exp.talla/100)**2)).toFixed(1):null;
+  const ultimaMedicion=[...notas].filter(n=>n.signos).sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'')||b.id-a.id)[0];
+  const vitales=ultimaMedicion?.signos||{};
+  const pesoActual=vitales.peso||exp.peso, tallaActual=vitales.talla||exp.talla;
+  const presionActual=vitales.pa||exp.presion, temperaturaActual=vitales.temp||exp.temperatura;
+  const imc=(pesoActual&&tallaActual)?(pesoActual/((tallaActual/100)**2)).toFixed(1):null;
   document.getElementById('tab-expediente').innerHTML=`
   <div class="card">
     <div class="card-header"><h3>📁 Expediente Médico</h3>
@@ -2070,18 +2074,19 @@ function renderDetalleP(pid){
     <div class="exp-section">
       <div class="exp-section-title">⚡ Signos Vitales</div>
       <div class="vitales-grid">
-        <div class="vital-card"><div class="v-val">${exp.peso||'—'}</div><div class="v-lbl">Peso kg</div></div>
-        <div class="vital-card"><div class="v-val">${exp.talla||'—'}</div><div class="v-lbl">Talla cm</div></div>
-        <div class="vital-card"><div class="v-val">${exp.presion||'—'}</div><div class="v-lbl">Presión</div></div>
-        <div class="vital-card"><div class="v-val">${exp.temperatura?exp.temperatura+'°':'—'}</div><div class="v-lbl">Temp.</div></div>
+        <div class="vital-card"><div class="v-val">${pesoActual||'—'}</div><div class="v-lbl">Peso kg</div></div>
+        <div class="vital-card"><div class="v-val">${tallaActual||'—'}</div><div class="v-lbl">Talla cm</div></div>
+        <div class="vital-card"><div class="v-val">${presionActual||'—'}</div><div class="v-lbl">Presión</div></div>
+        <div class="vital-card"><div class="v-val">${temperaturaActual?temperaturaActual+'°':'—'}</div><div class="v-lbl">Temp.</div></div>
         ${imc?`<div class="vital-card"><div class="v-val">${imc}</div><div class="v-lbl">IMC</div></div>`:''}
       </div>
       <div class="form-grid" style="margin-top:12px">
-        <div class="form-group"><label>Peso (kg)</label><input type="number" id="exp-peso" value="${exp.peso||''}" placeholder="70.0" step="0.1"></div>
-        <div class="form-group"><label>Talla (cm)</label><input type="number" id="exp-talla" value="${exp.talla||''}" placeholder="170"></div>
-        <div class="form-group"><label>Presión Arterial</label><input type="text" id="exp-presion" value="${exp.presion||''}" placeholder="120/80 mmHg"></div>
-        <div class="form-group"><label>Temperatura (°C)</label><input type="number" id="exp-temperatura" value="${exp.temperatura||''}" placeholder="36.5" step="0.1"></div>
+        <div class="form-group"><label>Peso (kg)</label><input type="number" id="exp-peso" value="${pesoActual||''}" placeholder="70.0" step="0.1"></div>
+        <div class="form-group"><label>Talla (cm)</label><input type="number" id="exp-talla" value="${tallaActual||''}" placeholder="170"></div>
+        <div class="form-group"><label>Presión Arterial</label><input type="text" id="exp-presion" value="${presionActual||''}" placeholder="120/80 mmHg"></div>
+        <div class="form-group"><label>Temperatura (°C)</label><input type="number" id="exp-temperatura" value="${temperaturaActual||''}" placeholder="36.5" step="0.1"></div>
       </div>
+      ${ultimaMedicion?`<p class="text-light" style="font-size:11px;margin-top:8px">Última medición: ${formatFecha(ultimaMedicion.fecha)}${ultimaMedicion.citaId?' · vinculada a la cita #'+ultimaMedicion.citaId:''}</p>`:''}
     </div>
 
     <div class="exp-section">
@@ -3006,6 +3011,7 @@ async function marcarCitaCompletada(id){
 
 function abrirNotaEvolucionMascota(mascotaId, cita) {
   openModalNota();
+  currentNotaCitaId = cita?.id||null;
   document.getElementById('modal-nota-title').textContent = '📝 Consulta veterinaria';
   setMascotaSelectNota(mascotaId);
   document.getElementById('n-tipo').value = 'resumen_clinico';
@@ -3016,17 +3022,17 @@ function abrirNotaEvolucionMascota(mascotaId, cita) {
 }
 
 function abrirNotaEvolucion(pacienteId, cita) {
-  editingNotaId = null;
-  document.getElementById('modal-nota-title').textContent = '📝 Nota de Evolución';
-  fillSelect('n-paciente');
+  openModalNota();
+  currentNotaCitaId = cita?.id||null;
+  document.getElementById('modal-nota-title').textContent = '🩺 Signos vitales y nota de consulta';
   setPacienteSelect('n-paciente', pacienteId);
-  document.getElementById('n-tipo').value = 'evolucion';
-  document.getElementById('n-fecha').value = hoy();
-  document.getElementById('n-titulo').value = `Consulta ${formatFecha(hoy())}`;
+  document.getElementById('n-tipo').value = 'resumen_clinico';
+  document.getElementById('n-fecha').value = cita?.fecha||hoy();
+  document.getElementById('n-titulo').value = `Consulta ${formatFecha(cita?.fecha||hoy())}`;
   const motivo = cita?.motivo ? `Motivo de consulta: ${cita.motivo}\n\n` : '';
   document.getElementById('n-contenido').value = motivo;
-  openModalOverlay('modal-nota');
-  setTimeout(() => document.getElementById('n-contenido').focus(), 150);
+  onTipoNotaChange();
+  setTimeout(() => document.getElementById('n-sv-pa')?.focus(), 150);
 }
 
 // ════════════════════ MEDICACIONES ════════════════════
@@ -3653,6 +3659,7 @@ function _signosPrintHTML(signos) {
 
 function openModalNota(id){
   editingNotaId=id||null;
+  currentNotaCitaId=null;
   document.getElementById('modal-nota-title').textContent=id?'✏️ Editar Nota':'📝 Nueva Nota Clínica';
   fillSelect('n-paciente');
   document.getElementById('n-tipo').value='evolucion'; document.getElementById('n-fecha').value=hoy(); document.getElementById('n-titulo').value=''; document.getElementById('n-contenido').value='';
@@ -3668,6 +3675,7 @@ function openModalNota(id){
   if(id){
     const n=C.n.find(x=>x.id===id);
     if(n){
+      currentNotaCitaId=n.citaId||null;
       if(esVet) setMascotaSelectNota(n.mascotaId); else setPacienteSelect('n-paciente',n.pacienteId);
       document.getElementById('n-tipo').value=n.tipo; document.getElementById('n-fecha').value=n.fecha; document.getElementById('n-titulo').value=n.titulo||''; document.getElementById('n-contenido').value=n.contenido; _cargarSignosNota(n.signos);
     }
@@ -3699,7 +3707,7 @@ async function guardarNota(){
     toast(esResumen?'Registra al menos un signo vital o escribe la nota':'Completa los campos obligatorios','error');
     return;
   }
-  const obj={pacienteId:pid,mascotaId:mid,tipo,fecha:document.getElementById('n-fecha').value||hoy(),titulo:document.getElementById('n-titulo').value.trim(),contenido,signos};
+  const obj={pacienteId:pid,mascotaId:mid,citaId:currentNotaCitaId,tipo,fecha:document.getElementById('n-fecha').value||hoy(),titulo:document.getElementById('n-titulo').value.trim(),contenido,signos};
   setLoading(true);
   const payload=toN(obj);
   let err;
@@ -3712,8 +3720,31 @@ async function guardarNota(){
     toast('Falta ejecutar el script de veterinaria en Supabase (columna mascota_id de notas)','error');
     return;
   }
+  if(err && _faltaColumna(err,'cita_id')){
+    setLoading(false);
+    toast('Falta ejecutar migracion_signos_vitales_por_cita.sql en Supabase','error');
+    return;
+  }
   setLoading(false);
   if(err){ toast('Error: '+err.message,'error'); return; }
+  // El expediente siempre refleja la medición de la consulta más reciente;
+  // la versión completa de cada cita permanece en notas.signos y su auditoría.
+  if(pid && signos){
+    const vitalesExp={
+      peso:signos.peso?Number(signos.peso):null,
+      talla:signos.talla?Number(signos.talla):null,
+      presion:signos.pa||null,
+      temperatura:signos.temp?Number(signos.temp):null
+    };
+    const medidos=Object.fromEntries(Object.entries(vitalesExp).filter(([,v])=>v!==null));
+    if(Object.keys(medidos).length){
+      const existente=C.e.find(x=>x.pacienteId===pid);
+      const rExp=existente
+        ? await sb.from('expediente').update(medidos).eq('id',existente.id)
+        : await sb.from('expediente').insert([{paciente_id:pid,clinica_id:currentClinicaId,...medidos}]);
+      if(rExp.error) toast('La nota se guardó, pero no se pudo actualizar el resumen de signos: '+rExp.error.message,'warning');
+    }
+  }
   toast(editingNotaId?'Nota actualizada':'Nota guardada ✅');
   if(!editingNotaId) logActivity('nota');
   closeModal('modal-nota');
