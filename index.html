@@ -19,7 +19,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js" defer></script>
-<link rel="stylesheet" href="css/styles.css?v=20260829k">
+<link rel="stylesheet" href="css/styles.css?v=20260830a">
 </head>
 <body>
 <script>
@@ -1756,6 +1756,14 @@
         <div class="recetario-editor-grid">
           <div id="u-recetario-preview" class="recetario-digital-preview"></div>
           <div class="recetario-config-campos">
+            <div class="form-group full"><label>Tamaño del papel <span style="font-size:10px;font-weight:400;color:var(--text-light)">— así se imprime en papel; en el teléfono se adapta solo</span></label>
+              <select id="u-rec-tamano" onchange="actualizarPreviewRecetario()">
+                <option value="media">Media carta (14 × 21.6 cm) — talonario</option>
+                <option value="a5">A5 (14.8 × 21 cm)</option>
+                <option value="carta">Carta (21.6 × 27.9 cm)</option>
+                <option value="a4">A4 (21 × 29.7 cm) — hoja completa</option>
+              </select>
+            </div>
             <div class="form-group"><label>Distribución</label><select id="u-rec-layout" onchange="actualizarPreviewRecetario()"><option value="lateral">Panel lateral + receta</option><option value="clasico">Clásica a una columna</option></select></div>
             <div class="form-group"><label>Color principal</label><input type="color" id="u-rec-color" value="#be185d" oninput="actualizarPreviewRecetario()"></div>
             <div class="form-group full"><label>Título profesional</label><input type="text" id="u-rec-titulo" placeholder="Dra. Nombre Apellido" oninput="actualizarPreviewRecetario()"></div>
@@ -2565,7 +2573,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260829e" defer></script>
+<script src="js/app.js?v=20260830a" defer></script>
 </body>
 </html>
 
