@@ -207,8 +207,10 @@ const toM   = x => ({
   fin:x.fin||null, via:x.via||'oral', estado:x.estado||'activa',
   indicaciones:x.indicaciones||null, clinica_id:currentClinicaId
 });
-const fromN   = r => ({ id:r.id, pacienteId:r.paciente_id, mascotaId:r.mascota_id||null, citaId:r.cita_id||null, tipo:r.tipo, fecha:r.fecha, titulo:r.titulo, contenido:r.contenido, signos:r.signos||null });
-const toN     = x => ({ paciente_id:x.pacienteId||null, mascota_id:x.mascotaId||null, cita_id:x.citaId||null, tipo:x.tipo||'evolucion', fecha:x.fecha||hoy(), titulo:x.titulo||null, contenido:x.contenido, signos:x.signos||null, clinica_id:currentClinicaId });
+// Las notas anteriores a la columna `estado` se tratan como finalizadas: no
+// existían los borradores, así que ninguna lo era.
+const fromN   = r => ({ id:r.id, pacienteId:r.paciente_id, mascotaId:r.mascota_id||null, citaId:r.cita_id||null, tipo:r.tipo, fecha:r.fecha, titulo:r.titulo, contenido:r.contenido, signos:r.signos||null, estado:r.estado||'finalizada' });
+const toN     = x => ({ paciente_id:x.pacienteId||null, mascota_id:x.mascotaId||null, cita_id:x.citaId||null, tipo:x.tipo||'evolucion', fecha:x.fecha||hoy(), titulo:x.titulo||null, contenido:x.contenido, signos:x.signos||null, estado:x.estado||'finalizada', clinica_id:currentClinicaId });
 const fromInv = r => ({ id:r.id, nombre:r.nombre, categoria:r.categoria||'general', unidad:r.unidad||'unidad', stock:Number(r.stock_actual||0), stockMin:Number(r.stock_minimo||0), precio:r.precio_unitario!=null?Number(r.precio_unitario):null, descripcion:r.descripcion||null, codigoMinsa:r.codigo_minsa||null, fechaVenc:r.fecha_vencimiento||null, alertaMeses:r.alerta_meses_antes!=null?Number(r.alerta_meses_antes):1 });
 const toInv   = x => ({ nombre:x.nombre, categoria:x.categoria||'general', unidad:x.unidad||'unidad', stock_actual:Number(x.stock||0), stock_minimo:Number(x.stockMin||0), precio_unitario:x.precio||null, descripcion:x.descripcion||null, clinica_id:currentClinicaId, codigo_minsa:x.codigoMinsa||null, fecha_vencimiento:x.fechaVenc||null, alerta_meses_antes:Number(x.alertaMeses||1) });
 const fromMov     = r => ({ id:r.id, invId:r.inventario_id, tipo:r.tipo, cantidad:Number(r.cantidad), motivo:r.motivo||null, fecha:r.fecha, referencia:r.referencia||null, notas:r.notas||null });
@@ -2041,7 +2043,7 @@ function renderDetalleP(pid){
 
   document.getElementById('tab-notas-p').innerHTML=`<div class="card">
     <div class="card-header"><h3>📝 Notas Clínicas</h3><button class="btn btn-primary btn-sm" onclick="openModalNotaP(${p.id})">+ Nueva</button></div>
-    ${notas.length?`<div class="timeline">${notas.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(n=>`<div class="timeline-item"><div class="timeline-date">${formatFecha(n.fecha)} · <span class="tag tag-blue" style="font-size:10px">${NOTA_TIPO_ICON[n.tipo]||'📝'} ${notaTipoLabel(n.tipo)}</span></div><div class="timeline-content">${n.titulo?`<strong style="display:block;margin-bottom:5px">${n.titulo}</strong>`:''}${_signosChipsHTML(n.signos)}${n.contenido?`<p style="white-space:pre-wrap;line-height:1.7">${n.contenido}</p>`:''}<div style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-secondary btn-sm" onclick="verNota(${n.id})">👁️ Ver</button><button class="btn btn-secondary btn-sm" onclick="editarNota(${n.id})">✏️ Editar</button><button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})">🖨️</button><button class="btn btn-danger btn-sm" onclick="eliminarNota(${n.id})">🗑️</button></div></div></div>`).join('')}</div>`:'<div class="empty-state"><div class="empty-icon">📝</div><p>Sin notas</p></div>'}
+    ${notas.length?`<div class="timeline">${notas.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(n=>`<div class="timeline-item"><div class="timeline-date">${formatFecha(n.fecha)} · <span class="tag tag-blue" style="font-size:10px">${NOTA_TIPO_ICON[n.tipo]||'📝'} ${notaTipoLabel(n.tipo)}</span> ${notaEstadoTag(n)}</div><div class="timeline-content">${n.titulo?`<strong style="display:block;margin-bottom:5px">${n.titulo}</strong>`:''}${_signosChipsHTML(n.signos)}${n.contenido?`<p style="white-space:pre-wrap;line-height:1.7">${n.contenido}</p>`:''}<div style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-secondary btn-sm" onclick="verNota(${n.id})">👁️ Ver</button><button class="btn btn-secondary btn-sm" onclick="editarNota(${n.id})">✏️ Editar</button>${n.estado!=='borrador'?`<button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})">🖨️</button>`:''}<button class="btn btn-danger btn-sm" onclick="eliminarNota(${n.id})">🗑️</button></div></div></div>`).join('')}</div>`:'<div class="empty-state"><div class="empty-icon">📝</div><p>Sin notas</p></div>'}
   </div>`;
 
   // Las áreas especializadas dependen de la especialidad activa. Un
@@ -2061,7 +2063,7 @@ function renderDetalleP(pid){
   if(esOft) renderProcedimientosOftTab(pid);
 
   const exp=C.e.find(x=>x.pacienteId===pid)||{};
-  const ultimaMedicion=[...notas].filter(n=>n.signos).sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'')||b.id-a.id)[0];
+  const ultimaMedicion=[...notas].filter(n=>n.signos && n.estado!=='borrador').sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'')||b.id-a.id)[0];
   const vitales=ultimaMedicion?.signos||{};
   const pesoActual=vitales.peso||exp.peso, tallaActual=vitales.talla||exp.talla;
   const presionActual=vitales.pa||exp.presion, temperaturaActual=vitales.temp||exp.temperatura;
@@ -2165,7 +2167,7 @@ function imprimirExpedienteCompleto(pid) {
   const exp  = C.e.find(x=>x.pacienteId===pid) || {};
   const citas = C.c.filter(x=>x.pacienteId===pid).sort((a,b)=>b.fecha.localeCompare(a.fecha));
   const meds  = C.m.filter(x=>x.pacienteId===pid);
-  const notas = C.n.filter(x=>x.pacienteId===pid);
+  const notas = C.n.filter(x=>x.pacienteId===pid && x.estado!=='borrador');
   const examenes = notas.filter(n=>n.tipo==='examen_visual').sort((a,b)=>b.fecha.localeCompare(a.fecha));
   const otrasNotas = notas.filter(n=>n.tipo!=='examen_visual').sort((a,b)=>b.fecha.localeCompare(a.fecha));
   const procOft = (C.procOft||[]).filter(x=>x.pacienteId===pid).sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''));
@@ -3466,6 +3468,24 @@ const NOTA_TIPO_LABEL = {
 };
 const notaTipoLabel = t => NOTA_TIPO_LABEL[t] || (t||'').replace(/_/g,' ');
 
+// Un borrador debe distinguirse a simple vista en cualquier listado: si no, se
+// confunde con una nota terminada y alguien la da por buena.
+function notaEstadoTag(n) {
+  return n?.estado === 'borrador' ? '<span class="tag tag-orange" style="font-size:10px">Borrador</span>' : '';
+}
+
+// Una nota ya finalizada no vuelve a borrador: se guarda y punto.
+function _configurarAccionesNota(nota) {
+  const borrador = document.getElementById('btn-nota-borrador');
+  const finalizar = document.getElementById('btn-nota-finalizar');
+  const yaFinalizada = nota?.estado === 'finalizada';
+  if(borrador) {
+    borrador.style.display = yaFinalizada ? 'none' : '';
+    borrador.textContent = nota ? '💾 Guardar cambios' : '💾 Guardar borrador';
+  }
+  if(finalizar) finalizar.textContent = yaFinalizada ? '💾 Guardar cambios' : '✅ Finalizar nota';
+}
+
 // Resumen de una línea de los signos vitales, para listados
 function _signosResumen(signos) {
   if(!signos) return '';
@@ -3503,9 +3523,9 @@ function renderNotas(){
         <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${n.titulo||prev}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
-        <span class="tag tag-blue" style="font-size:10px">${tipoIcon} ${notaTipoLabel(n.tipo)}</span>
+        <div><span class="tag tag-blue" style="font-size:10px">${tipoIcon} ${notaTipoLabel(n.tipo)}</span> ${notaEstadoTag(n)}</div>
         <div class="actions-cell" style="gap:3px;flex-wrap:nowrap">
-          <button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})">🖨️</button>
+          ${n.estado!=='borrador'?`<button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})">🖨️</button>`:''}
           <button class="btn btn-secondary btn-sm" onclick="verNota(${n.id})">👁️</button>
           <button class="btn btn-secondary btn-sm" onclick="editarNota(${n.id})">✏️</button>
           <button class="btn btn-danger btn-sm" onclick="eliminarNota(${n.id})">🗑️</button>
@@ -3582,7 +3602,16 @@ const NOTA_TIPO_FORM = {
 function onTipoNotaChange(limpiarContenido=false) {
   const tipo = document.getElementById('n-tipo')?.value;
   const esResumen = tipo === 'resumen_clinico';
-  if(limpiarContenido && !editingNotaId) {
+  if(limpiarContenido) {
+    // Cambiar el tipo desde una nota ya guardada NO la reclasifica: eso
+    // reescribiría un documento clínico existente. Se abre una nota nueva y
+    // la anterior queda intacta.
+    if(editingNotaId) {
+      editingNotaId = null;
+      document.getElementById('modal-nota-title').textContent = '📝 Nueva Nota Clínica';
+      _configurarAccionesNota(null);
+      toast('Se inició una nota nueva; la anterior quedó guardada','info');
+    }
     document.getElementById('n-titulo').value = '';
     document.getElementById('n-contenido').value = '';
     _limpiarSignosNota();
@@ -3716,7 +3745,9 @@ function openModalNota(id){
   const notaEditada=id!=null ? C.n.find(x=>String(x.id)===String(id)) : null;
   editingNotaId=notaEditada?.id||null;
   _reiniciarFormularioNota();
-  document.getElementById('modal-nota-title').textContent=notaEditada?'✏️ Editar Nota':'📝 Nueva Nota Clínica';
+  document.getElementById('modal-nota-title').textContent=notaEditada
+    ? (notaEditada.estado==='borrador'?'✏️ Editar borrador':'✏️ Editar Nota')
+    : '📝 Nueva Nota Clínica';
   // En veterinaria la nota es de una mascota, no de un paciente humano
   const esVet = esVeterinaria();
   const pw = document.getElementById('n-paciente-wrap'), mw = document.getElementById('n-mascota-wrap');
@@ -3728,13 +3759,13 @@ function openModalNota(id){
     currentNotaCitaId=notaEditada.citaId||null;
     if(esVet) setMascotaSelectNota(notaEditada.mascotaId); else setPacienteSelect('n-paciente',notaEditada.pacienteId);
     tipo.value=notaEditada.tipo;
-    tipo.disabled=true;
     document.getElementById('n-fecha').value=notaEditada.fecha;
     document.getElementById('n-titulo').value=notaEditada.titulo||'';
     document.getElementById('n-contenido').value=notaEditada.contenido||'';
     _cargarSignosNota(notaEditada.signos);
   }
   onTipoNotaChange();
+  _configurarAccionesNota(notaEditada);
   openModalOverlay('modal-nota');
 }
 function openModalNotaP(pid){ openModalNota(); setPacienteSelect('n-paciente', pid); }
@@ -3745,7 +3776,7 @@ function editarNota(id) {
   else openModalNota(id);
 }
 
-async function guardarNota(){
+async function guardarNota(estadoSolicitado='borrador'){
   if(!currentClinicaId){ toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
   const esVet=esVeterinaria();
   const pid=esVet?null:(parseInt(document.getElementById('n-paciente').value)||null);
@@ -3753,17 +3784,23 @@ async function guardarNota(){
   const contenido=document.getElementById('n-contenido').value.trim();
   const tipo=document.getElementById('n-tipo').value;
   const esResumen=tipo==='resumen_clinico';
+  // Una nota ya finalizada no retrocede a borrador aunque se pulse ese botón.
+  const notaExistente=editingNotaId?C.n.find(n=>String(n.id)===String(editingNotaId)):null;
+  const estado=notaExistente?.estado==='finalizada' ? 'finalizada'
+    : (estadoSolicitado==='finalizada' ? 'finalizada' : 'borrador');
+  const esBorrador=estado==='borrador';
   // Los signos solo se guardan en el Resumen Clínico, y solo los que se midieron
   const signos=esResumen?_leerSignosNota():null;
   if(esVet ? !mid : !pid){ toast(esVet?'Selecciona una mascota':'Selecciona un paciente','error'); return; }
-  // En el Resumen Clínico basta con registrar signos vitales; en el resto el texto es obligatorio
-  if(!contenido && !(esResumen && signos)){
+  // Un borrador puede quedar a medias: esa es su razón de ser. Solo al
+  // finalizar se exige el contenido clínico.
+  if(!esBorrador && !contenido && !(esResumen && signos)){
     toast(esResumen?'Registra al menos un signo vital o escribe la nota':'Completa los campos obligatorios','error');
     return;
   }
   // Se captura el modo al comenzar para que cada guardado afecte una sola fila.
   const notaIdEditada=editingNotaId;
-  const obj={pacienteId:pid,mascotaId:mid,citaId:currentNotaCitaId,tipo,fecha:document.getElementById('n-fecha').value||hoy(),titulo:document.getElementById('n-titulo').value.trim(),contenido,signos};
+  const obj={pacienteId:pid,mascotaId:mid,citaId:currentNotaCitaId,tipo,fecha:document.getElementById('n-fecha').value||hoy(),titulo:document.getElementById('n-titulo').value.trim(),contenido,signos,estado};
   setLoading(true);
   const payload=toN(obj);
   let err;
@@ -3781,11 +3818,18 @@ async function guardarNota(){
     toast('Falta ejecutar migracion_signos_vitales_por_cita.sql en Supabase','error');
     return;
   }
+  if(err && _faltaColumna(err,'estado')){
+    setLoading(false);
+    toast('Falta ejecutar migracion_notas_borrador.sql en Supabase','error');
+    return;
+  }
   setLoading(false);
   if(err){ toast('Error: '+err.message,'error'); return; }
   // El expediente siempre refleja la medición de la consulta más reciente;
   // la versión completa de cada cita permanece en notas.signos y su auditoría.
-  if(pid && signos){
+  // Un borrador no debe mover los signos vitales oficiales del expediente:
+  // todavía no es un dato clínico confirmado.
+  if(pid && signos && !esBorrador){
     const vitalesExp={
       peso:signos.peso?Number(signos.peso):null,
       talla:signos.talla?Number(signos.talla):null,
@@ -3801,7 +3845,8 @@ async function guardarNota(){
       if(rExp.error) toast('La nota se guardó, pero no se pudo actualizar el resumen de signos: '+rExp.error.message,'warning');
     }
   }
-  toast(notaIdEditada?'Nota actualizada':'Nota guardada ✅');
+  toast(esBorrador ? (notaIdEditada?'Borrador actualizado':'Borrador guardado ✅')
+                   : (notaIdEditada?'Nota actualizada':'Nota finalizada ✅'));
   if(!notaIdEditada) logActivity('nota');
   _reiniciarFormularioNota();
   closeModal('modal-nota');
@@ -3828,7 +3873,7 @@ function verNota(id){
   const n=C.n.find(x=>x.id===id), p=_sujetoNota(n);
   document.getElementById('ver-nota-title').textContent=`📝 ${n.titulo||'Nota Clínica'}`;
   document.getElementById('ver-nota-content').innerHTML=`
-    <div style="margin-bottom:14px"><span class="tag tag-blue">${notaTipoLabel(n.tipo)}</span><span style="margin-left:8px;font-size:12px;color:var(--text-light)">${formatFecha(n.fecha)}</span></div>
+    <div style="margin-bottom:14px"><span class="tag tag-blue">${notaTipoLabel(n.tipo)}</span> ${notaEstadoTag(n)}<span style="margin-left:8px;font-size:12px;color:var(--text-light)">${formatFecha(n.fecha)}</span></div>
     ${p?`<p class="text-light" style="margin-bottom:12px">${esVeterinaria()?'Mascota':'Paciente'}: <strong style="color:var(--text)">${escAttr(p.titulo)}</strong>${p.subtitulo?` <span style="font-size:12px">(${escAttr(p.subtitulo)})</span>`:''}</p>`:''}
     ${n.titulo?`<h3 style="margin-bottom:12px">${n.titulo}</h3>`:''}
     ${_signosChipsHTML(n.signos)}
@@ -3960,6 +4005,7 @@ function imprimirExamenVisual(n, p, cfg, fmtF, ini2) {
 
 function imprimirNota(id) {
   const n = C.n.find(x => x.id === id); if(!n) return;
+  if(n.estado==='borrador'){ toast('Finaliza la nota antes de imprimirla','warning'); return; }
   const p = C.p.find(x => x.id === n.pacienteId);
   const cfg = getClinicaConfig();
   const fmtF = f => { if(!f) return '—'; const d=new Date(f+'T12:00:00'); return d.toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'}); };
@@ -4587,7 +4633,7 @@ function poblarRelacionesExamen() {
       .sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''))
       .map(x=>({id:`cita:${x.id}`,lbl:`${formatFecha(x.fecha)} · ${x.motivo||'Consulta'}`}));
   } else if(tipo==='diagnostico') {
-    opciones = C.n.filter(x=>x.pacienteId===_examenPacId && x.tipo==='diagnostico')
+    opciones = C.n.filter(x=>x.pacienteId===_examenPacId && x.tipo==='diagnostico' && x.estado!=='borrador')
       .sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''))
       .map(x=>({id:`nota:${x.id}`,lbl:`${formatFecha(x.fecha)} · ${x.titulo||'Diagnóstico'}`}));
   } else if(tipo==='procedimiento') {
@@ -5192,7 +5238,7 @@ function imprimirNotaConsulta(citaId) {
   const p = C.p.find(x => x.id === c.pacienteId);
   const e = C.e.find(x => x.pacienteId === c.pacienteId);
   const meds = C.m.filter(m => m.pacienteId === c.pacienteId && m.estado === 'activa');
-  const notasDia = C.n.filter(n => n.pacienteId === c.pacienteId && n.fecha === c.fecha);
+  const notasDia = C.n.filter(n => n.pacienteId === c.pacienteId && n.fecha === c.fecha && n.estado!=='borrador');
   const cfg = getClinicaConfig();
   const fmtF = f => { if(!f) return '—'; const d=new Date(f+'T12:00:00'); return d.toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'}); };
   const edadCalc = fn => { if(!fn) return ''; const h=new Date(),n=new Date(fn); let a=h.getFullYear()-n.getFullYear(); if(h.getMonth()<n.getMonth()||(h.getMonth()===n.getMonth()&&h.getDate()<n.getDate()))a--; return a+' años'; };
@@ -11747,7 +11793,7 @@ function renderExpedienteHistorialPDF(pacienteId) {
   const exp  = C.e.find(x=>x.pacienteId===pacienteId);
   const citas = C.c.filter(x=>x.pacienteId===pacienteId).sort((a,b)=>b.fecha.localeCompare(a.fecha));
   const meds  = C.m.filter(x=>x.pacienteId===pacienteId);
-  const notas = C.n.filter(x=>x.pacienteId===pacienteId);
+  const notas = C.n.filter(x=>x.pacienteId===pacienteId && x.estado!=='borrador');
   const movs  = (C.mov||[]).filter(x=>x.pacienteId===pacienteId||x.referencia?.includes(p.nombre));
   const facts = (C.fact||[]).filter(x=>x.pacienteId===pacienteId);
   const edad  = _getEdadNum(p.fechaNac);
@@ -13216,7 +13262,7 @@ function renderDetalleMascota(mid) {
     <div class="card-header"><h3>📝 Consultas y notas</h3><button class="btn btn-primary btn-sm" onclick="openModalNotaMascota(${mid})">+ Nueva</button></div>
     ${notasMascota.length ? `<div class="timeline">${notasMascota.map(n => `
       <div class="timeline-item">
-        <div class="timeline-date">${formatFecha(n.fecha)} · <span class="tag tag-blue" style="font-size:10px">${NOTA_TIPO_ICON[n.tipo]||'📝'} ${notaTipoLabel(n.tipo)}</span></div>
+        <div class="timeline-date">${formatFecha(n.fecha)} · <span class="tag tag-blue" style="font-size:10px">${NOTA_TIPO_ICON[n.tipo]||'📝'} ${notaTipoLabel(n.tipo)}</span> ${notaEstadoTag(n)}</div>
         <div class="timeline-content">
           ${n.titulo?`<strong style="display:block;margin-bottom:5px">${escAttr(n.titulo)}</strong>`:''}
           ${_signosChipsHTML(n.signos)}
@@ -13224,7 +13270,7 @@ function renderDetalleMascota(mid) {
           <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
             <button class="btn btn-secondary btn-sm" onclick="verNota(${n.id})">👁️ Ver</button>
             <button class="btn btn-secondary btn-sm" onclick="editarNota(${n.id})">✏️ Editar</button>
-            <button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})">🖨️</button>
+            ${n.estado!=='borrador'?`<button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})">🖨️</button>`:''}
             <button class="btn btn-danger btn-sm" onclick="eliminarNota(${n.id})">🗑️</button>
           </div>
         </div>
@@ -13758,7 +13804,7 @@ function _refrescarVistaCitas() {
 function _historialPeso(mid) {
   const puntos = [];
   const exp = C.expMas.find(x => x.mascotaId === mid);
-  C.n.filter(n => n.mascotaId === mid && n.signos && n.signos.peso)
+  C.n.filter(n => n.mascotaId === mid && n.signos && n.signos.peso && n.estado!=='borrador')
     .forEach(n => {
       const kg = parseFloat(n.signos.peso);
       if(kg > 0) puntos.push({ fecha: n.fecha, kg, origen: 'consulta' });

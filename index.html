@@ -2485,7 +2485,8 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-nota')">Cancelar</button>
-      <button class="btn btn-primary" onclick="guardarNota()">💾 Guardar Nota</button>
+      <button class="btn btn-secondary" id="btn-nota-borrador" onclick="guardarNota('borrador')">💾 Guardar borrador</button>
+      <button class="btn btn-primary" id="btn-nota-finalizar" onclick="guardarNota('finalizada')">✅ Finalizar nota</button>
     </div>
   </div>
 </div>
@@ -2593,7 +2594,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260830a" defer></script>
+<script src="js/app.js?v=20260901a" defer></script>
 </body>
 </html>
 
