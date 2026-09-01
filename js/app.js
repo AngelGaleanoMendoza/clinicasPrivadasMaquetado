@@ -867,9 +867,13 @@ function recuperarDraft(idx) {
     openModalNota();
     setTimeout(() => {
       if(d.data.pacienteId) setPacienteSelect('n-paciente', d.data.pacienteId);
-      if(d.data.tipo)      document.getElementById('n-tipo').value     = d.data.tipo;
+      if(d.data.tipo) {
+        _agregarTipoNotaHistorico(d.data.tipo);
+        document.getElementById('n-tipo').value = d.data.tipo;
+      }
       if(d.data.tituloNota)document.getElementById('n-titulo').value   = d.data.tituloNota;
       if(d.data.contenido) document.getElementById('n-contenido').value= d.data.contenido;
+      onTipoNotaChange();
     }, 80);
   } else if(d.modulo === 'paciente') {
     openModalPaciente();
@@ -3449,13 +3453,13 @@ async function eliminarMedicacion(id){
 
 // ════════════════════ NOTAS ════════════════════
 const NOTA_TIPO_ICON = {
-  evolucion:'📋', resumen_clinico:'🩺', diagnostico:'🔬', tratamiento:'💊', laboratorio:'🧪',
+  evolucion:'📋', resumen_clinico:'🩺', constancia:'📄', diagnostico:'🔬', tratamiento:'💊', laboratorio:'🧪',
   imagen:'🩻', cirugia:'🔪', alta:'🏠', examen_visual:'👁️',
   odontologia:'🦷', receta:'📄', interconsulta:'🔄', otro:'📌'
 };
 // Etiqueta legible del tipo de nota (resumen_clinico -> Resumen clínico)
 const NOTA_TIPO_LABEL = {
-  evolucion:'Evolución', resumen_clinico:'Resumen clínico', diagnostico:'Diagnóstico',
+  evolucion:'Evolución', resumen_clinico:'Resumen clínico', constancia:'Constancia', diagnostico:'Diagnóstico',
   tratamiento:'Tratamiento', laboratorio:'Laboratorio', imagen:'Imagen / Radiología',
   cirugia:'Cirugía', alta:'Alta médica', examen_visual:'Examen visual',
   odontologia:'Odontología', receta:'Receta', interconsulta:'Interconsulta', otro:'Otro'
@@ -3499,7 +3503,7 @@ function renderNotas(){
         <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${n.titulo||prev}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
-        <span class="tag tag-blue" style="font-size:10px">${tipoIcon} ${n.tipo}</span>
+        <span class="tag tag-blue" style="font-size:10px">${tipoIcon} ${notaTipoLabel(n.tipo)}</span>
         <div class="actions-cell" style="gap:3px;flex-wrap:nowrap">
           <button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})">🖨️</button>
           <button class="btn btn-secondary btn-sm" onclick="verNota(${n.id})">👁️</button>
@@ -3560,14 +3564,39 @@ function _pintarPanelSignos() {
   }).join('');
 }
 
-// Muestra el panel solo en el Resumen Clínico; ahí el texto deja de ser obligatorio
-function onTipoNotaChange() {
-  const esResumen = document.getElementById('n-tipo')?.value === 'resumen_clinico';
+const NOTA_TIPO_FORM = {
+  evolucion:       { campo:'Nota de evolución',       placeholder:'Evolución del paciente, cambios y conducta médica...' },
+  resumen_clinico: { campo:'Resumen clínico',         placeholder:'Resumen de la consulta, hallazgos y recomendaciones...' },
+  constancia:      { campo:'Contenido de constancia', placeholder:'Detalle de la constancia médica...' },
+  diagnostico:     { campo:'Nota diagnóstica',        placeholder:'Impresión diagnóstica, criterios y hallazgos relevantes...' },
+  tratamiento:     { campo:'Plan de tratamiento',     placeholder:'Tratamiento indicado, objetivos y seguimiento...' },
+  laboratorio:     { campo:'Nota de laboratorio',     placeholder:'Resultados, interpretación y observaciones de laboratorio...' },
+  imagen:          { campo:'Nota de imagen',          placeholder:'Hallazgos e interpretación de imagen o radiología...' },
+  cirugia:         { campo:'Nota quirúrgica',         placeholder:'Procedimiento, hallazgos, técnica y evolución quirúrgica...' },
+  alta:            { campo:'Nota de alta médica',     placeholder:'Estado al alta, indicaciones y signos de alarma...' },
+  interconsulta:   { campo:'Nota de interconsulta',   placeholder:'Motivo, especialidad solicitada y observaciones...' },
+  otro:            { campo:'Nota clínica',            placeholder:'Descripción detallada de la nota clínica...' }
+};
+
+// Cada tipo comienza vacío para que el contenido de una nota no pase a otra.
+function onTipoNotaChange(limpiarContenido=false) {
+  const tipo = document.getElementById('n-tipo')?.value;
+  const esResumen = tipo === 'resumen_clinico';
+  if(limpiarContenido && !editingNotaId) {
+    document.getElementById('n-titulo').value = '';
+    document.getElementById('n-contenido').value = '';
+    _limpiarSignosNota();
+  }
   const wrap = document.getElementById('n-signos-wrap');
   if(wrap) wrap.style.display = esResumen ? '' : 'none';
   if(esResumen && !document.getElementById('n-signos-grid')?.children.length) _pintarPanelSignos();
   const req = document.getElementById('n-contenido-req');
   if(req) req.style.display = esResumen ? 'none' : '';
+  const presentacion = NOTA_TIPO_FORM[tipo] || NOTA_TIPO_FORM.otro;
+  const label = document.getElementById('n-contenido-label');
+  if(label) label.textContent = presentacion.campo;
+  const contenido = document.getElementById('n-contenido');
+  if(contenido) contenido.placeholder = presentacion.placeholder;
 }
 
 function _limpiarSignosNota() {
@@ -3660,7 +3689,10 @@ function _signosPrintHTML(signos) {
 function _reiniciarFormularioNota(){
   currentNotaCitaId=null;
   fillSelect('n-paciente');
-  document.getElementById('n-tipo').value='evolucion';
+  const tipo=document.getElementById('n-tipo');
+  tipo.querySelectorAll('.nota-tipo-historico').forEach(option=>option.remove());
+  tipo.disabled=false;
+  tipo.value='evolucion';
   document.getElementById('n-fecha').value=hoy();
   document.getElementById('n-titulo').value='';
   document.getElementById('n-contenido').value='';
@@ -3668,6 +3700,16 @@ function _reiniciarFormularioNota(){
   _pintarPanelSignos();
   _limpiarSignosNota();
   document.getElementById('n-mascota').value=''; document.getElementById('n-mas-txt').value='';
+}
+
+function _agregarTipoNotaHistorico(tipoValor){
+  const tipo=document.getElementById('n-tipo');
+  if(!tipoValor || Array.from(tipo.options).some(option=>option.value===tipoValor)) return;
+  const option=document.createElement('option');
+  option.value=tipoValor;
+  option.textContent=`${NOTA_TIPO_ICON[tipoValor]||'📝'} ${notaTipoLabel(tipoValor)}`;
+  option.className='nota-tipo-historico';
+  tipo.appendChild(option);
 }
 
 function openModalNota(id){
@@ -3681,9 +3723,12 @@ function openModalNota(id){
   if(pw) pw.style.display = esVet ? 'none' : '';
   if(mw) mw.style.display = esVet ? '' : 'none';
   if(notaEditada){
+    const tipo=document.getElementById('n-tipo');
+    _agregarTipoNotaHistorico(notaEditada.tipo);
     currentNotaCitaId=notaEditada.citaId||null;
     if(esVet) setMascotaSelectNota(notaEditada.mascotaId); else setPacienteSelect('n-paciente',notaEditada.pacienteId);
-    document.getElementById('n-tipo').value=notaEditada.tipo;
+    tipo.value=notaEditada.tipo;
+    tipo.disabled=true;
     document.getElementById('n-fecha').value=notaEditada.fecha;
     document.getElementById('n-titulo').value=notaEditada.titulo||'';
     document.getElementById('n-contenido').value=notaEditada.contenido||'';
@@ -3783,7 +3828,7 @@ function verNota(id){
   const n=C.n.find(x=>x.id===id), p=_sujetoNota(n);
   document.getElementById('ver-nota-title').textContent=`📝 ${n.titulo||'Nota Clínica'}`;
   document.getElementById('ver-nota-content').innerHTML=`
-    <div style="margin-bottom:14px"><span class="tag tag-blue">${n.tipo}</span><span style="margin-left:8px;font-size:12px;color:var(--text-light)">${formatFecha(n.fecha)}</span></div>
+    <div style="margin-bottom:14px"><span class="tag tag-blue">${notaTipoLabel(n.tipo)}</span><span style="margin-left:8px;font-size:12px;color:var(--text-light)">${formatFecha(n.fecha)}</span></div>
     ${p?`<p class="text-light" style="margin-bottom:12px">${esVeterinaria()?'Mascota':'Paciente'}: <strong style="color:var(--text)">${escAttr(p.titulo)}</strong>${p.subtitulo?` <span style="font-size:12px">(${escAttr(p.subtitulo)})</span>`:''}</p>`:''}
     ${n.titulo?`<h3 style="margin-bottom:12px">${n.titulo}</h3>`:''}
     ${_signosChipsHTML(n.signos)}
@@ -3918,7 +3963,7 @@ function imprimirNota(id) {
   const p = C.p.find(x => x.id === n.pacienteId);
   const cfg = getClinicaConfig();
   const fmtF = f => { if(!f) return '—'; const d=new Date(f+'T12:00:00'); return d.toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'}); };
-  const tipoColor = {evolucion:'#1D4ED8',resumen_clinico:'#0E7490',diagnostico:'#7C3AED',tratamiento:'#059669',laboratorio:'#D97706',imagen:'#0891B2',cirugia:'#DC2626',alta:'#065F46',otro:'#475569'}[n.tipo]||'#1D4ED8';
+  const tipoColor = {evolucion:'#1D4ED8',resumen_clinico:'#0E7490',constancia:'#475569',diagnostico:'#7C3AED',tratamiento:'#059669',laboratorio:'#D97706',imagen:'#0891B2',cirugia:'#DC2626',alta:'#065F46',otro:'#475569'}[n.tipo]||'#1D4ED8';
 
   const ini2 = (a,b) => ((a||'')[0]||'').toUpperCase()+((b||'')[0]||'').toUpperCase();
   if(n.tipo === 'examen_visual') { imprimirExamenVisual(n, p, cfg, fmtF, ini2); return; }
@@ -4038,16 +4083,11 @@ function abrirRecetaDigital({titulo,receta,cfg,sujeto,meds,esVeterinaria=false})
   const alerta=sujeto.alerta?`<div class="drx-alert">⚠ ${escAttr(sujeto.alerta)}</div>`:'';
   const medHtml=meds.map((m,i)=>`<div class="drx-med"><div class="drx-num">${i+1}</div><div class="drx-med-main"><strong>${escAttr(m.nombre||'')}</strong>${m.indicaciones?`<p>${escAttr(m.indicaciones)}</p>`:''}</div><div class="drx-med-data"><span><b>Dosis</b>${escAttr(m.dosis||'')}</span><span><b>Frecuencia</b>${escAttr(m.frecuencia||'')}</span><span><b>Vía</b>${escAttr(via(m.via))}</span><span><b>Duración</b>${m.fin?fmt(m.inicio)+' – '+fmt(m.fin):'Según indicación'}</span></div></div>`).join('');
   const firma=_firmaImgUrlHTML(receta.prescriptorFirmaUrl||cfg.firmaUrl,42);
-  let logo=d.logoUrl?`<img class="drx-logo" src="${escAttr(d.logoUrl)}" alt="Logo">`:'';
+  const logo=d.logoUrl?`<img class="drx-logo" src="${escAttr(d.logoUrl)}" alt="Logo">`:'';
   const contacto=d.encabezadoCompleto
     ? `${d.direccion?`<p>📍 ${escAttr(d.direccion)}</p>`:''}${d.telefono?`<p>☎ ${escAttr(d.telefono)}</p>`:''}`
     : '';
-  if(d.encabezadoCompleto){
-    receta.prescriptorNombre=receta.prescriptorNombre||d.titulo;
-    receta.prescriptorEspecialidad=receta.prescriptorEspecialidad||d.subtitulo;
-    logo=`<div style="display:flex;align-items:center;gap:12px">${logo}<div><h1>${escAttr(d.titulo)}</h1><h2>${escAttr(d.subtitulo)}</h2><p>${escAttr(d.institucion)}</p>${contacto}</div></div>`;
-    d.titulo=''; d.subtitulo=''; d.institucion='';
-  }
+  const marcaTexto=`<div class="drx-brand-text"><h1>${escAttr(d.titulo)}</h1><h2>${escAttr(d.subtitulo)}</h2><p>${escAttr(d.institucion)}</p>${contacto}</div>`;
   const T = TAMANOS_RECETA[d.tamano] || TAMANOS_RECETA.media;
   // Todo lo que estaba calibrado para A4 se escala a la hoja elegida: márgenes,
   // panel lateral y su margen negativo. Sin esto, un talonario de 14 cm heredaba
@@ -4066,8 +4106,8 @@ function abrirRecetaDigital({titulo,receta,cfg,sujeto,meds,esVeterinaria=false})
   const pxAncho = Math.round(T.w * 96 / 25.4);
 
   const html=`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escAttr(titulo)}</title><style>
-  @page{size:${T.w}mm ${T.h}mm;margin:0}*{box-sizing:border-box}body{margin:0;background:#eef2f7;font-family:"${d.fuente}",sans-serif;color:#172033}.drx-page{--rx:${d.color};width:${T.w}mm;min-height:${T.h}mm;margin:0 auto;background:#fff;padding:${mmY}mm ${mmX}mm ${mmB}mm;display:flex;flex-direction:column}.drx-head{display:grid;grid-template-columns:1fr auto;gap:15px;border-bottom:3px solid var(--rx);padding-bottom:9px}.drx-brand{display:flex;align-items:center;gap:12px}.drx-brand.logo-right{flex-direction:row-reverse;justify-content:flex-end}.drx-brand.logo-center{flex-direction:column;text-align:center;gap:5px}.drx-logo{width:22mm;height:18mm;object-fit:contain;flex:none}.drx-head h1{font-size:${fsTitulo}px;color:var(--rx);margin:0 0 3px;line-height:1.15}.drx-head h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;margin:0}.drx-head p{font-size:10px;margin:3px 0 0;color:#64748b}.drx-meta{text-align:right;font-size:10px}.drx-meta strong{display:block;font-size:12px;margin-bottom:4px}.drx-grid{display:grid;grid-template-columns:${d.layout==='lateral'?mmSide+'mm 1fr':'1fr'};flex:1}.drx-side{background:color-mix(in srgb,var(--rx) 10%,white);border-right:1px solid color-mix(in srgb,var(--rx) 30%,white);padding:14px 11px;margin-left:-${mmX}mm}.drx-side h3{font-size:10px;text-transform:uppercase;color:var(--rx);letter-spacing:.7px;margin:0 0 12px}.drx-side-item{font-size:10px;margin:10px 0;display:flex;gap:6px}.drx-side-item i{width:7px;height:7px;border:1.5px solid var(--rx);border-radius:50%;flex:none;margin-top:2px}.drx-alert{margin-top:18px;padding:8px;background:#fff;border:1px solid #fecaca;color:#b91c1c;font-size:9px;border-radius:5px}.drx-main{padding:14px ${d.layout==='lateral'?'0 0 13px':'0'};min-width:0}.drx-patient{display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px 12px;padding-bottom:11px;border-bottom:1px solid #cbd5e1}.drx-field label,.drx-section-label{display:block;font-size:8px;font-weight:800;text-transform:uppercase;color:var(--rx);letter-spacing:.5px}.drx-field div{font-size:12px;font-weight:600;padding:4px 0;border-bottom:1px solid #94a3b8;min-height:24px}.drx-field.wide{grid-column:span 2}.drx-dx{margin:13px 0;padding:9px 11px;border-left:4px solid var(--rx);background:#f8fafc}.drx-dx div{font-size:12px;margin-top:3px}.drx-rx-title{font-size:21px;font-family:Georgia,serif;color:var(--rx);margin:12px 0 6px}.drx-med{display:grid;grid-template-columns:25px 1fr;gap:7px;border-bottom:1px solid #dbe3ec;padding:9px 0}.drx-num{width:22px;height:22px;border-radius:50%;background:var(--rx);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800}.drx-med-main strong{font-size:12px}.drx-med-main p{font-size:9.5px;color:#475569;margin:3px 0}.drx-med-data{grid-column:2;display:grid;grid-template-columns:repeat(${colsPos},1fr);gap:5px}.drx-med-data span{font-size:9px}.drx-med-data b{display:block;color:var(--rx);font-size:7px;text-transform:uppercase;margin-bottom:2px}.drx-notes{margin-top:13px;padding:10px;border:1px solid #cbd5e1;border-radius:6px;min-height:45px;font-size:10px;white-space:pre-wrap}.drx-bottom{display:grid;grid-template-columns:1fr ${pxFirma}px;gap:18px;align-items:end;margin-top:22px}.drx-next{font-size:10px;border-bottom:1px solid #64748b;padding-bottom:5px}.drx-sign{text-align:center}.drx-sign-line{border-top:1px solid #334155;padding-top:5px;font-size:11px;font-weight:800}.drx-sign small{display:block;color:#64748b;margin-top:2px}.drx-foot{text-align:center;border-top:1px solid #cbd5e1;padding-top:7px;margin-top:12px;font-size:8px;color:#64748b}@media print{body{background:#fff}.drx-page{margin:0;box-shadow:none;print-color-adjust:exact;-webkit-print-color-adjust:exact}}@media screen{body{padding:14px 10px}.drx-page{box-shadow:0 6px 28px rgba(15,23,42,.18);border-radius:4px}}@media screen and (max-width:${pxAncho + 40}px){.drx-page{width:100%;min-height:0;padding:22px 16px}.drx-grid{grid-template-columns:1fr}.drx-side{margin-left:0;border-right:0;border-bottom:1px solid color-mix(in srgb,var(--rx) 30%,white);border-radius:6px;margin-bottom:4px}.drx-main{padding:14px 0 0}.drx-head{grid-template-columns:1fr;gap:8px}.drx-meta{text-align:left}.drx-patient{grid-template-columns:1fr 1fr}.drx-field.wide{grid-column:span 2}.drx-med-data{grid-template-columns:1fr 1fr}.drx-bottom{grid-template-columns:1fr;gap:18px}.drx-sign{text-align:left}}
-  </style></head><body><div class="drx-page"><header class="drx-head"><div class="drx-brand logo-${d.logoPos}">${logo}<div><h1>${escAttr(d.titulo)}</h1><h2>${escAttr(d.subtitulo)}</h2><p>${escAttr(d.institucion)}</p></div></div><div class="drx-meta"><strong>RECETA MÉDICA</strong><span>${fmt(receta.fechaEmision||receta.inicio||hoy())}</span><br><span>${_numeroReceta(receta)}</span></div></header><div class="drx-grid"><main class="drx-main"><section class="drx-patient"><div class="drx-field wide"><label>${esVeterinaria?'Paciente / Mascota':'Paciente'}</label><div>${escAttr(sujeto.nombre)}</div></div>${campos}</section>${alerta}${d.secciones.diagnostico?`<section class="drx-dx"><span class="drx-section-label">Diagnóstico</span><div>${escAttr(receta.diagnostico||'—')}</div></section>`:''}<div class="drx-rx-title">℞ Prescripción</div>${medHtml}${d.secciones.indicaciones&&receta.recetaNotas?`<section><span class="drx-section-label" style="margin-top:14px">Indicaciones generales</span><div class="drx-notes">${escAttr(receta.recetaNotas)}</div></section>`:''}<div class="drx-bottom">${d.secciones.proximaCita?`<div class="drx-next"><b>Próxima cita:</b> ${fmt(receta.proximaCita)}</div>`:'<div></div>'}<div class="drx-sign">${firma}<div class="drx-sign-line">${escAttr(receta.prescriptorNombre||d.titulo)}</div><small>${escAttr(receta.prescriptorEspecialidad||d.subtitulo)}${d.registro?' · '+escAttr(d.registro):''}</small></div></div></main></div><footer class="drx-foot">${escAttr(d.pie)}</footer></div><script>window.onload=function(){window.print()}<\/script></body></html>`;
+  @page{size:${T.w}mm ${T.h}mm;margin:0}*{box-sizing:border-box}body{margin:0;background:#eef2f7;font-family:"${d.fuente}",sans-serif;color:#172033}.drx-page{--rx:${d.color};width:${T.w}mm;min-height:${T.h}mm;margin:0 auto;background:#fff;padding:${mmY}mm ${mmX}mm ${mmB}mm;display:flex;flex-direction:column}.drx-head{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:15px;border-bottom:3px solid var(--rx);padding-bottom:9px}.drx-brand{display:flex;align-items:center;gap:12px;min-width:0}.drx-brand.logo-right{flex-direction:row-reverse;justify-content:flex-end}.drx-brand.logo-center{justify-content:center;text-align:left}.drx-brand-text{min-width:0}.drx-logo{width:22mm;height:18mm;object-fit:contain;flex:none}.drx-head h1{font-size:${fsTitulo}px;color:var(--rx);margin:0 0 3px;line-height:1.15;overflow-wrap:anywhere}.drx-head h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;margin:0}.drx-head p{font-size:10px;margin:3px 0 0;color:#64748b}.drx-meta{text-align:right;font-size:10px;white-space:nowrap}.drx-meta strong{display:block;font-size:12px;margin-bottom:4px}.drx-grid{display:grid;grid-template-columns:${d.layout==='lateral'?mmSide+'mm 1fr':'1fr'};flex:1}.drx-side{background:color-mix(in srgb,var(--rx) 10%,white);border-right:1px solid color-mix(in srgb,var(--rx) 30%,white);padding:14px 11px;margin-left:-${mmX}mm}.drx-side h3{font-size:10px;text-transform:uppercase;color:var(--rx);letter-spacing:.7px;margin:0 0 12px}.drx-side-item{font-size:10px;margin:10px 0;display:flex;gap:6px}.drx-side-item i{width:7px;height:7px;border:1.5px solid var(--rx);border-radius:50%;flex:none;margin-top:2px}.drx-alert{margin-top:18px;padding:8px;background:#fff;border:1px solid #fecaca;color:#b91c1c;font-size:9px;border-radius:5px}.drx-main{padding:14px ${d.layout==='lateral'?'0 0 13px':'0'};min-width:0}.drx-patient{display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px 12px;padding-bottom:11px;border-bottom:1px solid #cbd5e1}.drx-field label,.drx-section-label{display:block;font-size:8px;font-weight:800;text-transform:uppercase;color:var(--rx);letter-spacing:.5px}.drx-field div{font-size:12px;font-weight:600;padding:4px 0;border-bottom:1px solid #94a3b8;min-height:24px}.drx-field.wide{grid-column:span 2}.drx-dx{margin:13px 0;padding:9px 11px;border-left:4px solid var(--rx);background:#f8fafc}.drx-dx div{font-size:12px;margin-top:3px}.drx-rx-title{font-size:21px;font-family:Georgia,serif;color:var(--rx);margin:12px 0 6px}.drx-med{display:grid;grid-template-columns:25px 1fr;gap:7px;border-bottom:1px solid #dbe3ec;padding:9px 0}.drx-num{width:22px;height:22px;border-radius:50%;background:var(--rx);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800}.drx-med-main strong{font-size:12px}.drx-med-main p{font-size:9.5px;color:#475569;margin:3px 0}.drx-med-data{grid-column:2;display:grid;grid-template-columns:repeat(${colsPos},1fr);gap:5px}.drx-med-data span{font-size:9px}.drx-med-data b{display:block;color:var(--rx);font-size:7px;text-transform:uppercase;margin-bottom:2px}.drx-notes{margin-top:13px;padding:10px;border:1px solid #cbd5e1;border-radius:6px;min-height:45px;font-size:10px;white-space:pre-wrap}.drx-bottom{display:grid;grid-template-columns:1fr ${pxFirma}px;gap:18px;align-items:end;margin-top:22px}.drx-next{font-size:10px;border-bottom:1px solid #64748b;padding-bottom:5px}.drx-sign{text-align:center}.drx-sign-line{border-top:1px solid #334155;padding-top:5px;font-size:11px;font-weight:800}.drx-sign small{display:block;color:#64748b;margin-top:2px}.drx-foot{text-align:center;border-top:1px solid #cbd5e1;padding-top:7px;margin-top:12px;font-size:8px;color:#64748b}@media print{body{background:#fff}.drx-page{margin:0;box-shadow:none;print-color-adjust:exact;-webkit-print-color-adjust:exact}}@media screen{body{padding:14px 10px}.drx-page{box-shadow:0 6px 28px rgba(15,23,42,.18);border-radius:4px}}@media screen and (max-width:${pxAncho + 40}px){.drx-page{width:100%;min-height:0;padding:22px 16px}.drx-grid{grid-template-columns:1fr}.drx-side{margin-left:0;border-right:0;border-bottom:1px solid color-mix(in srgb,var(--rx) 30%,white);border-radius:6px;margin-bottom:4px}.drx-main{padding:14px 0 0}.drx-patient{grid-template-columns:1fr 1fr}.drx-field.wide{grid-column:span 2}.drx-med-data{grid-template-columns:1fr 1fr}.drx-bottom{grid-template-columns:1fr;gap:18px}.drx-sign{text-align:left}}
+  </style></head><body><div class="drx-page"><header class="drx-head"><div class="drx-brand logo-${d.logoPos}">${logo}${marcaTexto}</div><div class="drx-meta"><strong>RECETA MÉDICA</strong><span>${fmt(receta.fechaEmision||receta.inicio||hoy())}</span><br><span>${_numeroReceta(receta)}</span></div></header><div class="drx-grid"><main class="drx-main"><section class="drx-patient"><div class="drx-field wide"><label>${esVeterinaria?'Paciente / Mascota':'Paciente'}</label><div>${escAttr(sujeto.nombre)}</div></div>${campos}</section>${alerta}${d.secciones.diagnostico?`<section class="drx-dx"><span class="drx-section-label">Diagnóstico</span><div>${escAttr(receta.diagnostico||'—')}</div></section>`:''}<div class="drx-rx-title">℞ Prescripción</div>${medHtml}${d.secciones.indicaciones&&receta.recetaNotas?`<section><span class="drx-section-label" style="margin-top:14px">Indicaciones generales</span><div class="drx-notes">${escAttr(receta.recetaNotas)}</div></section>`:''}<div class="drx-bottom">${d.secciones.proximaCita?`<div class="drx-next"><b>Próxima cita:</b> ${fmt(receta.proximaCita)}</div>`:'<div></div>'}<div class="drx-sign">${firma}<div class="drx-sign-line">${escAttr(receta.prescriptorNombre||d.titulo)}</div><small>${escAttr(receta.prescriptorEspecialidad||d.subtitulo)}${d.registro?' · '+escAttr(d.registro):''}</small></div></div></main></div><footer class="drx-foot">${escAttr(d.pie)}</footer></div><script>window.onload=function(){window.print()}<\/script></body></html>`;
   const w=window.open('','_blank','width=900,height=1100');
   if(!w){toast('El navegador bloqueó la ventana de impresión','warning');return;}
   w.document.write(html);w.document.close();

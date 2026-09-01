@@ -2460,18 +2460,16 @@
           <div id="n-mas-sug" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;z-index:300;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.15);margin-top:4px"></div>
         </div>
       </div>
-      <div class="form-group"><label>Tipo de Nota</label><select id="n-tipo" onchange="onTipoNotaChange()">
+      <div class="form-group"><label>Tipo de Nota</label><select id="n-tipo" onchange="onTipoNotaChange(true)">
         <option value="evolucion">📋 Evolución</option>
         <option value="resumen_clinico">🩺 Resumen Clínico</option>
+        <option value="constancia">📄 Constancia</option>
         <option value="diagnostico">🔬 Diagnóstico</option>
         <option value="tratamiento">💊 Tratamiento</option>
         <option value="laboratorio">🧪 Laboratorio</option>
         <option value="imagen">🩻 Imagen / Radiología</option>
         <option value="cirugia">🔪 Cirugía</option>
         <option value="alta">🏠 Alta médica</option>
-        <option value="examen_visual">👁️ Examen Visual</option>
-        <option value="odontologia">🦷 Odontología</option>
-        <option value="receta">📄 Receta</option>
         <option value="interconsulta">🔄 Interconsulta</option>
         <option value="otro">📌 Otro</option>
       </select></div>
@@ -2483,7 +2481,7 @@
         <div class="signos-grid" id="n-signos-grid"></div>
         <div id="n-sv-imc" style="font-size:11.5px;color:var(--primary);font-weight:700;margin-top:7px;min-height:15px"></div>
       </div>
-      <div class="form-group"><label>Nota Clínica <span id="n-contenido-req">*</span></label><textarea id="n-contenido" placeholder="Descripción detallada, hallazgos, diagnóstico..." style="min-height:130px"></textarea></div>
+      <div class="form-group"><label><span id="n-contenido-label">Nota de evolución</span> <span id="n-contenido-req">*</span></label><textarea id="n-contenido" placeholder="Evolución del paciente, cambios y conducta médica..." style="min-height:130px"></textarea></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-nota')">Cancelar</button>
