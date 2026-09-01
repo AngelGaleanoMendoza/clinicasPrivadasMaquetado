@@ -1766,6 +1766,14 @@
             </div>
             <input type="hidden" id="u-rec-layout" value="clasico">
             <div class="form-group"><label>Color principal</label><input type="color" id="u-rec-color" value="#be185d" oninput="actualizarPreviewRecetario()"></div>
+            <div class="form-group"><label>Tipo de letra</label><select id="u-rec-fuente" onchange="actualizarPreviewRecetario()">
+              <option value="Arial">Arial — limpia y moderna</option>
+              <option value="Georgia">Georgia — elegante</option>
+              <option value="Times New Roman">Times New Roman — clásica</option>
+              <option value="Verdana">Verdana — alta legibilidad</option>
+              <option value="Trebuchet MS">Trebuchet — moderna y suave</option>
+              <option value="Courier New">Courier New — monoespaciada</option>
+            </select></div>
             <div class="form-group full"><label>Título profesional</label><input type="text" id="u-rec-titulo" placeholder="Dra. Nombre Apellido" oninput="actualizarPreviewRecetario()"></div>
             <div class="form-group full"><label>Especialidad / subtítulo</label><input type="text" id="u-rec-subtitulo" placeholder="Endocrinología" oninput="actualizarPreviewRecetario()"></div>
             <div class="form-group"><label>Registro médico</label><input type="text" id="u-rec-registro" placeholder="MINSA 0000" oninput="actualizarPreviewRecetario()"></div>
