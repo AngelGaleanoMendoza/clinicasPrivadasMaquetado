@@ -3994,6 +3994,11 @@ const TAMANOS_RECETA = {
 
 function _disenoRecetarioDigital(receta, cfg) {
   const d = receta?.recetarioConfig?.version===2 ? receta.recetarioConfig : {};
+  const secciones={
+    diagnostico:d.secciones?.diagnostico!==false,
+    indicaciones:d.secciones?.indicaciones!==false,
+    proximaCita:d.secciones?.proximaCita!==false
+  };
   return {
     // La receta siempre usa una sola columna; se retiró el panel de "Áreas de atención".
     layout:'clasico', color:d.color||'#be185d',
@@ -4002,7 +4007,7 @@ function _disenoRecetarioDigital(receta, cfg) {
     registro:d.registro||cfg.registro||'', institucion:d.institucion||cfg.institucion||cfg.nombreClinica||'',
     logoUrl:d.logoUrl||'', logoPos:['left','center','right'].includes(d.logoPos)?d.logoPos:'left',
     lista:Array.isArray(d.lista)?d.lista:[], pie:d.pie||[cfg.telefono,cfg.email,cfg.direccion].filter(Boolean).join(' · '),
-    tamano:TAMANOS_RECETA[d.tamano]?d.tamano:'media'
+    tamano:TAMANOS_RECETA[d.tamano]?d.tamano:'media', secciones
   };
 }
 
@@ -4034,7 +4039,7 @@ function abrirRecetaDigital({titulo,receta,cfg,sujeto,meds,esVeterinaria=false})
 
   const html=`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escAttr(titulo)}</title><style>
   @page{size:${T.w}mm ${T.h}mm;margin:0}*{box-sizing:border-box}body{margin:0;background:#eef2f7;font-family:Arial,sans-serif;color:#172033}.drx-page{--rx:${d.color};width:${T.w}mm;min-height:${T.h}mm;margin:0 auto;background:#fff;padding:${mmY}mm ${mmX}mm ${mmB}mm;display:flex;flex-direction:column}.drx-head{display:grid;grid-template-columns:1fr auto;gap:15px;border-bottom:3px solid var(--rx);padding-bottom:9px}.drx-brand{display:flex;align-items:center;gap:12px}.drx-brand.logo-right{flex-direction:row-reverse;justify-content:flex-end}.drx-brand.logo-center{flex-direction:column;text-align:center;gap:5px}.drx-logo{width:22mm;height:18mm;object-fit:contain;flex:none}.drx-head h1{font-size:${fsTitulo}px;color:var(--rx);margin:0 0 3px;line-height:1.15}.drx-head h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;margin:0}.drx-head p{font-size:10px;margin:3px 0 0;color:#64748b}.drx-meta{text-align:right;font-size:10px}.drx-meta strong{display:block;font-size:12px;margin-bottom:4px}.drx-grid{display:grid;grid-template-columns:${d.layout==='lateral'?mmSide+'mm 1fr':'1fr'};flex:1}.drx-side{background:color-mix(in srgb,var(--rx) 10%,white);border-right:1px solid color-mix(in srgb,var(--rx) 30%,white);padding:14px 11px;margin-left:-${mmX}mm}.drx-side h3{font-size:10px;text-transform:uppercase;color:var(--rx);letter-spacing:.7px;margin:0 0 12px}.drx-side-item{font-size:10px;margin:10px 0;display:flex;gap:6px}.drx-side-item i{width:7px;height:7px;border:1.5px solid var(--rx);border-radius:50%;flex:none;margin-top:2px}.drx-alert{margin-top:18px;padding:8px;background:#fff;border:1px solid #fecaca;color:#b91c1c;font-size:9px;border-radius:5px}.drx-main{padding:14px ${d.layout==='lateral'?'0 0 13px':'0'};min-width:0}.drx-patient{display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px 12px;padding-bottom:11px;border-bottom:1px solid #cbd5e1}.drx-field label,.drx-section-label{display:block;font-size:8px;font-weight:800;text-transform:uppercase;color:var(--rx);letter-spacing:.5px}.drx-field div{font-size:12px;font-weight:600;padding:4px 0;border-bottom:1px solid #94a3b8;min-height:24px}.drx-field.wide{grid-column:span 2}.drx-dx{margin:13px 0;padding:9px 11px;border-left:4px solid var(--rx);background:#f8fafc}.drx-dx div{font-size:12px;margin-top:3px}.drx-rx-title{font-size:21px;font-family:Georgia,serif;color:var(--rx);margin:12px 0 6px}.drx-med{display:grid;grid-template-columns:25px 1fr;gap:7px;border-bottom:1px solid #dbe3ec;padding:9px 0}.drx-num{width:22px;height:22px;border-radius:50%;background:var(--rx);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800}.drx-med-main strong{font-size:12px}.drx-med-main p{font-size:9.5px;color:#475569;margin:3px 0}.drx-med-data{grid-column:2;display:grid;grid-template-columns:repeat(${colsPos},1fr);gap:5px}.drx-med-data span{font-size:9px}.drx-med-data b{display:block;color:var(--rx);font-size:7px;text-transform:uppercase;margin-bottom:2px}.drx-notes{margin-top:13px;padding:10px;border:1px solid #cbd5e1;border-radius:6px;min-height:45px;font-size:10px;white-space:pre-wrap}.drx-bottom{display:grid;grid-template-columns:1fr ${pxFirma}px;gap:18px;align-items:end;margin-top:22px}.drx-next{font-size:10px;border-bottom:1px solid #64748b;padding-bottom:5px}.drx-sign{text-align:center}.drx-sign-line{border-top:1px solid #334155;padding-top:5px;font-size:11px;font-weight:800}.drx-sign small{display:block;color:#64748b;margin-top:2px}.drx-foot{text-align:center;border-top:1px solid #cbd5e1;padding-top:7px;margin-top:12px;font-size:8px;color:#64748b}@media print{body{background:#fff}.drx-page{margin:0;box-shadow:none;print-color-adjust:exact;-webkit-print-color-adjust:exact}}@media screen{body{padding:14px 10px}.drx-page{box-shadow:0 6px 28px rgba(15,23,42,.18);border-radius:4px}}@media screen and (max-width:${pxAncho + 40}px){.drx-page{width:100%;min-height:0;padding:22px 16px}.drx-grid{grid-template-columns:1fr}.drx-side{margin-left:0;border-right:0;border-bottom:1px solid color-mix(in srgb,var(--rx) 30%,white);border-radius:6px;margin-bottom:4px}.drx-main{padding:14px 0 0}.drx-head{grid-template-columns:1fr;gap:8px}.drx-meta{text-align:left}.drx-patient{grid-template-columns:1fr 1fr}.drx-field.wide{grid-column:span 2}.drx-med-data{grid-template-columns:1fr 1fr}.drx-bottom{grid-template-columns:1fr;gap:18px}.drx-sign{text-align:left}}
-  </style></head><body><div class="drx-page"><header class="drx-head"><div class="drx-brand logo-${d.logoPos}">${logo}<div><h1>${escAttr(d.titulo)}</h1><h2>${escAttr(d.subtitulo)}</h2><p>${escAttr(d.institucion)}</p></div></div><div class="drx-meta"><strong>RECETA MÉDICA</strong><span>${fmt(receta.fechaEmision||receta.inicio||hoy())}</span><br><span>${_numeroReceta(receta)}</span></div></header><div class="drx-grid"><main class="drx-main"><section class="drx-patient"><div class="drx-field wide"><label>${esVeterinaria?'Paciente / Mascota':'Paciente'}</label><div>${escAttr(sujeto.nombre)}</div></div>${campos}</section>${alerta}<section class="drx-dx"><span class="drx-section-label">Diagnóstico</span><div>${escAttr(receta.diagnostico||'—')}</div></section><div class="drx-rx-title">℞ Prescripción</div>${medHtml}${receta.recetaNotas?`<section><span class="drx-section-label" style="margin-top:14px">Indicaciones generales</span><div class="drx-notes">${escAttr(receta.recetaNotas)}</div></section>`:''}<div class="drx-bottom"><div class="drx-next"><b>Próxima cita:</b> ${fmt(receta.proximaCita)}</div><div class="drx-sign">${firma}<div class="drx-sign-line">${escAttr(receta.prescriptorNombre||d.titulo)}</div><small>${escAttr(receta.prescriptorEspecialidad||d.subtitulo)}${d.registro?' · '+escAttr(d.registro):''}</small></div></div></main></div><footer class="drx-foot">${escAttr(d.pie)}</footer></div><script>window.onload=function(){window.print()}<\/script></body></html>`;
+  </style></head><body><div class="drx-page"><header class="drx-head"><div class="drx-brand logo-${d.logoPos}">${logo}<div><h1>${escAttr(d.titulo)}</h1><h2>${escAttr(d.subtitulo)}</h2><p>${escAttr(d.institucion)}</p></div></div><div class="drx-meta"><strong>RECETA MÉDICA</strong><span>${fmt(receta.fechaEmision||receta.inicio||hoy())}</span><br><span>${_numeroReceta(receta)}</span></div></header><div class="drx-grid"><main class="drx-main"><section class="drx-patient"><div class="drx-field wide"><label>${esVeterinaria?'Paciente / Mascota':'Paciente'}</label><div>${escAttr(sujeto.nombre)}</div></div>${campos}</section>${alerta}${d.secciones.diagnostico?`<section class="drx-dx"><span class="drx-section-label">Diagnóstico</span><div>${escAttr(receta.diagnostico||'—')}</div></section>`:''}<div class="drx-rx-title">℞ Prescripción</div>${medHtml}${d.secciones.indicaciones&&receta.recetaNotas?`<section><span class="drx-section-label" style="margin-top:14px">Indicaciones generales</span><div class="drx-notes">${escAttr(receta.recetaNotas)}</div></section>`:''}<div class="drx-bottom">${d.secciones.proximaCita?`<div class="drx-next"><b>Próxima cita:</b> ${fmt(receta.proximaCita)}</div>`:'<div></div>'}<div class="drx-sign">${firma}<div class="drx-sign-line">${escAttr(receta.prescriptorNombre||d.titulo)}</div><small>${escAttr(receta.prescriptorEspecialidad||d.subtitulo)}${d.registro?' · '+escAttr(d.registro):''}</small></div></div></main></div><footer class="drx-foot">${escAttr(d.pie)}</footer></div><script>window.onload=function(){window.print()}<\/script></body></html>`;
   const w=window.open('','_blank','width=900,height=1100');
   if(!w){toast('El navegador bloqueó la ventana de impresión','warning');return;}
   w.document.write(html);w.document.close();
@@ -10007,6 +10012,11 @@ function _configRecetarioFormulario() {
     logoUrl:_recetarioLogoUrlActual||'',
     logoPos:document.getElementById('u-rec-logo-pos')?.value||'left',
     lista:(document.getElementById('u-rec-lista')?.value||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean),
+    secciones:{
+      diagnostico:!!document.getElementById('u-rec-sec-diagnostico')?.checked,
+      indicaciones:!!document.getElementById('u-rec-sec-indicaciones')?.checked,
+      proximaCita:!!document.getElementById('u-rec-sec-proxima')?.checked
+    },
     pie:document.getElementById('u-rec-pie')?.value.trim()||''
   };
 }
@@ -10027,16 +10037,17 @@ function actualizarPreviewRecetario() {
     +'<div class="rdp-body clasico"><main class="rdp-main">'
     +'<div class="rdp-line"><span class="rdp-label">Paciente</span><br>Nombre y apellidos</div>'
     +'<div class="rdp-line"><span class="rdp-label">Fecha · Identificación · Edad</span><br>Datos dentro de su sección</div>'
-    +'<div class="rdp-line"><span class="rdp-label">Diagnóstico</span><br>Diagnóstico de la consulta</div>'
+    +(cfg.secciones.diagnostico?'<div class="rdp-line"><span class="rdp-label">Diagnóstico</span><br>Diagnóstico de la consulta</div>':'')
     +'<span class="rdp-rx">℞</span><div class="rdp-med"><b>Medicamento 500 mg</b><br>Dosis · Frecuencia · Vía</div>'
-    +'<div class="rdp-med"><b>Indicaciones generales</b><br>Recomendaciones para el paciente</div>'
-    +'<div class="rdp-line" style="margin-top:9px"><span class="rdp-label">Próxima cita</span><br>Fecha de control</div>'
+    +(cfg.secciones.indicaciones?'<div class="rdp-med"><b>Indicaciones generales</b><br>Recomendaciones para el paciente</div>':'')
+    +(cfg.secciones.proximaCita?'<div class="rdp-line" style="margin-top:9px"><span class="rdp-label">Próxima cita</span><br>Fecha de control</div>':'')
     +'<div class="rdp-sign">Firma · '+escAttr(cfg.registro||'Registro médico')+'</div></main></div>'
     +'<div class="rdp-foot">'+escAttr(cfg.pie||'Información de contacto del profesional')+'</div>';
 }
 
 function _resetRecetarioUsuario(_url, config) {
-  const cfg = {...{version:2,tamano:'media',layout:'clasico',color:'#be185d',titulo:'',subtitulo:'',registro:'',institucion:'',logoUrl:'',logoPos:'left',lista:[],pie:''},...(config?.version===2?config:{})};
+  const cfg = {...{version:2,tamano:'media',layout:'clasico',color:'#be185d',titulo:'',subtitulo:'',registro:'',institucion:'',logoUrl:'',logoPos:'left',lista:[],secciones:{diagnostico:true,indicaciones:true,proximaCita:true},pie:''},...(config?.version===2?config:{})};
+  cfg.secciones={diagnostico:cfg.secciones?.diagnostico!==false,indicaciones:cfg.secciones?.indicaciones!==false,proximaCita:cfg.secciones?.proximaCita!==false};
   cfg.layout='clasico';
   _pendingRecetarioLogoFile=null;
   _recetarioLogoUrlActual=cfg.logoUrl||null;
@@ -10051,6 +10062,9 @@ function _resetRecetarioUsuario(_url, config) {
   document.getElementById('u-rec-institucion').value=cfg.institucion;
   document.getElementById('u-rec-logo-pos').value=['left','center','right'].includes(cfg.logoPos)?cfg.logoPos:'left';
   document.getElementById('u-rec-lista').value=Array.isArray(cfg.lista)?cfg.lista.join('\n'):'';
+  document.getElementById('u-rec-sec-diagnostico').checked=cfg.secciones.diagnostico;
+  document.getElementById('u-rec-sec-indicaciones').checked=cfg.secciones.indicaciones;
+  document.getElementById('u-rec-sec-proxima').checked=cfg.secciones.proximaCita;
   document.getElementById('u-rec-pie').value=cfg.pie;
   _pintarLogoRecetario(_recetarioLogoUrlActual);
   actualizarPreviewRecetario();

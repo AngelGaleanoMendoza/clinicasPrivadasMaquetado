@@ -1782,6 +1782,14 @@
               </div>
             </div>
             <div class="form-group"><label>Posición del logo</label><select id="u-rec-logo-pos" onchange="actualizarPreviewRecetario()"><option value="left">Izquierda</option><option value="center">Centro</option><option value="right">Derecha</option></select></div>
+            <div class="form-group full"><label>Secciones opcionales del recetario</label>
+              <div style="display:flex;gap:10px;flex-wrap:wrap">
+                <label class="farma-receta-toggle"><input type="checkbox" id="u-rec-sec-diagnostico" onchange="actualizarPreviewRecetario()"> Diagnóstico</label>
+                <label class="farma-receta-toggle"><input type="checkbox" id="u-rec-sec-indicaciones" onchange="actualizarPreviewRecetario()"> Indicaciones generales</label>
+                <label class="farma-receta-toggle"><input type="checkbox" id="u-rec-sec-proxima" onchange="actualizarPreviewRecetario()"> Próxima cita</label>
+              </div>
+              <small style="display:block;color:var(--text-light);margin-top:7px">Paciente, prescripción y firma siempre se incluyen.</small>
+            </div>
             <textarea id="u-rec-lista" style="display:none"></textarea>
             <div class="form-group full"><label>Pie del recetario</label><input type="text" id="u-rec-pie" placeholder="Teléfono · Dirección · Correo" oninput="actualizarPreviewRecetario()"></div>
             <p style="font-size:11px;color:var(--text-light);line-height:1.5;margin:0">La vista previa es completamente digital. Los datos del paciente y de la prescripción se insertarán dentro de estas secciones, sin usar una imagen de fondo.</p>
