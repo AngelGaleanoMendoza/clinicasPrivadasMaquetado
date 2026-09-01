@@ -828,7 +828,20 @@ ORDER BY tablename;
 -- Cada consulta conserva sus propios signos vitales en la nota clínica.
 ALTER TABLE public.notas
   ADD COLUMN IF NOT EXISTS cita_id BIGINT REFERENCES public.citas(id) ON DELETE SET NULL;
+ALTER TABLE public.notas
+  ADD COLUMN IF NOT EXISTS estado TEXT NOT NULL DEFAULT 'finalizada';
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'notas_estado_check' AND conrelid = 'public.notas'::regclass
+  ) THEN
+    ALTER TABLE public.notas
+      ADD CONSTRAINT notas_estado_check CHECK (estado IN ('borrador','finalizada'));
+  END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS idx_notas_cita_id ON public.notas(cita_id);
+CREATE INDEX IF NOT EXISTS idx_notas_estado ON public.notas(clinica_id, estado);
 CREATE INDEX IF NOT EXISTS idx_notas_paciente_fecha_signos
   ON public.notas(paciente_id, fecha DESC, id DESC) WHERE signos IS NOT NULL;
 

@@ -2461,17 +2461,23 @@
         </div>
       </div>
       <div class="form-group"><label>Tipo de Nota</label><select id="n-tipo" onchange="onTipoNotaChange(true)">
-        <option value="evolucion">📋 Evolución</option>
-        <option value="resumen_clinico">🩺 Resumen Clínico</option>
-        <option value="constancia">📄 Constancia</option>
-        <option value="diagnostico">🔬 Diagnóstico</option>
-        <option value="tratamiento">💊 Tratamiento</option>
-        <option value="laboratorio">🧪 Laboratorio</option>
-        <option value="imagen">🩻 Imagen / Radiología</option>
-        <option value="cirugia">🔪 Cirugía</option>
-        <option value="alta">🏠 Alta médica</option>
-        <option value="interconsulta">🔄 Interconsulta</option>
-        <option value="otro">📌 Otro</option>
+        <optgroup label="Seguimiento clínico">
+          <option value="evolucion">📋 Evolución</option>
+          <option value="resumen_clinico">🩺 Resumen Clínico</option>
+          <option value="alta">🏠 Alta médica</option>
+        </optgroup>
+        <optgroup label="Evaluación y atención">
+          <option value="diagnostico">🔬 Diagnóstico</option>
+          <option value="tratamiento">💊 Tratamiento</option>
+          <option value="laboratorio">🧪 Laboratorio</option>
+          <option value="imagen">🩻 Imagen / Radiología</option>
+          <option value="cirugia">🔪 Cirugía</option>
+        </optgroup>
+        <optgroup label="Documentos clínicos">
+          <option value="constancia">📄 Constancia</option>
+          <option value="interconsulta">🔄 Interconsulta</option>
+          <option value="otro">📌 Otro</option>
+        </optgroup>
       </select></div>
       <div class="form-group"><label>Fecha</label><input type="date" id="n-fecha"></div>
       <div class="form-group"><label>Título</label><input type="text" id="n-titulo" placeholder="Breve título de la nota"></div>
@@ -2487,6 +2493,20 @@
       <button class="btn btn-secondary" onclick="closeModal('modal-nota')">Cancelar</button>
       <button class="btn btn-secondary" id="btn-nota-borrador" onclick="guardarNota('borrador')">💾 Guardar borrador</button>
       <button class="btn btn-primary" id="btn-nota-finalizar" onclick="guardarNota('finalizada')">✅ Finalizar nota</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CAMBIO DE TIPO DE NOTA -->
+<div class="modal-overlay" id="modal-nota-cambio-tipo">
+  <div class="modal mc-box nota-cambio-box">
+    <div id="nota-cambio-icon">📝</div>
+    <h2>¿Desea continuar con el avance de la nota anterior?</h2>
+    <p class="mc-msg" id="nota-cambio-msg"></p>
+    <div class="nota-cambio-preview" id="nota-cambio-preview"></div>
+    <div class="mc-actions nota-cambio-actions">
+      <button class="btn btn-primary" onclick="_resolverCambioTipoNota('continuar')">Continuar con lo anterior</button>
+      <button class="btn btn-secondary" onclick="_resolverCambioTipoNota('nuevo')">Empezar desde cero</button>
     </div>
   </div>
 </div>

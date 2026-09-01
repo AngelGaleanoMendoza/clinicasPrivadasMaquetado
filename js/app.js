@@ -3638,10 +3638,11 @@ const NOTA_TIPO_FORM = {
   otro:            { campo:'Nota clínica',            placeholder:'Descripción detallada de la nota clínica...' }
 };
 
-// Cada tipo comienza vacío para que el contenido de una nota no pase a otra.
-// El acápite anterior, para saber CON QUÉ tipo guardar lo que ya estaba escrito
-// cuando el select ya cambió de valor.
+// El acápite anterior, para saber con qué tipo guardar lo escrito cuando el
+// select ya cambió de valor.
 let _tipoNotaPrevio = 'evolucion';
+let _cambioTipoNotaResolve = null;
+let _cambiandoTipoNotaSilencioso = false;
 
 // Todas las notas de una misma visita comparten anclaje: la cita cuando existe
 // y, si la nota no nació de una, la fecha —que para una consulta es el mismo
@@ -3651,94 +3652,40 @@ function _claveVisita(n) {
   return n.citaId ? 'cita:' + n.citaId : 'fecha:' + (n.fecha || '');
 }
 
-// Al cambiar de acápite, lo ya escrito no se pierde ni estorba: se guarda como
-// borrador y el formulario queda limpio para la siguiente nota, encadenada a la
-// misma consulta. `previa` es la nota que se estaba editando (o null si era
-// nueva); se calcula antes de llamar aquí porque también decide si el editor
-// debe desengancharse, y esa decisión es independiente de si hubo guardado.
-// Devuelve true si de verdad escribió algo en la base.
-async function _guardarComoBorradorEncadenado(previa) {
-  const titulo = document.getElementById('n-titulo')?.value.trim() || '';
-  const contenido = document.getElementById('n-contenido')?.value.trim() || '';
-  const signos = _tipoNotaPrevio === 'resumen_clinico' ? _leerSignosNota() : null;
-  if(!titulo && !contenido && !signos) return false;      // no había nada escrito
-
-  // Una nota finalizada ya vive, intacta, en su propia fila. Si nadie tocó su
-  // texto, tocar el selector de tipo no debe duplicarla en la base.
-  if(previa?.estado === 'finalizada') {
-    const sinCambios = (previa.titulo||'') === titulo && (previa.contenido||'') === contenido
-      && JSON.stringify(previa.signos||null) === JSON.stringify(signos);
-    if(sinCambios) return false;
-  }
-
+function _snapshotNotaActual(tipoBase=_tipoNotaPrevio) {
   const esVet = esVeterinaria();
-  const pid = esVet ? null : (parseInt(document.getElementById('n-paciente').value) || null);
-  const mid = esVet ? (parseInt(document.getElementById('n-mascota').value) || null) : null;
-  if(esVet ? !mid : !pid) return false;                   // sin sujeto no se puede guardar
-  if(!currentClinicaId) return false;
-
-  // Un borrador que ya existía se reclasifica en su sitio: sigue siendo la
-  // misma nota, solo cambia de tipo. Una nota nueva (o una finalizada con
-  // ediciones) siempre crea una fila propia, encadenada, y siempre en
-  // borrador — una finalizada nunca se sobrescribe ni recupera ese estado
-  // solo porque se le siguió escribiendo.
-  const sobrescribir = previa?.estado === 'borrador';
-  const payload = toN({
-    pacienteId: pid, mascotaId: mid, citaId: currentNotaCitaId, tipo: _tipoNotaPrevio,
-    fecha: document.getElementById('n-fecha').value || hoy(),
-    titulo, contenido, signos, estado: 'borrador'
-  });
-  const { error } = sobrescribir
-    ? await sb.from('notas').update(payload).eq('id', previa.id)
-    : await sb.from('notas').insert([payload]);
-  if(error) {
-    toast('No se pudo guardar el borrador: ' + error.message, 'error');
-    return false;
-  }
-  return true;
+  return {
+    pacienteId: esVet ? null : (parseInt(document.getElementById('n-paciente')?.value) || null),
+    mascotaId: esVet ? (parseInt(document.getElementById('n-mascota')?.value) || null) : null,
+    citaId: currentNotaCitaId,
+    tipo: tipoBase || document.getElementById('n-tipo')?.value || 'evolucion',
+    fecha: document.getElementById('n-fecha')?.value || hoy(),
+    titulo: document.getElementById('n-titulo')?.value.trim() || '',
+    contenido: document.getElementById('n-contenido')?.value.trim() || '',
+    signos: tipoBase === 'resumen_clinico' ? _leerSignosNota() : null
+  };
 }
 
-// Cambiar el tipo NUNCA borra lo escrito. El médico redacta primero y clasifica
-// después —o se da cuenta a media nota de que era una constancia y no una
-// evolución—; perder el texto por reclasificar es la peor forma de castigar eso.
-// Lo único que cambia según el estado es SOBRE QUÉ fila se escribe:
-//   · borrador   → se reclasifica ahí mismo; todavía no es un documento clínico.
-//   · finalizada → se abre una nota nueva que hereda el texto y la original
-//                  queda intacta, porque un documento clínico terminado no
-//                  cambia de tipo por detrás.
-async function onTipoNotaChange(cambioManual=false) {
-  const tipo = document.getElementById('n-tipo')?.value;
+function _hayAvanceNota(snap) {
+  return !!(snap?.titulo || snap?.contenido || snap?.signos);
+}
+
+function _aplicarTextoNota(snap, copiarSignos=false) {
+  document.getElementById('n-fecha').value = snap?.fecha || hoy();
+  document.getElementById('n-titulo').value = snap?.titulo || '';
+  document.getElementById('n-contenido').value = snap?.contenido || '';
+  copiarSignos ? _cargarSignosNota(snap?.signos) : _limpiarSignosNota();
+}
+
+function _limpiarTextoNotaConFecha(fecha) {
+  document.getElementById('n-fecha').value = fecha || hoy();
+  document.getElementById('n-titulo').value = '';
+  document.getElementById('n-contenido').value = '';
+  _limpiarSignosNota();
+}
+
+function _aplicarTipoNotaVisual(tipo) {
   const esResumen = tipo === 'resumen_clinico';
-  if(cambioManual) {
-    const editada = editingNotaId;
-    const previa = editada ? C.n.find(x => String(x.id) === String(editada)) : null;
-    const guardo = await _guardarComoBorradorEncadenado(previa);
-    // Un borrador reclasificado en su sitio sigue siendo la misma nota: el
-    // editor no se suelta de ella. En cualquier otro caso —nota nueva que
-    // encadenó otra, o una finalizada de la que ya no se puede seguir
-    // editando— el editor queda libre para la siguiente.
-    const debeDesenganchar = (!previa && guardo) || previa?.estado === 'finalizada';
-    if(debeDesenganchar) {
-      // El formulario arranca limpio para la nota siguiente, pero conserva
-      // paciente, fecha y cita: es la misma consulta, no una visita nueva.
-      editingNotaId = null;
-      document.getElementById('modal-nota-title').textContent = '📝 Nueva Nota Clínica';
-      _configurarAccionesNota(null);
-      document.getElementById('n-titulo').value = '';
-      document.getElementById('n-contenido').value = '';
-      _limpiarSignosNota();
-      toast(guardo ? 'Nota anterior guardada en borrador; sigues en la misma consulta'
-                   : 'Se inició una nota nueva; la nota finalizada no se modifica',
-            guardo ? 'success' : 'info');
-    }
-    if(guardo) {
-      await loadAll();
-      if(currentView==='paciente-detalle') renderDetalleP(currentPatientId);
-      else if(currentView==='mascota-detalle') renderDetalleMascota(currentMascotaId);
-      else renderNotas();
-    }
-  }
-  _tipoNotaPrevio = tipo;
   const wrap = document.getElementById('n-signos-wrap');
   if(wrap) wrap.style.display = esResumen ? '' : 'none';
   if(esResumen && !document.getElementById('n-signos-grid')?.children.length) _pintarPanelSignos();
@@ -3749,6 +3696,138 @@ async function onTipoNotaChange(cambioManual=false) {
   if(label) label.textContent = presentacion.campo;
   const contenido = document.getElementById('n-contenido');
   if(contenido) contenido.placeholder = presentacion.placeholder;
+}
+
+function _setTipoNotaSinDisparar(tipo) {
+  const select = document.getElementById('n-tipo');
+  if(!select) return;
+  _cambiandoTipoNotaSilencioso = true;
+  select.value = tipo;
+  _cambiandoTipoNotaSilencioso = false;
+}
+
+// Al cambiar de acápite, lo escrito queda registrado en el historial como
+// borrador antes de abrir la siguiente nota.
+async function _guardarComoBorradorEncadenado(previa, snap) {
+  if(!_hayAvanceNota(snap)) return { guardado:false, motivo:'vacio' };
+
+  // Una nota finalizada ya vive, intacta, en su propia fila. Si nadie tocó su
+  // texto, tocar el selector de tipo no debe duplicarla en la base.
+  if(previa?.estado === 'finalizada') {
+    const sinCambios = (previa.titulo||'') === snap.titulo && (previa.contenido||'') === snap.contenido
+      && JSON.stringify(previa.signos||null) === JSON.stringify(snap.signos);
+    if(sinCambios) return { guardado:false, motivo:'sin_cambios' };
+  }
+
+  if(esVeterinaria() ? !snap.mascotaId : !snap.pacienteId)
+    return { guardado:false, error: esVeterinaria() ? 'Selecciona una mascota' : 'Selecciona un paciente' };
+  if(!currentClinicaId) return { guardado:false, error:'Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.' };
+
+  const sobrescribir = previa?.estado === 'borrador';
+  const payload = toN({
+    pacienteId: snap.pacienteId, mascotaId: snap.mascotaId, citaId: snap.citaId, tipo: snap.tipo,
+    fecha: snap.fecha, titulo: snap.titulo, contenido: snap.contenido, signos: snap.signos,
+    estado: 'borrador'
+  });
+  const { error } = sobrescribir
+    ? await sb.from('notas').update(payload).eq('id', previa.id)
+    : await sb.from('notas').insert([payload]);
+  if(error) {
+    return { guardado:false, error:'No se pudo guardar el borrador: ' + error.message };
+  }
+  return { guardado:true, sobrescribir };
+}
+
+function _refrescarHistorialNotasActual() {
+  if(currentView==='paciente-detalle') renderDetalleP(currentPatientId);
+  else if(currentView==='mascota-detalle') renderDetalleMascota(currentMascotaId);
+  else renderNotas();
+}
+
+function _preguntarCambioTipoNota({snap, tipoNuevo, resultadoGuardado}) {
+  return new Promise(resolve => {
+    _cambioTipoNotaResolve = resolve;
+    const msg = document.getElementById('nota-cambio-msg');
+    const preview = document.getElementById('nota-cambio-preview');
+    const de = notaTipoLabel(snap.tipo);
+    const hacia = notaTipoLabel(tipoNuevo);
+    if(msg) {
+      msg.innerHTML = `El avance de <strong>${escAttr(de)}</strong> ${resultadoGuardado.guardado?'quedó guardado como borrador en el historial':'se conserva sin modificar'}.
+        Ahora cambiaste a <strong>${escAttr(hacia)}</strong>.`;
+    }
+    if(preview) {
+      const texto = snap.contenido || snap.titulo || '';
+      preview.style.display = texto ? 'block' : 'none';
+      preview.innerHTML = texto ? `<strong>Avance escrito</strong><p>${escAttr(texto)}</p>` : '';
+    }
+    openModalOverlay('modal-nota-cambio-tipo');
+  });
+}
+
+function _resolverCambioTipoNota(decision) {
+  closeModal('modal-nota-cambio-tipo');
+  if(_cambioTipoNotaResolve) {
+    _cambioTipoNotaResolve(decision);
+    _cambioTipoNotaResolve = null;
+  }
+}
+
+// Cambiar el tipo no borra lo escrito: el médico decide si usa ese avance como
+// base del nuevo acápite o si empieza limpio.
+async function onTipoNotaChange(cambioManual=false) {
+  const select = document.getElementById('n-tipo');
+  const tipo = select?.value;
+  if(!tipo) return;
+  if(_cambiandoTipoNotaSilencioso) {
+    _aplicarTipoNotaVisual(tipo);
+    return;
+  }
+  if(cambioManual && tipo !== _tipoNotaPrevio) {
+    const tipoAnterior = _tipoNotaPrevio;
+    const snap = _snapshotNotaActual(tipoAnterior);
+    const editada = editingNotaId;
+    const previa = editada ? C.n.find(x => String(x.id) === String(editada)) : null;
+
+    if(!_hayAvanceNota(snap)) {
+      editingNotaId = null;
+      document.getElementById('modal-nota-title').textContent = '📝 Nueva Nota Clínica';
+      _configurarAccionesNota(null);
+      _limpiarTextoNotaConFecha(snap.fecha);
+      _tipoNotaPrevio = tipo;
+      _aplicarTipoNotaVisual(tipo);
+      return;
+    }
+
+    select.disabled = true;
+    const resultado = await _guardarComoBorradorEncadenado(previa, snap);
+    select.disabled = false;
+    if(resultado.error) {
+      toast(resultado.error, 'error');
+      _setTipoNotaSinDisparar(tipoAnterior);
+      _aplicarTextoNota(snap, tipoAnterior === 'resumen_clinico');
+      _tipoNotaPrevio = tipoAnterior;
+      _aplicarTipoNotaVisual(tipoAnterior);
+      return;
+    }
+    if(resultado.guardado) {
+      await loadAll();
+      _refrescarHistorialNotasActual();
+    }
+
+    const decision = await _preguntarCambioTipoNota({ snap, tipoNuevo:tipo, resultadoGuardado:resultado });
+    editingNotaId = null;
+    document.getElementById('modal-nota-title').textContent = '📝 Nueva Nota Clínica';
+    _configurarAccionesNota(null);
+    if(decision === 'continuar') {
+      _aplicarTextoNota(snap, tipo === 'resumen_clinico');
+      toast('Avance copiado a la nueva nota; la anterior queda en el historial', 'info');
+    } else {
+      _limpiarTextoNotaConFecha(snap.fecha);
+      toast('Nueva nota en blanco; la anterior queda en el historial', 'info');
+    }
+  }
+  _tipoNotaPrevio = tipo;
+  _aplicarTipoNotaVisual(tipo);
 }
 
 function _limpiarSignosNota() {

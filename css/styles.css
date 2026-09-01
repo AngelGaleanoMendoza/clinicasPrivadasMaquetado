@@ -393,6 +393,15 @@ body.dark .fact-item-row input,body.dark .fact-item-row select{background:#0F172
 .mc-box h2{font-size:18px;font-weight:700;margin-bottom:8px}
 .mc-box .mc-msg{color:var(--text-light);font-size:14px;line-height:1.65;margin-bottom:28px}
 .mc-actions{display:flex;gap:10px;justify-content:center}
+.nota-cambio-box{text-align:left;max-width:520px}
+#nota-cambio-icon{font-size:42px;line-height:1;margin-bottom:12px;text-align:center}
+.nota-cambio-box h2{text-align:center}
+.nota-cambio-box .mc-msg{text-align:center;margin-bottom:14px}
+.nota-cambio-preview{display:none;background:var(--bg);border:1.5px solid var(--border);border-radius:12px;padding:12px 14px;margin:0 0 18px;color:var(--text);font-size:13px;line-height:1.55;text-align:left}
+.nota-cambio-preview strong{display:block;margin-bottom:4px;font-size:12px;color:var(--text-light);text-transform:uppercase;letter-spacing:.04em}
+.nota-cambio-preview p{white-space:pre-wrap;max-height:120px;overflow:auto}
+.nota-cambio-actions{align-items:stretch}
+.nota-cambio-actions .btn{justify-content:center}
 
 /* LOGIN USER CARDS */
 .login-select-title{color:#94A3B8;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;margin-bottom:14px;text-align:center}
