@@ -10745,7 +10745,9 @@ async function restablecerPasswordAdmin(id, nombre) {
     let estado = estadoFn || errFn?.context?.status;
     try { if(errFn?.context?.json) detalle = (await errFn.context.json())?.error || detalle; } catch(e) {}
 
-    if(estado === 404 || /\bnot found\b/i.test(detalle)) {
+    if(estado === 404 && /No existe una cuenta de acceso/i.test(detalle)) {
+      toast(detalle, 'error');
+    } else if(estado === 404 || /\bnot found\b/i.test(detalle)) {
       toast('La función «cambiar-password» no respondió desde este proyecto. Revisa que el deploy activo sea del proyecto ckpskotpdkmojgaqxyht y vuelve a desplegarla desde Edge Functions.','error');
     } else if(/Failed to send a request|Failed to fetch|NetworkError|load failed/i.test(detalle)) {
       // No distingue "no existe" de "no se pudo llegar": el navegador informa

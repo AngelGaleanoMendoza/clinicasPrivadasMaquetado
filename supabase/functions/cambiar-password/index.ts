@@ -83,8 +83,21 @@ Deno.serve(async (req) => {
     destino = data.users.find(u => (u.email ?? '').trim().toLowerCase() === correoDestino);
     if (data.users.length < 200) break;
   }
+  let cuentaCreada = false;
   if (!destino) {
-    return responder({ error: `No existe una cuenta de acceso para ${correoDestino}. Créala primero desde Authentication → Users.` }, 404);
+    const { data: creado, error: errCrear } = await admin.auth.admin.createUser({
+      email: correoDestino,
+      password: claveNueva,
+      email_confirm: true,
+    });
+    if (errCrear) {
+      return responder({ error: `No existe una cuenta de acceso para ${correoDestino} y no se pudo crear: ${errCrear.message}` }, 500);
+    }
+    if (!creado.user) {
+      return responder({ error: `No se pudo crear la cuenta de acceso para ${correoDestino}` }, 500);
+    }
+    cuentaCreada = true;
+    destino = { id: creado.user.id, email: creado.user.email ?? correoDestino };
   }
 
   // ── 5. Cambiar la contraseña y dejar el correo confirmado, para que pueda
@@ -100,5 +113,5 @@ Deno.serve(async (req) => {
     .update({ bloqueado: false, intentos_fallidos: 0, password: null })
     .ilike('email', correoDestino);
 
-  return responder({ ok: true, email: correoDestino });
+  return responder({ ok: true, email: correoDestino, cuentaCreada });
 });
