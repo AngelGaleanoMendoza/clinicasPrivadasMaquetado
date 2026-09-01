@@ -818,3 +818,106 @@ CREATE INDEX IF NOT EXISTS idx_profiles_email ON public.profiles(lower(btrim(ema
 SELECT indexname, tablename FROM pg_indexes
 WHERE schemaname = 'public' AND indexname LIKE 'idx_%'
 ORDER BY tablename;
+
+
+-- ============================================================
+-- PASO 12: HISTORIAL INMUTABLE DEL EXPEDIENTE DEL PACIENTE
+-- Conserva cada versión anterior con fecha, hora y usuario. Los triggers
+-- registran cambios aunque se realicen fuera de esta aplicación.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS public.historial_expediente (
+  id BIGSERIAL PRIMARY KEY,
+  clinica_id BIGINT NOT NULL REFERENCES public.clinicas(id) ON DELETE CASCADE,
+  paciente_id BIGINT REFERENCES public.pacientes(id) ON DELETE SET NULL,
+  tabla_origen TEXT NOT NULL,
+  registro_id BIGINT,
+  accion TEXT NOT NULL CHECK (accion IN ('INSERT','UPDATE','DELETE')),
+  datos_anteriores JSONB,
+  datos_nuevos JSONB,
+  usuario_id UUID,
+  usuario_nombre TEXT,
+  usuario_email TEXT,
+  fecha_hora TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_historial_expediente_paciente_fecha
+  ON public.historial_expediente(clinica_id, paciente_id, fecha_hora DESC);
+
+ALTER TABLE public.historial_expediente ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "historial_expediente_select" ON public.historial_expediente;
+CREATE POLICY "historial_expediente_select" ON public.historial_expediente
+  FOR SELECT USING (is_superadmin() OR clinica_id = get_my_clinica_id());
+-- No se crean políticas INSERT/UPDATE/DELETE para el navegador: el historial
+-- solamente lo escribe el trigger y no puede ser alterado desde la aplicación.
+
+CREATE OR REPLACE FUNCTION public.registrar_historial_expediente()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  fila JSONB;
+  v_paciente_id BIGINT;
+  v_clinica_id BIGINT;
+  v_registro_id BIGINT;
+  v_nombre TEXT;
+  v_email TEXT;
+BEGIN
+  fila := CASE WHEN TG_OP = 'DELETE' THEN to_jsonb(OLD) ELSE to_jsonb(NEW) END;
+  v_clinica_id := (fila->>'clinica_id')::BIGINT;
+  v_registro_id := NULLIF(fila->>'id','')::BIGINT;
+  v_paciente_id := CASE WHEN TG_TABLE_NAME = 'pacientes'
+    THEN v_registro_id ELSE NULLIF(fila->>'paciente_id','')::BIGINT END;
+
+  SELECT p.nombre, p.email INTO v_nombre, v_email
+  FROM public.profiles p
+  WHERE p.id = auth.uid()
+     OR lower(p.email) = lower(nullif(auth.jwt()->>'email',''))
+  ORDER BY (p.id = auth.uid()) DESC NULLS LAST LIMIT 1;
+
+  INSERT INTO public.historial_expediente
+    (clinica_id,paciente_id,tabla_origen,registro_id,accion,
+     datos_anteriores,datos_nuevos,usuario_id,usuario_nombre,usuario_email)
+  VALUES
+    (v_clinica_id,v_paciente_id,TG_TABLE_NAME,v_registro_id,TG_OP,
+     CASE WHEN TG_OP IN ('UPDATE','DELETE') THEN to_jsonb(OLD) END,
+     CASE WHEN TG_OP IN ('INSERT','UPDATE') THEN to_jsonb(NEW) END,
+     auth.uid(),v_nombre,coalesce(v_email,auth.jwt()->>'email'));
+  RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_historial_pacientes ON public.pacientes;
+CREATE TRIGGER trg_historial_pacientes AFTER INSERT OR UPDATE OR DELETE ON public.pacientes
+  FOR EACH ROW EXECUTE FUNCTION public.registrar_historial_expediente();
+DROP TRIGGER IF EXISTS trg_historial_expediente ON public.expediente;
+CREATE TRIGGER trg_historial_expediente AFTER INSERT OR UPDATE OR DELETE ON public.expediente
+  FOR EACH ROW EXECUTE FUNCTION public.registrar_historial_expediente();
+DROP TRIGGER IF EXISTS trg_historial_notas ON public.notas;
+CREATE TRIGGER trg_historial_notas AFTER INSERT OR UPDATE OR DELETE ON public.notas
+  FOR EACH ROW EXECUTE FUNCTION public.registrar_historial_expediente();
+DROP TRIGGER IF EXISTS trg_historial_citas ON public.citas;
+CREATE TRIGGER trg_historial_citas AFTER INSERT OR UPDATE OR DELETE ON public.citas
+  FOR EACH ROW EXECUTE FUNCTION public.registrar_historial_expediente();
+DROP TRIGGER IF EXISTS trg_historial_medicaciones ON public.medicaciones;
+CREATE TRIGGER trg_historial_medicaciones AFTER INSERT OR UPDATE OR DELETE ON public.medicaciones
+  FOR EACH ROW EXECUTE FUNCTION public.registrar_historial_expediente();
+DROP TRIGGER IF EXISTS trg_historial_examenes ON public.examenes;
+CREATE TRIGGER trg_historial_examenes AFTER INSERT OR UPDATE OR DELETE ON public.examenes
+  FOR EACH ROW EXECUTE FUNCTION public.registrar_historial_expediente();
+DROP TRIGGER IF EXISTS trg_historial_dental_audit ON public.historial_dental;
+CREATE TRIGGER trg_historial_dental_audit AFTER INSERT OR UPDATE OR DELETE ON public.historial_dental
+  FOR EACH ROW EXECUTE FUNCTION public.registrar_historial_expediente();
+DROP TRIGGER IF EXISTS trg_historial_odontograma ON public.odontograma;
+CREATE TRIGGER trg_historial_odontograma AFTER INSERT OR UPDATE OR DELETE ON public.odontograma
+  FOR EACH ROW EXECUTE FUNCTION public.registrar_historial_expediente();
+DROP TRIGGER IF EXISTS trg_historial_periodontograma ON public.periodontograma;
+CREATE TRIGGER trg_historial_periodontograma AFTER INSERT OR UPDATE OR DELETE ON public.periodontograma
+  FOR EACH ROW EXECUTE FUNCTION public.registrar_historial_expediente();
+DROP TRIGGER IF EXISTS trg_historial_proc_odontologicos ON public.procedimientos_odontologicos;
+CREATE TRIGGER trg_historial_proc_odontologicos AFTER INSERT OR UPDATE OR DELETE ON public.procedimientos_odontologicos
+  FOR EACH ROW EXECUTE FUNCTION public.registrar_historial_expediente();
+DROP TRIGGER IF EXISTS trg_historial_proc_oftalmologicos ON public.procedimientos_oftalmologicos;
+CREATE TRIGGER trg_historial_proc_oftalmologicos AFTER INSERT OR UPDATE OR DELETE ON public.procedimientos_oftalmologicos
+  FOR EACH ROW EXECUTE FUNCTION public.registrar_historial_expediente();

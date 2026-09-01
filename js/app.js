@@ -144,7 +144,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
 // ════════════════════ CACHE LOCAL ════════════════════
 // cli/mas/expMas/vac/desp/hosp son las tablas veterinarias; quedan vacías en clínicas humanas
-const C = { p:[], c:[], m:[], n:[], e:[], prof:[], inv:[], mov:[], fin:[], fact:[], factItems:[], proc:[], procOft:[], hd:[], odo:[], perio:[], cli:[], mas:[], expMas:[], vac:[], desp:[], hosp:[] };
+const C = { p:[], c:[], m:[], n:[], e:[], historial:[], prof:[], inv:[], mov:[], fin:[], fact:[], factItems:[], proc:[], procOft:[], hd:[], odo:[], perio:[], cli:[], mas:[], expMas:[], vac:[], desp:[], hosp:[] };
 let currentClinicaId = null;
 let currentClinica   = null;
 let procOftLoadError = null;
@@ -281,12 +281,13 @@ async function loadAll() {
   if(!currentClinicaId) { setDbStatus(true); setLoading(false); return; }
   setLoading(true);
   try {
-    const [rp,rc,rm,rn,re,rpf,ri,rmov,rfin,rfact] = await Promise.all([
+    const [rp,rc,rm,rn,re,rhist,rpf,ri,rmov,rfin,rfact] = await Promise.all([
       sb.from('pacientes').select('*').eq('clinica_id', currentClinicaId).order('id'),
       sb.from('citas').select('*').eq('clinica_id', currentClinicaId).order('id'),
       sb.from('medicaciones').select('*').eq('clinica_id', currentClinicaId).order('id'),
       sb.from('notas').select('*').eq('clinica_id', currentClinicaId).order('id'),
       sb.from('expediente').select('*').eq('clinica_id', currentClinicaId).order('id'),
+      sb.from('historial_expediente').select('*').eq('clinica_id', currentClinicaId).order('fecha_hora', {ascending:false}),
       _consultaPerfil(cols => sb.from('profiles').select(cols).eq('clinica_id', currentClinicaId)),
       sb.from('inventario').select('*').eq('clinica_id', currentClinicaId).order('nombre'),
       sb.from('inventario_movimientos').select('*').eq('clinica_id', currentClinicaId).order('fecha', {ascending:false}).limit(500),
@@ -302,6 +303,9 @@ async function loadAll() {
     C.m = (rm.data||[]).map(fromM);
     C.n = (rn.data||[]).map(fromN);
     C.e = re.error ? [] : (re.data||[]).map(fromE);
+    // Durante el despliegue la app sigue funcionando aunque la migración aún
+    // no se haya ejecutado; simplemente no muestra eventos históricos.
+    C.historial = rhist.error ? [] : (rhist.data||[]);
     // La columna horario puede no existir todavía: se reintenta sin ella para no
     // quedarnos sin profesionales (rompería los selects de médico y las agendas).
     if(rpf.error && _faltaColumna(rpf.error, 'horario')) {
@@ -2121,6 +2125,28 @@ function renderDetalleP(pid){
         <div class="form-group"><label>Observaciones Médicas Adicionales</label><textarea id="exp-observacionesMedicas" placeholder="Notas del médico sobre el expediente...">${exp.observacionesMedicas||''}</textarea></div>
       </div>
     </div>
+
+    ${renderHistorialExpediente(pid)}
+  </div>`;
+}
+
+function renderHistorialExpediente(pid) {
+  const eventos=(C.historial||[]).filter(h=>Number(h.paciente_id)===Number(pid));
+  if(!eventos.length) return `<div class="exp-section"><div class="exp-section-title">🕓 Historial de modificaciones</div><p class="text-light" style="font-size:13px">Aún no hay modificaciones registradas. El historial comenzará al ejecutar la migración incluida en rls_setup.sql.</p></div>`;
+  const etiquetas={pacientes:'Datos personales',expediente:'Expediente médico',notas:'Nota clínica',citas:'Cita',medicaciones:'Medicación',examenes:'Examen',historial_dental:'Historia dental',odontograma:'Odontograma',periodontograma:'Periodontograma',procedimientos_odontologicos:'Procedimiento odontológico',procedimientos_oftalmologicos:'Procedimiento oftalmológico'};
+  const acciones={INSERT:'Creación',UPDATE:'Modificación',DELETE:'Eliminación'};
+  const ignorar=new Set(['id','clinica_id','paciente_id','actualizado_en','created_at','creado_en']);
+  const valor=v=>v===null||v===undefined||v===''?'—':(typeof v==='object'?JSON.stringify(v):String(v));
+  const cambios=h=>{
+    const antes=h.datos_anteriores||{}, despues=h.datos_nuevos||{};
+    const keys=[...new Set([...Object.keys(antes),...Object.keys(despues)])]
+      .filter(k=>!ignorar.has(k) && valor(antes[k])!==valor(despues[k]));
+    if(!keys.length) return '<span class="text-light">Sin cambios de contenido</span>';
+    return keys.map(k=>`<div style="padding:5px 0;border-bottom:1px solid var(--border);font-size:12px"><strong>${escAttr(k.replaceAll('_',' '))}:</strong> ${h.accion!=='INSERT'?`<span style="color:var(--text-light);text-decoration:line-through">${escAttr(valor(antes[k]))}</span> → `:''}<span>${escAttr(valor(despues[k]))}</span></div>`).join('');
+  };
+  return `<div class="exp-section"><div class="exp-section-title">🕓 Historial de modificaciones</div>
+    <p class="text-light" style="font-size:12px;margin-bottom:12px">Registro permanente de cambios, incluidas las versiones anteriores de las notas.</p>
+    <div class="timeline">${eventos.map(h=>`<div class="timeline-item"><div class="timeline-date">${new Date(h.fecha_hora).toLocaleString('es-NI')} · <span class="tag tag-blue" style="font-size:10px">${acciones[h.accion]||h.accion} — ${etiquetas[h.tabla_origen]||h.tabla_origen}</span></div><div class="timeline-content"><div style="font-size:12px;margin-bottom:6px;color:var(--text-light)">Realizado por: <strong style="color:var(--text)">${escAttr(h.usuario_nombre||h.usuario_email||'Usuario del sistema')}</strong></div><details><summary style="cursor:pointer;color:var(--primary);font-size:12px;font-weight:700">Ver cambios y versión anterior</summary><div style="margin-top:8px">${cambios(h)}</div></details></div></div>`).join('')}</div>
   </div>`;
 }
 
