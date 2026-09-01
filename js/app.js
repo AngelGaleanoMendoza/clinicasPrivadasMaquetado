@@ -3657,28 +3657,37 @@ function _signosPrintHTML(signos) {
     + '</div>';
 }
 
-function openModalNota(id){
-  editingNotaId=id||null;
+function _reiniciarFormularioNota(){
   currentNotaCitaId=null;
-  document.getElementById('modal-nota-title').textContent=id?'✏️ Editar Nota':'📝 Nueva Nota Clínica';
   fillSelect('n-paciente');
-  document.getElementById('n-tipo').value='evolucion'; document.getElementById('n-fecha').value=hoy(); document.getElementById('n-titulo').value=''; document.getElementById('n-contenido').value='';
+  document.getElementById('n-tipo').value='evolucion';
+  document.getElementById('n-fecha').value=hoy();
+  document.getElementById('n-titulo').value='';
+  document.getElementById('n-contenido').value='';
   // El panel se regenera cada vez: el tipo de clínica decide qué signos se piden
   _pintarPanelSignos();
   _limpiarSignosNota();
+  document.getElementById('n-mascota').value=''; document.getElementById('n-mas-txt').value='';
+}
+
+function openModalNota(id){
+  const notaEditada=id!=null ? C.n.find(x=>String(x.id)===String(id)) : null;
+  editingNotaId=notaEditada?.id||null;
+  _reiniciarFormularioNota();
+  document.getElementById('modal-nota-title').textContent=notaEditada?'✏️ Editar Nota':'📝 Nueva Nota Clínica';
   // En veterinaria la nota es de una mascota, no de un paciente humano
   const esVet = esVeterinaria();
-  document.getElementById('n-mascota').value=''; document.getElementById('n-mas-txt').value='';
   const pw = document.getElementById('n-paciente-wrap'), mw = document.getElementById('n-mascota-wrap');
   if(pw) pw.style.display = esVet ? 'none' : '';
   if(mw) mw.style.display = esVet ? '' : 'none';
-  if(id){
-    const n=C.n.find(x=>x.id===id);
-    if(n){
-      currentNotaCitaId=n.citaId||null;
-      if(esVet) setMascotaSelectNota(n.mascotaId); else setPacienteSelect('n-paciente',n.pacienteId);
-      document.getElementById('n-tipo').value=n.tipo; document.getElementById('n-fecha').value=n.fecha; document.getElementById('n-titulo').value=n.titulo||''; document.getElementById('n-contenido').value=n.contenido; _cargarSignosNota(n.signos);
-    }
+  if(notaEditada){
+    currentNotaCitaId=notaEditada.citaId||null;
+    if(esVet) setMascotaSelectNota(notaEditada.mascotaId); else setPacienteSelect('n-paciente',notaEditada.pacienteId);
+    document.getElementById('n-tipo').value=notaEditada.tipo;
+    document.getElementById('n-fecha').value=notaEditada.fecha;
+    document.getElementById('n-titulo').value=notaEditada.titulo||'';
+    document.getElementById('n-contenido').value=notaEditada.contenido||'';
+    _cargarSignosNota(notaEditada.signos);
   }
   onTipoNotaChange();
   openModalOverlay('modal-nota');
@@ -3707,12 +3716,14 @@ async function guardarNota(){
     toast(esResumen?'Registra al menos un signo vital o escribe la nota':'Completa los campos obligatorios','error');
     return;
   }
+  // Se captura el modo al comenzar para que cada guardado afecte una sola fila.
+  const notaIdEditada=editingNotaId;
   const obj={pacienteId:pid,mascotaId:mid,citaId:currentNotaCitaId,tipo,fecha:document.getElementById('n-fecha').value||hoy(),titulo:document.getElementById('n-titulo').value.trim(),contenido,signos};
   setLoading(true);
   const payload=toN(obj);
   let err;
-  ({error:err} = editingNotaId
-    ? await sb.from('notas').update(payload).eq('id',editingNotaId)
+  ({error:err} = notaIdEditada
+    ? await sb.from('notas').update(payload).eq('id',notaIdEditada)
     : await sb.from('notas').insert([payload]));
   // Sin mascota_id la nota quedaría huérfana: no se degrada, se avisa.
   if(err && esVet && _faltaColumna(err,'mascota_id')){
@@ -3745,8 +3756,9 @@ async function guardarNota(){
       if(rExp.error) toast('La nota se guardó, pero no se pudo actualizar el resumen de signos: '+rExp.error.message,'warning');
     }
   }
-  toast(editingNotaId?'Nota actualizada':'Nota guardada ✅');
-  if(!editingNotaId) logActivity('nota');
+  toast(notaIdEditada?'Nota actualizada':'Nota guardada ✅');
+  if(!notaIdEditada) logActivity('nota');
+  _reiniciarFormularioNota();
   closeModal('modal-nota');
   await loadAll(); renderNotas();
   if(currentView==='paciente-detalle') renderDetalleP(currentPatientId);
