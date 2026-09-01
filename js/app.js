@@ -4008,7 +4008,9 @@ function _disenoRecetarioDigital(receta, cfg) {
     registro:d.registro||cfg.registro||'', institucion:d.institucion||cfg.institucion||cfg.nombreClinica||'',
     logoUrl:d.logoUrl||'', logoPos:['left','center','right'].includes(d.logoPos)?d.logoPos:'left',
     lista:Array.isArray(d.lista)?d.lista:[], pie:d.pie||[cfg.telefono,cfg.email,cfg.direccion].filter(Boolean).join(' · '),
-    tamano:TAMANOS_RECETA[d.tamano]?d.tamano:'media', secciones
+    tamano:TAMANOS_RECETA[d.tamano]?d.tamano:'media', secciones,
+    encabezadoCompleto:d.encabezadoCompleto===true,
+    telefono:cfg.telefono||'', direccion:cfg.direccion||''
   };
 }
 
@@ -4020,7 +4022,16 @@ function abrirRecetaDigital({titulo,receta,cfg,sujeto,meds,esVeterinaria=false})
   const alerta=sujeto.alerta?`<div class="drx-alert">⚠ ${escAttr(sujeto.alerta)}</div>`:'';
   const medHtml=meds.map((m,i)=>`<div class="drx-med"><div class="drx-num">${i+1}</div><div class="drx-med-main"><strong>${escAttr(m.nombre||'')}</strong>${m.indicaciones?`<p>${escAttr(m.indicaciones)}</p>`:''}</div><div class="drx-med-data"><span><b>Dosis</b>${escAttr(m.dosis||'')}</span><span><b>Frecuencia</b>${escAttr(m.frecuencia||'')}</span><span><b>Vía</b>${escAttr(via(m.via))}</span><span><b>Duración</b>${m.fin?fmt(m.inicio)+' – '+fmt(m.fin):'Según indicación'}</span></div></div>`).join('');
   const firma=_firmaImgUrlHTML(receta.prescriptorFirmaUrl||cfg.firmaUrl,42);
-  const logo=d.logoUrl?`<img class="drx-logo" src="${escAttr(d.logoUrl)}" alt="Logo">`:'';
+  let logo=d.logoUrl?`<img class="drx-logo" src="${escAttr(d.logoUrl)}" alt="Logo">`:'';
+  const contacto=d.encabezadoCompleto
+    ? `${d.direccion?`<p>📍 ${escAttr(d.direccion)}</p>`:''}${d.telefono?`<p>☎ ${escAttr(d.telefono)}</p>`:''}`
+    : '';
+  if(d.encabezadoCompleto){
+    receta.prescriptorNombre=receta.prescriptorNombre||d.titulo;
+    receta.prescriptorEspecialidad=receta.prescriptorEspecialidad||d.subtitulo;
+    logo=`<div style="display:flex;align-items:center;gap:12px">${logo}<div><h1>${escAttr(d.titulo)}</h1><h2>${escAttr(d.subtitulo)}</h2><p>${escAttr(d.institucion)}</p>${contacto}</div></div>`;
+    d.titulo=''; d.subtitulo=''; d.institucion='';
+  }
   const T = TAMANOS_RECETA[d.tamano] || TAMANOS_RECETA.media;
   // Todo lo que estaba calibrado para A4 se escala a la hoja elegida: márgenes,
   // panel lateral y su margen negativo. Sin esto, un talonario de 14 cm heredaba
@@ -10013,6 +10024,7 @@ function _configRecetarioFormulario() {
     institucion:document.getElementById('u-rec-institucion')?.value.trim()||'',
     logoUrl:_recetarioLogoUrlActual||'',
     logoPos:document.getElementById('u-rec-logo-pos')?.value||'left',
+    encabezadoCompleto:!!document.getElementById('u-rec-encabezado-completo')?.checked,
     lista:(document.getElementById('u-rec-lista')?.value||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean),
     secciones:{
       diagnostico:!!document.getElementById('u-rec-sec-diagnostico')?.checked,
@@ -10029,6 +10041,11 @@ function actualizarPreviewRecetario() {
   if(!box) return;
   const titulo=cfg.titulo||document.getElementById('u-nombre')?.value||'Nombre del médico';
   const subtitulo=cfg.subtitulo||document.getElementById('u-especialidad')?.value||'Especialidad médica';
+  const cid=Number(document.getElementById('u-clinica')?.value)||null;
+  const clinica=adminClinicas.find(c=>c.id===cid)||currentClinica||{};
+  const contacto=cfg.encabezadoCompleto
+    ? (clinica.direccion?'<span>📍 '+escAttr(clinica.direccion)+'</span>':'')+(clinica.telefono?'<span>☎ '+escAttr(clinica.telefono)+'</span>':'')
+    : '';
   const logo=cfg.logoUrl?'<img class="rdp-logo" src="'+escAttr(cfg.logoUrl)+'" alt="Logo">':'';
   box.style.setProperty('--rdp',cfg.color);
   box.style.fontFamily='"'+cfg.fuente+'", sans-serif';
@@ -10036,7 +10053,7 @@ function actualizarPreviewRecetario() {
   // talonario y se sigue viendo un A4 alargado.
   const T=TAMANOS_RECETA[cfg.tamano]||TAMANOS_RECETA.media;
   box.style.aspectRatio=T.w+' / '+T.h;
-  box.innerHTML='<div class="rdp-head logo-'+cfg.logoPos+'">'+logo+'<div class="rdp-head-text"><strong>'+escAttr(titulo)+'</strong><span>'+escAttr(subtitulo)+'</span><span>'+escAttr(cfg.institucion||'Clínica / Institución')+'</span></div></div>'
+  box.innerHTML='<div class="rdp-head logo-'+cfg.logoPos+'">'+logo+'<div class="rdp-head-text"><strong>'+escAttr(titulo)+'</strong><span>'+escAttr(subtitulo)+'</span><span>'+escAttr(cfg.institucion||clinica.institucion||clinica.nombre||'Clínica / Institución')+'</span>'+contacto+'</div></div>'
     +'<div class="rdp-body clasico"><main class="rdp-main">'
     +'<div class="rdp-line"><span class="rdp-label">Paciente</span><br>Nombre y apellidos</div>'
     +'<div class="rdp-line"><span class="rdp-label">Fecha · Identificación · Edad</span><br>Datos dentro de su sección</div>'
@@ -10049,7 +10066,7 @@ function actualizarPreviewRecetario() {
 }
 
 function _resetRecetarioUsuario(_url, config) {
-  const cfg = {...{version:2,tamano:'media',layout:'clasico',color:'#be185d',fuente:'Arial',titulo:'',subtitulo:'',registro:'',institucion:'',logoUrl:'',logoPos:'left',lista:[],secciones:{diagnostico:true,indicaciones:true,proximaCita:true},pie:''},...(config?.version===2?config:{})};
+  const cfg = {...{version:2,tamano:'media',layout:'clasico',color:'#be185d',fuente:'Arial',titulo:'',subtitulo:'',registro:'',institucion:'',logoUrl:'',logoPos:'left',encabezadoCompleto:false,lista:[],secciones:{diagnostico:true,indicaciones:true,proximaCita:true},pie:''},...(config?.version===2?config:{})};
   cfg.secciones={diagnostico:cfg.secciones?.diagnostico!==false,indicaciones:cfg.secciones?.indicaciones!==false,proximaCita:cfg.secciones?.proximaCita!==false};
   cfg.layout='clasico';
   _pendingRecetarioLogoFile=null;
@@ -10065,6 +10082,7 @@ function _resetRecetarioUsuario(_url, config) {
   document.getElementById('u-rec-registro').value=cfg.registro;
   document.getElementById('u-rec-institucion').value=cfg.institucion;
   document.getElementById('u-rec-logo-pos').value=['left','center','right'].includes(cfg.logoPos)?cfg.logoPos:'left';
+  document.getElementById('u-rec-encabezado-completo').checked=cfg.encabezadoCompleto===true;
   document.getElementById('u-rec-lista').value=Array.isArray(cfg.lista)?cfg.lista.join('\n'):'';
   document.getElementById('u-rec-sec-diagnostico').checked=cfg.secciones.diagnostico;
   document.getElementById('u-rec-sec-indicaciones').checked=cfg.secciones.indicaciones;
