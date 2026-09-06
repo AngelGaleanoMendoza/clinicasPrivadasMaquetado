@@ -1253,10 +1253,11 @@ async function navigate(view, patientId) {
   if(esVeterinaria() && view==='pacientes')   { navigate('mascotas'); return; }
   if(esVeterinaria() && view==='expedientes') { navigate('mascotas'); return; }
   if((view==='clientes' || view==='mascotas' || view==='mascota-detalle' || view==='hospitalizacion') && !esVeterinaria() && !sa) { navigate('dashboard'); return; }
-  if(view==='hospitalizacion' && !hasPermiso('pacientes')) { navigate('dashboard'); return; }
-  if(view==='clientes' && !hasPermiso('pacientes')) { navigate('dashboard'); return; }
-  if(view==='mascotas' && !hasPermiso('pacientes')) { navigate('dashboard'); return; }
-  if(view==='mascota-detalle' && !hasPermiso('pacientes')) { navigate('dashboard'); return; }
+  // El permiso 'pacientes' cubre a la persona atendida, se llame paciente o
+  // mascota. Las vistas veterinarias ya lo exigían; las humanas no, así que
+  // alguien sin el permiso llegaba igual restaurando la última vista guardada.
+  if(['pacientes','expedientes','paciente-detalle','clientes','mascotas','mascota-detalle','hospitalizacion'].includes(view)
+     && !hasPermiso('pacientes')) { _sinPermiso('Pacientes'); return; }
   // Rutas especiales sin loadAll
   if(view==='finanzas'){
     renderFinanzas(); if(window.innerWidth<=768) closeSidebar(); return;
@@ -5887,13 +5888,35 @@ function importarJSON(e){
       const d=JSON.parse(ev.target.result);
       const ok=await customConfirm({icon:'📥',title:'Importar backup',msg:'Esto insertará los datos del archivo en Supabase.<br><small style="color:var(--text-light)">No se borran los registros existentes.</small>',okText:'Importar',danger:false});
       if(!ok) return;
+      // Sin clínica, los mappers ponen clinica_id nulo y el backup entero
+      // entraría huérfano: guardado, pero invisible para todas las consultas.
+      if(!_exigeClinica()) return;
       setLoading(true);
-      if(d.pacientes?.length) await sb.from('pacientes').upsert(d.pacientes.map(toP));
-      if(d.citas?.length) await sb.from('citas').upsert(d.citas.map(toC));
-      if(d.medicaciones?.length) await sb.from('medicaciones').upsert(d.medicaciones.map(toM));
-      if(d.notas?.length) await sb.from('notas').upsert(d.notas.map(toN));
+      // Antes no se miraba ni un solo error y siempre se decía "importado
+      // correctamente": si RLS o una columna ausente rechazaban las filas, el
+      // usuario se quedaba convencido de que su backup estaba dentro.
+      const bloques = [
+        ['pacientes',    d.pacientes,    toP],
+        ['citas',        d.citas,        toC],
+        ['medicaciones', d.medicaciones, toM],
+        ['notas',        d.notas,        toN],
+      ];
+      const okey = [], fallos = [];
+      for(const [tabla, filas, mapper] of bloques) {
+        if(!filas?.length) continue;
+        const { error } = await sb.from(tabla).upsert(filas.map(mapper));
+        if(error) fallos.push(`${tabla}: ${error.message}`);
+        else okey.push(`${filas.length} ${tabla}`);
+      }
       setLoading(false);
-      toast('Datos importados correctamente ✅');
+      if(fallos.length) {
+        toast(`No se importó todo. Falló ${fallos.length === bloques.length ? 'todo' : 'una parte'}:\n${fallos.join('\n')}`, 'error');
+        console.error('Importar backup:', fallos);
+      } else if(!okey.length) {
+        toast('El archivo no traía pacientes, citas, medicaciones ni notas', 'warning');
+      } else {
+        toast('Importado: ' + okey.join(' · ') + ' ✅');
+      }
       await loadAll(); renderView(currentView); updateBadges();
     }catch(err){ setLoading(false); toast('Error al leer el archivo','error'); console.error(err); }
   };
@@ -9585,7 +9608,10 @@ function applyRoleMenu() {
   vis('menu-notas',            hasClinica && hasPermiso('notas'));
   vis('menu-atendidos',        hasClinica && hasPermiso('atendidos') && !isOdonto);
   vis('menu-procedimientos',   hasClinica && (isOdonto || sa));
-  vis('menu-procedimientos-oftalmo', hasClinica && (sa || (isOft && hasPermiso('proc_oftalmo'))));
+  // El menú ofrecía esto a cualquier Super Admin y navigate() lo rebotaba: el
+  // módulo solo existe en clínicas de atención visual. Se usa la MISMA condición
+  // que la guarda (puedeGestionarProcOft) para que no vuelvan a divergir.
+  vis('menu-procedimientos-oftalmo', hasClinica && puedeGestionarProcOft());
 
   // ─ Sección Gestión
   // Sin atajos por tipo de clínica: el menú refleja exactamente los permisos
