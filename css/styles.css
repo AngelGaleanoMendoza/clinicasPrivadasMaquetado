@@ -295,6 +295,14 @@ body.dark .fact-item-row input,body.dark .fact-item-row select{background:#0F172
 .tab{padding:8px 18px;border:none;background:transparent;border-radius:11px;cursor:pointer;font-size:13px;font-weight:500;color:var(--text-light);transition:all .2s;font-family:inherit;white-space:nowrap;flex-shrink:0}
 .tab.active{background:var(--card);color:var(--primary);font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.06),0 2px 10px rgba(0,0,0,.07)}
 
+/* Selector de clínica del Super Admin (barra lateral) */
+#sa-clinica-switch{padding:12px 14px;margin:0 10px 6px;background:rgba(124,77,255,.12);border:1px solid rgba(124,77,255,.3);border-radius:12px}
+#sa-clinica-switch label{display:block;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#a78bfa;margin-bottom:6px}
+#sa-clinica-switch select{width:100%;padding:8px 10px;border-radius:9px;border:1.5px solid rgba(255,255,255,.15);background:rgba(15,23,42,.6);color:#E2E8F0;font-family:inherit;font-size:12.5px;min-height:40px}
+#sa-clinica-switch small{display:block;margin-top:6px;font-size:10.5px;line-height:1.45;color:#94A3B8}
+/* Sin clínica elegida el aviso pasa a ámbar: es una acción pendiente, no una nota */
+#sa-clinica-switch small.sa-clinica-pendiente{color:#FCD34D;font-weight:600}
+
 /* TIMELINE */
 .timeline{position:relative;padding-left:26px}
 .timeline::before{content:'';position:absolute;left:7px;top:0;bottom:0;width:2px;background:linear-gradient(to bottom,var(--primary),var(--accent));border-radius:2px}

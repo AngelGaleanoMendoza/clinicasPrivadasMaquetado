@@ -147,6 +147,76 @@ window.addEventListener('DOMContentLoaded', () => {
 const C = { p:[], c:[], m:[], n:[], e:[], historial:[], prof:[], inv:[], mov:[], fin:[], fact:[], factItems:[], proc:[], procOft:[], hd:[], odo:[], perio:[], cli:[], mas:[], expMas:[], vac:[], desp:[], hosp:[] };
 let currentClinicaId = null;
 let currentClinica   = null;
+
+// ─── Clínica de trabajo del Super Admin ───
+// El Super Admin no pertenece a ninguna clínica (clinica_id NULL), pero todo el
+// sistema filtra por clinica_id. Sin elegir una, sus consultas preguntan por
+// `clinica_id = NULL`, que en Postgres no coincide con nada: veía pantallas
+// vacías y sus escrituras quedaban huérfanas e invisibles para siempre —RLS no
+// las frena porque la política es `is_superadmin() OR ...` y la primera parte ya
+// da verdadero—. Elegir clínica hace que el resto del sistema funcione tal cual,
+// sin tocar las ~100 consultas que ya filtran bien.
+const CLINICA_SA_KEY = 'lm_sa_clinica';
+
+async function _clinicasDisponiblesSA() {
+  if(adminClinicas.length) return adminClinicas;
+  const { data } = await sb.from('clinicas').select('*').order('nombre');
+  adminClinicas = data || [];
+  return adminClinicas;
+}
+
+async function renderSelectorClinicaSA() {
+  const caja = document.getElementById('sa-clinica-switch');
+  if(!caja) return;
+  if(!isSuperAdmin()) { caja.style.display = 'none'; return; }
+  caja.style.display = '';
+  const lista = await _clinicasDisponiblesSA();
+  const sel = document.getElementById('sa-clinica-select');
+  if(!sel) return;
+  sel.innerHTML = '<option value="">— Sin clínica (vista global) —</option>'
+    + lista.map(c => `<option value="${c.id}"${String(c.id)===String(currentClinicaId)?' selected':''}>${escAttr(c.nombre)}</option>`).join('');
+  const aviso = document.getElementById('sa-clinica-aviso');
+  if(aviso) {
+    // Sin clínica elegida hay que decirlo: si no, las pantallas vacías parecen
+    // datos que no existen en vez de una clínica sin seleccionar.
+    aviso.textContent = currentClinicaId
+      ? 'Ves y editas los datos de esta clínica.'
+      : 'Elige una clínica para ver pacientes, citas y exámenes.';
+    aviso.className = currentClinicaId ? '' : 'sa-clinica-pendiente';
+  }
+}
+
+async function cambiarClinicaTrabajo(id) {
+  const nuevo = id ? Number(id) : null;
+  if(nuevo === currentClinicaId) return;
+  // Los datos de la clínica anterior no pueden sobrevivir al cambio.
+  _vaciarCache();
+  currentClinicaId = nuevo;
+  if(nuevo) localStorage.setItem(CLINICA_SA_KEY, String(nuevo));
+  else localStorage.removeItem(CLINICA_SA_KEY);
+  setLoading(true);
+  if(nuevo) {
+    const { data } = await sb.from('clinicas').select('*').eq('id', nuevo).single();
+    currentClinica = data || null;
+  }
+  await loadAll();
+  setLoading(false);
+  applyRoleMenu();
+  await renderSelectorClinicaSA();
+  updateBadges();
+  renderView(currentView);
+  toast(nuevo ? `Trabajando en ${currentClinica?.nombre || 'la clínica'}` : 'Vista global: sin clínica seleccionada', 'info');
+}
+
+// Vaciar la caché al cerrar sesión es obligatorio, no higiene. loadAll() no la
+// toca cuando no hay clínica (sale en su primera línea), así que si un usuario
+// de la clínica A sale y en la misma pestaña entra alguien sin clínica —el Super
+// Admin—, C conservaría intactos los pacientes, citas, notas y finanzas de A y
+// se los mostraría como propios. Son historiales médicos de otra clínica.
+function _vaciarCache() {
+  Object.keys(C).forEach(k => { C[k].length = 0; });
+  currentClinica = null;
+}
 let procOftLoadError = null;
 
 // Columnas de profiles que el cliente puede recibir. La tabla tiene además una
@@ -790,6 +860,7 @@ async function autoLogout() {
   const guardados = guardarBorradoresSesion();
   await sb.auth.signOut();
   currentUser = null; currentClinicaId = null;
+  _vaciarCache();
   const app = document.getElementById('app');
   app.style.transition = 'opacity .3s';
   app.style.opacity = '0';
@@ -946,8 +1017,14 @@ async function entrarConPerfil(profile) {
   document.getElementById('sf-avatar').textContent = currentUser.avatar;
   applyRoleMenu();
   setLoading(true);
-  const {data:clData} = await _conLimite(
-    sb.from('clinicas').select('*').eq('id',currentClinicaId).single(), 15000, 'La consulta de tu clínica');
+  // El Super Admin no tiene clínica propia: se le devuelve la última en la que
+  // estuvo trabajando, para que al recargar no aparezca todo vacío.
+  if(!currentClinicaId && isSuperAdmin()) {
+    const guardada = Number(localStorage.getItem(CLINICA_SA_KEY)) || null;
+    if(guardada) currentClinicaId = guardada;
+  }
+  const {data:clData} = currentClinicaId ? await _conLimite(
+    sb.from('clinicas').select('*').eq('id',currentClinicaId).single(), 15000, 'La consulta de tu clínica') : {data:null};
   currentClinica = clData || null;
   // Recalcular el menú ahora que ya conocemos el tipo real de clínica.
   applyRoleMenu();
@@ -972,6 +1049,7 @@ async function doLogout() {
   detenerInactividad();
   await sb.auth.signOut();
   currentUser = null; currentClinicaId = null;
+  _vaciarCache();
   const app = document.getElementById('app');
   app.style.transition = 'opacity .3s';
   app.style.opacity = '0';
@@ -1126,20 +1204,34 @@ async function navigate(view, patientId) {
   const role = currentUser?.key;
   const esFarmacia = currentClinica?.tipo === 'farmacia';
   const farmaAccess = sa || role === 'farmaceutico' || esFarmacia;
+  // Guards por permiso. Rebotar en silencio al dashboard hacía imposible saber
+  // por qué: el menú desaparecía y la vista no se abría, sin más. Ahora se dice
+  // qué permiso falta y quién puede darlo.
+  const _sinPermiso = (etiqueta) => {
+    toast(`No tienes el permiso "${etiqueta}". Pídeselo al Super Admin desde el panel de Usuarios.`, 'warning');
+    navigate('dashboard');
+  };
   // Guards por permiso
-  if(view==='finanzas'     && !hasPermiso('finanzas'))     { navigate('dashboard'); return; }
-  if(view==='inventario'   && !hasPermiso('inventario'))   { navigate('dashboard'); return; }
-  if(view==='estadisticas' && !hasPermiso('estadisticas')) { navigate('dashboard'); return; }
-  if(view==='exportar'     && !hasPermiso('exportar'))     { navigate('dashboard'); return; }
+  if(view==='finanzas'     && !hasPermiso('finanzas'))     { _sinPermiso('Finanzas'); return; }
+  if(view==='inventario'   && !hasPermiso('inventario'))   { _sinPermiso('Inventario'); return; }
+  if(view==='estadisticas' && !hasPermiso('estadisticas')) { _sinPermiso('Estadísticas'); return; }
+  if(view==='exportar'     && !hasPermiso('exportar'))     { _sinPermiso('Exportar / Enviar'); return; }
   if(view==='configuracion' && !sa)                        { navigate('dashboard'); return; }
   if(view==='admin'        && !sa)                         { navigate('dashboard'); return; }
   if(view==='farmacia'     && !farmaAccess)                { navigate('dashboard'); return; }
-  if(view==='citas'        && !hasPermiso('citas'))        { navigate('dashboard'); return; }
-  if(view==='agendas'      && !hasPermiso('agendas'))      { navigate('dashboard'); return; }
-  if(view==='medicaciones' && !hasPermiso('medicaciones')) { navigate('dashboard'); return; }
-  if(view==='notas'        && !hasPermiso('notas'))        { navigate('dashboard'); return; }
-  if(view==='atendidos'    && !hasPermiso('atendidos'))    { navigate('dashboard'); return; }
-  if(view==='examenes-digitalizados' && (!hasPermiso('examenes') || esVeterinaria() || esFarmacia)) { navigate('dashboard'); return; }
+  if(view==='citas'        && !hasPermiso('citas'))        { _sinPermiso('Citas'); return; }
+  if(view==='agendas'      && !hasPermiso('agendas'))      { _sinPermiso('Agendas'); return; }
+  if(view==='medicaciones' && !hasPermiso('medicaciones')) { _sinPermiso('Recetas / Medicaciones'); return; }
+  if(view==='notas'        && !hasPermiso('notas'))        { _sinPermiso('Notas Clínicas'); return; }
+  if(view==='atendidos'    && !hasPermiso('atendidos'))    { _sinPermiso('Atendidos por Día'); return; }
+  // Tres motivos distintos para no entrar aquí; decir cuál es el que aplica.
+  if(view==='examenes-digitalizados') {
+    if(!hasPermiso('examenes')) { _sinPermiso('Exámenes digitalizados'); return; }
+    if(esVeterinaria() || esFarmacia) {
+      toast('Los exámenes digitalizados son del expediente humano; esta clínica no los usa.','info');
+      navigate('dashboard'); return;
+    }
+  }
   if(view==='pacientes' && (role==='farmaceutico' || esFarmacia)) { navigate('farmacia'); return; }
   if(view==='expedientes' && (role==='farmaceutico' || esFarmacia)) { navigate('farmacia'); return; }
   if(view==='procedimientos' && !isOdontologo() && !isSuperAdmin()) { navigate('dashboard'); return; }
@@ -9459,6 +9551,7 @@ function applyRoleMenu() {
   // ─ Sección Clínica y sus ítems (oculta en modo farmacia)
   const hasClinica = !modoFarmacia;
   vis('menu-clinica-section', hasClinica);
+  renderSelectorClinicaSA();   // solo se pinta si es Super Admin
   vis('menu-clientes',        hasClinica && esVet && hasPermiso('pacientes'));
   vis('menu-mascotas',        hasClinica && esVet && hasPermiso('pacientes'));
   vis('menu-hospitalizacion', hasClinica && esVet && hasPermiso('pacientes'));
@@ -10259,6 +10352,18 @@ function renderPermisosModal(checked = []) {
     </label>`;
   }).join('');
 }
+// Marcar los 13 permisos uno a uno es tedioso y se olvidan; el caso típico es
+// "que vea todo". El botón alterna: si ya están todos, los quita.
+function alternarTodosPermisos() {
+  const todos = ALL_PERMISOS.every(p => document.getElementById('perm-'+p.id)?.checked);
+  ALL_PERMISOS.forEach(p => {
+    const cb = document.getElementById('perm-'+p.id);
+    if(cb) { cb.checked = !todos; togglePermLabel(p.id); }
+  });
+  const btn = document.getElementById('btn-todos-permisos');
+  if(btn) btn.textContent = todos ? 'Marcar todos' : 'Quitar todos';
+}
+
 function togglePermLabel(id) {
   const cb = document.getElementById('perm-'+id);
   const lbl = document.getElementById('perm-label-'+id);
@@ -10479,6 +10584,14 @@ function onRolChange() {
   _syncEspecialidadUsuario();
 }
 
+// Solo un Super Admin puede repartir el rol de Super Admin: el trigger de la
+// base lo rechaza igual, pero mostrar una opción que el servidor va a negar es
+// una trampa para quien la elige.
+function _ajustarOpcionSuperAdmin() {
+  const opt = document.querySelector('#u-rol option[value="superadmin"]');
+  if(opt) opt.hidden = !isSuperAdmin();
+}
+
 function openModalUsuario() {
   document.getElementById('modal-usuario-title').textContent = '👤 Nuevo Usuario';
   document.getElementById('u-nombre').value = '';
@@ -10491,6 +10604,7 @@ function openModalUsuario() {
   document.querySelectorAll('#u-icono-grid .icon-opt').forEach((b,i)=>b.classList.toggle('selected',i===0));
   fillClinicaSelect(null);
   editingUsuarioId = null;
+  _ajustarOpcionSuperAdmin();
   renderPermisosModal(PERMISOS_DEFECTO['medico'] || []);
   document.getElementById('u-especialidad').value = '';
   _syncEspecialidadUsuario();
@@ -10502,6 +10616,7 @@ function openModalUsuario() {
 function openModalUsuarioEditById(id) {
   const u = adminUsuarios.find(x=>x.id===id);
   if(!u) return;
+  _ajustarOpcionSuperAdmin();
   document.getElementById('modal-usuario-title').textContent = '✏️ Editar Usuario';
   document.getElementById('u-nombre').value = u.nombre;
   document.getElementById('u-email').value = u.email||'';
