@@ -404,8 +404,10 @@ async function loadAll() {
     const rawFact = rfact.error ? [] : (rfact.data||[]);
     C.fact = rawFact.map(r => fromFact(r));
     C.factItems = rawFact.flatMap(r => (r.factura_items||[]).map(fromFactItem));
-    // Tablas odontológicas (carga separada: tablas opcionales)
-    if(isOdontologo() || isSuperAdmin()) {
+    // Tablas odontológicas (carga separada: tablas opcionales). Se cargan con el
+    // MISMO criterio que decide si la interfaz dental se ve: si no, o faltarían
+    // los datos, o se traerían para nadie.
+    if(modoOdontologia()) {
       const [rproc, rhd, rodo, rperio] = await Promise.all([
         sb.from('procedimientos_odontologicos').select('*').eq('clinica_id', currentClinicaId).order('fecha', {ascending:false}),
         sb.from('historial_dental').select('*').eq('clinica_id', currentClinicaId),
@@ -1246,7 +1248,13 @@ async function navigate(view, patientId) {
   }
   if(view==='pacientes' && (role==='farmaceutico' || esFarmacia)) { navigate('farmacia'); return; }
   if(view==='expedientes' && (role==='farmaceutico' || esFarmacia)) { navigate('farmacia'); return; }
-  if(view==='procedimientos' && !isOdontologo() && !isSuperAdmin()) { navigate('dashboard'); return; }
+  if(view==='procedimientos') {
+    if(!modoOdontologia()) { toast('Los procedimientos odontológicos son de una clínica dental.','info'); navigate('dashboard'); return; }
+    // El plan de tratamiento es un registro clínico: se pide el mismo permiso
+    // que las notas. Sin esto, unificar por especialidad se lo habría abierto a
+    // recepción en cualquier clínica dental, que antes no lo veía.
+    if(!hasPermiso('notas')) { _sinPermiso('Notas Clínicas'); return; }
+  }
   if(view==='procedimientos-oftalmo' && !puedeGestionarProcOft()) { navigate('dashboard'); return; }
   // En veterinaria el paciente es la mascota: Pacientes y Expedientes humanos
   // no tienen sentido y se redirigen a sus equivalentes.
@@ -2672,8 +2680,8 @@ function _serviciosActivos() {
   const extra = [];
   // Por tipo de clínica o por quién atiende: un optometrista en una clínica
   // general sigue necesitando su examen visual.
-  if(tipo === 'optica' || tipo === 'oftalmologia' || esProfesionalOftalmo()) extra.push(SERV_OPTOMETRIA);
-  if(tipo === 'dental' || isOdontologo()) extra.push(SERV_ODONTOLOGIA);
+  if(modoAtencionVisual()) extra.push(SERV_OPTOMETRIA);
+  if(modoOdontologia())    extra.push(SERV_ODONTOLOGIA);
   return [...SERVICIOS_BASE, ...extra];
 }
 
@@ -2935,10 +2943,10 @@ function openModalCita(id){
   // quedaba sin selección en las ópticas. El valor correcto es 'optometria'.
   fillServicioSelect(esVet ? 'consulta'
     : (esOptica || esOftalmologia()) ? 'optometria'
-    : isOdontologo() ? 'odontologia'
+    : modoOdontologia() ? 'odontologia'
     : 'consulta');
   const motivoInput = document.getElementById('c-motivo');
-  if(motivoInput && isOdontologo()) motivoInput.placeholder = 'Escribe el procedimiento dental (ej: limpieza, conducto...)';
+  if(motivoInput && modoOdontologia()) motivoInput.placeholder = 'Escribe el procedimiento dental (ej: limpieza, conducto...)';
   else if(motivoInput && modoDermatologia()) motivoInput.placeholder = 'Escribe el diagnóstico o la lesión (ej: acné, tiña, psoriasis...)';
   // El catálogo completo solo estorba fuera de dermatología
   const btnDerma = document.getElementById('btn-catalogo-derma');
@@ -2947,7 +2955,7 @@ function openModalCita(id){
   // veterinaria dejaba "Observaciones" pegado para el resto de la sesión.
   const motivoLabel = motivoWrap?.querySelector('label');
   if(motivoLabel) {
-    motivoLabel.textContent = isOdontologo() ? 'Procedimiento / Motivo *'
+    motivoLabel.textContent = modoOdontologia() ? 'Procedimiento / Motivo *'
       : modoDermatologia() ? 'Motivo / Diagnóstico *'
       : (esVet && _esServicioNoClinico(document.getElementById('c-tipo').value)) ? 'Observaciones'
       : 'Motivo de Consulta *';
@@ -8084,7 +8092,7 @@ function mostrarSugerenciasDx(query) {
     ).join('');
     return;
   }
-  if(isOdontologo()) {
+  if(modoOdontologia()) {
     const procs = buscarProcedimientosDentales(query);
     if(!procs.length){ el.style.display='none'; return; }
     el.style.display = 'block';
@@ -9607,7 +9615,8 @@ function applyRoleMenu() {
   vis('menu-medicaciones',     hasClinica && hasPermiso('medicaciones'));
   vis('menu-notas',            hasClinica && hasPermiso('notas'));
   vis('menu-atendidos',        hasClinica && hasPermiso('atendidos') && !isOdonto);
-  vis('menu-procedimientos',   hasClinica && (isOdonto || sa));
+  // Misma condición que la guarda de navigate(), para que no vuelvan a divergir.
+  vis('menu-procedimientos',   hasClinica && modoOdontologia() && hasPermiso('notas'));
   // El menú ofrecía esto a cualquier Super Admin y navigate() lo rebotaba: el
   // módulo solo existe en clínicas de atención visual. Se usa la MISMA condición
   // que la guarda (puedeGestionarProcOft) para que no vuelvan a divergir.
