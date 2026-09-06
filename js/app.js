@@ -208,6 +208,18 @@ async function cambiarClinicaTrabajo(id) {
   toast(nuevo ? `Trabajando en ${currentClinica?.nombre || 'la clínica'}` : 'Vista global: sin clínica seleccionada', 'info');
 }
 
+// Guarda previa a cualquier escritura. Sin clínica, los mappers toX ponen
+// clinica_id: null y la fila se guarda igual —RLS no la frena, porque la
+// política es `is_superadmin() OR ...`— pero queda huérfana: ninguna consulta
+// filtrada por clínica volverá a encontrarla. Devuelve true si se puede escribir.
+function _exigeClinica() {
+  if(currentClinicaId) return true;
+  toast(isSuperAdmin()
+    ? 'Elige primero una clínica en el selector de la barra lateral: sin ella el dato se guardaría sin dueño.'
+    : 'Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.', 'error');
+  return false;
+}
+
 // Vaciar la caché al cerrar sesión es obligatorio, no higiene. loadAll() no la
 // toca cuando no hay clínica (sale en su primera línea), así que si un usuario
 // de la clínica A sale y en la misma pestaña entra alguien sin clínica —el Super
@@ -1429,10 +1441,13 @@ function renderNavQuickGrid(cv) {
 // ════════════════════ DASHBOARD ════════════════════
 function renderDashboard(){
   renderPendientesSesion();
-  renderNavQuickGrid(currentView);
   const modoFarmacia = currentUser?.key === 'farmaceutico' || currentClinica?.tipo === 'farmacia';
-  if(modoFarmacia) { renderDashboardFarmacia(); return; }
-  if(isSuperAdmin()) { renderDashboardSA(); return; }
+  // Los paneles de Super Admin y Farmacia reescriben el dashboard entero, así
+  // que la rejilla de accesos rápidos se pinta DESPUÉS de ellos; si no, la
+  // llenábamos para borrarla acto seguido.
+  if(modoFarmacia) { renderDashboardFarmacia(); renderNavQuickGrid(currentView); return; }
+  if(isSuperAdmin()) { renderDashboardSA(); renderNavQuickGrid(currentView); return; }
+  renderNavQuickGrid(currentView);
   renderDashboardClinica();
 }
 
@@ -1449,8 +1464,12 @@ function renderDashboardSA() {
   const medicos       = C.prof.filter(p=>['medico','medico_admin','admin','recepcion','enfermeria','optometrista','oftalmologo','dermatologo'].includes(p.rol));
 
   const view = document.getElementById('view-dashboard');
+  // El grid de accesos rápidos vive dentro de #view-dashboard, así que este
+  // innerHTML lo destruía: el Super Admin era el único rol que se quedaba sin
+  // él en el teléfono. Se recrea aquí y se vuelve a pintar al final.
   view.innerHTML = `
   <div id="panel-pendientes-sesion" style="display:none;margin-bottom:10px"></div>
+  <div class="nav-quick-grid" id="nav-quick-grid"></div>
   <div class="sa-dash">
 
     <!-- KPIs -->
@@ -1726,6 +1745,7 @@ function renderDashboardFarmacia() {
   const view = document.getElementById('view-dashboard');
   view.innerHTML = `
     <div id="panel-pendientes-sesion-farma" style="margin-bottom:18px"></div>
+    <div class="nav-quick-grid" id="nav-quick-grid"></div>
     <div class="stats-grid" style="margin-bottom:18px">
       <div class="stat-card"><div class="stat-icon si-green">💰</div><div class="stat-info"><h3>${fmtC(totalIng)}</h3><p>Ingresos de Hoy</p></div></div>
       <div class="stat-card"><div class="stat-icon si-red">📤</div><div class="stat-info"><h3 style="color:var(--danger)">${fmtC(totalEgr)}</h3><p>Gastos de Hoy</p></div></div>
@@ -1990,7 +2010,7 @@ function actualizarEdadCalculada() {
 }
 
 async function guardarPaciente(irExpediente=false, irCita=false){
-  if(!currentClinicaId){ toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
+  if(!_exigeClinica()) return;
   if(!_lockSubmit('paciente', null)) return;
   const nombre=document.getElementById('p-nombre').value.trim();
   const apellidos=document.getElementById('p-apellidos').value.trim();
@@ -2973,7 +2993,7 @@ function openModalCitaP(pid){ openModalCita(); setPacienteSelect('c-paciente', p
 function openModalCitaMascota(mid){ openModalCita(); setMascotaSelect(mid); }
 
 async function guardarCita(){
-  if(!currentClinicaId){ toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
+  if(!_exigeClinica()) return;
   const esVet = esVeterinaria();
   const fecha=document.getElementById('c-fecha').value;
   const hora=document.getElementById('c-hora').value;
@@ -3465,7 +3485,7 @@ function seleccionarMedItem(m, idx) {
 }
 
 async function guardarMedicacion() {
-  if(!currentClinicaId) { toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
+  if(!_exigeClinica()) return;
   const esVet = esVeterinaria();
   const pid = esVet ? null : (parseInt(document.getElementById('m-paciente').value) || null);
   const mid = esVet ? (parseInt(document.getElementById('m-mascota').value) || null) : null;
@@ -3813,7 +3833,9 @@ async function _guardarComoBorradorEncadenado(previa, snap) {
 
   if(esVeterinaria() ? !snap.mascotaId : !snap.pacienteId)
     return { guardado:false, error: esVeterinaria() ? 'Selecciona una mascota' : 'Selecciona un paciente' };
-  if(!currentClinicaId) return { guardado:false, error:'Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.' };
+  if(!currentClinicaId) return { guardado:false, error: isSuperAdmin()
+    ? 'Elige primero una clínica en el selector de la barra lateral.'
+    : 'Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.' };
 
   const sobrescribir = previa?.estado === 'borrador';
   const payload = toN({
@@ -4072,7 +4094,7 @@ function editarNota(id) {
 }
 
 async function guardarNota(estadoSolicitado='borrador'){
-  if(!currentClinicaId){ toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
+  if(!_exigeClinica()) return;
   const esVet=esVeterinaria();
   const pid=esVet?null:(parseInt(document.getElementById('n-paciente').value)||null);
   const mid=esVet?(parseInt(document.getElementById('n-mascota').value)||null):null;
@@ -5167,6 +5189,7 @@ async function subirLogoRecetario(file, usuarioId) {
 
 // ════════════════════ EXPEDIENTE ════════════════════
 async function guardarExpediente(pid) {
+  if(!_exigeClinica()) return;
   const obj = {
     pacienteId: pid,
     peso: document.getElementById('exp-peso').value,
@@ -6845,7 +6868,7 @@ function openModalProducto(id){
 }
 
 async function guardarProducto(){
-  if(!currentClinicaId){ toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
+  if(!_exigeClinica()) return;
   const nombre=document.getElementById('prod-nombre').value.trim();
   if(!nombre){ toast('El nombre es obligatorio','error'); return; }
   setLoading(true);
@@ -12360,7 +12383,9 @@ function switchFarmaTab(tab) {
 }
 
 function renderFarmacia() {
-  showView('farmacia');
+  // Aquí había un showView('farmacia') que no existe en ningún archivo: lanzaba
+  // ReferenceError y abortaba el resto de la función, así que la vista quedaba a
+  // medio pintar. navigate() ya activa la vista antes de llamar aquí.
   const nombreEl = document.getElementById('farma-clinica-nombre');
   if(nombreEl) nombreEl.textContent = currentClinica?.nombre || '';
   actualizarStatsFarma();
@@ -13180,7 +13205,7 @@ function openModalCliente(id) {
 }
 
 async function guardarCliente(irAMascota) {
-  if(!currentClinicaId) { toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
+  if(!_exigeClinica()) return;
   const obj = {
     nombre:         document.getElementById('cli-nombre').value.trim(),
     apellidos:      document.getElementById('cli-apellidos').value.trim(),
@@ -13420,7 +13445,7 @@ function openModalMascota(id, clienteId) {
 }
 
 async function guardarMascota() {
-  if(!currentClinicaId) { toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
+  if(!_exigeClinica()) return;
   const obj = {
     clienteId:     parseInt(document.getElementById('mas-cliente').value) || null,
     nombre:        document.getElementById('mas-nombre').value.trim(),
@@ -13733,7 +13758,7 @@ function renderDetalleMascota(mid) {
 }
 
 async function guardarExpedienteMascota(mid) {
-  if(!currentClinicaId) { toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
+  if(!_exigeClinica()) return;
   const obj = {
     mascotaId: mid,
     peso: document.getElementById('expm-peso').value,
@@ -14273,7 +14298,7 @@ function setProximaDosis(dias) {
 }
 
 async function guardarVacuna() {
-  if(!currentClinicaId) { toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
+  if(!_exigeClinica()) return;
   const sel = document.getElementById('vac-vacuna').value;
   const vacuna = sel === '__otra' ? document.getElementById('vac-otra').value.trim() : sel;
   if(!vacuna) { toast('Indica qué vacuna se aplicó','error'); return; }
@@ -14349,7 +14374,7 @@ function setProximaDesp(dias) {
 }
 
 async function guardarDesp() {
-  if(!currentClinicaId) { toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
+  if(!_exigeClinica()) return;
   const mid = editingDespId ? C.desp.find(x => x.id === editingDespId)?.mascotaId : _vacunaMascotaId;
   if(!mid) { toast('No se pudo determinar la mascota','error'); return; }
   const obj = {
@@ -14576,7 +14601,7 @@ function setMascotaSelectHosp(mid) {
 }
 
 async function guardarHosp() {
-  if(!currentClinicaId) { toast('Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.','error'); return; }
+  if(!_exigeClinica()) return;
   const mid = editingHospId ? _hospMascotaId : (parseInt(document.getElementById('hosp-mascota')?.value) || null);
   if(!mid) { toast('Elige la mascota que ingresa','error'); return; }
   const obj = {
@@ -14666,6 +14691,7 @@ function _pintarSeguimiento(error) {
 }
 
 async function guardarSeguimiento() {
+  if(!_exigeClinica()) return;
   const temp = document.getElementById('seg-temp').value;
   const med  = document.getElementById('seg-medicacion').value.trim();
   const notas= document.getElementById('seg-notas').value.trim();
