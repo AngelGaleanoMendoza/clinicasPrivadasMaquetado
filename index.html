@@ -240,13 +240,19 @@
       <!-- PACIENTES -->
       <div id="view-pacientes" class="view">
         <div class="card">
-          <div class="card-header"><h3>👥 Registro de Pacientes</h3><button class="btn btn-primary" onclick="openModalPaciente()">+ Nuevo Paciente</button></div>
+          <div class="card-header" id="pacientes-encabezado">
+            <h3>👥 Registro de Pacientes</h3>
+            <div class="pacientes-header-actions">
+              <button class="btn btn-secondary btn-sm" onclick="iniciarGuiaPacientes(true)" title="Ver la guía de este módulo">❔ Ver guía</button>
+              <button class="btn btn-primary" id="btn-nuevo-paciente" onclick="openModalPaciente()">+ Nuevo Paciente</button>
+            </div>
+          </div>
           <div class="search-bar">
-            <div class="search-bar-input">
+            <div class="search-bar-input" id="pacientes-buscador">
               <span style="color:var(--text-light)">🔍</span>
               <input type="text" id="pacientes-search" placeholder="Buscar por nombre, apellidos, DNI o teléfono..." oninput="filterPacientes(this.value)">
             </div>
-            <div class="filter-chips">
+            <div class="filter-chips" id="pacientes-filtros">
               <span class="chip active" onclick="setFiltroEstado('todos',this)">Todos</span>
               <span class="chip" onclick="setFiltroEstado('activo',this)">Activos</span>
               <span class="chip" onclick="setFiltroEstado('inactivo',this)">Inactivos</span>
@@ -2633,7 +2639,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260906f" defer></script>
+<script src="js/app.js?v=20260906g" defer></script>
 </body>
 </html>
 

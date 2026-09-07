@@ -1198,10 +1198,219 @@ function customConfirm({icon='⚠️', title, msg, okText='Confirmar', cancelTex
 function _confirmOk()     { document.getElementById('modal-confirm').classList.remove('open'); if(_confirmResolve) { _confirmResolve(true);  _confirmResolve=null; } }
 function _confirmCancel() { document.getElementById('modal-confirm').classList.remove('open'); if(_confirmResolve) { _confirmResolve(false); _confirmResolve=null; } }
 
+// ════════════════════ GUÍA CONTEXTUAL: PACIENTES ════════════════════
+const GUIA_PACIENTES_VERSION = 1;
+const GUIA_PACIENTES_PASOS = [
+  {
+    target:'#pacientes-encabezado',
+    titulo:'Tu registro de pacientes',
+    texto:'Desde aquí administras las personas atendidas por la clínica. La guía te mostrará el recorrido básico sin modificar ningún dato.',
+  },
+  {
+    target:'#btn-nuevo-paciente',
+    titulo:'Registra un paciente',
+    texto:'Usa este botón para crear su ficha personal. Al guardarla, Lumea Med también prepara su expediente clínico.',
+  },
+  {
+    target:'#pacientes-buscador',
+    titulo:'Encuentra una ficha rápido',
+    texto:'Busca por nombre, apellidos, identificación o teléfono. Los resultados se actualizan mientras escribes.',
+  },
+  {
+    target:'#pacientes-filtros',
+    titulo:'Filtra por estado',
+    texto:'Alterna entre todos los pacientes, los activos y los inactivos sin perder la búsqueda que hayas escrito.',
+  },
+  {
+    target:()=>document.querySelector('#tabla-pacientes .pac-row:first-child .actions-cell') || document.getElementById('pacientes-empty'),
+    titulo:'Abre y gestiona el expediente',
+    texto:()=>C.p.length
+      ? 'En cada fila puedes registrar que el paciente acudió, abrir su expediente, editar sus datos o eliminarlo.'
+      : 'Aquí aparecerán los pacientes registrados. Cuando agregues el primero tendrás accesos para abrir, editar y gestionar su expediente.',
+  },
+];
+
+let _guiaPacientes = {activa:false,paso:0,target:null,timer:null,ultimoFoco:null};
+
+function _claveGuiaPacientes() {
+  return `lm_guia_${currentUser?.id||'anon'}_${currentClinicaId||'sin-clinica'}_pacientes_v${GUIA_PACIENTES_VERSION}`;
+}
+
+function _guiaPacientesVista() {
+  try { return localStorage.getItem(_claveGuiaPacientes()) === 'completada'; }
+  catch(error) { return false; }
+}
+
+function _guardarGuiaPacientesVista() {
+  try { localStorage.setItem(_claveGuiaPacientes(),'completada'); }
+  catch(error) {}
+}
+
+function _asegurarGuiaPacientesDOM() {
+  let root=document.getElementById('guia-pacientes');
+  if(root) return root;
+  root=document.createElement('div');
+  root.id='guia-pacientes';
+  root.className='guia-root';
+  root.hidden=true;
+  root.innerHTML=`
+    <div class="guia-blocker" aria-hidden="true"></div>
+    <div class="guia-spotlight" aria-hidden="true"></div>
+    <section class="guia-card" role="dialog" aria-modal="true" aria-labelledby="guia-pacientes-titulo" aria-describedby="guia-pacientes-texto">
+      <div class="guia-card-head">
+        <div class="guia-identidad"><div class="guia-avatar" aria-hidden="true">✦</div><div><div class="guia-eyebrow" id="guia-pacientes-contador"></div><h3 id="guia-pacientes-titulo"></h3></div></div>
+        <button class="guia-cerrar" type="button" onclick="omitirGuiaPacientes()" aria-label="Cerrar guía">✕</button>
+      </div>
+      <div class="guia-texto" id="guia-pacientes-texto"></div>
+      <div class="guia-progress" id="guia-pacientes-progress" aria-hidden="true"></div>
+      <div class="guia-actions">
+        <button class="guia-btn guia-btn-ghost" type="button" onclick="omitirGuiaPacientes()">Omitir guía</button>
+        <div class="guia-actions-right">
+          <button class="guia-btn guia-btn-back" id="guia-pacientes-anterior" type="button" onclick="anteriorGuiaPacientes()">Anterior</button>
+          <button class="guia-btn guia-btn-next" id="guia-pacientes-siguiente" type="button" onclick="siguienteGuiaPacientes()">Siguiente</button>
+        </div>
+      </div>
+    </section>`;
+  document.body.appendChild(root);
+  return root;
+}
+
+function _resolverTargetGuiaPacientes(paso) {
+  const objetivo=GUIA_PACIENTES_PASOS[paso]?.target;
+  return typeof objetivo==='function' ? objetivo() : document.querySelector(objetivo);
+}
+
+function _posicionarGuiaPacientes() {
+  if(!_guiaPacientes.activa || !_guiaPacientes.target?.isConnected) return;
+  const root=document.getElementById('guia-pacientes');
+  const spot=root?.querySelector('.guia-spotlight');
+  const card=root?.querySelector('.guia-card');
+  if(!spot || !card) return;
+  const rect=_guiaPacientes.target.getBoundingClientRect();
+  const margen=8;
+  const top=Math.max(6,rect.top-margen);
+  const left=Math.max(6,rect.left-margen);
+  const right=Math.min(window.innerWidth-6,rect.right+margen);
+  const bottom=Math.min(window.innerHeight-6,rect.bottom+margen);
+  spot.style.top=top+'px';
+  spot.style.left=left+'px';
+  spot.style.width=Math.max(0,right-left)+'px';
+  spot.style.height=Math.max(0,bottom-top)+'px';
+
+  const cardRect=card.getBoundingClientRect();
+  const cardLeft=Math.min(window.innerWidth-cardRect.width-10,Math.max(10,rect.left+(rect.width-cardRect.width)/2));
+  const debajo=rect.bottom+18;
+  const encima=rect.top-cardRect.height-18;
+  let cardTop=debajo+cardRect.height<=window.innerHeight-10 ? debajo : encima;
+  if(cardTop<10) cardTop=Math.max(10,window.innerHeight-cardRect.height-10);
+  card.style.left=cardLeft+'px';
+  card.style.top=cardTop+'px';
+}
+
+function _mostrarPasoGuiaPacientes(paso) {
+  if(!_guiaPacientes.activa) return;
+  const max=GUIA_PACIENTES_PASOS.length-1;
+  _guiaPacientes.paso=Math.min(max,Math.max(0,paso));
+  const config=GUIA_PACIENTES_PASOS[_guiaPacientes.paso];
+  const target=_resolverTargetGuiaPacientes(_guiaPacientes.paso);
+  if(!target) {
+    if(_guiaPacientes.paso<max) _mostrarPasoGuiaPacientes(_guiaPacientes.paso+1);
+    else finalizarGuiaPacientes();
+    return;
+  }
+  _guiaPacientes.target=target;
+  const root=_asegurarGuiaPacientesDOM();
+  root.querySelector('#guia-pacientes-contador').textContent=`Lumi · Paso ${_guiaPacientes.paso+1} de ${GUIA_PACIENTES_PASOS.length}`;
+  root.querySelector('#guia-pacientes-titulo').textContent=config.titulo;
+  root.querySelector('#guia-pacientes-texto').textContent=typeof config.texto==='function'?config.texto():config.texto;
+  root.querySelector('#guia-pacientes-anterior').disabled=_guiaPacientes.paso===0;
+  root.querySelector('#guia-pacientes-siguiente').textContent=_guiaPacientes.paso===max?'Finalizar':'Siguiente';
+  root.querySelector('#guia-pacientes-progress').innerHTML=GUIA_PACIENTES_PASOS
+    .map((_,i)=>`<span class="guia-dot${i===_guiaPacientes.paso?' active':''}"></span>`).join('');
+  const card=root.querySelector('.guia-card');
+  card.style.visibility='hidden';
+  const sinMovimiento=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  target.scrollIntoView({behavior:sinMovimiento?'auto':'smooth',block:'center',inline:'nearest'});
+  requestAnimationFrame(()=>{
+    _posicionarGuiaPacientes();
+    card.style.visibility='visible';
+    root.querySelector('#guia-pacientes-siguiente').focus({preventScroll:true});
+  });
+}
+
+function iniciarGuiaPacientes(forzar=false) {
+  if(currentView!=='pacientes') {
+    navigate('pacientes').then(()=>iniciarGuiaPacientes(true));
+    return;
+  }
+  if(!forzar && _guiaPacientesVista()) return;
+  clearTimeout(_guiaPacientes.timer);
+  const root=_asegurarGuiaPacientesDOM();
+  _guiaPacientes.ultimoFoco=document.activeElement;
+  _guiaPacientes.activa=true;
+  root.hidden=false;
+  _mostrarPasoGuiaPacientes(0);
+}
+
+function _cerrarGuiaPacientes(marcarVista) {
+  clearTimeout(_guiaPacientes.timer);
+  if(marcarVista) _guardarGuiaPacientesVista();
+  const root=document.getElementById('guia-pacientes');
+  if(root) root.hidden=true;
+  const foco=_guiaPacientes.ultimoFoco;
+  _guiaPacientes={activa:false,paso:0,target:null,timer:null,ultimoFoco:null};
+  if(foco?.isConnected) foco.focus({preventScroll:true});
+}
+
+function siguienteGuiaPacientes() {
+  if(_guiaPacientes.paso>=GUIA_PACIENTES_PASOS.length-1) finalizarGuiaPacientes();
+  else _mostrarPasoGuiaPacientes(_guiaPacientes.paso+1);
+}
+
+function anteriorGuiaPacientes() {
+  _mostrarPasoGuiaPacientes(_guiaPacientes.paso-1);
+}
+
+function finalizarGuiaPacientes() {
+  _cerrarGuiaPacientes(true);
+  toast('Guía de Pacientes completada. Puedes repetirla desde “Ver guía”.','success');
+}
+
+function omitirGuiaPacientes() {
+  _cerrarGuiaPacientes(true);
+  toast('Guía omitida. Puedes abrirla nuevamente desde “Ver guía”.','info');
+}
+
+function _programarGuiaPacientes() {
+  clearTimeout(_guiaPacientes.timer);
+  if(_guiaPacientes.activa || _guiaPacientesVista()) return;
+  _guiaPacientes.timer=setTimeout(()=>{
+    if(currentView==='pacientes' && !_guiaPacientes.activa) iniciarGuiaPacientes();
+  },450);
+}
+
+window.addEventListener('resize',_posicionarGuiaPacientes);
+window.addEventListener('scroll',_posicionarGuiaPacientes,true);
+document.addEventListener('keydown',e=>{
+  if(!_guiaPacientes.activa) return;
+  if(e.key==='Tab') {
+    const botones=[...document.querySelectorAll('#guia-pacientes button:not(:disabled)')];
+    if(!botones.length) return;
+    const actual=botones.indexOf(document.activeElement);
+    if(e.shiftKey && actual<=0) { e.preventDefault(); botones.at(-1).focus(); }
+    else if(!e.shiftKey && actual===botones.length-1) { e.preventDefault(); botones[0].focus(); }
+    return;
+  }
+  if(e.key==='Escape') omitirGuiaPacientes();
+  if(e.key==='ArrowRight') siguienteGuiaPacientes();
+  if(e.key==='ArrowLeft') anteriorGuiaPacientes();
+});
+
 // ════════════════════ NAVIGATION ════════════════════
 let currentView='dashboard', editingId=null, editingCitaId=null, editingMedId=null, editingNotaId=null, currentNotaCitaId=null, currentPatientId=null, currentMascotaId=null, selCalDate=hoy(), currentResumenCitaId=null, currentNotaId=null;
 
 async function navigate(view, patientId) {
+  if(view!=='pacientes' && _guiaPacientes.activa) _cerrarGuiaPacientes(false);
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.querySelectorAll('.menu-item').forEach(m=>m.classList.remove('active'));
   const el=document.getElementById('view-'+(view==='paciente-detalle'?'paciente-detalle':view));
@@ -1920,6 +2129,7 @@ function renderPacientes(){
   const countEl=document.getElementById('pacientes-count');
   if(countEl) countEl.textContent=`${C.p.length} pacientes`;
   renderPacientesList(C.p);
+  if(currentView==='pacientes') _programarGuiaPacientes();
 }
 
 function renderPacientesList(lista){
