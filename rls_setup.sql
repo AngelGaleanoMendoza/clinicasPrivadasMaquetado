@@ -848,7 +848,8 @@ CREATE INDEX IF NOT EXISTS idx_notas_paciente_fecha_signos
 CREATE TABLE IF NOT EXISTS public.historial_expediente (
   id BIGSERIAL PRIMARY KEY,
   clinica_id BIGINT NOT NULL REFERENCES public.clinicas(id) ON DELETE CASCADE,
-  paciente_id BIGINT REFERENCES public.pacientes(id) ON DELETE SET NULL,
+  -- Identificador historico: debe sobrevivir aunque el paciente ya no exista.
+  paciente_id BIGINT,
   tabla_origen TEXT NOT NULL,
   registro_id BIGINT,
   accion TEXT NOT NULL CHECK (accion IN ('INSERT','UPDATE','DELETE')),

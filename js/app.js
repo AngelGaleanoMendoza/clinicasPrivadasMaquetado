@@ -2076,14 +2076,62 @@ async function guardarPaciente(irExpediente=false, irCita=false){
 
 async function eliminarPaciente(id){
   const x=C.p.find(p=>p.id===id);
-  const ok=await customConfirm({icon:'🗑️',title:'Eliminar paciente',msg:`¿Eliminar a <strong>${x.nombre} ${x.apellidos}</strong>?<br><br>También se eliminarán sus citas, medicaciones y notas.`,okText:'Eliminar'});
+  if(!x){ toast('Paciente no encontrado','error'); return; }
+  const ok=await customConfirm({icon:'🗑️',title:'Eliminar paciente',msg:`¿Eliminar a <strong>${x.nombre} ${x.apellidos}</strong>?<br><br>También se eliminarán sus citas, medicaciones, notas, exámenes y expediente clínico. Las facturas se conservarán sin enlace al paciente.`,okText:'Eliminar',danger:true});
   if(!ok) return;
   setLoading(true);
-  const {error}=await sb.from('pacientes').delete().eq('id',id);
-  setLoading(false);
-  if(error){ toast('Error: '+error.message,'error'); return; }
-  toast('Paciente eliminado');
-  await loadAll(); renderPacientes(); updateBadges();
+  try {
+    await limpiarDatosPacienteAntesDeBorrar(id);
+    const {error}=await sb.from('pacientes').delete().eq('id',id);
+    if(error) throw error;
+    toast('Paciente eliminado');
+    await loadAll(); renderPacientes(); updateBadges();
+  } catch(error) {
+    toast('Error al eliminar paciente: '+(error?.message||error),'error');
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function limpiarDatosPacienteAntesDeBorrar(id) {
+  await Promise.all([
+    _desvincularPaciente('facturas', id, {paciente_id:null, cita_id:null}),
+    _desvincularPaciente('finanzas', id, {paciente_id:null}),
+  ]);
+  const tablas = [
+    'procedimientos_oftalmologicos',
+    'procedimientos_odontologicos',
+    'historial_dental',
+    'odontograma',
+    'periodontograma',
+    'examenes',
+    'notas',
+    'medicaciones',
+    'expediente',
+    'citas',
+  ];
+  for(const tabla of tablas) await _borrarRegistrosPaciente(tabla, id);
+}
+
+async function _borrarRegistrosPaciente(tabla, pacienteId) {
+  const { error } = await sb.from(tabla).delete().eq('paciente_id', pacienteId);
+  if(error && !_errorRelacionOpcionalPaciente(error)) throw new Error(`${tabla}: ${error.message}`);
+}
+
+async function _desvincularPaciente(tabla, pacienteId, payload) {
+  let { error } = await sb.from(tabla).update(payload).eq('paciente_id', pacienteId);
+  if(error && 'cita_id' in payload && _faltaColumna(error, 'cita_id')) {
+    ({ error } = await sb.from(tabla).update({paciente_id:null}).eq('paciente_id', pacienteId));
+  }
+  if(error && !_errorRelacionOpcionalPaciente(error)) throw new Error(`${tabla}: ${error.message}`);
+}
+
+function _errorRelacionOpcionalPaciente(error) {
+  const m = (error?.message || '').toLowerCase();
+  return _faltaColumna(error, 'paciente_id')
+    || m.includes('does not exist')
+    || m.includes('could not find the table')
+    || m.includes('schema cache');
 }
 
 // ════════════════════ DETALLE PACIENTE ════════════════════
