@@ -114,8 +114,7 @@
       <div class="menu-item active" onclick="navigate('dashboard')"><span class="icon">📊</span> Dashboard</div>
       <div class="menu-item" id="menu-expedientes" onclick="navigate('expedientes')"><span class="icon">📋</span> Expedientes</div>
       <div class="menu-item" id="menu-examenes-digitalizados" onclick="navigate('examenes-digitalizados')" style="display:none"><span class="icon">🔬</span> Exámenes digitalizados</div>
-      <div class="menu-item" id="menu-procedimientos" onclick="navigate('procedimientos')" style="display:none"><span class="icon">🦷</span> Procedimientos</div>
-      <div class="menu-item" id="menu-procedimientos-oftalmo" onclick="navigate('procedimientos-oftalmo')" style="display:none"><span class="icon">👁️</span> Procedimientos / Quirófano</div>
+      <div class="menu-item" id="menu-procedimientos" onclick="navigate('procedimientos')" style="display:none"><span class="icon">🩺</span> Procedimientos clínicos</div>
       <div class="menu-item" id="menu-farmacia" onclick="navigate('farmacia')" style="display:none"><span class="icon">💊</span> Farmacia</div>
       <div class="menu-section" id="menu-clinica-section">Clínica</div>
       <div class="menu-item" id="menu-clientes" onclick="navigate('clientes')" style="display:none"><span class="icon">🧑‍🤝‍🧑</span> Clientes <span class="badge" id="badge-clientes">0</span></div>
@@ -454,8 +453,7 @@
           <button class="tab" id="tab-btn-historial-dental" onclick="switchTab('tab-historial-dental',this)" style="display:none">🦷 Historia Dental</button>
           <button class="tab" id="tab-btn-odontograma" onclick="switchTab('tab-odontograma',this)" style="display:none">🗺️ Odontograma</button>
           <button class="tab" id="tab-btn-periodontograma" onclick="switchTab('tab-periodontograma',this)" style="display:none">📏 Periodontograma</button>
-          <button class="tab" id="tab-btn-procedimientos-p" onclick="switchTab('tab-procedimientos-p',this)" style="display:none">📋 Plan Tratamiento</button>
-          <button class="tab" id="tab-btn-proc-oft-p" onclick="switchTab('tab-proc-oft-p',this)" style="display:none">👁️ Procedimientos</button>
+          <button class="tab" id="tab-btn-proc-oft-p" onclick="switchTab('tab-proc-oft-p',this)" style="display:none">🩺 Procedimientos</button>
         </div>
         <div id="tab-info"></div>
         <div id="tab-citas-p" style="display:none"></div>
@@ -466,7 +464,6 @@
         <div id="tab-historial-dental" style="display:none"></div>
         <div id="tab-odontograma" style="display:none"></div>
         <div id="tab-periodontograma" style="display:none"></div>
-        <div id="tab-procedimientos-p" style="display:none"></div>
         <div id="tab-proc-oft-p" style="display:none"></div>
       </div>
 
@@ -570,11 +567,8 @@
         </div>
       </div>
 
-      <!-- PROCEDIMIENTOS ODONTOLÓGICOS -->
+      <!-- PROCEDIMIENTOS CLÍNICOS POR SERVICIO -->
       <div id="view-procedimientos" class="view"></div>
-
-      <!-- PROCEDIMIENTOS OFTALMOLÓGICOS / QUIRÓFANO -->
-      <div id="view-procedimientos-oftalmo" class="view"></div>
 
       <!-- FARMACIA -->
       <div id="view-farmacia" class="view">
@@ -2366,17 +2360,19 @@
   </div>
 </div>
 
-<!-- MODAL PROCEDIMIENTO OFTALMOLÓGICO / QUIRÓFANO -->
+<!-- MODAL PROCEDIMIENTO CLÍNICO -->
 <div class="modal-overlay" id="modal-proc-oft">
   <div class="modal modal-xl proc-oft-modal">
     <button class="modal-close-btn" onclick="closeModal('modal-proc-oft')" title="Cerrar">✕</button>
-    <h2 id="modal-proc-oft-title">👁️ Nuevo Procedimiento</h2>
+    <h2 id="modal-proc-oft-title">🩺 Nuevo procedimiento clínico</h2>
 
     <section class="proc-oft-section">
       <h3>1. Identificación y agenda</h3>
       <div class="form-grid">
         <div class="form-group full"><label>Paciente *</label><select id="po-paciente"></select></div>
-        <div class="form-group full"><label>Procedimiento *</label><select id="po-procedimiento" onchange="onProcOftCatalogoChange()"></select></div>
+        <div class="form-group"><label>Servicio *</label><select id="po-servicio" onchange="onProcClinServicioChange()"></select></div>
+        <div class="form-group full"><label>Procedimiento *</label><select id="po-procedimiento" onchange="onProcClinCatalogoChange()"></select></div>
+        <div class="form-group full" id="po-procedimiento-otro-wrap" style="display:none"><label>Nombre del procedimiento *</label><input type="text" id="po-procedimiento-otro" placeholder="Escribe el procedimiento clínico"></div>
         <div class="form-group"><label>Categoría</label><input type="text" id="po-categoria" readonly></div>
         <div class="form-group"><label>Tipo</label><input type="text" id="po-tipo-label" readonly><input type="hidden" id="po-tipo"></div>
         <div class="form-group"><label>Fecha *</label><input type="date" id="po-fecha"></div>
@@ -2389,12 +2385,14 @@
         <div class="form-group"><label>Prioridad</label><select id="po-prioridad">
           <option value="normal">Normal</option><option value="preferente">Preferente</option><option value="urgente">Urgente</option>
         </select></div>
-        <div class="form-group"><label>Ojo</label><select id="po-ojo">
+        <div class="form-group" id="po-lateralidad-wrap"><label>Lateralidad</label><select id="po-ojo">
           <option value="OD">OD — Ojo derecho</option><option value="OI">OI — Ojo izquierdo</option>
           <option value="AO">AO — Ambos ojos</option><option value="no_aplica">No aplica</option>
         </select></div>
+        <div class="form-group" id="po-diente-wrap" style="display:none"><label>Diente(s)</label><input type="text" id="po-diente" placeholder="Ej: 11, 12, 21 o sector anterior"></div>
+        <div class="form-group" id="po-presupuesto-wrap" style="display:none"><label>Presupuesto</label><input type="number" id="po-presupuesto" min="0" step="0.01" placeholder="0.00"></div>
         <div class="form-group"><label>Sala / Quirófano</label><input type="text" id="po-sala" placeholder="Ej: Quirófano 1"></div>
-        <div class="form-group"><label>Especialidad</label><input type="text" id="po-especialidad" placeholder="Oftalmología, Retina..."></div>
+        <div class="form-group"><label>Especialidad</label><input type="text" id="po-especialidad" placeholder="Especialidad o área clínica"></div>
         <div class="form-group"><label>Profesional responsable</label><input type="text" id="po-profesional" readonly></div>
       </div>
     </section>
@@ -2436,7 +2434,7 @@
       <h3>5. Indicaciones y seguimiento</h3>
       <div class="form-grid">
         <div class="form-group full"><label>Indicaciones posteriores</label><textarea id="po-indicaciones"></textarea></div>
-        <div class="form-group"><label class="proc-check"><input type="checkbox" id="po-seguimiento" onchange="syncProcOftSeguimiento()"> Requiere seguimiento</label></div>
+        <div class="form-group"><label class="proc-check"><input type="checkbox" id="po-seguimiento" onchange="syncProcClinSeguimiento()"> Requiere seguimiento</label></div>
         <div class="form-group" id="po-control-wrap"><label>Próximo control</label><input type="date" id="po-control"></div>
         <div class="form-group full"><label>Referencia / contrarreferencia</label><textarea id="po-referencia"></textarea></div>
       </div>
@@ -2445,7 +2443,7 @@
     <section class="proc-oft-section">
       <h3>6. Consentimiento y documentos</h3>
       <div class="form-grid">
-        <div class="form-group"><label class="proc-check"><input type="checkbox" id="po-consentimiento" onchange="syncProcOftConsentimiento()"> Consentimiento informado verificado</label></div>
+        <div class="form-group"><label class="proc-check"><input type="checkbox" id="po-consentimiento" onchange="syncProcClinConsentimiento()"> Consentimiento informado verificado</label></div>
         <div class="form-group" id="po-consent-fecha-wrap"><label>Fecha del consentimiento</label><input type="date" id="po-consent-fecha"></div>
         <div class="form-group full"><label>Documentos / imágenes adjuntas</label><input type="file" id="po-adjuntos" multiple accept="image/*,.pdf,.doc,.docx"><div id="po-adjuntos-existentes" class="proc-adjuntos"></div></div>
       </div>
@@ -2453,43 +2451,7 @@
 
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-proc-oft')">Cancelar</button>
-      <button class="btn btn-primary" onclick="guardarProcedimientoOft()">💾 Guardar procedimiento</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL PROCEDIMIENTO ODONTOLÓGICO -->
-<div class="modal-overlay" id="modal-procedimiento">
-  <div class="modal">
-    <button class="modal-close-btn" onclick="closeModal('modal-procedimiento')" title="Cerrar">✕</button>
-    <h2 id="modal-proc-title">🦷 Nuevo Procedimiento</h2>
-    <div class="form-grid">
-      <div class="form-group full"><label>Paciente *</label>
-        <select id="proc-paciente"></select>
-      </div>
-      <div class="form-group full"><label>Procedimiento *</label>
-        <select id="proc-procedimiento">
-          <option value="">Seleccionar procedimiento...</option>
-        </select>
-      </div>
-      <div class="form-group"><label>Fecha *</label><input type="date" id="proc-fecha"></div>
-      <div class="form-group"><label>Estado</label>
-        <select id="proc-estado">
-          <option value="pendiente">Pendiente</option>
-          <option value="iniciado">Iniciado</option>
-          <option value="finalizado">Finalizado</option>
-          <option value="cancelado">Cancelado</option>
-        </select>
-      </div>
-      <div class="form-group"><label>Diente(s)</label><input type="text" id="proc-diente" placeholder="Ej: 11, 12, 21 o sector anterior"></div>
-      <div class="form-group"><label>Presupuesto ($)</label><input type="number" id="proc-presupuesto" min="0" step="0.01" placeholder="0.00"></div>
-      <div class="form-group full"><label>Notas / Observaciones</label>
-        <textarea id="proc-notas" placeholder="Observaciones clínicas del procedimiento..."></textarea>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('modal-procedimiento')">Cancelar</button>
-      <button class="btn btn-primary" onclick="guardarProcedimiento()">💾 Guardar</button>
+      <button class="btn btn-primary" onclick="guardarProcedimientoClin()">💾 Guardar procedimiento</button>
     </div>
   </div>
 </div>

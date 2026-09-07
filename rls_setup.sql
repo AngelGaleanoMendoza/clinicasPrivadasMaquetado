@@ -942,3 +942,13 @@ CREATE TRIGGER trg_historial_proc_odontologicos AFTER INSERT OR UPDATE OR DELETE
 DROP TRIGGER IF EXISTS trg_historial_proc_oftalmologicos ON public.procedimientos_oftalmologicos;
 CREATE TRIGGER trg_historial_proc_oftalmologicos AFTER INSERT OR UPDATE OR DELETE ON public.procedimientos_oftalmologicos
   FOR EACH ROW EXECUTE FUNCTION public.registrar_historial_expediente();
+
+-- La tabla unificada se crea en migracion_procedimientos_clinicos.sql. Este
+-- bloque agrega su auditoria si esa migracion ya fue ejecutada.
+DO $$
+BEGIN
+  IF to_regclass('public.procedimientos_clinicos') IS NOT NULL THEN
+    EXECUTE 'DROP TRIGGER IF EXISTS trg_historial_proc_clinicos ON public.procedimientos_clinicos';
+    EXECUTE 'CREATE TRIGGER trg_historial_proc_clinicos AFTER INSERT OR UPDATE OR DELETE ON public.procedimientos_clinicos FOR EACH ROW EXECUTE FUNCTION public.registrar_historial_expediente()';
+  END IF;
+END $$;
