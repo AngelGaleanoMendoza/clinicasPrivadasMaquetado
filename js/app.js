@@ -1198,76 +1198,191 @@ function customConfirm({icon='⚠️', title, msg, okText='Confirmar', cancelTex
 function _confirmOk()     { document.getElementById('modal-confirm').classList.remove('open'); if(_confirmResolve) { _confirmResolve(true);  _confirmResolve=null; } }
 function _confirmCancel() { document.getElementById('modal-confirm').classList.remove('open'); if(_confirmResolve) { _confirmResolve(false); _confirmResolve=null; } }
 
-// ════════════════════ GUÍA CONTEXTUAL: PACIENTES ════════════════════
-const GUIA_PACIENTES_VERSION = 1;
-const GUIA_PACIENTES_PASOS = [
-  {
-    target:'#pacientes-encabezado',
-    titulo:'Tu registro de pacientes',
-    texto:'Desde aquí administras las personas atendidas por la clínica. La guía te mostrará el recorrido básico sin modificar ningún dato.',
+// ════════════════════ GUÍAS CONTEXTUALES POR MÓDULO ════════════════════
+const GUIAS_MODULOS = {
+  pacientes: {
+    version:1,
+    nombre:'Pacientes',
+    pasos:[
+      {target:'#pacientes-encabezado',titulo:'Tu registro de pacientes',texto:'Desde aquí administras las personas atendidas por la clínica. La guía te mostrará el recorrido básico sin modificar ningún dato.'},
+      {target:'#btn-nuevo-paciente',titulo:'Registra un paciente',texto:'Usa este botón para crear su ficha personal. Al guardarla, Lumea Med también prepara su expediente clínico.'},
+      {target:'#pacientes-buscador',titulo:'Encuentra una ficha rápido',texto:'Busca por nombre, apellidos, identificación o teléfono. Los resultados se actualizan mientras escribes.'},
+      {target:'#pacientes-filtros',titulo:'Filtra por estado',texto:'Alterna entre todos los pacientes, los activos y los inactivos sin perder la búsqueda que hayas escrito.'},
+      {
+        target:()=>document.querySelector('#tabla-pacientes .pac-row:first-child .actions-cell') || document.getElementById('pacientes-empty'),
+        titulo:'Abre y gestiona el expediente',
+        texto:()=>C.p.length
+          ? 'En cada fila puedes registrar que el paciente acudió, abrir su expediente, editar sus datos o eliminarlo.'
+          : 'Aquí aparecerán los pacientes registrados. Cuando agregues el primero tendrás accesos para abrir, editar y gestionar su expediente.',
+      },
+    ],
   },
-  {
-    target:'#btn-nuevo-paciente',
-    titulo:'Registra un paciente',
-    texto:'Usa este botón para crear su ficha personal. Al guardarla, Lumea Med también prepara su expediente clínico.',
+  expedientes: {
+    version:1,
+    nombre:'Expedientes',
+    pasos:[
+      {target:'#expedientes-encabezado',titulo:'Expedientes de la clínica',texto:'Esta vista reúne el expediente clínico de cada paciente y muestra de forma rápida su estado y última cita.'},
+      {target:'#exp-search',titulo:'Localiza un expediente',texto:'Busca por nombre, apellidos, identificación o número de expediente. La tabla se filtra mientras escribes.'},
+      {
+        target:()=>document.querySelector('#exp-list tbody tr:first-child') || document.getElementById('exp-list'),
+        titulo:'Revisa la información esencial',
+        texto:()=>C.p.length
+          ? 'Cada fila resume el número de expediente, edad, sangre, última cita y estado del paciente.'
+          : 'Los expedientes aparecerán aquí cuando registres pacientes en la clínica.',
+      },
+      {
+        target:()=>document.querySelector('#exp-list tbody tr:first-child td:last-child') || document.getElementById('exp-list'),
+        titulo:'Consulta o descarga',
+        texto:()=>C.p.length
+          ? 'Usa Ver para entrar al expediente completo o PDF para generar una copia clínica descargable.'
+          : 'Cuando exista un paciente podrás abrir su expediente completo y generar su PDF desde esta sección.',
+      },
+    ],
   },
-  {
-    target:'#pacientes-buscador',
-    titulo:'Encuentra una ficha rápido',
-    texto:'Busca por nombre, apellidos, identificación o teléfono. Los resultados se actualizan mientras escribes.',
+  'examenes-digitalizados': {
+    version:1,
+    nombre:'Exámenes digitalizados',
+    pasos:[
+      {target:'#examenes-encabezado',titulo:'Repositorio diagnóstico',texto:'Aquí centralizas estudios, imágenes e informes digitalizados para mantenerlos asociados al expediente correcto.'},
+      {target:'#examenes-intro',titulo:'Documentos siempre vinculados',texto:'Cada archivo se organiza con sus datos clínicos, categoría, hallazgos y procedencia para facilitar su consulta posterior.'},
+      {
+        target:'#examenes-selector',
+        titulo:'Selecciona al paciente',
+        texto:()=>C.p.length
+          ? 'Elige un paciente para abrir su archivo diagnóstico. También podrás saltar directamente a su expediente.'
+          : 'Primero registra un paciente. Después podrás seleccionarlo aquí para incorporar sus estudios.',
+      },
+      {
+        target:'#exmod-contenido',
+        titulo:'Consulta y carga exámenes',
+        texto:()=>_examenModuloPacId
+          ? (puedeGestionarExamenes() ? 'Aquí puedes buscar estudios existentes y usar + Nuevo examen para cargar un documento.' : 'Aquí puedes consultar y abrir los estudios disponibles para el paciente seleccionado.')
+          : 'Después de seleccionar un paciente, esta zona mostrará sus estudios y las opciones disponibles para consultarlos o cargarlos.',
+      },
+    ],
   },
-  {
-    target:'#pacientes-filtros',
-    titulo:'Filtra por estado',
-    texto:'Alterna entre todos los pacientes, los activos y los inactivos sin perder la búsqueda que hayas escrito.',
+  citas: {
+    version:1,
+    nombre:'Citas',
+    pasos:[
+      {target:'#citas-encabezado',titulo:'Agenda una nueva atención',texto:'Desde este encabezado puedes crear una cita y asociarla con su paciente, fecha, profesional y motivo.'},
+      {target:'#btn-nueva-cita',titulo:'Crea la cita',texto:'Este botón abre el formulario completo. Podrás elegir al paciente, el servicio, la hora y el profesional responsable.'},
+      {target:'#cita-buscador-rapido',titulo:'Empieza desde el paciente',texto:'También puedes buscar primero al paciente y crear la cita con sus datos ya seleccionados.'},
+      {target:'#citas-view-tabs',titulo:'Cambia la escala del calendario',texto:'Consulta las citas por mes, semana, día o una fecha específica según el nivel de detalle que necesites.'},
+      {target:'#citas-agenda-panel',titulo:'Organiza la jornada',texto:'El calendario y sus listados muestran las atenciones programadas. Desde cada cita puedes actualizar su estado y realizar acciones clínicas.'},
+      {
+        target:'#citas-historial-panel',
+        titulo:'Revisa todo el historial',
+        texto:()=>C.c.length
+          ? 'Aquí puedes filtrar todas las citas por paciente o motivo y consultar sus acciones disponibles.'
+          : 'Las citas guardadas aparecerán aquí como historial completo de la clínica.',
+      },
+    ],
   },
-  {
-    target:()=>document.querySelector('#tabla-pacientes .pac-row:first-child .actions-cell') || document.getElementById('pacientes-empty'),
-    titulo:'Abre y gestiona el expediente',
-    texto:()=>C.p.length
-      ? 'En cada fila puedes registrar que el paciente acudió, abrir su expediente, editar sus datos o eliminarlo.'
-      : 'Aquí aparecerán los pacientes registrados. Cuando agregues el primero tendrás accesos para abrir, editar y gestionar su expediente.',
+  agendas: {
+    version:1,
+    nombre:'Agendas',
+    pasos:[
+      {target:'#agendas-encabezado',titulo:'Agenda por profesional',texto:'Esta vista separa la programación por integrante del equipo para que puedas revisar su disponibilidad y carga de trabajo.'},
+      {
+        target:'#agendas-doctors-list',
+        titulo:'Selecciona al profesional',
+        texto:()=>C.prof.length
+          ? 'Elige una persona del equipo para consultar su calendario y las citas asignadas.'
+          : 'El personal configurado para la clínica aparecerá aquí. Un administrador puede agregarlo desde Configuración.',
+      },
+      {
+        target:'#agendas-right-panel',
+        titulo:'Calendario y citas del día',
+        texto:()=>selAgendasDoc
+          ? 'Aquí puedes cambiar de fecha, revisar sus indicadores y crear o gestionar las citas del día seleccionado.'
+          : 'Al seleccionar un profesional, aquí aparecerán su calendario, sus indicadores y las citas del día.',
+      },
+    ],
   },
-];
+  medicaciones: {
+    version:1,
+    nombre:'Medicaciones',
+    pasos:[
+      {target:'#medicaciones-encabezado',titulo:'Tratamientos de la clínica',texto:'Este módulo reúne las medicaciones indicadas a los pacientes y permite dar seguimiento a cada tratamiento.'},
+      {target:'#btn-nueva-medicacion',titulo:'Registra una medicación',texto:'Abre el formulario para indicar medicamento, dosis, frecuencia, duración y profesional responsable.'},
+      {
+        target:()=>document.querySelector('#tabla-medicaciones .medicacion-list-item:first-child') || document.getElementById('meds-empty'),
+        titulo:'Consulta los tratamientos',
+        texto:()=>C.m.length
+          ? 'Cada registro identifica al paciente, el medicamento, su frecuencia, prescriptor y estado actual.'
+          : 'Las medicaciones guardadas aparecerán aquí ordenadas por su fecha de inicio.',
+      },
+      {
+        target:()=>document.querySelector('#tabla-medicaciones .medicacion-list-item:first-child .actions-cell') || document.getElementById('meds-empty'),
+        titulo:'Imprime y administra',
+        texto:()=>C.m.length
+          ? 'Desde estas acciones puedes imprimir la receta, editar el tratamiento o eliminarlo.'
+          : 'Cuando registres una medicación tendrás accesos para imprimirla, editarla o eliminarla.',
+      },
+    ],
+  },
+  notas: {
+    version:1,
+    nombre:'Notas Clínicas',
+    pasos:[
+      {target:'#notas-encabezado',titulo:'Evolución clínica documentada',texto:'Aquí se concentran notas de consulta, evolución, signos vitales y otros registros clínicos de la atención.'},
+      {target:'#btn-nueva-nota',titulo:'Crea una nota clínica',texto:'Este botón abre el formulario para asociar la nota con el paciente, definir su tipo y registrar la información clínica.'},
+      {target:'#notas-clinic-badge-container',titulo:'Contexto de la clínica',texto:'Esta referencia confirma en qué clínica se están consultando y registrando las notas.'},
+      {
+        target:()=>document.querySelector('#tabla-notas .nota-list-item:first-child') || document.getElementById('notas-empty'),
+        titulo:'Consulta y gestiona las notas',
+        texto:()=>C.n.length
+          ? 'Cada registro muestra paciente, fecha, tipo y estado. Sus acciones permiten imprimir, ver, editar o eliminar la nota.'
+          : 'Las notas clínicas aparecerán aquí después de guardar el primer registro.',
+      },
+    ],
+  },
+};
 
-let _guiaPacientes = {activa:false,paso:0,target:null,timer:null,ultimoFoco:null};
+let _guiaModulo = {activa:false,modulo:null,paso:0,target:null,timer:null,ultimoFoco:null};
 
-function _claveGuiaPacientes() {
-  return `lm_guia_${currentUser?.id||'anon'}_${currentClinicaId||'sin-clinica'}_pacientes_v${GUIA_PACIENTES_VERSION}`;
+function _configGuiaModulo(modulo=_guiaModulo.modulo) {
+  return GUIAS_MODULOS[modulo] || null;
 }
 
-function _guiaPacientesVista() {
-  try { return localStorage.getItem(_claveGuiaPacientes()) === 'completada'; }
+function _claveGuiaModulo(modulo) {
+  const config=_configGuiaModulo(modulo);
+  return `lm_guia_${currentUser?.id||'anon'}_${currentClinicaId||'sin-clinica'}_${modulo}_v${config?.version||1}`;
+}
+
+function _guiaModuloVista(modulo) {
+  try { return localStorage.getItem(_claveGuiaModulo(modulo)) === 'completada'; }
   catch(error) { return false; }
 }
 
-function _guardarGuiaPacientesVista() {
-  try { localStorage.setItem(_claveGuiaPacientes(),'completada'); }
+function _guardarGuiaModuloVista(modulo) {
+  try { localStorage.setItem(_claveGuiaModulo(modulo),'completada'); }
   catch(error) {}
 }
 
-function _asegurarGuiaPacientesDOM() {
-  let root=document.getElementById('guia-pacientes');
+function _asegurarGuiaModuloDOM() {
+  let root=document.getElementById('guia-modulo');
   if(root) return root;
   root=document.createElement('div');
-  root.id='guia-pacientes';
+  root.id='guia-modulo';
   root.className='guia-root';
   root.hidden=true;
   root.innerHTML=`
     <div class="guia-blocker" aria-hidden="true"></div>
     <div class="guia-spotlight" aria-hidden="true"></div>
-    <section class="guia-card" role="dialog" aria-modal="true" aria-labelledby="guia-pacientes-titulo" aria-describedby="guia-pacientes-texto">
+    <section class="guia-card" role="dialog" aria-modal="true" aria-labelledby="guia-modulo-titulo" aria-describedby="guia-modulo-texto">
       <div class="guia-card-head">
-        <div class="guia-identidad"><div class="guia-avatar" aria-hidden="true">✦</div><div><div class="guia-eyebrow" id="guia-pacientes-contador"></div><h3 id="guia-pacientes-titulo"></h3></div></div>
-        <button class="guia-cerrar" type="button" onclick="omitirGuiaPacientes()" aria-label="Cerrar guía">✕</button>
+        <div class="guia-identidad"><div class="guia-avatar" aria-hidden="true">✦</div><div><div class="guia-eyebrow" id="guia-modulo-contador"></div><h3 id="guia-modulo-titulo"></h3></div></div>
+        <button class="guia-cerrar" type="button" onclick="omitirGuiaModulo()" aria-label="Cerrar guía">✕</button>
       </div>
-      <div class="guia-texto" id="guia-pacientes-texto"></div>
-      <div class="guia-progress" id="guia-pacientes-progress" aria-hidden="true"></div>
+      <div class="guia-texto" id="guia-modulo-texto"></div>
+      <div class="guia-progress" id="guia-modulo-progress" aria-hidden="true"></div>
       <div class="guia-actions">
-        <button class="guia-btn guia-btn-ghost" type="button" onclick="omitirGuiaPacientes()">Omitir guía</button>
+        <button class="guia-btn guia-btn-ghost" type="button" onclick="omitirGuiaModulo()">Omitir guía</button>
         <div class="guia-actions-right">
-          <button class="guia-btn guia-btn-back" id="guia-pacientes-anterior" type="button" onclick="anteriorGuiaPacientes()">Anterior</button>
-          <button class="guia-btn guia-btn-next" id="guia-pacientes-siguiente" type="button" onclick="siguienteGuiaPacientes()">Siguiente</button>
+          <button class="guia-btn guia-btn-back" id="guia-modulo-anterior" type="button" onclick="anteriorGuiaModulo()">Anterior</button>
+          <button class="guia-btn guia-btn-next" id="guia-modulo-siguiente" type="button" onclick="siguienteGuiaModulo()">Siguiente</button>
         </div>
       </div>
     </section>`;
@@ -1275,18 +1390,18 @@ function _asegurarGuiaPacientesDOM() {
   return root;
 }
 
-function _resolverTargetGuiaPacientes(paso) {
-  const objetivo=GUIA_PACIENTES_PASOS[paso]?.target;
+function _resolverTargetGuiaModulo(paso) {
+  const objetivo=_configGuiaModulo()?.pasos[paso]?.target;
   return typeof objetivo==='function' ? objetivo() : document.querySelector(objetivo);
 }
 
-function _posicionarGuiaPacientes() {
-  if(!_guiaPacientes.activa || !_guiaPacientes.target?.isConnected) return;
-  const root=document.getElementById('guia-pacientes');
+function _posicionarGuiaModulo() {
+  if(!_guiaModulo.activa || !_guiaModulo.target?.isConnected) return;
+  const root=document.getElementById('guia-modulo');
   const spot=root?.querySelector('.guia-spotlight');
   const card=root?.querySelector('.guia-card');
   if(!spot || !card) return;
-  const rect=_guiaPacientes.target.getBoundingClientRect();
+  const rect=_guiaModulo.target.getBoundingClientRect();
   const margen=8;
   const top=Math.max(6,rect.top-margen);
   const left=Math.max(6,rect.left-margen);
@@ -1307,110 +1422,126 @@ function _posicionarGuiaPacientes() {
   card.style.top=cardTop+'px';
 }
 
-function _mostrarPasoGuiaPacientes(paso) {
-  if(!_guiaPacientes.activa) return;
-  const max=GUIA_PACIENTES_PASOS.length-1;
-  _guiaPacientes.paso=Math.min(max,Math.max(0,paso));
-  const config=GUIA_PACIENTES_PASOS[_guiaPacientes.paso];
-  const target=_resolverTargetGuiaPacientes(_guiaPacientes.paso);
+function _mostrarPasoGuiaModulo(paso) {
+  if(!_guiaModulo.activa) return;
+  const configModulo=_configGuiaModulo();
+  const max=configModulo.pasos.length-1;
+  _guiaModulo.paso=Math.min(max,Math.max(0,paso));
+  const configPaso=configModulo.pasos[_guiaModulo.paso];
+  const target=_resolverTargetGuiaModulo(_guiaModulo.paso);
   if(!target) {
-    if(_guiaPacientes.paso<max) _mostrarPasoGuiaPacientes(_guiaPacientes.paso+1);
-    else finalizarGuiaPacientes();
+    if(_guiaModulo.paso<max) _mostrarPasoGuiaModulo(_guiaModulo.paso+1);
+    else finalizarGuiaModulo();
     return;
   }
-  _guiaPacientes.target=target;
-  const root=_asegurarGuiaPacientesDOM();
-  root.querySelector('#guia-pacientes-contador').textContent=`Lumi · Paso ${_guiaPacientes.paso+1} de ${GUIA_PACIENTES_PASOS.length}`;
-  root.querySelector('#guia-pacientes-titulo').textContent=config.titulo;
-  root.querySelector('#guia-pacientes-texto').textContent=typeof config.texto==='function'?config.texto():config.texto;
-  root.querySelector('#guia-pacientes-anterior').disabled=_guiaPacientes.paso===0;
-  root.querySelector('#guia-pacientes-siguiente').textContent=_guiaPacientes.paso===max?'Finalizar':'Siguiente';
-  root.querySelector('#guia-pacientes-progress').innerHTML=GUIA_PACIENTES_PASOS
-    .map((_,i)=>`<span class="guia-dot${i===_guiaPacientes.paso?' active':''}"></span>`).join('');
+  _guiaModulo.target=target;
+  const root=_asegurarGuiaModuloDOM();
+  root.querySelector('#guia-modulo-contador').textContent=`Lumi · ${configModulo.nombre} · Paso ${_guiaModulo.paso+1} de ${configModulo.pasos.length}`;
+  root.querySelector('#guia-modulo-titulo').textContent=configPaso.titulo;
+  root.querySelector('#guia-modulo-texto').textContent=typeof configPaso.texto==='function'?configPaso.texto():configPaso.texto;
+  root.querySelector('#guia-modulo-anterior').disabled=_guiaModulo.paso===0;
+  root.querySelector('#guia-modulo-siguiente').textContent=_guiaModulo.paso===max?'Finalizar':'Siguiente';
+  root.querySelector('#guia-modulo-progress').innerHTML=configModulo.pasos
+    .map((_,i)=>`<span class="guia-dot${i===_guiaModulo.paso?' active':''}"></span>`).join('');
   const card=root.querySelector('.guia-card');
   card.style.visibility='hidden';
   const sinMovimiento=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   target.scrollIntoView({behavior:sinMovimiento?'auto':'smooth',block:'center',inline:'nearest'});
   requestAnimationFrame(()=>{
-    _posicionarGuiaPacientes();
+    _posicionarGuiaModulo();
     card.style.visibility='visible';
-    root.querySelector('#guia-pacientes-siguiente').focus({preventScroll:true});
+    root.querySelector('#guia-modulo-siguiente').focus({preventScroll:true});
   });
 }
 
-function iniciarGuiaPacientes(forzar=false) {
-  if(currentView!=='pacientes') {
-    navigate('pacientes').then(()=>iniciarGuiaPacientes(true));
+function iniciarGuiaModulo(modulo=currentView,forzar=false) {
+  const config=_configGuiaModulo(modulo);
+  if(!config) return;
+  if(currentView!==modulo) {
+    navigate(modulo).then(()=>{
+      if(currentView===modulo) iniciarGuiaModulo(modulo,true);
+    });
     return;
   }
-  if(!forzar && _guiaPacientesVista()) return;
-  clearTimeout(_guiaPacientes.timer);
-  const root=_asegurarGuiaPacientesDOM();
-  _guiaPacientes.ultimoFoco=document.activeElement;
-  _guiaPacientes.activa=true;
+  if(!forzar && _guiaModuloVista(modulo)) return;
+  if(_guiaModulo.activa || _guiaModulo.timer) _cerrarGuiaModulo(false);
+  const root=_asegurarGuiaModuloDOM();
+  _guiaModulo={activa:true,modulo,paso:0,target:null,timer:null,ultimoFoco:document.activeElement};
   root.hidden=false;
-  _mostrarPasoGuiaPacientes(0);
+  _mostrarPasoGuiaModulo(0);
 }
 
-function _cerrarGuiaPacientes(marcarVista) {
-  clearTimeout(_guiaPacientes.timer);
-  if(marcarVista) _guardarGuiaPacientesVista();
-  const root=document.getElementById('guia-pacientes');
+function _cerrarGuiaModulo(marcarVista) {
+  clearTimeout(_guiaModulo.timer);
+  const modulo=_guiaModulo.modulo;
+  if(marcarVista && modulo) _guardarGuiaModuloVista(modulo);
+  const root=document.getElementById('guia-modulo');
   if(root) root.hidden=true;
-  const foco=_guiaPacientes.ultimoFoco;
-  _guiaPacientes={activa:false,paso:0,target:null,timer:null,ultimoFoco:null};
+  const foco=_guiaModulo.ultimoFoco;
+  _guiaModulo={activa:false,modulo:null,paso:0,target:null,timer:null,ultimoFoco:null};
   if(foco?.isConnected) foco.focus({preventScroll:true});
 }
 
-function siguienteGuiaPacientes() {
-  if(_guiaPacientes.paso>=GUIA_PACIENTES_PASOS.length-1) finalizarGuiaPacientes();
-  else _mostrarPasoGuiaPacientes(_guiaPacientes.paso+1);
+function siguienteGuiaModulo() {
+  const pasos=_configGuiaModulo()?.pasos || [];
+  if(_guiaModulo.paso>=pasos.length-1) finalizarGuiaModulo();
+  else _mostrarPasoGuiaModulo(_guiaModulo.paso+1);
 }
 
-function anteriorGuiaPacientes() {
-  _mostrarPasoGuiaPacientes(_guiaPacientes.paso-1);
+function anteriorGuiaModulo() {
+  _mostrarPasoGuiaModulo(_guiaModulo.paso-1);
 }
 
-function finalizarGuiaPacientes() {
-  _cerrarGuiaPacientes(true);
-  toast('Guía de Pacientes completada. Puedes repetirla desde “Ver guía”.','success');
+function finalizarGuiaModulo() {
+  const nombre=_configGuiaModulo()?.nombre || 'este módulo';
+  _cerrarGuiaModulo(true);
+  toast(`Guía de ${nombre} completada. Puedes repetirla desde “Ver guía”.`,'success');
 }
 
-function omitirGuiaPacientes() {
-  _cerrarGuiaPacientes(true);
+function omitirGuiaModulo() {
+  _cerrarGuiaModulo(true);
   toast('Guía omitida. Puedes abrirla nuevamente desde “Ver guía”.','info');
 }
 
-function _programarGuiaPacientes() {
-  clearTimeout(_guiaPacientes.timer);
-  if(_guiaPacientes.activa || _guiaPacientesVista()) return;
-  _guiaPacientes.timer=setTimeout(()=>{
-    if(currentView==='pacientes' && !_guiaPacientes.activa) iniciarGuiaPacientes();
+function _programarGuiaModulo(modulo=currentView) {
+  const config=_configGuiaModulo(modulo);
+  if(!config || _guiaModulo.activa || _guiaModuloVista(modulo)) return;
+  clearTimeout(_guiaModulo.timer);
+  _guiaModulo.modulo=modulo;
+  _guiaModulo.timer=setTimeout(()=>{
+    if(currentView===modulo && !_guiaModulo.activa) iniciarGuiaModulo(modulo);
   },450);
 }
 
-window.addEventListener('resize',_posicionarGuiaPacientes);
-window.addEventListener('scroll',_posicionarGuiaPacientes,true);
+// Compatibilidad con el botón piloto almacenado en versiones anteriores.
+function iniciarGuiaPacientes(forzar=false) {
+  iniciarGuiaModulo('pacientes',forzar);
+}
+
+window.addEventListener('resize',_posicionarGuiaModulo);
+window.addEventListener('scroll',_posicionarGuiaModulo,true);
 document.addEventListener('keydown',e=>{
-  if(!_guiaPacientes.activa) return;
+  if(!_guiaModulo.activa) return;
   if(e.key==='Tab') {
-    const botones=[...document.querySelectorAll('#guia-pacientes button:not(:disabled)')];
+    const botones=[...document.querySelectorAll('#guia-modulo button:not(:disabled)')];
     if(!botones.length) return;
     const actual=botones.indexOf(document.activeElement);
     if(e.shiftKey && actual<=0) { e.preventDefault(); botones.at(-1).focus(); }
     else if(!e.shiftKey && actual===botones.length-1) { e.preventDefault(); botones[0].focus(); }
     return;
   }
-  if(e.key==='Escape') omitirGuiaPacientes();
-  if(e.key==='ArrowRight') siguienteGuiaPacientes();
-  if(e.key==='ArrowLeft') anteriorGuiaPacientes();
+  if(e.key==='Escape') omitirGuiaModulo();
+  if(e.key==='ArrowRight') siguienteGuiaModulo();
+  if(e.key==='ArrowLeft') anteriorGuiaModulo();
 });
 
 // ════════════════════ NAVIGATION ════════════════════
 let currentView='dashboard', editingId=null, editingCitaId=null, editingMedId=null, editingNotaId=null, currentNotaCitaId=null, currentPatientId=null, currentMascotaId=null, selCalDate=hoy(), currentResumenCitaId=null, currentNotaId=null;
 
 async function navigate(view, patientId) {
-  if(view!=='pacientes' && _guiaPacientes.activa) _cerrarGuiaPacientes(false);
+  if(_guiaModulo.modulo && view!==_guiaModulo.modulo && (_guiaModulo.activa || _guiaModulo.timer)) {
+    _cerrarGuiaModulo(false);
+  }
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.querySelectorAll('.menu-item').forEach(m=>m.classList.remove('active'));
   const el=document.getElementById('view-'+(view==='paciente-detalle'?'paciente-detalle':view));
@@ -1515,6 +1646,7 @@ function renderView(v) {
     case 'hospitalizacion': renderHospitalizacion(); break;
   }
   updateBadges();
+  _programarGuiaModulo(v);
 }
 
 function updateBadges() {
@@ -2129,7 +2261,6 @@ function renderPacientes(){
   const countEl=document.getElementById('pacientes-count');
   if(countEl) countEl.textContent=`${C.p.length} pacientes`;
   renderPacientesList(C.p);
-  if(currentView==='pacientes') _programarGuiaPacientes();
 }
 
 function renderPacientesList(lista){
@@ -3429,7 +3560,7 @@ function renderMedicaciones(){
   el.innerHTML=[...C.m].sort((a,b)=>(b.inicio||'').localeCompare(a.inicio||'')).map(x=>{
     const p=_sujetoMed(x);
     const [,mm,dd]=(x.inicio||hoy()).split('-');
-    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)">
+    return `<div class="medicacion-list-item" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)">
       <div style="width:36px;flex-shrink:0;text-align:center;background:var(--primary-light);border-radius:8px;padding:5px 2px">
         <div style="font-size:13px;font-weight:800;color:var(--primary);line-height:1">${dd}</div>
         <div style="font-size:10px;color:var(--primary);text-transform:uppercase;font-weight:600">${MESES[parseInt(mm)-1]}</div>
@@ -3931,7 +4062,7 @@ function renderNotas(){
     const prev=base.length>60?base.substring(0,60)+'…':base;
     const tipoIcon = NOTA_TIPO_ICON[n.tipo] || '📝';
     const [,mm,dd]=(n.fecha||hoy()).split('-');
-    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)">
+    return `<div class="nota-list-item" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)">
       <div style="width:36px;flex-shrink:0;text-align:center;background:var(--primary-light);border-radius:8px;padding:5px 2px">
         <div style="font-size:13px;font-weight:800;color:var(--primary);line-height:1">${dd}</div>
         <div style="font-size:10px;color:var(--primary);text-transform:uppercase;font-weight:600">${MESES[parseInt(mm)-1]}</div>
@@ -5022,9 +5153,12 @@ function renderModuloExamenes() {
   const seleccionado = pacientes.find(p=>p.id===_examenModuloPacId) || null;
   if(!seleccionado) _examenModuloPacId = null;
   el.innerHTML = `<div class="card exmod-selector-card">
-    <div class="card-header"><h3>🔬 Exámenes digitalizados</h3></div>
-    <div class="ex-modulo-intro"><span>🗂️</span><div><strong>Repositorio diagnóstico central</strong><p>Selecciona un paciente para consultar o incorporar documentos a su expediente clínico.</p></div></div>
-    ${pacientes.length ? `<div class="exmod-selector-row">
+    <div class="card-header" id="examenes-encabezado">
+      <h3>🔬 Exámenes digitalizados</h3>
+      <button class="btn btn-secondary btn-sm" onclick="iniciarGuiaModulo('examenes-digitalizados',true)" title="Ver la guía de este módulo">❔ Ver guía</button>
+    </div>
+    <div class="ex-modulo-intro" id="examenes-intro"><span>🗂️</span><div><strong>Repositorio diagnóstico central</strong><p>Selecciona un paciente para consultar o incorporar documentos a su expediente clínico.</p></div></div>
+    ${pacientes.length ? `<div class="exmod-selector-row" id="examenes-selector">
       <div class="form-group" style="margin:0;flex:1"><label>Paciente *</label>
         <select id="exmod-paciente" onchange="seleccionarPacienteModuloExamenes(this.value)">
           <option value="">Seleccionar paciente...</option>
@@ -5032,7 +5166,7 @@ function renderModuloExamenes() {
         </select>
       </div>
       ${seleccionado?`<button class="btn btn-secondary" onclick="navigate('paciente-detalle',${seleccionado.id})">📋 Abrir expediente</button>`:''}
-    </div>` : `<div class="empty-state" style="padding:30px"><div class="empty-icon">👥</div><p>No hay pacientes registrados.<br>Registra un paciente antes de agregar exámenes.</p></div>`}
+    </div>` : `<div class="empty-state" id="examenes-selector" style="padding:30px"><div class="empty-icon">👥</div><p>No hay pacientes registrados.<br>Registra un paciente antes de agregar exámenes.</p></div>`}
   </div>
   <div id="exmod-contenido"></div>`;
   if(seleccionado) renderExamenes(seleccionado.id,'exmod-contenido');

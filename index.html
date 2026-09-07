@@ -19,7 +19,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js" defer></script>
-<link rel="stylesheet" href="css/styles.css?v=20260906a">
+<link rel="stylesheet" href="css/styles.css?v=20260906b">
 </head>
 <body>
 <script>
@@ -216,13 +216,16 @@
 
       <!-- AGENDAS -->
       <div id="view-agendas" class="view">
-        <div style="display:grid;grid-template-columns:270px 1fr;gap:18px;align-items:start">
+        <div id="agendas-layout" style="display:grid;grid-template-columns:270px 1fr;gap:18px;align-items:start">
           <!-- Panel izquierdo: lista de médicos -->
           <div>
             <div class="card">
-              <div class="card-header" style="margin-bottom:14px">
+              <div class="card-header" id="agendas-encabezado" style="margin-bottom:14px">
                 <h3>👨‍⚕️ Personal</h3>
-                <button class="btn btn-secondary btn-sm" onclick="navigate('configuracion')" title="Agregar médico">+ Agregar</button>
+                <div class="guia-header-actions">
+                  <button class="btn btn-secondary btn-sm" onclick="iniciarGuiaModulo('agendas',true)" title="Ver la guía de este módulo">❔ Ver guía</button>
+                  <button class="btn btn-secondary btn-sm" onclick="navigate('configuracion')" title="Agregar médico">+ Agregar</button>
+                </div>
               </div>
               <div id="agendas-doctors-list"></div>
             </div>
@@ -242,8 +245,8 @@
         <div class="card">
           <div class="card-header" id="pacientes-encabezado">
             <h3>👥 Registro de Pacientes</h3>
-            <div class="pacientes-header-actions">
-              <button class="btn btn-secondary btn-sm" onclick="iniciarGuiaPacientes(true)" title="Ver la guía de este módulo">❔ Ver guía</button>
+            <div class="guia-header-actions">
+              <button class="btn btn-secondary btn-sm" onclick="iniciarGuiaModulo('pacientes',true)" title="Ver la guía de este módulo">❔ Ver guía</button>
               <button class="btn btn-primary" id="btn-nuevo-paciente" onclick="openModalPaciente()">+ Nuevo Paciente</button>
             </div>
           </div>
@@ -326,8 +329,14 @@
 
         <!-- Buscador rápido de paciente para citar -->
         <div class="card" style="margin-bottom:18px">
-          <div class="card-header"><h3>📅 Nueva cita para</h3><button class="btn btn-primary btn-sm" style="white-space:nowrap" onclick="openModalCita()">+ Nueva Cita</button></div>
-          <div class="search-bar" style="margin-bottom:0;margin-top:14px">
+          <div class="card-header" id="citas-encabezado">
+            <h3>📅 Nueva cita para</h3>
+            <div class="guia-header-actions">
+              <button class="btn btn-secondary btn-sm" onclick="iniciarGuiaModulo('citas',true)" title="Ver la guía de este módulo">❔ Ver guía</button>
+              <button class="btn btn-primary btn-sm" id="btn-nueva-cita" style="white-space:nowrap" onclick="openModalCita()">+ Nueva Cita</button>
+            </div>
+          </div>
+          <div class="search-bar" id="cita-buscador-rapido" style="margin-bottom:0;margin-top:14px">
             <div class="search-bar-input" style="position:relative">
               <span style="color:var(--text-light)">🔍</span>
               <input type="text" id="cita-pac-buscar"
@@ -341,7 +350,7 @@
           </div>
         </div>
 
-        <div class="card">
+        <div class="card" id="citas-agenda-panel">
           <!-- TABS de fecha -->
           <div class="citas-view-tabs" id="citas-view-tabs">
             <button class="citas-view-tab active" id="ctab-calendario" onclick="switchCitasTab('calendario')">
@@ -390,7 +399,7 @@
         </div>
 
         <!-- Historial completo -->
-        <div class="card" style="margin-top:18px">
+        <div class="card" id="citas-historial-panel" style="margin-top:18px">
           <div class="card-header">
             <h3>📋 Historial completo</h3>
             <input type="text" id="citas-filtro-paciente" placeholder="Filtrar por paciente o motivo..." style="padding:8px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;background:var(--bg);color:var(--text);outline:none;min-width:260px;margin:0" oninput="filtrarTablaCitas(this.value)">
@@ -403,7 +412,13 @@
       <!-- MEDICACIONES -->
       <div id="view-medicaciones" class="view">
         <div class="card">
-          <div class="card-header"><h3>💊 Medicaciones</h3><button class="btn btn-primary" onclick="openModalMedicacion()">+ Nueva Medicación</button></div>
+          <div class="card-header" id="medicaciones-encabezado">
+            <h3>💊 Medicaciones</h3>
+            <div class="guia-header-actions">
+              <button class="btn btn-secondary btn-sm" onclick="iniciarGuiaModulo('medicaciones',true)" title="Ver la guía de este módulo">❔ Ver guía</button>
+              <button class="btn btn-primary" id="btn-nueva-medicacion" onclick="openModalMedicacion()">+ Nueva Medicación</button>
+            </div>
+          </div>
           <div id="tabla-medicaciones"></div>
           <div id="meds-empty" class="empty-state" style="display:none"><div class="empty-icon">💊</div><p>No hay medicaciones registradas.</p></div>
         </div>
@@ -412,7 +427,13 @@
       <!-- NOTAS -->
       <div id="view-notas" class="view">
         <div class="card">
-          <div class="card-header"><h3>📝 Notas Clínicas</h3><button class="btn btn-primary" onclick="openModalNota()">+ Nueva Nota</button></div>
+          <div class="card-header" id="notas-encabezado">
+            <h3>📝 Notas Clínicas</h3>
+            <div class="guia-header-actions">
+              <button class="btn btn-secondary btn-sm" onclick="iniciarGuiaModulo('notas',true)" title="Ver la guía de este módulo">❔ Ver guía</button>
+              <button class="btn btn-primary" id="btn-nueva-nota" onclick="openModalNota()">+ Nueva Nota</button>
+            </div>
+          </div>
           <div id="notas-clinic-badge-container"></div>
           <div id="tabla-notas"></div>
           <div id="notas-empty" class="empty-state" style="display:none"><div class="empty-icon">📝</div><p>No hay notas clínicas.</p></div>
@@ -452,11 +473,14 @@
       <!-- EXPEDIENTES -->
       <div id="view-expedientes" class="view">
         <div class="card">
-          <div class="card-header">
+          <div class="card-header" id="expedientes-encabezado">
             <h3>📋 Expedientes Clínicos</h3>
-            <input type="text" id="exp-search" placeholder="Buscar por nombre, apellido o N° expediente..."
-              oninput="filtrarExpedientes(this.value)"
-              style="padding:8px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;background:var(--bg);color:var(--text);outline:none;min-width:260px">
+            <div class="guia-header-actions">
+              <button class="btn btn-secondary btn-sm" onclick="iniciarGuiaModulo('expedientes',true)" title="Ver la guía de este módulo">❔ Ver guía</button>
+              <input type="text" id="exp-search" placeholder="Buscar por nombre, apellido o N° expediente..."
+                oninput="filtrarExpedientes(this.value)"
+                style="padding:8px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;background:var(--bg);color:var(--text);outline:none;min-width:260px">
+            </div>
           </div>
           <div id="exp-list" style="margin-top:4px"></div>
         </div>
@@ -2639,7 +2663,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260906g" defer></script>
+<script src="js/app.js?v=20260906h" defer></script>
 </body>
 </html>
 

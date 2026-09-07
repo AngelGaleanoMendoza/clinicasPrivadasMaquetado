@@ -505,7 +505,7 @@ body.dark .fact-item-row input,body.dark .fact-item-row select{background:#0F172
 .chip{padding:5px 14px;border-radius:20px;font-size:12px;font-weight:600;border:1.5px solid var(--border);background:var(--bg);color:var(--text-light);cursor:pointer;transition:all .2s;user-select:none}
 .chip.active{background:var(--primary);color:#fff;border-color:var(--primary)}
 .chip:hover:not(.active){border-color:var(--primary);color:var(--primary)}
-.pacientes-header-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.guia-header-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
 
 /* GUÍA CONTEXTUAL */
 .guia-root{position:fixed;inset:0;z-index:10000;pointer-events:none}
@@ -534,8 +534,9 @@ body.dark .fact-item-row input,body.dark .fact-item-row select{background:#0F172
 .guia-btn:disabled{opacity:.4;cursor:default}
 @keyframes guiaEntrada{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
 @media(max-width:560px){
-  .pacientes-header-actions{width:100%;display:grid;grid-template-columns:auto 1fr}
-  .pacientes-header-actions .btn{justify-content:center;margin:0}
+  .guia-header-actions{width:100%;display:grid;grid-template-columns:auto minmax(0,1fr)}
+  .guia-header-actions .btn{justify-content:center;margin:0}
+  .guia-header-actions>input{width:100%;min-width:0!important}
   .guia-card{width:calc(100vw - 20px);border-radius:16px}
   .guia-card-head{padding:15px 15px 0}.guia-texto{padding:9px 15px 13px}.guia-progress{padding:0 15px 13px}.guia-actions{padding:11px 12px}
 }
