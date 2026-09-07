@@ -5864,119 +5864,447 @@ async function exportarEmail(){
   toast('Abriendo cliente de correo...','info');
 }
 
+// Backup real por clínica. El formato anterior se conserva solo para poder
+// reconocer archivos históricos, pero los botones usan este flujo versionado.
+const BACKUP_VERSION = 2;
+const BACKUP_TABLAS = [
+  {tabla:'pacientes', obligatoria:true},
+  {tabla:'expediente', obligatoria:true},
+  {tabla:'citas', obligatoria:true},
+  {tabla:'medicaciones', obligatoria:true},
+  {tabla:'notas', obligatoria:true},
+  {tabla:'examenes', opcional:true},
+  {tabla:'historial_expediente', opcional:true},
+  {tabla:'procedimientos_odontologicos', opcional:true},
+  {tabla:'historial_dental', opcional:true},
+  {tabla:'odontograma', opcional:true},
+  {tabla:'periodontograma', opcional:true},
+  {tabla:'procedimientos_oftalmologicos', opcional:true},
+  {tabla:'inventario', obligatoria:true},
+  {tabla:'inventario_movimientos', obligatoria:true},
+  {tabla:'finanzas', obligatoria:true},
+  {tabla:'facturas', obligatoria:true, select:'*,factura_items(*)'},
+  {tabla:'actividad_usuarios', opcional:true},
+  {tabla:'clientes', opcional:true},
+  {tabla:'mascotas', opcional:true},
+  {tabla:'expediente_mascota', opcional:true},
+  {tabla:'vacunas_mascota', opcional:true},
+  {tabla:'desparasitaciones', opcional:true},
+  {tabla:'hospitalizaciones', opcional:true},
+  {tabla:'hospitalizacion_seguimiento', opcional:true},
+];
+
+function _errorTablaAusenteBackup(error) {
+  const msg = `${error?.message||''} ${error?.details||''}`;
+  return /does not exist|could not find the table|schema cache/i.test(msg);
+}
+
+async function _consultarTablaBackup(def) {
+  const filas = [];
+  const pagina = 1000;
+  for(let desde=0;;desde+=pagina) {
+    const {data,error} = await sb.from(def.tabla)
+      .select(def.select||'*')
+      .eq('clinica_id', currentClinicaId)
+      .order('id', {ascending:true})
+      .range(desde, desde+pagina-1);
+    if(error) {
+      if(def.opcional && _errorTablaAusenteBackup(error)) {
+        return {tabla:def.tabla, filas:[], advertencia:`${def.tabla}: no disponible`};
+      }
+      throw new Error(`${def.tabla}: ${error.message}`);
+    }
+    filas.push(...(data||[]));
+    if((data||[]).length < pagina) break;
+  }
+  return {tabla:def.tabla, filas};
+}
+
+async function _consultarPerfilesBackup() {
+  const data=[];
+  const pagina=1000;
+  for(let desde=0;;desde+=pagina) {
+    const r=await _consultaPerfil(cols=>sb.from('profiles').select(cols)
+      .eq('clinica_id',currentClinicaId).order('nombre').range(desde,desde+pagina-1));
+    if(r.error) return r;
+    data.push(...(r.data||[]));
+    if((r.data||[]).length<pagina) break;
+  }
+  return {data,error:null};
+}
+
+function _sanitizarUsuarioBackup(usuario) {
+  const limpio = {...usuario};
+  ['password','password_hash','encrypted_password','intentos_fallidos','confirmation_token','recovery_token','access_token','refresh_token'].forEach(k=>delete limpio[k]);
+  return limpio;
+}
+
+function _filasPor(filas, campo, id) {
+  return (filas||[]).filter(x=>String(x[campo])===String(id));
+}
+
+function _facturasConItems(facturas, items) {
+  return (facturas||[]).map(f=>({...f, items:_filasPor(items,'factura_id',f.id)}));
+}
+
+async function _construirBackupClinica() {
+  const [resultados, perfiles, clinicaResp] = await Promise.all([
+    Promise.all(BACKUP_TABLAS.map(_consultarTablaBackup)),
+    _consultarPerfilesBackup(),
+    sb.from('clinicas').select('*').eq('id',currentClinicaId).single(),
+  ]);
+  if(perfiles.error) throw new Error(`profiles: ${perfiles.error.message}`);
+  if(clinicaResp.error) throw new Error(`clinicas: ${clinicaResp.error.message}`);
+
+  const t = Object.fromEntries(resultados.map(r=>[r.tabla,r.filas]));
+  const advertencias = resultados.map(r=>r.advertencia).filter(Boolean);
+  const facturas = (t.facturas||[]).map(f=>{
+    const copia={...f};
+    delete copia.factura_items;
+    return copia;
+  });
+  const facturaItems = (t.facturas||[]).flatMap(f=>f.factura_items||[]);
+  const idsPacientes = new Set((t.pacientes||[]).map(p=>String(p.id)));
+  const idsMascotas = new Set((t.mascotas||[]).map(m=>String(m.id)));
+
+  const pacientes = (t.pacientes||[]).map(p=>({
+    paciente:p,
+    expediente:_filasPor(t.expediente,'paciente_id',p.id),
+    citas:_filasPor(t.citas,'paciente_id',p.id),
+    medicaciones:_filasPor(t.medicaciones,'paciente_id',p.id),
+    notas:_filasPor(t.notas,'paciente_id',p.id),
+    examenes:_filasPor(t.examenes,'paciente_id',p.id),
+    historial:_filasPor(t.historial_expediente,'paciente_id',p.id),
+    historiaDental:_filasPor(t.historial_dental,'paciente_id',p.id),
+    odontograma:_filasPor(t.odontograma,'paciente_id',p.id),
+    periodontograma:_filasPor(t.periodontograma,'paciente_id',p.id),
+    procedimientosOdontologicos:_filasPor(t.procedimientos_odontologicos,'paciente_id',p.id),
+    procedimientosOftalmologicos:_filasPor(t.procedimientos_oftalmologicos,'paciente_id',p.id),
+    finanzas:_filasPor(t.finanzas,'paciente_id',p.id),
+    facturas:_facturasConItems(_filasPor(facturas,'paciente_id',p.id),facturaItems),
+  }));
+
+  const mascotas = (t.mascotas||[]).map(m=>{
+    const hospitalizaciones = _filasPor(t.hospitalizaciones,'mascota_id',m.id);
+    return {
+      mascota:m,
+      propietario:(t.clientes||[]).find(c=>String(c.id)===String(m.cliente_id))||null,
+      expediente:_filasPor(t.expediente_mascota,'mascota_id',m.id),
+      citas:_filasPor(t.citas,'mascota_id',m.id),
+      medicaciones:_filasPor(t.medicaciones,'mascota_id',m.id),
+      notas:_filasPor(t.notas,'mascota_id',m.id),
+      vacunas:_filasPor(t.vacunas_mascota,'mascota_id',m.id),
+      desparasitaciones:_filasPor(t.desparasitaciones,'mascota_id',m.id),
+      hospitalizaciones:hospitalizaciones.map(h=>({...h,seguimiento:_filasPor(t.hospitalizacion_seguimiento,'hospitalizacion_id',h.id)})),
+    };
+  });
+
+  const sinSujeto = filas=>(filas||[]).filter(x=>
+    (!x.paciente_id || !idsPacientes.has(String(x.paciente_id))) &&
+    (!x.mascota_id || !idsMascotas.has(String(x.mascota_id)))
+  );
+  const usuarios=(perfiles.data||[]).map(_sanitizarUsuarioBackup);
+  return {
+    app:'Lumea Med', tipo:'backup_clinica', schemaVersion:BACKUP_VERSION,
+    generadoEn:new Date().toISOString(), clinica:clinicaResp.data,
+    generadoPor:{id:currentUser?.id||null,nombre:currentUser?.name||null,email:currentUser?.email||null,rol:currentUser?.key||null},
+    alcance:{archivos:'Se conservan las URL y los metadatos; los binarios de Storage no se incrustan en este archivo.'},
+    resumen:{pacientes:pacientes.length,mascotas:mascotas.length,usuarios:usuarios.length,citas:(t.citas||[]).length,medicaciones:(t.medicaciones||[]).length,notas:(t.notas||[]).length,examenes:(t.examenes||[]).length},
+    usuarios, pacientes, mascotas,
+    datosClinica:{
+      clientes:t.clientes||[], inventario:t.inventario||[], movimientosInventario:t.inventario_movimientos||[],
+      actividadUsuarios:t.actividad_usuarios||[],
+      registrosSinPaciente:{
+        citas:sinSujeto(t.citas), medicaciones:sinSujeto(t.medicaciones), notas:sinSujeto(t.notas),
+        expediente:sinSujeto(t.expediente), examenes:sinSujeto(t.examenes),
+        historiaDental:sinSujeto(t.historial_dental), odontograma:sinSujeto(t.odontograma),
+        periodontograma:sinSujeto(t.periodontograma),
+        procedimientosOdontologicos:sinSujeto(t.procedimientos_odontologicos),
+        procedimientosOftalmologicos:sinSujeto(t.procedimientos_oftalmologicos),
+        finanzas:sinSujeto(t.finanzas), facturas:_facturasConItems(sinSujeto(facturas),facturaItems),
+        historial:sinSujeto(t.historial_expediente),
+      },
+    },
+    advertencias,
+  };
+}
+
+function _nombreArchivoBackup(extension) {
+  const codigo=(currentClinica?.codigo||currentClinica?.nombre||currentClinicaId||'clinica')
+    .toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_-]+/g,'-').replace(/^-|-$/g,'').toLowerCase();
+  return `lumea-backup-${codigo}-${hoy()}.${extension}`;
+}
+
 async function exportarJSON(){
-  const fechaStr = new Date().toLocaleString('es-ES');
-  const h = hoy();
-  const sep = '─'.repeat(52);
+  if(!_exigeClinica()) return;
+  setLoading(true);
+  try {
+    const backup = await _construirBackupClinica();
+    const blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = _nombreArchivoBackup('json');
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    const aviso = backup.advertencias.length ? ` · ${backup.advertencias.length} módulo(s) opcional(es) no disponibles` : '';
+    toast(`Backup descargado: ${backup.resumen.pacientes} pacientes${aviso}`, backup.advertencias.length?'warning':'success');
+  } catch(error) {
+    console.error('Exportar backup:', error);
+    toast('No se pudo generar el backup: ' + (error.message||'error desconocido'), 'error');
+  } finally {
+    setLoading(false);
+  }
+}
 
-  const lineasP = C.p.map(x =>
-    `  • ${x.nombre} ${x.apellidos} | ${x.identificacion||'—'} | ${x.fechaNac||'—'} | ${x.telefono||'—'} | ${x.email||'—'} | ${x.estado||'activo'}`
-  ).join('\n') || '  (sin registros)';
+const BACKUP_PDF_LABELS = {
+  fecha_nac:'Fecha de nacimiento',fecha_registro:'Fecha de registro',sangre:'Tipo de sangre',
+  emergencia:'Contacto de emergencia',foto_url:'Fotografía',enfermedades_cronicas:'Enfermedades crónicas',
+  cirugias_previas:'Cirugías previas',antecedentes_familiares:'Antecedentes familiares',habito_tabaco:'Tabaco',
+  habito_alcohol:'Alcohol',actividad_fisica:'Actividad física',observaciones_medicas:'Observaciones médicas',
+  duracion_min:'Duración (min)',medico_id:'Médico',motivo_cancelacion:'Motivo de cancelación',
+  fecha_emision:'Fecha de emisión',prescriptor_nombre:'Prescriptor',prescriptor_especialidad:'Especialidad',
+  receta_notas:'Indicaciones generales',proxima_cita:'Próxima cita',archivo_url:'Archivo',
+  archivo_nombre:'Nombre del archivo',archivo_tipo:'Tipo de archivo',centro_laboratorio:'Centro / laboratorio',
+  profesional_responsable:'Profesional responsable',datos_anteriores:'Datos anteriores',datos_nuevos:'Datos nuevos',
+  fecha_hora:'Fecha y hora',tabla_origen:'Módulo',usuario_nombre:'Usuario',usuario_email:'Correo del usuario',
+  paciente_nombre:'Paciente',metodo_pago:'Método de pago',precio_unitario:'Precio unitario',
+  diagnostico_principal:'Diagnóstico principal',motivo_consulta:'Motivo de consulta',
+  antecedentes_medicos:'Antecedentes médicos',medicamentos_actuales:'Medicamentos actuales',
+  alergias_medicamentos:'Alergias a medicamentos',ultima_visita_dental:'Última visita dental',
+  tratamientos_previos:'Tratamientos previos',habitos_orales:'Hábitos orales',higiene_oral:'Higiene oral',
+  procedimiento_realizado:'Procedimiento realizado',tecnica_utilizada:'Técnica utilizada',
+  indicaciones_posteriores:'Indicaciones posteriores',fecha_proximo_control:'Próximo control',
+};
 
-  const lineasC = C.c.map(x => {
-    const p = C.p.find(q=>q.id===x.pacienteId);
-    return `  • ${x.fecha} ${x.hora} | ${p?p.nombre+' '+p.apellidos:'N/A'} | ${x.motivo} | ${x.tipo} | ${x.estado}`;
-  }).join('\n') || '  (sin registros)';
+function _etiquetaBackupPDF(campo) {
+  return BACKUP_PDF_LABELS[campo] || campo.replaceAll('_',' ').replace(/^./,c=>c.toUpperCase());
+}
 
-  const lineasM = C.m.map(x => {
-    const p = C.p.find(q=>q.id===x.pacienteId);
-    return `  • ${p?p.nombre+' '+p.apellidos:'N/A'} | ${x.nombre} | ${x.dosis} | ${x.frecuencia} | vía ${x.via} | ${x.estado}`;
-  }).join('\n') || '  (sin registros)';
+function _valorBackupPDF(valor) {
+  if(valor===null || valor===undefined || valor==='') return '—';
+  if(typeof valor==='boolean') return valor?'Sí':'No';
+  if(typeof valor==='object') return `<pre>${escAttr(JSON.stringify(valor,null,2))}</pre>`;
+  const texto=String(valor);
+  if(/^https?:\/\//i.test(texto)) return `<a href="${escAttr(texto)}" target="_blank" rel="noopener">Abrir archivo</a>`;
+  return escAttr(texto);
+}
 
-  const lineasN = C.n.map(x => {
-    const p = C.p.find(q=>q.id===x.pacienteId);
-    return `  • ${x.fecha} | ${p?p.nombre+' '+p.apellidos:'N/A'} | ${x.tipo}${x.titulo?' — '+x.titulo:''}`;
-  }).join('\n') || '  (sin registros)';
+function _camposBackupPDF(registro, omitir=[]) {
+  const tecnicos=new Set(['id','clinica_id','paciente_id','mascota_id','cliente_id','factura_id','cita_id','usuario_id','created_at','actualizado_en','creado_en',...omitir]);
+  const filas=Object.entries(registro||{}).filter(([k,v])=>!tecnicos.has(k) && v!==null && v!=='' && v!==undefined);
+  if(!filas.length) return '<p class="backup-empty">Sin datos registrados.</p>';
+  return `<div class="backup-fields">${filas.map(([k,v])=>`<div class="backup-field"><span>${escAttr(_etiquetaBackupPDF(k))}</span><div>${_valorBackupPDF(v)}</div></div>`).join('')}</div>`;
+}
 
-  const citasHoy = C.c.filter(x=>x.fecha===h);
-  const lineasHoy = citasHoy.map(x => {
-    const p = C.p.find(q=>q.id===x.pacienteId);
-    return `  • ${x.hora} | ${p?p.nombre+' '+p.apellidos:'N/A'} | ${x.motivo} | ${x.estado}`;
-  }).join('\n') || '  (ninguna)';
+function _seccionBackupPDF(titulo, registros) {
+  if(!registros?.length) return '';
+  return `<section class="backup-section"><h3>${escAttr(titulo)} <small>${registros.length}</small></h3>${registros.map((r,i)=>`<article class="backup-record">${registros.length>1?`<b class="backup-record-number">Registro ${i+1}</b>`:''}${_camposBackupPDF(r,['items','seguimiento'])}${r.items?.length?_seccionBackupPDF('Detalle de factura',r.items):''}${r.seguimiento?.length?_seccionBackupPDF('Seguimiento de hospitalización',r.seguimiento):''}</article>`).join('')}</section>`;
+}
 
-  const cuerpo =
-`BACKUP LUMEA MED — ${fechaStr}
-${sep}
-Clínica ID: ${currentClinicaId} | Usuario: ${currentUser?.name||'—'}
-${sep}
+function _sujetoBackupPDF(grupo, indice, veterinario=false) {
+  const sujeto=veterinario?grupo.mascota:grupo.paciente;
+  const nombre=veterinario?sujeto.nombre:`${sujeto.nombre||''} ${sujeto.apellidos||''}`.trim();
+  const secciones=veterinario ? [
+    ['Propietario',grupo.propietario?[grupo.propietario]:[]],['Expediente veterinario',grupo.expediente],
+    ['Citas',grupo.citas],['Medicaciones y recetas',grupo.medicaciones],['Notas clínicas',grupo.notas],
+    ['Vacunas',grupo.vacunas],['Desparasitaciones',grupo.desparasitaciones],['Hospitalizaciones',grupo.hospitalizaciones],
+  ] : [
+    ['Expediente médico',grupo.expediente],['Citas',grupo.citas],['Medicaciones y recetas',grupo.medicaciones],
+    ['Notas clínicas',grupo.notas],['Exámenes digitalizados',grupo.examenes],['Historia dental',grupo.historiaDental],
+    ['Odontograma',grupo.odontograma],['Periodontograma',grupo.periodontograma],
+    ['Procedimientos odontológicos',grupo.procedimientosOdontologicos],['Procedimientos oftalmológicos',grupo.procedimientosOftalmologicos],
+    ['Finanzas asociadas',grupo.finanzas],['Facturas',grupo.facturas],['Historial de auditoría',grupo.historial],
+  ];
+  return `<div class="backup-patient"><header><span>${veterinario?'Paciente veterinario':'Paciente'} ${indice+1}</span><h2>${escAttr(nombre||'Sin nombre')}</h2><p>${veterinario?escAttr([sujeto.especie,sujeto.raza].filter(Boolean).join(' · ')):escAttr(sujeto.identificacion||'Sin identificación')}</p></header><section class="backup-section"><h3>Datos ${veterinario?'de la mascota':'personales'}</h3>${_camposBackupPDF(sujeto)}</section>${secciones.map(x=>_seccionBackupPDF(x[0],x[1])).join('')}</div>`;
+}
 
-RESUMEN
-  Pacientes:        ${C.p.length}
-  Citas totales:    ${C.c.length}
-  Citas hoy:        ${citasHoy.length}
-  Medicaciones:     ${C.m.length} (activas: ${C.m.filter(x=>x.estado==='activa').length})
-  Notas clínicas:   ${C.n.length}
+async function exportarPDFClinica() {
+  if(!_exigeClinica()) return;
+  const w=window.open('','_blank','width=980,height=1100');
+  if(!w){toast('El navegador bloqueó la ventana del PDF','warning');return;}
+  w.document.write('<!doctype html><html><body style="font-family:Arial;padding:40px;color:#475569"><h2>Preparando expedientes…</h2><p>Consultando todos los datos de la clínica.</p></body></html>');
+  setLoading(true);
+  try {
+    const b=await _construirBackupClinica();
+    const pacientes=b.pacientes.map((p,i)=>_sujetoBackupPDF(p,i)).join('');
+    const mascotas=b.mascotas.map((m,i)=>_sujetoBackupPDF(m,i,true)).join('');
+    const usuarios=_seccionBackupPDF('Usuarios de la clínica (sin contraseñas)',b.usuarios);
+    const advertencias=b.advertencias.length?`<p class="backup-warning">Respaldo parcial de módulos opcionales: ${escAttr(b.advertencias.join(' · '))}</p>`:'';
+    const nombre=escAttr(b.clinica?.nombre||'Clínica');
+    w.document.open();
+    w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Expedientes - ${nombre}</title><style>
+      @page{size:A4;margin:12mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#172033;margin:0;font-size:11px;line-height:1.45}a{color:#075985}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:9px/1.4 Consolas,monospace;margin:0}.backup-cover{min-height:255mm;display:flex;flex-direction:column;justify-content:center;text-align:center;padding:20mm}.backup-cover .mark{font-size:52px}.backup-cover h1{font-size:30px;color:#0f766e;margin:12px 0 4px}.backup-cover h2{font-size:18px;margin:0;color:#334155}.backup-cover .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:32px auto 0;max-width:520px}.backup-cover .summary div{border:1px solid #cbd5e1;border-radius:12px;padding:14px;background:#f8fafc}.backup-cover strong{display:block;font-size:24px;color:#0f766e}.backup-conf{margin:30px auto 0;max-width:500px;color:#b45309}.backup-warning{margin:10px auto 0;max-width:520px;padding:9px;border:1px solid #f59e0b;background:#fffbeb;color:#92400e;border-radius:8px}.backup-patient{break-before:page;padding-top:2mm}.backup-patient>header{border-bottom:3px solid #0f766e;padding:0 0 12px;margin-bottom:14px}.backup-patient>header span{text-transform:uppercase;color:#0f766e;font-size:9px;font-weight:700;letter-spacing:1.2px}.backup-patient>header h2{font-size:23px;margin:3px 0 0}.backup-patient>header p{color:#64748b;margin:2px 0}.backup-section{margin:14px 0}.backup-section h3{font-size:12px;color:#0f766e;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #cbd5e1;padding-bottom:5px;margin:0 0 8px}.backup-section h3 small{float:right;background:#ccfbf1;border-radius:20px;padding:1px 8px}.backup-fields{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}.backup-field{display:grid;grid-template-columns:140px 1fr;gap:8px;padding:5px 7px;border-bottom:1px solid #e2e8f0;break-inside:avoid}.backup-field>span{color:#64748b;font-size:9px;text-transform:uppercase;font-weight:700}.backup-field>div{overflow-wrap:anywhere;white-space:pre-wrap}.backup-record{border:1px solid #e2e8f0;border-radius:7px;padding:8px;margin-bottom:7px;break-inside:avoid}.backup-record-number{display:block;color:#0f766e;margin-bottom:5px}.backup-record .backup-section{margin:10px 0 0}.backup-empty{color:#94a3b8;font-style:italic}.backup-users{break-before:page}@media print{.backup-cover{min-height:250mm}}@media screen{body{max-width:850px;margin:0 auto;padding:24px}.backup-patient{padding-top:24px}}@media(max-width:600px){.backup-cover{padding:10px}.backup-cover .summary,.backup-fields{grid-template-columns:1fr}.backup-field{grid-template-columns:110px 1fr}}
+    </style></head><body><section class="backup-cover"><div class="mark">🏥</div><h1>${nombre}</h1><h2>Respaldo completo de expedientes</h2><p>Generado ${escAttr(new Date(b.generadoEn).toLocaleString('es-NI'))}</p><div class="summary"><div><strong>${b.resumen.pacientes}</strong>Pacientes</div><div><strong>${b.resumen.mascotas}</strong>Mascotas</div><div><strong>${b.resumen.usuarios}</strong>Usuarios</div></div><p class="backup-conf">Documento médico confidencial. Los archivos digitalizados se muestran mediante su enlace.</p>${advertencias}</section>${pacientes}${mascotas}${usuarios?`<div class="backup-users">${usuarios}</div>`:''}<script>window.onload=function(){window.print()}<\/script></body></html>`);
+    w.document.close();
+    toast(`PDF preparado con ${b.resumen.pacientes+b.resumen.mascotas} expediente(s)`);
+  } catch(error) {
+    console.error('Exportar PDF:',error);
+    w.document.body.innerHTML=`<h2>No se pudo generar el PDF</h2><p>${escAttr(error.message||'Error desconocido')}</p>`;
+    toast('No se pudo generar el PDF: '+(error.message||'error desconocido'),'error');
+  } finally {
+    setLoading(false);
+  }
+}
 
-${sep}
-CITAS DE HOY (${h})
-${lineasHoy}
+function _agregarFilasBackup(destino, tabla, filas) {
+  if(!Array.isArray(filas)) return;
+  destino[tabla] ||= [];
+  destino[tabla].push(...filas.filter(Boolean));
+}
 
-${sep}
-PACIENTES (${C.p.length})
-${lineasP}
+function _tablasDesdeBackupV2(b) {
+  const t={};
+  const mapaPaciente={
+    expediente:'expediente',citas:'citas',medicaciones:'medicaciones',notas:'notas',examenes:'examenes',
+    historial:'historial_expediente',historiaDental:'historial_dental',odontograma:'odontograma',
+    periodontograma:'periodontograma',procedimientosOdontologicos:'procedimientos_odontologicos',
+    procedimientosOftalmologicos:'procedimientos_oftalmologicos',finanzas:'finanzas',
+  };
+  (b.pacientes||[]).forEach(g=>{
+    _agregarFilasBackup(t,'pacientes',[g.paciente]);
+    Object.entries(mapaPaciente).forEach(([origen,tabla])=>_agregarFilasBackup(t,tabla,g[origen]));
+    (g.facturas||[]).forEach(f=>{
+      const copia={...f}; const items=copia.items; delete copia.items;
+      _agregarFilasBackup(t,'facturas',[copia]); _agregarFilasBackup(t,'factura_items',items);
+    });
+  });
+  (b.mascotas||[]).forEach(g=>{
+    _agregarFilasBackup(t,'mascotas',[g.mascota]);
+    _agregarFilasBackup(t,'clientes',g.propietario?[g.propietario]:[]);
+    _agregarFilasBackup(t,'expediente_mascota',g.expediente);
+    [['citas','citas'],['medicaciones','medicaciones'],['notas','notas'],['vacunas','vacunas_mascota'],['desparasitaciones','desparasitaciones']]
+      .forEach(([origen,tabla])=>_agregarFilasBackup(t,tabla,g[origen]));
+    (g.hospitalizaciones||[]).forEach(h=>{
+      const copia={...h}; const seguimiento=copia.seguimiento; delete copia.seguimiento;
+      _agregarFilasBackup(t,'hospitalizaciones',[copia]);
+      _agregarFilasBackup(t,'hospitalizacion_seguimiento',seguimiento);
+    });
+  });
+  const dc=b.datosClinica||{};
+  _agregarFilasBackup(t,'clientes',dc.clientes);
+  _agregarFilasBackup(t,'inventario',dc.inventario);
+  _agregarFilasBackup(t,'inventario_movimientos',dc.movimientosInventario);
+  const sin=dc.registrosSinPaciente||{};
+  const mapaSinPaciente={
+    expediente:'expediente',citas:'citas',medicaciones:'medicaciones',notas:'notas',examenes:'examenes',
+    historiaDental:'historial_dental',odontograma:'odontograma',periodontograma:'periodontograma',
+    procedimientosOdontologicos:'procedimientos_odontologicos',procedimientosOftalmologicos:'procedimientos_oftalmologicos',
+    finanzas:'finanzas',historial:'historial_expediente',
+  };
+  Object.entries(mapaSinPaciente).forEach(([origen,tabla])=>_agregarFilasBackup(t,tabla,sin[origen]));
+  (sin.facturas||[]).forEach(f=>{
+    const copia={...f}; const items=copia.items; delete copia.items;
+    _agregarFilasBackup(t,'facturas',[copia]); _agregarFilasBackup(t,'factura_items',items);
+  });
+  _agregarFilasBackup(t,'profiles',(b.usuarios||[]).map(_sanitizarUsuarioBackup));
+  for(const tabla of Object.keys(t)) {
+    const unicos=new Map();
+    t[tabla].forEach((fila,i)=>unicos.set(fila.id!=null?String(fila.id):`sin-id-${i}`,fila));
+    t[tabla]=[...unicos.values()];
+  }
+  return t;
+}
 
-${sep}
-CITAS (${C.c.length})
-${lineasC}
+async function _restaurarBackupV2(b) {
+  if(String(b.clinica?.id)!==String(currentClinicaId)) {
+    throw new Error('Este backup pertenece a otra clínica. Selecciona la clínica correcta antes de importarlo.');
+  }
+  const tablas=_tablasDesdeBackupV2(b);
+  const orden=['profiles','pacientes','clientes','mascotas','expediente','citas','medicaciones','notas','examenes','historial_dental','odontograma','periodontograma','procedimientos_odontologicos','procedimientos_oftalmologicos','expediente_mascota','vacunas_mascota','desparasitaciones','hospitalizaciones','hospitalizacion_seguimiento','inventario','inventario_movimientos','finanzas','facturas','factura_items'];
+  const conClinica=new Set(orden.filter(x=>x!=='factura_items'));
+  const restaurados=[],fallos=[],omitidos=[];
+  if(isSuperAdmin() && b.clinica) {
+    const clinica={...b.clinica};
+    delete clinica.id;
+    const {error}=await sb.from('clinicas').update(clinica).eq('id',currentClinicaId);
+    if(error) fallos.push(`clinicas: ${error.message}`);
+    else restaurados.push('configuración de la clínica');
+  } else if(b.clinica) {
+    omitidos.push('configuración de la clínica (requiere Super Admin)');
+  }
+  for(const tabla of orden) {
+    let filas=tablas[tabla]||[];
+    if(!filas.length) continue;
+    if(tabla==='profiles' && !isSuperAdmin()) {
+      omitidos.push('usuarios (requiere Super Admin)');
+      continue;
+    }
+    filas=filas.map(f=>{
+      const limpio={...f};
+      if(conClinica.has(tabla)) limpio.clinica_id=currentClinicaId;
+      return tabla==='profiles'?_sanitizarUsuarioBackup(limpio):limpio;
+    });
+    let insertadas=0;
+    for(let i=0;i<filas.length;i+=250) {
+      const {error}=await sb.from(tabla).upsert(filas.slice(i,i+250));
+      if(error) { fallos.push(`${tabla}: ${error.message}`); break; }
+      insertadas+=Math.min(250,filas.length-i);
+    }
+    if(insertadas) restaurados.push(`${insertadas} ${tabla}`);
+  }
+  if((tablas.historial_expediente||[]).length) {
+    omitidos.push('historial de auditoría (solo lectura; permanece en el JSON)');
+  }
+  return {restaurados,fallos,omitidos};
+}
 
-${sep}
-MEDICACIONES (${C.m.length})
-${lineasM}
-
-${sep}
-NOTAS CLÍNICAS (${C.n.length})
-${lineasN}
-
-${sep}
-Generado automáticamente por Lumea Med v5.1
-${fechaStr}`;
-
-  const asunto = `Backup Lumea Med — ${h}`;
-  window.location.href = `mailto:sebasgale65@gmail.com?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
-  toast('Abriendo cliente de correo con el backup...','info');
+async function _restaurarBackupLegado(d) {
+  const bloques=[['pacientes',d.pacientes,toP],['citas',d.citas,toC],['medicaciones',d.medicaciones,toM],['notas',d.notas,toN]];
+  const restaurados=[],fallos=[];
+  for(const [tabla,filas,mapper] of bloques) {
+    if(!filas?.length) continue;
+    const {error}=await sb.from(tabla).upsert(filas.map(mapper));
+    if(error) fallos.push(`${tabla}: ${error.message}`);
+    else restaurados.push(`${filas.length} ${tabla}`);
+  }
+  return {restaurados,fallos,omitidos:[]};
 }
 
 function importarJSON(e){
   const file=e.target.files[0]; if(!file) return;
   const r=new FileReader();
   r.onload=async ev=>{
-    try{
+    try {
       const d=JSON.parse(ev.target.result);
-      const ok=await customConfirm({icon:'📥',title:'Importar backup',msg:'Esto insertará los datos del archivo en Supabase.<br><small style="color:var(--text-light)">No se borran los registros existentes.</small>',okText:'Importar',danger:false});
-      if(!ok) return;
-      // Sin clínica, los mappers ponen clinica_id nulo y el backup entero
-      // entraría huérfano: guardado, pero invisible para todas las consultas.
       if(!_exigeClinica()) return;
-      setLoading(true);
-      // Antes no se miraba ni un solo error y siempre se decía "importado
-      // correctamente": si RLS o una columna ausente rechazaban las filas, el
-      // usuario se quedaba convencido de que su backup estaba dentro.
-      const bloques = [
-        ['pacientes',    d.pacientes,    toP],
-        ['citas',        d.citas,        toC],
-        ['medicaciones', d.medicaciones, toM],
-        ['notas',        d.notas,        toN],
-      ];
-      const okey = [], fallos = [];
-      for(const [tabla, filas, mapper] of bloques) {
-        if(!filas?.length) continue;
-        const { error } = await sb.from(tabla).upsert(filas.map(mapper));
-        if(error) fallos.push(`${tabla}: ${error.message}`);
-        else okey.push(`${filas.length} ${tabla}`);
+      if(d.tipo==='backup_clinica' && Number(d.schemaVersion)>BACKUP_VERSION) {
+        throw new Error(`Este backup usa la versión ${d.schemaVersion}; actualiza Lumea Med antes de restaurarlo.`);
       }
-      setLoading(false);
-      if(fallos.length) {
-        toast(`No se importó todo. Falló ${fallos.length === bloques.length ? 'todo' : 'una parte'}:\n${fallos.join('\n')}`, 'error');
-        console.error('Importar backup:', fallos);
-      } else if(!okey.length) {
-        toast('El archivo no traía pacientes, citas, medicaciones ni notas', 'warning');
+      const esV2=d.tipo==='backup_clinica' && Number(d.schemaVersion)>=2;
+      if(esV2 && String(d.clinica?.id)!==String(currentClinicaId)) {
+        throw new Error(`El archivo pertenece a ${d.clinica?.nombre||'otra clínica'}. Selecciónala antes de importar.`);
+      }
+      const cantidad=esV2?(d.resumen?.pacientes||0)+(d.resumen?.mascotas||0):(d.pacientes?.length||0);
+      const ok=await customConfirm({
+        icon:'📥',title:'Restaurar backup',
+        msg:`Se restaurarán ${cantidad} expediente(s) en <strong>${escAttr(currentClinica?.nombre||'la clínica actual')}</strong>.<br><small style="color:var(--text-light)">Se actualizan coincidencias por ID y se insertan faltantes. No se borra ningún registro.</small>`,
+        okText:'Restaurar',danger:false,
+      });
+      if(!ok) return;
+      setLoading(true);
+      const resultado=esV2?await _restaurarBackupV2(d):await _restaurarBackupLegado(d);
+      if(resultado.fallos.length) {
+        toast(`La restauración quedó parcial:\n${resultado.fallos.join('\n')}`,'error');
+        console.error('Importar backup:',resultado.fallos);
+      } else if(!resultado.restaurados.length) {
+        toast('El archivo no contiene registros restaurables','warning');
       } else {
-        toast('Importado: ' + okey.join(' · ') + ' ✅');
+        const extra=resultado.omitidos.length?` · Omitido: ${resultado.omitidos.join(', ')}`:'';
+        toast('Restaurado: '+resultado.restaurados.join(' · ')+extra,resultado.omitidos.length?'warning':'success');
       }
       await loadAll(); renderView(currentView); updateBadges();
-    }catch(err){ setLoading(false); toast('Error al leer el archivo','error'); console.error(err); }
+    } catch(err) {
+      toast('No se pudo importar: '+(err.message||'archivo inválido'),'error');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
-  r.readAsText(file); e.target.value='';
+  r.readAsText(file);
+  e.target.value='';
 }
 
 // ════════════════════ SIDEBAR MOBILE ════════════════════

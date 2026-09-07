@@ -339,6 +339,11 @@ body.dark .fact-item-row input,body.dark .fact-item-row select{background:#0F172
 .export-box .export-icon{font-size:40px;margin-bottom:10px}
 .export-box h3{font-size:16px;font-weight:700;margin-bottom:6px}
 .export-box p{color:var(--text-light);font-size:13px;margin-bottom:16px}
+.export-security-note{font-size:12px;line-height:1.5;margin-bottom:18px;padding:10px 12px;border-radius:10px;background:var(--bg);border:1px solid var(--border)}
+.export-actions-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.export-actions-grid .export-box{padding:22px 16px;display:flex;flex-direction:column;align-items:center}
+.export-actions-grid .export-box p{flex:1;line-height:1.45}
+@media(max-width:560px){.export-actions-grid{grid-template-columns:1fr}.export-actions-grid .export-box{padding:20px 14px}}
 
 /* MODAL */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:200;align-items:center;justify-content:center;backdrop-filter:blur(6px)}

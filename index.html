@@ -1002,22 +1002,30 @@
       <div id="view-exportar" class="view">
         <div class="grid-2">
           <div class="card">
-            <h3 style="margin-bottom:18px">📤 Exportar Datos</h3>
-            <div class="export-box" style="margin-bottom:14px">
+            <h3 style="margin-bottom:8px">📤 Respaldo de la clínica</h3>
+            <p class="text-light export-security-note">Los archivos contienen información médica confidencial. Guárdalos en un lugar seguro.</p>
+            <div class="export-actions-grid">
+            <div class="export-box">
               <div class="export-icon">📧</div><h3>Enviar a tu correo</h3>
-              <p>Reporte a <strong>sebasgale65@gmail.com</strong></p>
+              <p>Envía un resumen breve de actividad por correo.</p>
               <button class="btn btn-primary" onclick="exportarEmail()">📧 Enviar</button>
             </div>
-            <div class="export-box" style="margin-bottom:14px">
-              <div class="export-icon">📩</div><h3>Backup por Correo</h3>
-              <p>Envía un respaldo completo a <strong>sebasgale65@gmail.com</strong></p>
-              <button class="btn btn-secondary" onclick="exportarJSON()">📩 Enviar Backup</button>
+            <div class="export-box">
+              <div class="export-icon">🗃️</div><h3>Backup JSON</h3>
+              <p>Descarga todos los expedientes agrupados por paciente y los usuarios sin contraseñas.</p>
+              <button class="btn btn-primary" onclick="exportarJSON()">⬇️ Descargar JSON</button>
+            </div>
+            <div class="export-box">
+              <div class="export-icon">📄</div><h3>Expedientes en PDF</h3>
+              <p>Genera un documento legible, con una sección independiente para cada paciente.</p>
+              <button class="btn btn-secondary" onclick="exportarPDFClinica()">🖨️ Generar PDF</button>
             </div>
             <div class="export-box">
               <div class="export-icon">📥</div><h3>Importar Backup</h3>
-              <p>Restaura desde un archivo anterior</p>
+              <p>Restaura un JSON de esta misma clínica sin borrar los registros existentes.</p>
               <input type="file" id="import-file" accept=".json" style="display:none" onchange="importarJSON(event)">
               <button class="btn btn-secondary" onclick="document.getElementById('import-file').click()">📥 Importar</button>
+            </div>
             </div>
           </div>
           <div class="card"><h3 style="margin-bottom:18px">📊 Resumen</h3><div id="resumen-exportar"></div></div>
@@ -2625,7 +2633,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260906e" defer></script>
+<script src="js/app.js?v=20260906f" defer></script>
 </body>
 </html>
 
