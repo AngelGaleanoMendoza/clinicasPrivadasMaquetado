@@ -240,7 +240,7 @@ const PROFILE_COLS_BASE = ['id','nombre','rol','email','icono','clinica_id','per
 // Opcionales: se fueron agregando con el tiempo y pueden no existir todavía en
 // una base que no haya corrido los scripts. Si falta alguna, se pide sin ella:
 // una columna ausente NO puede dejar a nadie fuera del sistema.
-const PROFILE_COLS_OPC = ['especialidad','firma_url','recetario_url','recetario_config','bloqueado','intentos_fallidos','horario'];
+const PROFILE_COLS_OPC = ['especialidad','firma_url','recetario_url','recetario_config','bloqueado','intentos_fallidos','horario','ultimo_acceso'];
 let _profileColsOK = null;   // se recuerda la lista válida tras el primer intento
 
 function _profileCols() {
@@ -3925,7 +3925,7 @@ async function guardarMedicacion() {
       return;
     }
     toast('Receta actualizada');
-    logActivity('medicacion');
+    logActivity('medicacion_edicion');
   } else {
     const valid = medItems.filter(item => item.nombre && item.dosisQty && item.frecuencia);
     if(!valid.length) { toast('Agrega al menos un medicamento con nombre, dosificación y frecuencia','error'); return; }
@@ -5504,6 +5504,7 @@ async function guardarExamen() {
     return;
   }
   toast(guardadoCompatible?'Examen guardado; falta aplicar la migración de campos clínicos':'Examen guardado en el expediente 🔬', guardadoCompatible?'warning':undefined);
+  logActivity('examen');
   closeModal('modal-examen');
   renderExamenes(_examenPacId,_examenRenderTarget);
 }
@@ -9695,7 +9696,7 @@ async function guardarProcedimientoOft() {
   setLoading(false);
   closeModal('modal-proc-oft');
   toast((eraEdicion?'Procedimiento actualizado':'Procedimiento registrado ✅')+avisoAdjunto,avisoAdjunto?'warning':'success');
-  logActivity('procedimiento_oftalmologico');
+  logActivity(eraEdicion?'procedimiento_oftalmologico_edicion':'procedimiento_oftalmologico');
   await loadAll();
   if(currentView==='paciente-detalle')renderDetalleP(currentPatientId);else renderProcedimientosOftView();
 }
@@ -9935,6 +9936,7 @@ async function guardarProcedimiento() {
   if(!pacienteId || !procedimiento || !fecha) { toast('Completa paciente, procedimiento y fecha','error'); return; }
   setLoading(true);
   const obj = toProc({ pacienteId, procedimiento, categoria, fecha, estado, notas, presupuesto, diente });
+  const eraEdicion=!!editingProcId;
   let err;
   if(editingProcId) {
     const r = await sb.from('procedimientos_odontologicos').update(obj).eq('id', editingProcId);
@@ -9945,6 +9947,7 @@ async function guardarProcedimiento() {
   }
   setLoading(false);
   if(err) { toast('Error: ' + err.message, 'error'); return; }
+  if(!eraEdicion) logActivity('procedimiento_odontologico');
   toast(editingProcId ? 'Procedimiento actualizado' : 'Procedimiento registrado ✅');
   closeModal('modal-procedimiento');
   await loadAll();
@@ -10232,8 +10235,11 @@ const SUPER_ADMIN_EMAIL = 'sebasgale65@gmail.com';
 let adminClinicas = [];
 let adminUsuarios = [];
 let adminActividad = [];
+let adminConexiones = [];
+let adminActividadLimitada = false;
 let adminTab = 'clinicas';
 let prodPeriodo = 'hoy';
+let prodClinicaId = 'todas';
 let editingClinicaId = null;
 let editingUsuarioId = null;
 let currentDetalleClinicaId = null;
@@ -10368,14 +10374,23 @@ function applyRoleMenu() {
 
 async function loadAdminData() {
   setLoading(true);
-  const [rc, ru, ra] = await Promise.all([
+  const haceSieteDias = new Date();
+  haceSieteDias.setDate(haceSieteDias.getDate()-6);
+  const inicioMes = hoy().slice(0,7)+'-01';
+  const desdeActividad = [inicioMes,haceSieteDias.toISOString().split('T')[0]].sort()[0];
+  const [rc, ru, ra, rl] = await Promise.all([
     sb.from('clinicas').select('*').order('id'),
     _consultaPerfil(cols => sb.from('profiles').select(cols).order('nombre')),
-    sb.from('actividad_usuarios').select('*').order('created_at', {ascending:false}).limit(2000)
+    sb.from('actividad_usuarios').select('*',{count:'exact'}).gte('fecha',desdeActividad).order('created_at', {ascending:false}).limit(5000),
+    sb.from('actividad_usuarios').select('*').eq('accion','login').order('created_at', {ascending:false}).limit(5000)
   ]);
   adminClinicas = rc.data || [];
   adminUsuarios = ru.data || [];
   adminActividad = ra.data || [];
+  adminConexiones = rl.data || [];
+  adminActividadLimitada = Number(ra.count||0) > adminActividad.length;
+  if(ra.error) console.warn('No se pudo cargar actividad de usuarios:',ra.error);
+  if(rl.error) console.warn('No se pudieron cargar conexiones de usuarios:',rl.error);
   setLoading(false);
 }
 
@@ -10507,8 +10522,21 @@ function renderAdminUsuarios() {
 function setProdPeriodo(p, el) {
   prodPeriodo = p;
   document.querySelectorAll('[id^="prod-chip-"]').forEach(c=>c.classList.remove('active'));
-  el.classList.add('active');
+  (el || document.getElementById('prod-chip-'+p))?.classList.add('active');
   renderProductividad();
+}
+
+function setProdClinica(value) {
+  prodClinicaId = value || 'todas';
+  const select = document.getElementById('prod-clinica-filter');
+  if(select) select.value = prodClinicaId;
+  renderProductividad();
+}
+
+async function refrescarProductividad() {
+  await loadAdminData();
+  renderProductividad();
+  toast('Productividad actualizada','success');
 }
 
 function prodFechaRango() {
@@ -10521,72 +10549,187 @@ function prodFechaRango() {
   return [h.slice(0,7)+'-01', h];
 }
 
-function renderProductividad() {
-  const [desde, hasta] = prodFechaRango();
-  const acts = adminActividad.filter(a => a.fecha >= desde && a.fecha <= hasta);
+const PROD_ACCIONES = {
+  paciente:['👥','Pacientes'], cita:['📅','Citas'], nota:['📝','Notas'],
+  medicacion:['💊','Medicaciones'], examen:['🔬','Exámenes'],
+  procedimiento_odontologico:['🦷','Proc. dentales'],
+  procedimiento_oftalmologico:['👁️','Proc. visuales'],
+  cliente:['🤝','Clientes'], mascota:['🐾','Mascotas'], vacuna:['💉','Vacunas'],
+  desparasitacion:['🛡️','Desparasitaciones'], hospitalizacion:['🏥','Hospitalizaciones'],
+  seguimiento:['🩺','Seguimientos']
+};
 
-  // Resumen global
-  const logins  = acts.filter(a=>a.accion==='login').length;
-  const acciones = acts.filter(a=>a.accion!=='login').length;
-  const usuariosActivos = new Set(acts.map(a=>a.user_id)).size;
-  const resEl = document.getElementById('prod-resumen-row');
-  if(resEl) resEl.innerHTML=`
-    <div class="stat-card"><div class="stat-icon si-blue">👤</div><div class="stat-info"><h3>${usuariosActivos}</h3><p>Usuarios activos</p></div></div>
-    <div class="stat-card"><div class="stat-icon si-green">🔑</div><div class="stat-info"><h3>${logins}</h3><p>Inicios de sesión</p></div></div>
-    <div class="stat-card"><div class="stat-icon si-orange">⚡</div><div class="stat-info"><h3>${acciones}</h3><p>Acciones registradas</p></div></div>
-    <div class="stat-card"><div class="stat-icon" style="background:linear-gradient(135deg,#EEF2FF,#E0E7FF)">📊</div><div class="stat-info"><h3>${acts.length}</h3><p>Total eventos</p></div></div>`;
-
-  // Por usuario
-  const listEl = document.getElementById('prod-usuarios-list');
-  if(!listEl) return;
-  const porUsuario = {};
-  acts.forEach(a => {
-    if(!porUsuario[a.user_id]) porUsuario[a.user_id] = {nombre:a.user_nombre, login:0, cita:0, paciente:0, nota:0, medicacion:0, otros:0};
-    const u = porUsuario[a.user_id];
-    if(a.accion in u) u[a.accion]++; else u.otros++;
-  });
-  const usuarios = Object.entries(porUsuario).sort((a,b)=>{
-    const ta = Object.values(a[1]).slice(1).reduce((s,v)=>s+v,0);
-    const tb = Object.values(b[1]).slice(1).reduce((s,v)=>s+v,0);
-    return tb-ta;
-  });
-
-  if(!usuarios.length){
-    listEl.innerHTML=`<div class="empty-state"><div class="empty-icon">📊</div><p>Sin actividad registrada en este período</p></div>`;
-    renderTimeline(desde);
-    return;
-  }
-
-  const maxScore = Math.max(...usuarios.map(([,u])=>u.cita+u.paciente+u.nota+u.medicacion+u.otros),1);
-  listEl.innerHTML = usuarios.map(([uid,u])=>{
-    const prof = adminUsuarios.find(p=>p.id===uid);
-    const clinica = adminClinicas.find(c=>c.id===prof?.clinica_id);
-    const score = u.cita+u.paciente+u.nota+u.medicacion+u.otros;
-    const pct = Math.round(score/maxScore*100);
-    const nivel = score===0?['tag-gray','Inactivo']:score<5?['tag-orange','Bajo']:score<15?['tag-cyan','Activo']:['tag-green','Muy activo'];
-    const mini = (lbl,val)=>`<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text-light);background:var(--bg);border-radius:8px;padding:3px 8px;white-space:nowrap">${lbl} <strong style="color:var(--text)">${val}</strong></span>`;
-    return `<div style="padding:12px 16px;border-bottom:1px solid var(--border)">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
-        <div class="patient-avatar" style="background:linear-gradient(135deg,var(--primary),var(--accent));font-size:16px;flex-shrink:0">${prof?.icono||'👤'}</div>
-        <div style="flex:1;min-width:0">
-          <strong style="font-size:13px">${u.nombre}</strong>
-          <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${prof?.email||''}${clinica?` · ${clinica.nombre}`:''}</div>
-        </div>
-        <span class="tag ${nivel[0]}" style="flex-shrink:0">${nivel[1]}</span>
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px">
-        ${mini('🔑 Logins',u.login)}${mini('📆 Citas',u.cita)}${mini('👥 Pacientes',u.paciente)}${mini('📝 Notas',u.nota)}${mini('💊 Medicaciones',u.medicacion)}
-      </div>
-      <div style="background:var(--bg);border-radius:6px;height:14px;overflow:hidden">
-        <div style="width:${pct}%;height:100%;background:linear-gradient(90deg,var(--primary),var(--accent));border-radius:6px"></div>
-      </div>
-    </div>`;
-  }).join('');
-
-  renderTimeline(desde);
+function _normalizarIdProd(valor) {
+  return String(valor??'').trim().toLowerCase();
 }
 
-function renderTimeline(desde) {
+function _esRegistroProductivo(accion) {
+  return !!accion && accion!=='login' && !/(?:_edicion|_actualizacion|_eliminacion)$/.test(accion);
+}
+
+function _actividadEsDeUsuario(a, perfil, referencia) {
+  const id=_normalizarIdProd(a?.user_id);
+  return !!id && [perfil?.id,perfil?.email,referencia].some(v=>_normalizarIdProd(v)===id);
+}
+
+function _perfilDeActividad(a) {
+  return adminUsuarios.find(u=>_actividadEsDeUsuario(a,u)) || null;
+}
+
+function _fechaEventoActividad(a) {
+  return a?.created_at || (a?.fecha ? a.fecha+'T12:00:00' : null);
+}
+
+function _ultimaConexionProd(perfil, referencia) {
+  const candidatos=[];
+  if(perfil?.ultimo_acceso) candidatos.push(perfil.ultimo_acceso);
+  adminConexiones.forEach(a=>{
+    if(_actividadEsDeUsuario(a,perfil,referencia)) {
+      const fecha=_fechaEventoActividad(a);
+      if(fecha) candidatos.push(fecha);
+    }
+  });
+  return candidatos.sort((a,b)=>new Date(b)-new Date(a))[0] || null;
+}
+
+function _formatoUltimaConexion(fecha) {
+  if(!fecha) return 'Sin conexión registrada';
+  const d=new Date(fecha);
+  if(Number.isNaN(d.getTime())) return 'Sin conexión registrada';
+  return d.toLocaleString('es-NI',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+
+function _estadoUltimaConexion(fecha) {
+  if(!fecha) return ['tag-gray','Nunca'];
+  const minutos=(Date.now()-new Date(fecha).getTime())/60000;
+  if(minutos<=20) return ['tag-green','Reciente'];
+  if(minutos<=24*60) return ['tag-cyan','Hoy'];
+  if(minutos<=7*24*60) return ['tag-blue','Esta semana'];
+  return ['tag-gray','Anterior'];
+}
+
+function _renderFiltroClinicasProd() {
+  const select=document.getElementById('prod-clinica-filter');
+  if(!select) return;
+  if(prodClinicaId!=='todas' && !adminClinicas.some(c=>String(c.id)===String(prodClinicaId))) prodClinicaId='todas';
+  select.innerHTML='<option value="todas">Todas las clínicas</option>'+adminClinicas
+    .map(c=>`<option value="${c.id}"${String(c.id)===String(prodClinicaId)?' selected':''}>${escAttr(c.nombre)}</option>`).join('');
+}
+
+function _agruparUsuariosProd(acts) {
+  const grupos=new Map();
+  const agregar=(key,perfil,nombre,email,referencia)=>{
+    if(!grupos.has(key)) grupos.set(key,{key,perfil,nombre,email,referencia,eventos:[]});
+    return grupos.get(key);
+  };
+  adminUsuarios
+    .filter(u=>prodClinicaId==='todas' || String(u.clinica_id)===String(prodClinicaId))
+    .forEach(u=>agregar('perfil:'+u.id,u,u.nombre,u.email,u.id));
+  acts.forEach(a=>{
+    const perfil=_perfilDeActividad(a);
+    const referencia=perfil?.id || a.user_id || a.user_nombre || 'sin-id';
+    const key=perfil ? 'perfil:'+perfil.id : 'evento:'+_normalizarIdProd(referencia);
+    agregar(key,perfil,perfil?.nombre||a.user_nombre||'Usuario sin perfil',perfil?.email||'',referencia).eventos.push(a);
+  });
+  return [...grupos.values()];
+}
+
+function _accionesUsuarioProd(eventos) {
+  const conteo={};
+  eventos.filter(a=>_esRegistroProductivo(a.accion)).forEach(a=>{ conteo[a.accion]=(conteo[a.accion]||0)+1; });
+  return Object.entries(conteo).sort((a,b)=>b[1]-a[1]);
+}
+
+function renderProductividad() {
+  _renderFiltroClinicasProd();
+  document.querySelectorAll('[id^="prod-chip-"]').forEach(c=>c.classList.toggle('active',c.id==='prod-chip-'+prodPeriodo));
+  const [desde, hasta] = prodFechaRango();
+  const actividadClinica = adminActividad.filter(a => prodClinicaId==='todas' || String(a.clinica_id)===String(prodClinicaId));
+  const acts = actividadClinica.filter(a => a.fecha >= desde && a.fecha <= hasta);
+  const registros=acts.filter(a=>_esRegistroProductivo(a.accion));
+  const logins=acts.filter(a=>a.accion==='login');
+  const usuariosActivos=new Set(registros.map(a=>_normalizarIdProd(a.user_id)).filter(Boolean)).size;
+  const clinicasActivas=new Set(registros.map(a=>a.clinica_id).filter(v=>v!==null&&v!==undefined&&v!=='').map(String)).size;
+
+  const resEl = document.getElementById('prod-resumen-row');
+  if(resEl) resEl.innerHTML=`
+    <div class="stat-card"><div class="stat-icon si-orange">✍️</div><div class="stat-info"><h3>${registros.length}</h3><p>Registros creados</p></div></div>
+    <div class="stat-card"><div class="stat-icon si-blue">👤</div><div class="stat-info"><h3>${usuariosActivos}</h3><p>Usuarios con registros</p></div></div>
+    <div class="stat-card"><div class="stat-icon si-green">🏥</div><div class="stat-info"><h3>${clinicasActivas}</h3><p>Clínicas productivas</p></div></div>
+    <div class="stat-card"><div class="stat-icon" style="background:linear-gradient(135deg,#EEF2FF,#E0E7FF)">🔑</div><div class="stat-info"><h3>${logins.length}</h3><p>Conexiones</p></div></div>`;
+
+  const clinicaSeleccionada=prodClinicaId==='todas' ? 'Todas las clínicas' : adminClinicas.find(c=>String(c.id)===String(prodClinicaId))?.nombre||'Clínica';
+  const periodo={hoy:'Hoy',semana:'Esta semana',mes:'Este mes'}[prodPeriodo];
+  const note=document.getElementById('prod-data-note');
+  const faltaUltimoAcceso=Array.isArray(_profileColsOK) && !_profileColsOK.includes('ultimo_acceso');
+  if(note) note.innerHTML=`<span>Período: <strong>${periodo}</strong></span><span>Vista: <strong>${escAttr(clinicaSeleccionada)}</strong></span><span>Se cuentan altas nuevas; las ediciones no aumentan el ranking.</span>${faltaUltimoAcceso?'<span class="prod-data-warning">Ejecuta migracion_productividad_superadmin.sql para conservar la última conexión.</span>':''}${adminActividadLimitada?'<span class="prod-data-warning">⚠️ El período supera el límite de eventos cargados.</span>':''}`;
+
+  const clinicas=adminClinicas
+    .filter(c=>prodClinicaId==='todas' || String(c.id)===String(prodClinicaId))
+    .map(c=>{
+      const ev=acts.filter(a=>String(a.clinica_id)===String(c.id));
+      const regs=ev.filter(a=>_esRegistroProductivo(a.accion));
+      return {ref:c,registros:regs.length,logins:ev.filter(a=>a.accion==='login').length,
+        activos:new Set(regs.map(a=>_normalizarIdProd(a.user_id)).filter(Boolean)).size,
+        usuarios:adminUsuarios.filter(u=>String(u.clinica_id)===String(c.id)).length};
+    }).sort((a,b)=>b.registros-a.registros || b.activos-a.activos || a.ref.nombre.localeCompare(b.ref.nombre));
+  const maxClinica=Math.max(...clinicas.map(c=>c.registros),1);
+  const clinicasEl=document.getElementById('prod-clinicas-list');
+  const clinicasCount=document.getElementById('prod-clinicas-count');
+  if(clinicasCount) clinicasCount.textContent=`${clinicas.length} clínica${clinicas.length!==1?'s':''}`;
+  if(clinicasEl) clinicasEl.innerHTML=clinicas.length ? clinicas.map((c,i)=>`
+    <button class="prod-clinic-row" type="button" onclick="setProdClinica('${c.ref.id}')" title="Ver solo ${escAttr(c.ref.nombre)}">
+      <span class="prod-rank">${i+1}</span>
+      <span class="prod-clinic-main"><strong>${escAttr(c.ref.nombre)}</strong><small>${c.usuarios} usuario${c.usuarios!==1?'s':''} asignado${c.usuarios!==1?'s':''} · ${c.logins} conexión${c.logins!==1?'es':''}</small><span class="prod-track"><span style="width:${Math.round(c.registros/maxClinica*100)}%"></span></span></span>
+      <span class="prod-clinic-score"><strong>${c.registros}</strong><small>registros</small><em>${c.activos} activo${c.activos!==1?'s':''}</em></span>
+    </button>`).join('') : '<div class="empty-state"><div class="empty-icon">🏥</div><p>Sin clínicas para mostrar</p></div>';
+
+  const listEl = document.getElementById('prod-usuarios-list');
+  const usuarios=_agruparUsuariosProd(acts).map(u=>{
+    const acciones=_accionesUsuarioProd(u.eventos);
+    const total=acciones.reduce((s,[,n])=>s+n,0);
+    return {...u,acciones,total,ultima:_ultimaConexionProd(u.perfil,u.referencia)};
+  }).sort((a,b)=>b.total-a.total || (new Date(b.ultima||0)-new Date(a.ultima||0)) || a.nombre.localeCompare(b.nombre));
+  const maxUsuario=Math.max(...usuarios.map(u=>u.total),1);
+  const usuariosCount=document.getElementById('prod-usuarios-count');
+  if(usuariosCount) usuariosCount.textContent=`${usuarios.filter(u=>u.total>0).length} con registros`;
+  if(listEl) listEl.innerHTML=usuarios.length ? usuarios.map((u,i)=>{
+    const clinica=adminClinicas.find(c=>String(c.id)===String(u.perfil?.clinica_id));
+    const clinicasActividad=[...new Set(u.eventos.map(a=>adminClinicas.find(c=>String(c.id)===String(a.clinica_id))?.nombre).filter(Boolean))];
+    const contextoClinica=clinicasActividad.join(', ') || clinica?.nombre || 'Sin clínica asignada';
+    const nivel=u.total===0?['tag-gray','Sin registros']:u.total<5?['tag-orange','En marcha']:u.total<15?['tag-cyan','Activo']:['tag-green','Destacado'];
+    const medalla=i===0&&u.total?'🥇':i===1&&u.total?'🥈':i===2&&u.total?'🥉':String(i+1);
+    const chips=u.acciones.length ? u.acciones.slice(0,5).map(([accion,n])=>{
+      const meta=PROD_ACCIONES[accion]||['✍️',accion.replaceAll('_',' ')];
+      return `<span class="prod-action-chip">${meta[0]} ${escAttr(meta[1])} <strong>${n}</strong></span>`;
+    }).join('') : '<span class="prod-no-records">Sin altas nuevas en este período</span>';
+    return `<article class="prod-user-row">
+      <span class="prod-user-rank">${medalla}</span>
+      <div class="patient-avatar prod-user-avatar">${u.perfil?.icono||'👤'}</div>
+      <div class="prod-user-body"><div class="prod-user-title"><strong>${escAttr(u.nombre)}</strong><span class="tag ${nivel[0]}">${nivel[1]}</span></div><div class="prod-user-meta">${escAttr(u.email||'Sin correo')} · ${escAttr(contextoClinica)}</div><div class="prod-user-actions">${chips}</div><div class="prod-track"><span style="width:${Math.round(u.total/maxUsuario*100)}%"></span></div><div class="prod-user-login">Última conexión: <strong>${_formatoUltimaConexion(u.ultima)}</strong></div></div>
+      <div class="prod-user-score"><strong>${u.total}</strong><span>registros</span></div>
+    </article>`;
+  }).join('') : '<div class="empty-state"><div class="empty-icon">📊</div><p>Sin usuarios ni actividad en este período</p></div>';
+
+  renderConexionesProductividad();
+  renderTimeline(actividadClinica);
+}
+
+function renderConexionesProductividad() {
+  const el=document.getElementById('prod-conexiones-list');
+  if(!el) return;
+  const usuarios=adminUsuarios
+    .filter(u=>prodClinicaId==='todas' || String(u.clinica_id)===String(prodClinicaId))
+    .map(u=>({...u,ultima:_ultimaConexionProd(u,u.id)}))
+    .sort((a,b)=>new Date(b.ultima||0)-new Date(a.ultima||0) || a.nombre.localeCompare(b.nombre));
+  el.innerHTML=usuarios.length ? `<div class="prod-connections">${usuarios.map(u=>{
+    const clinica=adminClinicas.find(c=>String(c.id)===String(u.clinica_id));
+    const estado=_estadoUltimaConexion(u.ultima);
+    return `<div class="prod-connection-row"><div class="patient-avatar prod-connection-avatar">${u.icono||'👤'}</div><div class="prod-connection-main"><strong>${escAttr(u.nombre)}</strong><small>${escAttr(u.email||'Sin correo')}${clinica?' · '+escAttr(clinica.nombre):''}</small></div><div class="prod-connection-date"><strong>${_formatoUltimaConexion(u.ultima)}</strong><span class="tag ${estado[0]}">${estado[1]}</span></div></div>`;
+  }).join('')}</div>` : '<div class="empty-state"><div class="empty-icon">🟢</div><p>No hay usuarios para mostrar</p></div>';
+}
+
+function renderTimeline(actividad) {
   const el = document.getElementById('prod-timeline'); if(!el) return;
   const diasNom = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
   const dias = Array.from({length:7},(_,i)=>{
@@ -10594,24 +10737,26 @@ function renderTimeline(desde) {
   });
   const porDia = dias.map(f=>({
     f, nom:diasNom[new Date(f+'T12:00:00').getDay()],
-    login: adminActividad.filter(a=>a.fecha===f&&a.accion==='login').length,
-    total: adminActividad.filter(a=>a.fecha===f).length
+    login: actividad.filter(a=>a.fecha===f&&a.accion==='login').length,
+    total: actividad.filter(a=>a.fecha===f&&_esRegistroProductivo(a.accion)).length
   }));
   const maxT = Math.max(...porDia.map(d=>d.total),1);
   el.innerHTML = `<div style="display:flex;gap:8px;align-items:flex-end;height:120px;padding:0 4px">
     ${porDia.map(d=>`
       <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%">
         <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;width:100%">
-          <div title="${d.total} eventos" style="width:100%;background:linear-gradient(to top,var(--primary),var(--accent));border-radius:6px 6px 0 0;height:${Math.max(d.total?Math.round(d.total/maxT*90):0,0)}%;min-height:${d.total?'4px':'0'};transition:height .4s;position:relative">
+          <div title="${d.total} registros" style="width:100%;background:linear-gradient(to top,var(--primary),var(--accent));border-radius:6px 6px 0 0;height:${Math.max(d.total?Math.round(d.total/maxT*90):0,0)}%;min-height:${d.total?'4px':'0'};transition:height .4s;position:relative">
             ${d.total?`<div style="position:absolute;top:-18px;left:50%;transform:translateX(-50%);font-size:10px;font-weight:700;color:var(--primary)">${d.total}</div>`:''}
           </div>
         </div>
         <div style="font-size:10px;font-weight:700;color:var(--text-light);text-transform:uppercase">${d.nom}</div>
         <div style="font-size:9px;color:var(--text-light)">${d.f.slice(5)}</div>
+        <div style="font-size:9px;color:var(--primary)">🔑 ${d.login}</div>
       </div>`).join('')}
   </div>
   <div style="display:flex;gap:14px;margin-top:10px;font-size:11px;color:var(--text-light)">
-    <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:linear-gradient(135deg,var(--primary),var(--accent));display:inline-block"></span>Total eventos por día</span>
+    <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:linear-gradient(135deg,var(--primary),var(--accent));display:inline-block"></span>Registros creados por día</span>
+    <span>🔑 Conexiones</span>
   </div>`;
 }
 
@@ -10777,14 +10922,29 @@ async function guardarExamenVisual() {
 
 // ── logActivity ──
 async function logActivity(accion) {
-  if(!currentUser||!currentClinicaId) return;
-  sb.from('actividad_usuarios').insert({
-    clinica_id: currentClinicaId,
-    user_id: currentUser.id || currentUser.email,
-    user_nombre: currentUser.name,
-    accion,
-    fecha: hoy()
-  });
+  if(!currentUser) return;
+  const ahora=new Date().toISOString();
+  // El perfil evita perder la última conexión cuando el historial crece. La
+  // aplicación sigue funcionando si la migración aún no se ha ejecutado.
+  if(accion==='login' && currentUser.id) {
+    try {
+      const actualizado=await sb.from('profiles').update({ultimo_acceso:ahora}).eq('id',currentUser.id);
+      if(actualizado.error && !_faltaColumna(actualizado.error,'ultimo_acceso')) {
+        console.warn('No se pudo actualizar la última conexión:',actualizado.error);
+      }
+    } catch(error) { console.warn('No se pudo actualizar la última conexión:',error); }
+  }
+  if(!currentClinicaId) return;
+  try {
+    const {error}=await sb.from('actividad_usuarios').insert({
+      clinica_id:currentClinicaId,
+      user_id:currentUser.id || currentUser.email,
+      user_nombre:currentUser.name,
+      accion,
+      fecha:hoy()
+    });
+    if(error) console.warn('No se pudo registrar la actividad:',error);
+  } catch(error) { console.warn('No se pudo registrar la actividad:',error); }
 }
 
 // ── Modal Clínica ──
@@ -11031,18 +11191,15 @@ function renderDetallePanel(tab) {
   }
 
   if(tab === 'actividad') {
-    const usuarios = adminUsuarios.filter(u=>u.clinica_id===id);
-    const uids = new Set(usuarios.map(u=>u.id));
-    const acts = adminActividad.filter(a=>uids.has(a.user_id));
-    const logins    = acts.filter(a=>a.accion==='login').length;
-    const pacActs   = acts.filter(a=>a.accion==='paciente').length;
-    const citaActs  = acts.filter(a=>a.accion==='cita').length;
-    const notaActs  = acts.filter(a=>a.accion==='nota').length;
-
     const diasNom = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
     const dias = Array.from({length:7},(_,i)=>{
       const d = new Date(); d.setDate(d.getDate()-6+i); return d.toISOString().split('T')[0];
     });
+    const acts = adminActividad.filter(a=>String(a.clinica_id)===String(id) && a.fecha>=dias[0]);
+    const logins    = acts.filter(a=>a.accion==='login').length;
+    const pacActs   = acts.filter(a=>a.accion==='paciente').length;
+    const citaActs  = acts.filter(a=>a.accion==='cita').length;
+    const notaActs  = acts.filter(a=>a.accion==='nota').length;
     const porDia = dias.map(f=>({
       f, nom:diasNom[new Date(f+'T12:00:00').getDay()],
       total: acts.filter(a=>a.fecha===f).length
@@ -11051,10 +11208,10 @@ function renderDetallePanel(tab) {
 
     document.getElementById('detalle-panel-actividad').innerHTML = `
       <div class="admin-stat-row" style="margin-bottom:18px">
-        <div class="admin-stat"><div class="admin-stat-icon">🔑</div><div><div class="admin-stat-val">${logins}</div><div class="admin-stat-label">Logins registrados</div></div></div>
-        <div class="admin-stat"><div class="admin-stat-icon">👤</div><div><div class="admin-stat-val">${pacActs}</div><div class="admin-stat-label">Altas de pacientes</div></div></div>
-        <div class="admin-stat"><div class="admin-stat-icon">📅</div><div><div class="admin-stat-val">${citaActs}</div><div class="admin-stat-label">Citas agendadas</div></div></div>
-        <div class="admin-stat"><div class="admin-stat-icon">📝</div><div><div class="admin-stat-val">${notaActs}</div><div class="admin-stat-label">Notas médicas</div></div></div>
+        <div class="admin-stat"><div class="admin-stat-icon">🔑</div><div><div class="admin-stat-val">${logins}</div><div class="admin-stat-label">Logins · 7 días</div></div></div>
+        <div class="admin-stat"><div class="admin-stat-icon">👤</div><div><div class="admin-stat-val">${pacActs}</div><div class="admin-stat-label">Pacientes · 7 días</div></div></div>
+        <div class="admin-stat"><div class="admin-stat-icon">📅</div><div><div class="admin-stat-val">${citaActs}</div><div class="admin-stat-label">Citas · 7 días</div></div></div>
+        <div class="admin-stat"><div class="admin-stat-icon">📝</div><div><div class="admin-stat-val">${notaActs}</div><div class="admin-stat-label">Notas · 7 días</div></div></div>
       </div>
       <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px">Actividad últimos 7 días</div>
       <div style="display:flex;gap:8px;align-items:flex-end;height:110px;padding:0 4px">
@@ -13985,6 +14142,7 @@ async function guardarCliente(irAMascota) {
   }
   setLoading(false);
   if(error) { toast('Error al guardar: ' + error.message, 'error'); return; }
+  if(!editingClienteId) logActivity('cliente');
   toast(editingClienteId ? 'Cliente actualizado ✅' : 'Cliente registrado ✅');
   // closeModal limpia la bandera, así que hay que leerla antes de cerrar.
   const volverAMascota = _clienteDesdeMascota;
@@ -14231,6 +14389,7 @@ async function guardarMascota() {
     error = r.error; mascotaId = r.data?.id || null;
   }
   if(error) { setLoading(false); toast('Error al guardar: ' + error.message, 'error'); return; }
+  if(!editingMascotaId) logActivity('mascota');
 
   // La foto se sube después para poder nombrar el archivo con el id definitivo
   if(_fotoMascotaFile && mascotaId) {
@@ -15079,6 +15238,7 @@ async function guardarVacuna() {
     toast(falta ? 'Falta ejecutar el script de veterinaria en Supabase (tabla vacunas_mascota)' : 'Error al guardar: '+error.message, 'error');
     return;
   }
+  if(!editingVacunaId) logActivity('vacuna');
   toast(editingVacunaId ? 'Vacuna actualizada 💉' : 'Vacuna registrada 💉');
   closeModal('modal-vacuna');
   await loadAll();
@@ -15154,6 +15314,7 @@ async function guardarDesp() {
     toast(falta ? 'Falta ejecutar el script de veterinaria en Supabase (tabla desparasitaciones)' : 'Error al guardar: '+error.message, 'error');
     return;
   }
+  if(!editingDespId) logActivity('desparasitacion');
   toast(editingDespId ? 'Desparasitación actualizada 🪱' : 'Desparasitación registrada 🪱');
   closeModal('modal-desp');
   await loadAll();
@@ -15379,6 +15540,7 @@ async function guardarHosp() {
     toast(falta ? 'Falta ejecutar el script de veterinaria en Supabase (tabla hospitalizaciones)' : 'Error al guardar: '+error.message, 'error');
     return;
   }
+  if(!editingHospId) logActivity('hospitalizacion');
   toast(editingHospId ? 'Ingreso actualizado' : 'Mascota ingresada 🏥');
   closeModal('modal-hosp');
   await loadAll();
@@ -15462,6 +15624,7 @@ async function guardarSeguimiento() {
     toast(falta ? 'Falta ejecutar el script de veterinaria en Supabase (tabla hospitalizacion_seguimiento)' : 'Error: '+error.message, 'error');
     return;
   }
+  logActivity('seguimiento');
   toast('Control registrado 📋');
   document.getElementById('seg-temp').value = '';
   document.getElementById('seg-medicacion').value = '';

@@ -19,7 +19,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js" defer></script>
-<link rel="stylesheet" href="css/styles.css?v=20260906b">
+<link rel="stylesheet" href="css/styles.css?v=20260906c">
 </head>
 <body>
 <script>
@@ -991,21 +991,46 @@
           </div>
         </div>
         <div id="admin-panel-productividad" style="display:none">
-          <div class="card" style="margin-bottom:16px">
+          <div class="card prod-overview" style="margin-bottom:16px">
             <div class="card-header">
-              <h3>📊 Actividad por usuario</h3>
-              <div class="filter-chips">
-                <span class="chip active" id="prod-chip-hoy"    onclick="setProdPeriodo('hoy',this)">Hoy</span>
-                <span class="chip"        id="prod-chip-semana" onclick="setProdPeriodo('semana',this)">Esta semana</span>
-                <span class="chip"        id="prod-chip-mes"    onclick="setProdPeriodo('mes',this)">Este mes</span>
+              <div>
+                <h3>📊 Gestión y productividad clínica</h3>
+                <p class="prod-subtitle">Registros creados, actividad por clínica y uso de la plataforma.</p>
+              </div>
+              <div class="prod-controls">
+                <select id="prod-clinica-filter" aria-label="Filtrar productividad por clínica" onchange="setProdClinica(this.value)">
+                  <option value="todas">Todas las clínicas</option>
+                </select>
+                <div class="filter-chips">
+                  <span class="chip active" id="prod-chip-hoy"    onclick="setProdPeriodo('hoy',this)">Hoy</span>
+                  <span class="chip"        id="prod-chip-semana" onclick="setProdPeriodo('semana',this)">Esta semana</span>
+                  <span class="chip"        id="prod-chip-mes"    onclick="setProdPeriodo('mes',this)">Este mes</span>
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="refrescarProductividad()" title="Actualizar datos">↻ Actualizar</button>
               </div>
             </div>
             <div id="prod-resumen-row" class="stats-grid" style="margin-bottom:18px"></div>
-            <div id="prod-usuarios-list"></div>
+            <div id="prod-data-note" class="prod-data-note"></div>
+            <div class="prod-ranking-grid">
+              <section class="prod-panel">
+                <div class="prod-panel-header"><div><span class="prod-panel-kicker">Comparativo</span><h4>🏥 Productividad por clínica</h4></div><span id="prod-clinicas-count" class="tag tag-blue"></span></div>
+                <div id="prod-clinicas-list"></div>
+              </section>
+              <section class="prod-panel">
+                <div class="prod-panel-header"><div><span class="prod-panel-kicker">Ranking</span><h4>🏆 Usuarios con más registros</h4></div><span id="prod-usuarios-count" class="tag tag-green"></span></div>
+                <div id="prod-usuarios-list"></div>
+              </section>
+            </div>
           </div>
-          <div class="card">
-            <div class="card-header"><h3>📅 Línea de actividad — últimos 7 días</h3></div>
-            <div id="prod-timeline"></div>
+          <div class="prod-secondary-grid">
+            <div class="card">
+              <div class="card-header"><h3>🟢 Última conexión de usuarios</h3><span class="tag tag-gray">Acceso a la plataforma</span></div>
+              <div id="prod-conexiones-list"></div>
+            </div>
+            <div class="card">
+              <div class="card-header"><h3>📅 Actividad — últimos 7 días</h3></div>
+              <div id="prod-timeline"></div>
+            </div>
           </div>
         </div>
         <!-- MIGRACIÓN A SUPABASE AUTH -->
@@ -2663,7 +2688,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260906h" defer></script>
+<script src="js/app.js?v=20260906i" defer></script>
 </body>
 </html>
 
