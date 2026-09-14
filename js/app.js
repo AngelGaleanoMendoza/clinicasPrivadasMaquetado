@@ -1342,8 +1342,8 @@ const GUIAS_MODULOS = {
         target:()=>document.querySelector('#tabla-medicaciones .medicacion-list-item:first-child .actions-cell') || document.getElementById('meds-empty'),
         titulo:'Imprime y administra',
         texto:()=>C.m.length
-          ? 'Desde estas acciones puedes imprimir la receta, editar el tratamiento o eliminarlo.'
-          : 'Cuando registres una medicación tendrás accesos para imprimirla, editarla o eliminarla.',
+          ? 'Desde estas acciones puedes imprimir o descargar la receta en PDF, editar el tratamiento o eliminarlo.'
+          : 'Cuando registres una medicación tendrás accesos para imprimirla, descargarla, editarla o eliminarla.',
       },
     ],
   },
@@ -1358,7 +1358,7 @@ const GUIAS_MODULOS = {
         target:()=>document.querySelector('#tabla-notas .nota-list-item:first-child') || document.getElementById('notas-empty'),
         titulo:'Consulta y gestiona las notas',
         texto:()=>C.n.length
-          ? 'Cada registro muestra paciente, fecha, tipo y estado. Sus acciones permiten imprimir, ver, editar o eliminar la nota.'
+          ? 'Cada registro muestra paciente, fecha, tipo y estado. Sus acciones permiten imprimir, descargar en PDF, ver, editar o eliminar la nota.'
           : 'Las notas clínicas aparecerán aquí después de guardar el primer registro.',
       },
     ],
@@ -2520,6 +2520,7 @@ function renderDetalleP(pid){
       </div>
       <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn" style="background:rgba(255,255,255,.15);color:#fff" onclick="imprimirExpedienteCompleto(${p.id})">🖨️ Imprimir</button>
+        <button class="btn" style="background:rgba(255,255,255,.15);color:#fff" onclick="descargarDocumento(()=>imprimirExpedienteCompleto(${p.id}))" title="Descargar expediente en PDF">⬇️ Descargar</button>
         <button class="btn" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff" onclick="registrarAcudidoPaciente(${p.id})">✅ Paciente acudió</button>
         <button class="btn" style="background:rgba(255,255,255,.15);color:#fff" onclick="openModalPaciente(${p.id})">✏️ Editar</button>
       </div>
@@ -2568,8 +2569,8 @@ function renderDetalleP(pid){
   </div>`;
 
   document.getElementById('tab-meds-p').innerHTML=`<div class="card">
-    <div class="card-header"><h3>💊 Medicaciones</h3><div style="display:flex;gap:8px">${meds.length?`<button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirRecetaPaciente(${p.id})">🖨️ Receta</button>`:''}<button class="btn btn-primary btn-sm" onclick="openModalMedP(${p.id})">+ Nueva</button></div></div>
-    ${meds.length?meds.map(m=>`<div class="med-item"><span style="font-size:22px">💊</span><div class="med-info" style="flex:1"><h4>${m.nombre}</h4><div class="med-dosis">${m.dosis} — ${m.frecuencia} (${m.via})</div><p>${m.inicio?`Del ${formatFecha(m.inicio)} al ${m.fin?formatFecha(m.fin):'indefinido'}`:''}${m.indicaciones?' · '+m.indicaciones:''}</p><small style="color:var(--primary)">${m.prescriptorNombre?'Prescrito por '+escAttr(m.prescriptorNombre):'Receta anterior sin médico asignado'}</small></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">${estadoTag(m.estado)}<div class="actions-cell"><button class="btn btn-secondary btn-sm" onclick="imprimirReceta(${m.id})" title="Imprimir esta receta">🖨️</button><button class="btn btn-secondary btn-sm" onclick="openModalMedicacion(${m.id})">✏️</button><button class="btn btn-danger btn-sm" onclick="eliminarMedicacion(${m.id})">🗑️</button></div></div></div>`).join(''):'<div class="empty-state"><div class="empty-icon">💊</div><p>Sin medicaciones</p></div>'}
+    <div class="card-header doc-header"><h3>💊 Medicaciones</h3><div style="display:flex;gap:8px;flex-wrap:wrap">${meds.length?`<button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirRecetaPaciente(${p.id})">🖨️ Receta</button><button class="btn btn-sm btn-descarga" onclick="descargarDocumento(()=>imprimirRecetaPaciente(${p.id}))" title="Descargar receta en PDF">⬇️ Receta</button>`:''}<button class="btn btn-primary btn-sm" onclick="openModalMedP(${p.id})">+ Nueva</button></div></div>
+    ${meds.length?meds.map(m=>`<div class="med-item"><span style="font-size:22px">💊</span><div class="med-info" style="flex:1"><h4>${m.nombre}</h4><div class="med-dosis">${m.dosis} — ${m.frecuencia} (${m.via})</div><p>${m.inicio?`Del ${formatFecha(m.inicio)} al ${m.fin?formatFecha(m.fin):'indefinido'}`:''}${m.indicaciones?' · '+m.indicaciones:''}</p><small style="color:var(--primary)">${m.prescriptorNombre?'Prescrito por '+escAttr(m.prescriptorNombre):'Receta anterior sin médico asignado'}</small></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">${estadoTag(m.estado)}<div class="actions-cell"><button class="btn btn-secondary btn-sm" onclick="imprimirReceta(${m.id})" title="Imprimir esta receta">🖨️</button><button class="btn btn-secondary btn-sm" onclick="descargarDocumento(()=>imprimirReceta(${m.id}))" title="Descargar esta receta en PDF" aria-label="Descargar esta receta en PDF">⬇️</button><button class="btn btn-secondary btn-sm" onclick="openModalMedicacion(${m.id})">✏️</button><button class="btn btn-danger btn-sm" onclick="eliminarMedicacion(${m.id})">🗑️</button></div></div></div>`).join(''):'<div class="empty-state"><div class="empty-icon">💊</div><p>Sin medicaciones</p></div>'}
   </div>`;
 
   document.getElementById('tab-notas-p').innerHTML=`<div class="card">
@@ -3597,6 +3598,7 @@ function renderMedicaciones(){
         ${estadoTag(x.estado)}
         <div class="actions-cell" style="gap:3px;flex-wrap:nowrap">
           <button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirReceta(${x.id})" title="Imprimir esta receta">🖨️</button>
+          <button class="btn btn-sm btn-descarga" onclick="descargarDocumento(()=>imprimirReceta(${x.id}))" title="Descargar esta receta en PDF" aria-label="Descargar esta receta en PDF">⬇️</button>
           <button class="btn btn-secondary btn-sm" onclick="openModalMedicacion(${x.id})">✏️</button>
           <button class="btn btn-danger btn-sm" onclick="eliminarMedicacion(${x.id})">🗑️</button>
         </div>
@@ -4040,7 +4042,7 @@ function _notaItemHTML(n) {
       <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn btn-secondary btn-sm" onclick="verNota(${n.id})">👁️ Ver</button>
         <button class="btn btn-secondary btn-sm" onclick="editarNota(${n.id})">✏️ Editar</button>
-        ${n.estado!=='borrador'?`<button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})">🖨️</button>`:''}
+        ${n.estado!=='borrador'?`<button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})" title="Imprimir nota">🖨️</button><button class="btn btn-sm btn-descarga" onclick="descargarDocumento(()=>imprimirNota(${n.id}))" title="Descargar nota en PDF" aria-label="Descargar nota en PDF">⬇️</button>`:''}
         <button class="btn btn-danger btn-sm" onclick="eliminarNota(${n.id})">🗑️</button>
       </div>
     </div>
@@ -4098,7 +4100,7 @@ function renderNotas(){
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
         <div><span class="tag tag-blue" style="font-size:10px">${tipoIcon} ${notaTipoLabel(n.tipo)}</span> ${notaEstadoTag(n)}</div>
         <div class="actions-cell" style="gap:3px;flex-wrap:nowrap">
-          ${n.estado!=='borrador'?`<button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})">🖨️</button>`:''}
+          ${n.estado!=='borrador'?`<button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})" title="Imprimir nota">🖨️</button><button class="btn btn-sm btn-descarga" onclick="descargarDocumento(()=>imprimirNota(${n.id}))" title="Descargar nota en PDF" aria-label="Descargar nota en PDF">⬇️</button>`:''}
           <button class="btn btn-secondary btn-sm" onclick="verNota(${n.id})">👁️</button>
           <button class="btn btn-secondary btn-sm" onclick="editarNota(${n.id})">✏️</button>
           <button class="btn btn-danger btn-sm" onclick="eliminarNota(${n.id})">🗑️</button>
@@ -4959,7 +4961,7 @@ function imprimirExamenVisual(n, p, cfg, fmtF, ini2) {
 
 function imprimirNota(id) {
   const n = C.n.find(x => x.id === id); if(!n) return;
-  if(n.estado==='borrador'){ toast('Finaliza la nota antes de imprimirla','warning'); return; }
+  if(n.estado==='borrador'){ toast('Finaliza la nota antes de '+(_salidaDocumento==='descargar'?'descargarla':'imprimirla'),'warning'); return; }
   const p = C.p.find(x => x.id === n.pacienteId);
   const cfg = getClinicaConfig();
   const fmtF = f => { if(!f) return '—'; const d=new Date(f+'T12:00:00'); return d.toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'}); };
@@ -5032,11 +5034,14 @@ function _seleccionarReceta(tipo, sujetoId, meds) {
   if(!grupos.length) { toast('No hay recetas disponibles','info'); return null; }
   if(grupos.length === 1) return grupos[0][0];
   const lista = document.getElementById('receta-picker-lista');
+  // El selector interrumpe la acción: al elegir, se repite con la misma salida.
+  const descargar = _salidaDocumento === 'descargar';
   lista.innerHTML = grupos.map(([clave, items]) => {
     const r = items[0];
-    const accion = tipo === 'mascota' ? `imprimirRecetaMascota(${sujetoId},'${clave}')` : `imprimirRecetaPaciente(${sujetoId},'${clave}')`;
+    const llamada = tipo === 'mascota' ? `imprimirRecetaMascota(${sujetoId},'${clave}')` : `imprimirRecetaPaciente(${sujetoId},'${clave}')`;
+    const accion = descargar ? `descargarDocumento(()=>${llamada})` : llamada;
     return '<button class="btn btn-secondary" style="display:flex;width:100%;text-align:left;align-items:center;justify-content:space-between;margin-bottom:9px;padding:12px" onclick="closeModal(\'modal-receta-picker\');'+accion+'">'
-      + '<span><strong>'+(r.prescriptorNombre?'Dr(a). '+escAttr(r.prescriptorNombre):'Receta anterior')+'</strong><br><small>'+formatFecha(r.fechaEmision||r.inicio)+' · '+items.length+' medicamento'+(items.length===1?'':'s')+'</small></span><span>🖨️</span></button>';
+      + '<span><strong>'+(r.prescriptorNombre?'Dr(a). '+escAttr(r.prescriptorNombre):'Receta anterior')+'</strong><br><small>'+formatFecha(r.fechaEmision||r.inicio)+' · '+items.length+' medicamento'+(items.length===1?'':'s')+'</small></span><span>'+(descargar?'⬇️':'🖨️')+'</span></button>';
   }).join('');
   openModalOverlay('modal-receta-picker');
   return null;
@@ -5110,10 +5115,14 @@ function abrirRecetaDigital({titulo,receta,cfg,sujeto,meds,esVeterinaria=false})
 
   const html=`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escAttr(titulo)}</title><style>
   @page{size:${T.w}mm ${T.h}mm;margin:0}*{box-sizing:border-box}body{margin:0;background:#eef2f7;font-family:"${d.fuente}",sans-serif;color:#172033}.drx-page{--rx:${d.color};width:${T.w}mm;min-height:${T.h}mm;margin:0 auto;background:#fff;padding:${mmY}mm ${mmX}mm ${mmB}mm;display:flex;flex-direction:column}.drx-head{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:15px;border-bottom:3px solid var(--rx);padding-bottom:9px}.drx-brand{display:flex;align-items:center;gap:12px;min-width:0}.drx-brand.logo-right{flex-direction:row-reverse;justify-content:flex-end}.drx-brand.logo-center{justify-content:center;text-align:left}.drx-brand-text{min-width:0}.drx-logo{width:22mm;height:18mm;object-fit:contain;flex:none}.drx-head h1{font-size:${fsTitulo}px;color:var(--rx);margin:0 0 3px;line-height:1.15;overflow-wrap:anywhere}.drx-head h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;margin:0}.drx-head p{font-size:10px;margin:3px 0 0;color:#64748b}.drx-meta{text-align:right;font-size:10px;white-space:nowrap}.drx-meta strong{display:block;font-size:12px;margin-bottom:4px}.drx-grid{display:grid;grid-template-columns:${d.layout==='lateral'?mmSide+'mm 1fr':'1fr'};flex:1}.drx-side{background:color-mix(in srgb,var(--rx) 10%,white);border-right:1px solid color-mix(in srgb,var(--rx) 30%,white);padding:14px 11px;margin-left:-${mmX}mm}.drx-side h3{font-size:10px;text-transform:uppercase;color:var(--rx);letter-spacing:.7px;margin:0 0 12px}.drx-side-item{font-size:10px;margin:10px 0;display:flex;gap:6px}.drx-side-item i{width:7px;height:7px;border:1.5px solid var(--rx);border-radius:50%;flex:none;margin-top:2px}.drx-alert{margin-top:18px;padding:8px;background:#fff;border:1px solid #fecaca;color:#b91c1c;font-size:9px;border-radius:5px}.drx-main{padding:14px ${d.layout==='lateral'?'0 0 13px':'0'};min-width:0}.drx-patient{display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px 12px;padding-bottom:11px;border-bottom:1px solid #cbd5e1}.drx-field label,.drx-section-label{display:block;font-size:8px;font-weight:800;text-transform:uppercase;color:var(--rx);letter-spacing:.5px}.drx-field div{font-size:12px;font-weight:600;padding:4px 0;border-bottom:1px solid #94a3b8;min-height:24px}.drx-field.wide{grid-column:span 2}.drx-dx{margin:13px 0;padding:9px 11px;border-left:4px solid var(--rx);background:#f8fafc}.drx-dx div{font-size:12px;margin-top:3px}.drx-rx-title{font-size:21px;font-family:Georgia,serif;color:var(--rx);margin:12px 0 6px}.drx-med{display:grid;grid-template-columns:25px 1fr;gap:7px;border-bottom:1px solid #dbe3ec;padding:9px 0}.drx-num{width:22px;height:22px;border-radius:50%;background:var(--rx);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800}.drx-med-main strong{font-size:12px}.drx-med-main p{font-size:9.5px;color:#475569;margin:3px 0}.drx-med-data{grid-column:2;display:grid;grid-template-columns:repeat(${colsPos},1fr);gap:5px}.drx-med-data span{font-size:9px}.drx-med-data b{display:block;color:var(--rx);font-size:7px;text-transform:uppercase;margin-bottom:2px}.drx-notes{margin-top:13px;padding:10px;border:1px solid #cbd5e1;border-radius:6px;min-height:45px;font-size:10px;white-space:pre-wrap}.drx-bottom{display:grid;grid-template-columns:1fr ${pxFirma}px;gap:18px;align-items:end;margin-top:22px}.drx-next{font-size:10px;border-bottom:1px solid #64748b;padding-bottom:5px}.drx-sign{text-align:center}.drx-sign-line{border-top:1px solid #334155;padding-top:5px;font-size:11px;font-weight:800}.drx-sign small{display:block;color:#64748b;margin-top:2px}.drx-foot{text-align:center;border-top:1px solid #cbd5e1;padding-top:7px;margin-top:12px;font-size:8px;color:#64748b}@media print{body{background:#fff}.drx-page{margin:0;box-shadow:none;print-color-adjust:exact;-webkit-print-color-adjust:exact}}@media screen{body{padding:14px 10px}.drx-page{box-shadow:0 6px 28px rgba(15,23,42,.18);border-radius:4px}}@media screen and (max-width:${pxAncho + 40}px){.drx-page{width:100%;min-height:0;padding:22px 16px}.drx-grid{grid-template-columns:1fr}.drx-side{margin-left:0;border-right:0;border-bottom:1px solid color-mix(in srgb,var(--rx) 30%,white);border-radius:6px;margin-bottom:4px}.drx-main{padding:14px 0 0}.drx-patient{grid-template-columns:1fr 1fr}.drx-field.wide{grid-column:span 2}.drx-med-data{grid-template-columns:1fr 1fr}.drx-bottom{grid-template-columns:1fr;gap:18px}.drx-sign{text-align:left}}
-  </style></head><body><div class="drx-page"><header class="drx-head"><div class="drx-brand logo-${d.logoPos}">${logo}${marcaTexto}</div><div class="drx-meta"><strong>RECETA MÉDICA</strong><span>${fmt(receta.fechaEmision||receta.inicio||hoy())}</span><br><span>${_numeroReceta(receta)}</span></div></header><div class="drx-grid"><main class="drx-main"><section class="drx-patient"><div class="drx-field wide"><label>${esVeterinaria?'Paciente / Mascota':'Paciente'}</label><div>${escAttr(sujeto.nombre)}</div></div>${campos}</section>${alerta}${d.secciones.diagnostico?`<section class="drx-dx"><span class="drx-section-label">Diagnóstico</span><div>${escAttr(receta.diagnostico||'—')}</div></section>`:''}<div class="drx-rx-title">℞ Prescripción</div>${medHtml}${d.secciones.indicaciones&&receta.recetaNotas?`<section><span class="drx-section-label" style="margin-top:14px">Indicaciones generales</span><div class="drx-notes">${escAttr(receta.recetaNotas)}</div></section>`:''}<div class="drx-bottom">${d.secciones.proximaCita?`<div class="drx-next"><b>Próxima cita:</b> ${fmt(receta.proximaCita)}</div>`:'<div></div>'}<div class="drx-sign">${firma}<div class="drx-sign-line">${escAttr(receta.prescriptorNombre||d.titulo)}</div><small>${escAttr(receta.prescriptorEspecialidad||d.subtitulo)}${d.registro?' · '+escAttr(d.registro):''}</small></div></div></main></div><footer class="drx-foot">${escAttr(d.pie)}</footer></div><script>window.onload=function(){window.print()}<\/script></body></html>`;
-  const w=window.open('','_blank','width=900,height=1100');
-  if(!w){toast('El navegador bloqueó la ventana de impresión','warning');return;}
-  w.document.write(html);w.document.close();
+  </style></head><body><div class="drx-page"><header class="drx-head"><div class="drx-brand logo-${d.logoPos}">${logo}${marcaTexto}</div><div class="drx-meta"><strong>RECETA MÉDICA</strong><span>${fmt(receta.fechaEmision||receta.inicio||hoy())}</span><br><span>${_numeroReceta(receta)}</span></div></header><div class="drx-grid"><main class="drx-main"><section class="drx-patient"><div class="drx-field wide"><label>${esVeterinaria?'Paciente / Mascota':'Paciente'}</label><div>${escAttr(sujeto.nombre)}</div></div>${campos}</section>${alerta}${d.secciones.diagnostico?`<section class="drx-dx"><span class="drx-section-label">Diagnóstico</span><div>${escAttr(receta.diagnostico||'—')}</div></section>`:''}<div class="drx-rx-title">℞ Prescripción</div>${medHtml}${d.secciones.indicaciones&&receta.recetaNotas?`<section><span class="drx-section-label" style="margin-top:14px">Indicaciones generales</span><div class="drx-notes">${escAttr(receta.recetaNotas)}</div></section>`:''}<div class="drx-bottom">${d.secciones.proximaCita?`<div class="drx-next"><b>Próxima cita:</b> ${fmt(receta.proximaCita)}</div>`:'<div></div>'}<div class="drx-sign">${firma}<div class="drx-sign-line">${escAttr(receta.prescriptorNombre||d.titulo)}</div><small>${escAttr(receta.prescriptorEspecialidad||d.subtitulo)}${d.registro?' · '+escAttr(d.registro):''}</small></div></div></main></div><footer class="drx-foot">${escAttr(d.pie)}</footer></div></body></html>`;
+  // Para el PDF se maqueta un poco más ancho que la hoja: así no se activa la
+  // versión de pantalla estrecha y la hoja queda pegada al borde, sin sombra.
+  return _entregarDocumento({
+    titulo, html,
+    hoja:{ancho:T.w, alto:T.h, margen:0, anchoMarco:pxAncho + 60},
+    cssDescarga:'body{padding:0!important;margin:0!important}.drx-page{margin:0!important;box-shadow:none!important;border-radius:0!important}'
+  });
 }
 
 function imprimirRecetaPaciente(pid, recetaClave) {
@@ -6304,6 +6313,7 @@ function renderAtendidos(fecha) {
       ${estadoTag(c.estado)}
       <div class="actions-cell">
         <button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff;white-space:nowrap" onclick="imprimirNotaConsulta(${c.id})">🖨️ Nota</button>
+        <button class="btn btn-sm btn-descarga" style="white-space:nowrap" onclick="descargarDocumento(()=>imprimirNotaConsulta(${c.id}))" title="Descargar nota de consulta en PDF">⬇️ Nota</button>
         <button class="btn btn-primary btn-sm" onclick="verResumenCita(${c.id})">📄 Hoja</button>
         <button class="btn btn-secondary btn-sm" onclick="navigate('paciente-detalle',${c.pacienteId})">👁️</button>
       </div>
@@ -6629,14 +6639,7 @@ async function exportarJSON(){
   try {
     const backup = await _construirBackupClinica();
     const blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json;charset=utf-8'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = _nombreArchivoBackup('json');
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    _descargarArchivo(blob, _nombreArchivoBackup('json'));
     const aviso = backup.advertencias.length ? ` · ${backup.advertencias.length} módulo(s) opcional(es) no disponibles` : '';
     toast(`Backup descargado: ${backup.resumen.pacientes} pacientes${aviso}`, backup.advertencias.length?'warning':'success');
   } catch(error) {
@@ -6711,9 +6714,12 @@ function _sujetoBackupPDF(grupo, indice, veterinario=false) {
 
 async function exportarPDFClinica() {
   if(!_exigeClinica()) return;
-  const w=window.open('','_blank','width=980,height=1100');
-  if(!w){toast('El navegador bloqueó la ventana del PDF','warning');return;}
-  w.document.write('<!doctype html><html><body style="font-family:Arial;padding:40px;color:#475569"><h2>Preparando expedientes…</h2><p>Consultando todos los datos de la clínica.</p></body></html>');
+  // La ventana de impresión se abre antes del primer await para que el
+  // navegador no la bloquee; la descarga no necesita ventana.
+  const descargar=_salidaDocumento==='descargar';
+  const w=descargar?null:window.open('','_blank','width=980,height=1100');
+  if(!descargar&&!w){toast('El navegador bloqueó la ventana del PDF','warning');return;}
+  w?.document.write('<!doctype html><html><body style="font-family:Arial;padding:40px;color:#475569"><h2>Preparando expedientes…</h2><p>Consultando todos los datos de la clínica.</p></body></html>');
   setLoading(true);
   try {
     const b=await _construirBackupClinica();
@@ -6722,15 +6728,16 @@ async function exportarPDFClinica() {
     const usuarios=_seccionBackupPDF('Usuarios de la clínica (sin contraseñas)',b.usuarios);
     const advertencias=b.advertencias.length?`<p class="backup-warning">Respaldo parcial de módulos opcionales: ${escAttr(b.advertencias.join(' · '))}</p>`:'';
     const nombre=escAttr(b.clinica?.nombre||'Clínica');
-    w.document.open();
-    w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Expedientes - ${nombre}</title><style>
+    await _entregarDocumento({titulo:`Expedientes - ${b.clinica?.nombre||'Clínica'}`, ventana:w, descargar,
+      hoja:{ancho:210, alto:297, margen:12},
+      cssDescarga:'body{max-width:none!important;margin:0!important;padding:0!important}.backup-patient{padding-top:2mm!important}.backup-cover{min-height:250mm!important}',
+      html:`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Expedientes - ${nombre}</title><style>
       @page{size:A4;margin:12mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#172033;margin:0;font-size:11px;line-height:1.45}a{color:#075985}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:9px/1.4 Consolas,monospace;margin:0}.backup-cover{min-height:255mm;display:flex;flex-direction:column;justify-content:center;text-align:center;padding:20mm}.backup-cover .mark{font-size:52px}.backup-cover h1{font-size:30px;color:#0f766e;margin:12px 0 4px}.backup-cover h2{font-size:18px;margin:0;color:#334155}.backup-cover .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:32px auto 0;max-width:520px}.backup-cover .summary div{border:1px solid #cbd5e1;border-radius:12px;padding:14px;background:#f8fafc}.backup-cover strong{display:block;font-size:24px;color:#0f766e}.backup-conf{margin:30px auto 0;max-width:500px;color:#b45309}.backup-warning{margin:10px auto 0;max-width:520px;padding:9px;border:1px solid #f59e0b;background:#fffbeb;color:#92400e;border-radius:8px}.backup-patient{break-before:page;padding-top:2mm}.backup-patient>header{border-bottom:3px solid #0f766e;padding:0 0 12px;margin-bottom:14px}.backup-patient>header span{text-transform:uppercase;color:#0f766e;font-size:9px;font-weight:700;letter-spacing:1.2px}.backup-patient>header h2{font-size:23px;margin:3px 0 0}.backup-patient>header p{color:#64748b;margin:2px 0}.backup-section{margin:14px 0}.backup-section h3{font-size:12px;color:#0f766e;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #cbd5e1;padding-bottom:5px;margin:0 0 8px}.backup-section h3 small{float:right;background:#ccfbf1;border-radius:20px;padding:1px 8px}.backup-fields{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}.backup-field{display:grid;grid-template-columns:140px 1fr;gap:8px;padding:5px 7px;border-bottom:1px solid #e2e8f0;break-inside:avoid}.backup-field>span{color:#64748b;font-size:9px;text-transform:uppercase;font-weight:700}.backup-field>div{overflow-wrap:anywhere;white-space:pre-wrap}.backup-record{border:1px solid #e2e8f0;border-radius:7px;padding:8px;margin-bottom:7px;break-inside:avoid}.backup-record-number{display:block;color:#0f766e;margin-bottom:5px}.backup-record .backup-section{margin:10px 0 0}.backup-empty{color:#94a3b8;font-style:italic}.backup-users{break-before:page}@media print{.backup-cover{min-height:250mm}}@media screen{body{max-width:850px;margin:0 auto;padding:24px}.backup-patient{padding-top:24px}}@media(max-width:600px){.backup-cover{padding:10px}.backup-cover .summary,.backup-fields{grid-template-columns:1fr}.backup-field{grid-template-columns:110px 1fr}}
-    </style></head><body><section class="backup-cover"><div class="mark">🏥</div><h1>${nombre}</h1><h2>Respaldo completo de expedientes</h2><p>Generado ${escAttr(new Date(b.generadoEn).toLocaleString('es-NI'))}</p><div class="summary"><div><strong>${b.resumen.pacientes}</strong>Pacientes</div><div><strong>${b.resumen.mascotas}</strong>Mascotas</div><div><strong>${b.resumen.usuarios}</strong>Usuarios</div></div><p class="backup-conf">Documento médico confidencial. Los archivos digitalizados se muestran mediante su enlace.</p>${advertencias}</section>${pacientes}${mascotas}${usuarios?`<div class="backup-users">${usuarios}</div>`:''}<script>window.onload=function(){window.print()}<\/script></body></html>`);
-    w.document.close();
-    toast(`PDF preparado con ${b.resumen.pacientes+b.resumen.mascotas} expediente(s)`);
+    </style></head><body><section class="backup-cover"><div class="mark">🏥</div><h1>${nombre}</h1><h2>Respaldo completo de expedientes</h2><p>Generado ${escAttr(new Date(b.generadoEn).toLocaleString('es-NI'))}</p><div class="summary"><div><strong>${b.resumen.pacientes}</strong>Pacientes</div><div><strong>${b.resumen.mascotas}</strong>Mascotas</div><div><strong>${b.resumen.usuarios}</strong>Usuarios</div></div><p class="backup-conf">Documento médico confidencial. Los archivos digitalizados se muestran mediante su enlace.</p>${advertencias}</section>${pacientes}${mascotas}${usuarios?`<div class="backup-users">${usuarios}</div>`:''}</body></html>`});
+    if(!descargar) toast(`PDF preparado con ${b.resumen.pacientes+b.resumen.mascotas} expediente(s)`);
   } catch(error) {
     console.error('Exportar PDF:',error);
-    w.document.body.innerHTML=`<h2>No se pudo generar el PDF</h2><p>${escAttr(error.message||'Error desconocido')}</p>`;
+    if(w&&!w.closed) w.document.body.innerHTML=`<h2>No se pudo generar el PDF</h2><p>${escAttr(error.message||'Error desconocido')}</p>`;
     toast('No se pudo generar el PDF: '+(error.message||'error desconocido'),'error');
   } finally {
     setLoading(false);
@@ -9255,10 +9262,11 @@ function renderOdontograma(pid) {
     .map(e => `<span style="padding:3px 10px;border-radius:12px;background:${e.color};border:1.5px solid ${e.border};font-size:11px;font-weight:700;color:${e.text}">${e.code?e.code+' · ':''}${e.label}: ${counts[e.key]}</span>`)
     .join('');
   elTab.innerHTML = `<div class="card">
-    <div class="card-header">
+    <div class="card-header doc-header">
       <h3>🦷 Odontograma</h3>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-secondary btn-sm" onclick="imprimirOdontograma(${pid})">🖨️ Imprimir</button>
+        <button class="btn btn-secondary btn-sm" onclick="descargarDocumento(()=>imprimirOdontograma(${pid}))" title="Descargar odontograma en PDF">⬇️ Descargar</button>
         <button class="btn btn-primary btn-sm" onclick="abrirModalOdontograma(${pid})">✏️ Editar</button>
       </div>
     </div>
@@ -9543,9 +9551,10 @@ function renderPeriodontograma(pid) {
     </div>`;
 
   el.innerHTML = `<div class="card">
-    <div class="card-header"><h3>📏 Periodontograma</h3>
-      <div style="display:flex;gap:8px">
+    <div class="card-header doc-header"><h3>📏 Periodontograma</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-secondary btn-sm" onclick="imprimirPeriodontograma(${pid})">🖨️ Imprimir</button>
+        <button class="btn btn-secondary btn-sm" onclick="descargarDocumento(()=>imprimirPeriodontograma(${pid}))" title="Descargar periodontograma en PDF">⬇️ Descargar</button>
         <button class="btn btn-primary btn-sm" onclick="guardarPeriodontograma(${pid})">💾 Guardar</button>
       </div>
     </div>
@@ -9738,6 +9747,7 @@ function _procClinCardHTML(proc, compacto=false) {
     <div class="proc-oft-actions">
       <button class="btn btn-secondary btn-sm" onclick="openModalProcClin(${proc.id})">✏️ Editar</button>
       <button class="btn btn-secondary btn-sm" onclick="imprimirProcedimientoClin(${proc.id})">🖨️ Imprimir</button>
+      <button class="btn btn-secondary btn-sm" onclick="descargarDocumento(()=>imprimirProcedimientoClin(${proc.id}))" title="Descargar nota de procedimiento en PDF">⬇️ Descargar</button>
       <button class="btn btn-danger btn-sm" onclick="eliminarProcedimientoClin(${proc.id})">🗑️</button>
     </div>
   </article>`;
@@ -10148,14 +10158,286 @@ function pdfFooter(cfg) {
 }
 
 function pdfAbrir(titulo, body, cfg) {
-  const w = window.open('','_blank','width=900,height=1100');
-  if(!w) { toast('El navegador bloqueó la ventana de impresión','warning'); return; }
-  w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>${titulo}</title>
+  return _entregarDocumento({
+    titulo,
+    html:`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>${titulo}</title>
     <style>${PDF_CSS}</style></head><body>
     <div class="page">${pdfHeader(cfg)}${body}${pdfFooter(cfg)}</div>
-    <script>window.onload=function(){window.print()}<\/script>
-    </body></html>`);
+    </body></html>`,
+    // Mismo relleno que @media print, que el renderizado a PDF no aplica.
+    cssDescarga:'.page{padding:20px 24px!important}'
+  });
+}
+
+// ════════════════════ DESCARGA DE DOCUMENTOS EN PDF ════════════════════
+// Imprimir y descargar comparten el mismo HTML. Cada impreso entrega su
+// documento a _entregarDocumento(), que abre la ventana de impresión o, si la
+// acción la inició un botón "Descargar", convierte ese HTML en un PDF
+// paginado. Así ningún informe mantiene dos maquetaciones distintas.
+const PDF_LIBRERIAS = [
+  'https://cdn.jsdelivr.net/npm/html2canvas-pro@2.4.3/dist/html2canvas-pro.min.js',
+  'https://cdn.jsdelivr.net/npm/jspdf@4.2.1/dist/jspdf.umd.min.js'
+];
+// Medidas en mm. Carta es el papel habitual de las clínicas (el talonario de
+// receta por defecto es media carta); los impresos que fijan otra hoja la declaran.
+const HOJA_CARTA = { ancho:215.9, alto:279.4, margen:10 };
+const PX_POR_MM = 96 / 25.4;
+// Bloques que no deben quedar partidos entre dos páginas. Los renglones de
+// texto y lo marcado con break-inside:avoid se protegen aparte.
+const PDF_NO_CORTAR = 'tr,img,svg,canvas,h1,h2,h3,h4,li,.kpi,.patient-box,.sig-box,.opt-card,.opt-chip,.bar-row,.section-title,.badge-tipo,.pdf-header,.pdf-contacto,.pdf-footer,.rx-proxima,.drx-med,.drx-field,.drx-sign,.nr,.tb,.ir,.rb';
+let _salidaDocumento = 'imprimir';
+let _pdfEnCurso = false;
+
+// Envoltura de los botones "Descargar": ejecuta la misma función de impresión
+// pero con la salida dirigida a un archivo PDF.
+async function descargarDocumento(accion) {
+  if(_pdfEnCurso) { toast('Ya se está preparando otro PDF, espera un momento','info'); return; }
+  _salidaDocumento = 'descargar';
+  try { await accion(); }
+  finally { _salidaDocumento = 'imprimir'; }
+}
+
+function _entregarDocumento({titulo, html, hoja=HOJA_CARTA, cssDescarga='', ventana=null,
+  opcionesVentana='width=900,height=1100', descargar=_salidaDocumento==='descargar'}) {
+  if(descargar) {
+    if(ventana && !ventana.closed) ventana.close();
+    return _descargarHtmlComoPdf({titulo, html, hoja, cssDescarga});
+  }
+  const w = ventana || window.open('', '_blank', opcionesVentana);
+  if(!w) { toast('El navegador bloqueó la ventana de impresión','warning'); return; }
+  const imprimir = '<script>window.onload=function(){window.print()}<\/script>';
+  const cierre = html.lastIndexOf('</body>');
+  w.document.open();
+  w.document.write(cierre >= 0 ? html.slice(0, cierre) + imprimir + html.slice(cierre) : html + imprimir);
   w.document.close();
+}
+
+function _nombreArchivoPdf(titulo) {
+  const base = String(titulo || '').normalize('NFD').replace(/\p{M}/gu, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 90);
+  return (base || 'documento') + '.pdf';
+}
+
+function _descargarArchivo(blob, nombre) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nombre;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Safari móvil sigue leyendo el blob después del clic: no revocarlo enseguida.
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+// Logo, firmas y fotos se incrustan como data: antes de renderizar. Se piden
+// sin caché porque una copia guardada sin cabeceras CORS dejaría el lienzo
+// bloqueado y el PDF no podría exportarse.
+async function _incrustarImagenesPdf(html) {
+  if(!/<img[^>]+src=["']?https?:/i.test(html)) return html;
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const urls = [...new Set([...doc.images].map(img => img.getAttribute('src')).filter(src => /^https?:/i.test(src || '')))];
+  const incrustadas = new Map();
+  await Promise.all(urls.map(async url => {
+    const corte = new AbortController();
+    const limite = setTimeout(() => corte.abort(), 15000);
+    try {
+      const r = await fetch(url, {mode:'cors', cache:'no-store', signal:corte.signal});
+      if(!r.ok) return;
+      const blob = await r.blob();
+      incrustadas.set(url, await new Promise((listo, fallo) => {
+        const lector = new FileReader();
+        lector.onload = () => listo(lector.result);
+        lector.onerror = fallo;
+        lector.readAsDataURL(blob);
+      }));
+    } catch(_) {
+      // Sin CORS o sin red: se deja la URL y html2canvas lo intenta por su cuenta.
+    } finally {
+      clearTimeout(limite);
+    }
+  }));
+  if(!incrustadas.size) return html;
+  doc.querySelectorAll('img').forEach(img => {
+    const dato = incrustadas.get(img.getAttribute('src'));
+    if(dato) img.setAttribute('src', dato);
+  });
+  return '<!DOCTYPE html>' + doc.documentElement.outerHTML;
+}
+
+// Decide dónde termina cada página. Si el corte natural cae dentro de una fila,
+// firma o renglón, la página termina justo antes de ese bloque, siempre que no
+// quede más del 40% de la hoja en blanco. Los títulos viajan con el inicio de
+// lo que encabezan y se respetan los saltos forzados con break-before/after.
+function _cortesPaginaPdf(win, doc, altoPagina, total) {
+  const bloques = [], saltos = [];
+  let finContenido = 0;
+  const forzado = v => ['page','always','left','right','recto','verso'].includes(v);
+  const proteger = (arriba, abajo) => { if(abajo > arriba && abajo - arriba < altoPagina * 0.8) bloques.push([arriba, abajo]); };
+  // Títulos sueltos: bloque en negrita, de una línea corta y sin elementos
+  // internos (las secciones del expediente son div con estilos en línea).
+  const esTitulo = (el, cs) => el.matches('h1,h2,h3,h4,.section-title,thead')
+    || (el.childElementCount === 0 && ['block','flex'].includes(cs.display) && parseInt(cs.fontWeight, 10) >= 600
+        && el.textContent.trim().length > 0 && el.textContent.trim().length <= 80);
+  doc.body.querySelectorAll('*').forEach(el => {
+    if(el.ownerSVGElement) return;
+    const cs = win.getComputedStyle(el);
+    if(cs.display === 'none') return;
+    const r = el.getBoundingClientRect();
+    if(forzado(cs.breakBefore) || forzado(cs.pageBreakBefore)) saltos.push(r.top);
+    if(forzado(cs.breakAfter) || forzado(cs.pageBreakAfter)) saltos.push(r.bottom);
+    if(cs.breakInside === 'avoid' || cs.pageBreakInside === 'avoid' || el.matches(PDF_NO_CORTAR)) proteger(r.top, r.bottom);
+    if(r.height > 0 && esTitulo(el, cs) && el.nextElementSibling)
+      proteger(r.top, Math.min(r.bottom + 56, el.nextElementSibling.getBoundingClientRect().bottom));
+    // Lo último que se pinta marca el final real: el relleno inferior de la
+    // hoja no debe generar una página en blanco.
+    if(r.height > 0 && (cs.backgroundColor !== 'rgba(0, 0, 0, 0)' || cs.backgroundImage !== 'none'
+      || parseFloat(cs.borderTopWidth) > 0 || parseFloat(cs.borderBottomWidth) > 0 || el.matches('img,svg,canvas,hr')))
+      finContenido = Math.max(finContenido, r.bottom);
+  });
+  const textos = doc.createTreeWalker(doc.body, 4 /* NodeFilter.SHOW_TEXT */);
+  const rango = doc.createRange();
+  while(textos.nextNode()) {
+    if(!textos.currentNode.nodeValue.trim()) continue;
+    rango.selectNodeContents(textos.currentNode);
+    for(const r of rango.getClientRects()) {
+      proteger(r.top, r.bottom);
+      finContenido = Math.max(finContenido, r.bottom);
+    }
+  }
+  bloques.sort((a, b) => a[0] - b[0]);
+  saltos.sort((a, b) => a - b);
+  if(finContenido > 0) total = Math.min(total, Math.ceil(finContenido) + 2);
+
+  const cortes = [];
+  let inicio = 0, primero = 0;
+  while(total - inicio > 2) {
+    let fin = Math.min(inicio + altoPagina, total);
+    const salto = saltos.find(y => y > inicio + 2 && y < fin);
+    if(salto !== undefined) {
+      fin = salto;
+    } else if(fin < total) {
+      const minimo = inicio + altoPagina * 0.6;
+      while(primero < bloques.length && bloques[primero][1] <= inicio) primero++;
+      for(let movido = true; movido;) {
+        movido = false;
+        for(let k = primero; k < bloques.length && bloques[k][0] < fin; k++) {
+          const [arriba, abajo] = bloques[k];
+          if(abajo > fin + 0.5 && arriba >= minimo) { fin = arriba; movido = true; }
+        }
+      }
+    }
+    cortes.push([inicio, fin]);
+    inicio = fin;
+  }
+  return cortes.length ? cortes : [[0, total]];
+}
+
+// hoja: {ancho, alto, margen} en mm. alto:null genera una sola página del alto
+// del contenido (tickets). anchoMarco permite maquetar más ancho que la hoja
+// cuando el documento tiene media queries de pantalla que no deben activarse.
+async function _descargarHtmlComoPdf({titulo, html, hoja=HOJA_CARTA, cssDescarga=''}) {
+  if(_pdfEnCurso) { toast('Ya se está preparando otro PDF, espera un momento','info'); return; }
+  _pdfEnCurso = true;
+  const aviso = document.querySelector('#loading-overlay .load-text-op');
+  const avisoPrevio = aviso?.textContent;
+  const avance = texto => { if(aviso) aviso.textContent = texto; };
+  const marco = document.createElement('iframe');
+  setLoading(true);
+  avance('Preparando PDF…');
+  try {
+    const anchoPx = Math.round((hoja.ancho - 2 * hoja.margen) * PX_POR_MM);
+    const altoPagina = hoja.alto ? (hoja.alto - 2 * hoja.margen) * PX_POR_MM : 0;
+    const anchoMarco = Math.max(hoja.anchoMarco || 0, anchoPx);
+    // Un iframe aislado: los estilos del impreso no tocan la app ni al revés.
+    marco.setAttribute('aria-hidden', 'true');
+    marco.tabIndex = -1;
+    marco.style.cssText = `position:fixed;top:0;left:${-anchoMarco - 200}px;width:${anchoMarco}px;height:${Math.ceil(altoPagina) || 80}px;border:0;pointer-events:none`;
+    const extras = `<style>html,body{background:#fff!important}${cssDescarga}</style>`
+      + PDF_LIBRERIAS.map(src => `<script src="${src}"><\/script>`).join('');
+    const fuente = await _incrustarImagenesPdf(html);
+    const cabecera = fuente.search(/<\/head>/i);
+    marco.srcdoc = cabecera >= 0 ? fuente.slice(0, cabecera) + extras + fuente.slice(cabecera) : extras + fuente;
+    await new Promise((listo, fallo) => {
+      const limite = setTimeout(() => fallo(new Error('el documento tardó demasiado en cargar')), 45000);
+      marco.onload = () => { clearTimeout(limite); listo(); };
+      document.body.appendChild(marco);
+    });
+    const win = marco.contentWindow, doc = marco.contentDocument;
+    if(typeof win.html2canvas !== 'function' || !win.jspdf?.jsPDF)
+      throw new Error('no se pudieron cargar las herramientas de PDF, revisa la conexión');
+    if(doc.fonts?.ready) await doc.fonts.ready;
+
+    const total = Math.ceil(doc.documentElement.scrollHeight);
+    const cortes = hoja.alto ? _cortesPaginaPdf(win, doc, altoPagina, total) : [[0, total]];
+    const escala = cortes.length > 24 ? 1.5 : 2;
+    // Los navegadores limitan el tamaño de un canvas (iOS ronda los 16 MP), así
+    // que se renderiza por lotes de páginas que caben en ese límite.
+    const movil = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
+    const maxLote = Math.floor(Math.min((movil ? 16e6 : 48e6) / (anchoPx * escala), 30000) / escala);
+    const tramos = [];
+    cortes.forEach(([desde, hasta], pagina) => {
+      for(let y = desde; y < hasta; y += maxLote) tramos.push({pagina, desde:y, hasta:Math.min(hasta, y + maxLote), dentro:y - desde});
+    });
+
+    const altoHoja = hoja.alto || (total / PX_POR_MM + 2 * hoja.margen);
+    const orientacion = hoja.ancho > altoHoja ? 'landscape' : 'portrait';
+    const pdf = new win.jspdf.jsPDF({unit:'mm', format:[hoja.ancho, altoHoja], orientation:orientacion, compress:true});
+    pdf.setProperties({title:titulo, creator:'Lumea Med'});
+    // Las páginas son imágenes: los enlaces (p. ej. archivos digitalizados) se
+    // vuelven a crear encima para que sigan abriéndose desde el PDF.
+    const enlaces = [...doc.querySelectorAll('a[href]')]
+      .filter(a => /^(https?:|mailto:|tel:)/i.test(a.getAttribute('href')))
+      .flatMap(a => [...a.getClientRects()].map(r => ({url:a.href, r})));
+    let paginaActual = 0;
+    for(let i = 0; i < tramos.length;) {
+      let j = i;
+      while(j + 1 < tramos.length && tramos[j + 1].hasta - tramos[i].desde <= maxLote) j++;
+      const loteDesde = tramos[i].desde;
+      avance(cortes.length > 1 ? `Generando PDF… página ${tramos[j].pagina + 1} de ${cortes.length}` : 'Generando PDF…');
+      const lienzo = await win.html2canvas(doc.documentElement, {
+        scale:escala, useCORS:true, backgroundColor:'#ffffff', logging:false,
+        x:0, y:loteDesde, width:anchoPx, height:Math.ceil(tramos[j].hasta - loteDesde),
+        windowWidth:anchoMarco, windowHeight:marco.clientHeight, scrollX:0, scrollY:0
+      });
+      for(let k = i; k <= j; k++) {
+        const t = tramos[k];
+        const alto = Math.round((t.hasta - t.desde) * escala);
+        if(alto < 1) continue;
+        if(t.pagina > paginaActual) { pdf.addPage([hoja.ancho, altoHoja], orientacion); paginaActual = t.pagina; }
+        const recorte = doc.createElement('canvas');
+        recorte.width = lienzo.width;
+        recorte.height = alto;
+        const ctx = recorte.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, recorte.width, alto);
+        ctx.drawImage(lienzo, 0, Math.round((t.desde - loteDesde) * escala), lienzo.width, alto, 0, 0, lienzo.width, alto);
+        // A escala 2, calidad 0.8 se ve igual que 0.92 y pesa un 30% menos: importa
+        // al compartir por WhatsApp y en el respaldo de expedientes de toda la clínica.
+        pdf.addImage(recorte.toDataURL('image/jpeg', 0.8), 'JPEG', hoja.margen, hoja.margen + t.dentro / PX_POR_MM,
+          hoja.ancho - 2 * hoja.margen, alto / escala / PX_POR_MM);
+        recorte.width = recorte.height = 0;
+        enlaces.forEach(({url, r}) => {
+          if(r.width > 0 && r.top >= t.desde - 1 && r.bottom <= t.hasta + 1)
+            pdf.link(hoja.margen + r.left / PX_POR_MM, hoja.margen + (t.dentro + r.top - t.desde) / PX_POR_MM,
+              r.width / PX_POR_MM, r.height / PX_POR_MM, {url});
+        });
+      }
+      lienzo.width = lienzo.height = 0;
+      i = j + 1;
+    }
+    const nombre = _nombreArchivoPdf(titulo);
+    _descargarArchivo(new Blob([pdf.output('arraybuffer')], {type:'application/pdf'}), nombre);
+    toast('PDF descargado: ' + escAttr(nombre));
+  } catch(error) {
+    console.error('Descargar PDF:', error);
+    toast('No se pudo generar el PDF: ' + escAttr(error.message || 'error desconocido') + '. Puedes usar Imprimir → Guardar como PDF.', 'error');
+  } finally {
+    marco.remove();
+    if(aviso) aviso.textContent = avisoPrevio;
+    setLoading(false);
+    _pdfEnCurso = false;
+  }
 }
 
 // ════════════════════ ESTADÍSTICAS ════════════════════
@@ -11898,7 +12180,7 @@ async function restablecerPasswordAdmin(id, nombre) {
 }
 
 // ════════════════════ ESTADÍSTICAS ════════════════════
-function descargarPDFEstadisticas() {
+function imprimirReporteEstadisticas() {
   const cfg = getClinicaConfig();
   let titulo='', citas=[], periodo='';
   if(estTab==='dia'){
@@ -11970,7 +12252,7 @@ function descargarPDFEstadisticas() {
   pdfAbrir(titulo+' — '+periodo, body, cfg);
 }
 
-function descargarPDFInventario() {
+function imprimirReporteInventario() {
   const cfg = getClinicaConfig();
   const now = new Date();
   const mesActual = hoy().slice(0,7);
@@ -12325,7 +12607,7 @@ function renderResumenFinanzas() {
   }
 }
 
-function descargarPDFResumenFinanzas() {
+function imprimirResumenFinanzas() {
   const cfg = getClinicaConfig();
   const {from, to} = getFinDateRange();
   const periodoLabel = {
@@ -12503,7 +12785,8 @@ function renderFacturasList() {
         <span class="tag ${estadoTag(f.estado)}">${f.estado}</span>
         <div class="actions-cell" style="gap:4px">
           ${esPend?`<button class="btn btn-sm btn-primary" onclick="pagarFactura(${f.id})" title="Marcar como pagada">✅</button>`:''}
-          <button class="btn btn-sm btn-secondary" onclick="verFacturaPDF(${f.id})" title="Ver PDF">🖨️</button>
+          <button class="btn btn-sm btn-secondary" onclick="verFacturaPDF(${f.id})" title="Imprimir factura">🖨️</button>
+          <button class="btn btn-sm btn-secondary" onclick="descargarDocumento(()=>verFacturaPDF(${f.id}))" title="Descargar factura en PDF" aria-label="Descargar factura en PDF">⬇️</button>
           ${esPend?`<button class="btn btn-sm btn-danger" onclick="anularFactura(${f.id})" title="Anular factura">❌</button>`:''}
         </div>
       </div>
@@ -13131,7 +13414,8 @@ function filtrarExpedientes(q) {
           <td>${estadoTag}</td>
           <td style="text-align:right">
             <button class="btn btn-secondary btn-sm" onclick="navigate('paciente-detalle',${p.id})" style="margin-right:6px">👁 Ver</button>
-            <button class="btn btn-primary btn-sm" onclick="renderExpedienteHistorialPDF(${p.id})">📥 PDF</button>
+            <button class="btn btn-secondary btn-sm" onclick="renderExpedienteHistorialPDF(${p.id})" title="Imprimir historial" style="margin-right:6px">🖨️</button>
+            <button class="btn btn-primary btn-sm" onclick="descargarDocumento(()=>renderExpedienteHistorialPDF(${p.id}))" title="Descargar historial en PDF">⬇️ PDF</button>
           </td>
         </tr>`;
       }).join('')}</tbody>
@@ -13607,8 +13891,12 @@ function imprimirTicketVentaFarma(v, existingWin) {
       <td class="r b">${fmtC(i.precio * i.cantidad)}</td>
     </tr>`).join('');
 
-  const w = existingWin || window.open('', '_blank', 'width=680,height=860');
-  w.document.write(`<!DOCTYPE html><html lang="es"><head>
+  // En PDF el ticket ocupa una sola hoja del alto de su contenido, con el ancho
+  // del recibo (560 px) en lugar de una carta casi vacía.
+  return _entregarDocumento({
+    titulo:`Ticket ${v.numero}`, ventana:existingWin, opcionesVentana:'width=680,height=860',
+    hoja:{ancho:160, alto:null, margen:6},
+    html:`<!DOCTYPE html><html lang="es"><head>
 <meta charset="UTF-8"><title>Ticket ${v.numero}</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
@@ -13644,7 +13932,7 @@ td{padding:6px 8px;border-bottom:1px solid #F8FAFC}
     <div class="ti">Ticket de Venta</div>
   </div>
   <div class="nr">
-    <div><div class="nl">N de Venta</div><div class="nv">${v.numero}</div></div>
+    <div><div class="nl">N.º de venta</div><div class="nv">${v.numero}</div></div>
     <div><div class="fv">${v.fecha}</div><div class="fh">${v.hora}</div></div>
   </div>
   <table>
@@ -13659,17 +13947,16 @@ td{padding:6px 8px;border-bottom:1px solid #F8FAFC}
     <div class="tv">${fmtC(v.total)}</div>
   </div>
   ${v.cliente ? `<div class="ir"><span>Cliente:</span><span><strong>${v.cliente}</strong></span></div>` : ''}
-  <div class="ir"><span>Metodo de pago:</span><span>${metIcon} ${metLabel}</span></div>
+  <div class="ir"><span>Método de pago:</span><span>${metIcon} ${metLabel}</span></div>
   <div class="ir"><span>Atendido por:</span><span>${currentUser?.name || '--'}</span></div>
-  ${v.esReceta ? `<div class="rb"><strong>Receta medica</strong>
-    ${v.doctor ? `<div>Medico: ${v.doctor}</div>` : ''}
+  ${v.esReceta ? `<div class="rb"><strong>Receta médica</strong>
+    ${v.doctor ? `<div>Médico: ${v.doctor}</div>` : ''}
     ${v.pacReceta ? `<div>Paciente: ${v.pacReceta}</div>` : ''}
   </div>` : ''}
-  <div class="ft">Gracias por su compra! - ${cn} - ${new Date().toLocaleString('es-ES')}</div>
+  <div class="ft">¡Gracias por su compra! · ${cn} · ${new Date().toLocaleString('es-ES')}</div>
 </div>
-<script>window.onload=function(){window.print()}<\/script>
-</body></html>`);
-  w.document.close();
+</body></html>`
+  });
 }
 
 function reimprimirVentaFarma(finId) {
@@ -13731,7 +14018,7 @@ function renderFarmaVentas() {
       <td>${metIcon[v.metodoPago]||''} ${v.metodoPago||'—'}</td>
       <td>${esR ? '<span class="tag tag-blue">Receta</span>' : '<span class="tag tag-gray">Directa</span>'}</td>
       <td style="font-weight:700;color:var(--primary)">${fmtC(v.monto)}</td>
-      <td><button class="btn btn-secondary btn-sm" onclick="reimprimirVentaFarma(${v.id})" title="Imprimir ticket">🖨️</button></td>
+      <td><div class="actions-cell" style="flex-wrap:nowrap"><button class="btn btn-secondary btn-sm" onclick="reimprimirVentaFarma(${v.id})" title="Imprimir ticket">🖨️</button><button class="btn btn-secondary btn-sm" onclick="descargarDocumento(()=>reimprimirVentaFarma(${v.id}))" title="Descargar ticket en PDF" aria-label="Descargar ticket en PDF">⬇️</button></div></td>
     </tr>`;
   }).join('');
   const total = ventas.reduce((s, x) => s + Number(x.monto || 0), 0);
@@ -13869,7 +14156,7 @@ function renderFarmaEstadisticas() {
             <td>${metIcon[v.metodoPago]||''} ${v.metodoPago||'—'}</td>
             <td>${esR ? '<span class="tag tag-blue">Receta</span>' : '<span class="tag tag-gray">Directa</span>'}</td>
             <td style="font-weight:700;color:#15803D">${fmtC(v.monto)}</td>
-            <td><button class="btn btn-secondary btn-sm" onclick="reimprimirVentaFarma(${v.id})" title="Imprimir ticket">🖨️</button></td>
+            <td><div class="actions-cell" style="flex-wrap:nowrap"><button class="btn btn-secondary btn-sm" onclick="reimprimirVentaFarma(${v.id})" title="Imprimir ticket">🖨️</button><button class="btn btn-secondary btn-sm" onclick="descargarDocumento(()=>reimprimirVentaFarma(${v.id}))" title="Descargar ticket en PDF" aria-label="Descargar ticket en PDF">⬇️</button></div></td>
           </tr>`;
         }).join('');
   }
@@ -13940,7 +14227,7 @@ function renderFarmaEstadisticas() {
     </div>`).join('');
 }
 
-function descargarPDFFarmacia() {
+function imprimirReporteFarmacia() {
   const cfg = getClinicaConfig();
   const { label, fn } = getFarmaPeriodoFiltro();
   const ventas    = C.fin.filter(x => fn(x) && x.categoria === 'farmacia' && x.tipo === 'ingreso');
@@ -14621,9 +14908,9 @@ function renderDetalleMascota(mid) {
 
   const medsMascota = C.m.filter(x => x.mascotaId === mid);
   document.getElementById('mtab-recetas').innerHTML = `<div class="card">
-    <div class="card-header"><h3>💊 Medicaciones</h3>
+    <div class="card-header doc-header"><h3>💊 Medicaciones</h3>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        ${medsMascota.length?`<button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirRecetaMascota(${mid})">🖨️ Recetas</button>`:''}
+        ${medsMascota.length?`<button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirRecetaMascota(${mid})">🖨️ Recetas</button><button class="btn btn-sm btn-descarga" onclick="descargarDocumento(()=>imprimirRecetaMascota(${mid}))" title="Descargar receta en PDF">⬇️ Recetas</button>`:''}
         <button class="btn btn-primary btn-sm" onclick="openModalMedMascota(${mid})">+ Nueva</button>
       </div>
     </div>
@@ -14640,6 +14927,7 @@ function renderDetalleMascota(mid) {
           ${estadoTag(x.estado)}
           <div class="actions-cell">
             <button class="btn btn-secondary btn-sm" onclick="imprimirReceta(${x.id})" title="Imprimir esta receta">🖨️</button>
+            <button class="btn btn-secondary btn-sm" onclick="descargarDocumento(()=>imprimirReceta(${x.id}))" title="Descargar esta receta en PDF" aria-label="Descargar esta receta en PDF">⬇️</button>
             <button class="btn btn-secondary btn-sm" onclick="openModalMedicacion(${x.id})">✏️</button>
             <button class="btn btn-danger btn-sm" onclick="eliminarMedicacion(${x.id})">🗑️</button>
           </div>
@@ -14675,9 +14963,9 @@ function renderDetalleMascota(mid) {
 
   document.getElementById('mtab-vacunas').innerHTML = `
   <div class="card">
-    <div class="card-header"><h3>💉 Vacunas</h3>
+    <div class="card-header doc-header"><h3>💉 Vacunas</h3>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        ${(vacs.length||desps.length)?`<button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirCarnetVacunas(${mid})">🖨️ Carnet</button>`:''}
+        ${(vacs.length||desps.length)?`<button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirCarnetVacunas(${mid})">🖨️ Carnet</button><button class="btn btn-sm btn-descarga" onclick="descargarDocumento(()=>imprimirCarnetVacunas(${mid}))" title="Descargar carnet en PDF">⬇️ Carnet</button>`:''}
         <button class="btn btn-primary btn-sm" onclick="openModalVacuna(${mid})">+ Vacuna</button>
       </div>
     </div>

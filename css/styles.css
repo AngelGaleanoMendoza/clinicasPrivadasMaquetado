@@ -154,6 +154,30 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 .btn-danger{background:linear-gradient(135deg,#EF4444,#DC2626);color:#fff}
 .btn-danger:hover{box-shadow:0 4px 12px rgba(239,68,68,.35);transform:translateY(-1px)}
 .btn-sm{padding:6px 12px;font-size:12px;border-radius:8px}
+/* Descargar en PDF: acompaña a los botones morados de imprimir sin competir con ellos */
+.btn-descarga{background:rgba(124,58,237,.08);color:#6D28D9;border:1.5px solid rgba(124,58,237,.32)}
+.btn-descarga:hover{background:rgba(124,58,237,.15);border-color:#7C3AED}
+body.dark .btn-descarga{background:rgba(167,139,250,.12);color:#C4B5FD;border-color:rgba(167,139,250,.35)}
+/* Pareja Imprimir + Descargar de los reportes: se mantiene junta y envuelve en pantallas estrechas */
+.doc-acciones{display:inline-flex;gap:8px;flex-wrap:wrap;align-items:center}
+.doc-acciones-centro{justify-content:center}
+@media(max-width:560px){
+  .card-header>.doc-acciones,.card-header.doc-header>div{width:100%}
+  .card-header>.doc-acciones .btn,.card-header.doc-header>div .btn{flex:1 1 auto;justify-content:center}
+  .card-header.doc-header>h3{flex-basis:100%}
+}
+/* Listas de notas y recetas: con imprimir + descargar ya no caben las acciones junto al
+   nombre en un teléfono; etiquetas y botones bajan a su propia línea */
+@media(max-width:600px){
+  .nota-list-item,.medicacion-list-item{flex-wrap:wrap;row-gap:8px!important}
+  #tab-meds-p .med-item,#mtab-recetas .med-item{flex-wrap:wrap}
+  #tab-meds-p .med-item>div:last-child,#mtab-recetas .med-item>div:last-child{width:100%;flex-direction:row!important;align-items:center!important;justify-content:space-between}
+  /* Atendidos por día: hora, avatar y nombre arriba; estado y acciones (nota, descarga, hoja) abajo */
+  .atendido-item{flex-wrap:wrap;row-gap:10px}
+  .atendido-item .atendido-info{flex:1 1 calc(100% - 120px)}
+  .atendido-item>.actions-cell{margin-left:auto;justify-content:flex-end}
+  .nota-list-item>div:last-child,.medicacion-list-item>div:last-child{width:100%;flex-direction:row!important;align-items:center!important;justify-content:space-between;flex-wrap:wrap;gap:6px!important}
+}
 .btn-ghost{background:transparent;border:1.5px solid var(--border);color:var(--text-light);padding:7px 10px;border-radius:8px;cursor:pointer;transition:all .2s;font-size:14px}
 .btn-ghost:hover{background:var(--bg);color:var(--text)}
 

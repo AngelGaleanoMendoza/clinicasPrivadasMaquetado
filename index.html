@@ -22,7 +22,7 @@
 <!-- Lectura local de machotes. El archivo se procesa en el navegador antes de
      guardarlo; Mammoth extrae DOCX y PDF.js se carga al elegir un PDF. -->
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js" defer></script>
-<link rel="stylesheet" href="css/styles.css?v=20260913a">
+<link rel="stylesheet" href="css/styles.css?v=20260914a">
 </head>
 <body>
 <script>
@@ -564,7 +564,7 @@
               <p class="text-light" style="text-align:center;padding:20px">Llena los datos y guarda para ver la vista previa en las notas de consulta.</p>
             </div>
             <div style="margin-top:14px">
-              <p class="text-light" style="font-size:12px">💡 Para imprimir una nota de consulta completa: ve a <strong>Atendidos por Día</strong> → botón <strong>🖨️ Nota</strong></p>
+              <p class="text-light" style="font-size:12px">💡 Para imprimir o descargar una nota de consulta completa: ve a <strong>Atendidos por Día</strong> → botones <strong>🖨️ Nota</strong> o <strong>⬇️ Nota</strong></p>
             </div>
           </div>
         </div>
@@ -721,7 +721,10 @@
                 <span class="chip" onclick="setFarmaEstPeriodo('semana',this)">Esta semana</span>
                 <span class="chip" onclick="setFarmaEstPeriodo('anio',this)">Este año</span>
               </div>
-              <button class="btn btn-primary btn-sm" onclick="descargarPDFFarmacia()">⬇️ Descargar PDF</button>
+              <div class="doc-acciones">
+                <button class="btn btn-secondary btn-sm" onclick="imprimirReporteFarmacia()">🖨️ Imprimir</button>
+                <button class="btn btn-primary btn-sm" onclick="descargarDocumento(imprimirReporteFarmacia)">⬇️ Descargar PDF</button>
+              </div>
             </div>
           </div>
           <div class="stats-grid" style="margin-bottom:18px">
@@ -762,7 +765,10 @@
         <div class="card" style="margin-bottom:18px">
           <div class="card-header">
             <h3>📈 Estadísticas de Pacientes Atendidos</h3>
-            <button class="btn btn-primary btn-sm" onclick="descargarPDFEstadisticas()">⬇️ Descargar PDF</button>
+            <div class="doc-acciones">
+              <button class="btn btn-secondary btn-sm" onclick="imprimirReporteEstadisticas()">🖨️ Imprimir</button>
+              <button class="btn btn-primary btn-sm" onclick="descargarDocumento(imprimirReporteEstadisticas)">⬇️ Descargar PDF</button>
+            </div>
           </div>
           <div class="tabs" style="margin-bottom:0">
             <button class="tab active" id="tab-est-dia"    onclick="switchEstTab('dia')">📅 Diario</button>
@@ -862,7 +868,7 @@
 
         <div id="inv-panel-reportes" style="display:none">
           <div class="card" style="margin-bottom:16px">
-            <div class="card-header"><h3>📈 Período</h3><button class="btn btn-primary btn-sm" onclick="descargarPDFInventario()">⬇️ Descargar PDF</button></div>
+            <div class="card-header"><h3>📈 Período</h3><div class="doc-acciones"><button class="btn btn-secondary btn-sm" onclick="imprimirReporteInventario()">🖨️ Imprimir</button><button class="btn btn-primary btn-sm" onclick="descargarDocumento(imprimirReporteInventario)">⬇️ Descargar PDF</button></div></div>
             <div class="tabs" style="margin-bottom:16px">
               <button class="tab active" id="tab-rep-dia"    onclick="switchRepTab('dia')">📅 Diario</button>
               <button class="tab"        id="tab-rep-semana" onclick="switchRepTab('semana')">📆 Semanal</button>
@@ -879,14 +885,17 @@
         <div class="card" style="margin-bottom:18px">
           <div class="card-header">
             <h3>💰 Módulo de Finanzas</h3>
-            <div style="display:flex;gap:8px;align-items:center">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
               <div class="filter-chips" id="fin-periodo-chips">
                 <span class="chip" onclick="setFinPeriodo('hoy',this)">Hoy</span>
                 <span class="chip active" onclick="setFinPeriodo('mes',this)">Este mes</span>
                 <span class="chip" onclick="setFinPeriodo('semana',this)">Esta semana</span>
                 <span class="chip" onclick="setFinPeriodo('anio',this)">Este año</span>
               </div>
-              <button id="btn-pdf-resumen-fin" class="btn btn-primary btn-sm" onclick="descargarPDFResumenFinanzas()" style="display:none">⬇️ PDF Resumen</button>
+              <div id="btn-pdf-resumen-fin" class="doc-acciones" style="display:none">
+                <button class="btn btn-secondary btn-sm" onclick="imprimirResumenFinanzas()" title="Imprimir resumen">🖨️ Resumen</button>
+                <button class="btn btn-primary btn-sm" onclick="descargarDocumento(imprimirResumenFinanzas)" title="Descargar resumen en PDF">⬇️ PDF Resumen</button>
+              </div>
             </div>
           </div>
           <div class="tabs" style="margin-bottom:0">
@@ -1070,7 +1079,10 @@
             <div class="export-box">
               <div class="export-icon">📄</div><h3>Expedientes en PDF</h3>
               <p>Genera un documento legible, con una sección independiente para cada paciente.</p>
-              <button class="btn btn-secondary" onclick="exportarPDFClinica()">🖨️ Generar PDF</button>
+              <div class="doc-acciones doc-acciones-centro">
+                <button class="btn btn-secondary" onclick="exportarPDFClinica()">🖨️ Imprimir</button>
+                <button class="btn btn-primary" onclick="descargarDocumento(exportarPDFClinica)">⬇️ Descargar PDF</button>
+              </div>
             </div>
             <div class="export-box">
               <div class="export-icon">📥</div><h3>Importar Backup</h3>
@@ -2474,7 +2486,7 @@
       <label style="font-size:12px;font-weight:600;color:var(--text-light)">Observaciones</label>
       <textarea id="odo-obs" placeholder="Notas del odontograma..." style="width:100%;min-height:52px;margin-top:4px;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:13px;background:var(--card);color:var(--text);resize:vertical;box-sizing:border-box"></textarea>
     </div>
-    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-odontograma')">Cancelar</button><button class="btn btn-secondary" onclick="imprimirOdontograma(_odoCurrentPid)">🖨️ Imprimir</button><button class="btn btn-primary" onclick="guardarOdontograma()">💾 Guardar</button></div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-odontograma')">Cancelar</button><button class="btn btn-secondary" onclick="imprimirOdontograma(_odoCurrentPid)">🖨️ Imprimir</button><button class="btn btn-secondary" onclick="descargarDocumento(()=>imprimirOdontograma(_odoCurrentPid))" title="Descargar odontograma en PDF">⬇️ Descargar</button><button class="btn btn-primary" onclick="guardarOdontograma()">💾 Guardar</button></div>
   </div>
 </div>
 
@@ -2595,6 +2607,7 @@
     <div id="ver-nota-content"></div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-ver-nota')">Cerrar</button>
+      <button class="btn btn-secondary" onclick="descargarDocumento(()=>imprimirNota(currentNotaId))" title="Descargar nota en PDF">⬇️ Descargar</button>
       <button class="btn btn-primary" onclick="imprimirNota(currentNotaId)">🖨️ Imprimir Nota</button>
     </div>
   </div>
@@ -2617,6 +2630,7 @@
     <div id="resumen-cita-content"></div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-resumen-cita')">Cerrar</button>
+      <button class="btn btn-secondary" onclick="descargarDocumento(()=>imprimirNotaConsulta(currentResumenCitaId))" title="Descargar nota de consulta en PDF">⬇️ Descargar</button>
       <button class="btn btn-primary" onclick="imprimirNotaConsulta(currentResumenCitaId)">🖨️ Imprimir Nota</button>
     </div>
   </div>
@@ -2691,7 +2705,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260913a" defer></script>
+<script src="js/app.js?v=20260914a" defer></script>
 </body>
 </html>
 
