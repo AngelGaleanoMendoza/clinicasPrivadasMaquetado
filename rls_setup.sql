@@ -991,3 +991,24 @@ BEGIN
     EXECUTE 'CREATE TRIGGER trg_historial_proc_clinicos AFTER INSERT OR UPDATE OR DELETE ON public.procedimientos_clinicos FOR EACH ROW EXECUTE FUNCTION public.registrar_historial_expediente()';
   END IF;
 END $$;
+
+-- ============================================================
+-- PASO 14: Balance de reparto por servicio (módulos alquilados)
+-- ============================================================
+-- Detalle y comentarios en migracion_balance_reparto.sql.
+CREATE TABLE IF NOT EXISTS public.reparto_servicios (
+  id BIGSERIAL PRIMARY KEY,
+  clinica_id BIGINT NOT NULL REFERENCES public.clinicas(id) ON DELETE CASCADE,
+  tipo TEXT NOT NULL,
+  porcentaje_clinica NUMERIC(5,2) NOT NULL
+    CHECK (porcentaje_clinica >= 0 AND porcentaje_clinica <= 100),
+  actualizado_por TEXT,
+  actualizado_en TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (clinica_id, tipo)
+);
+ALTER TABLE public.factura_items ADD COLUMN IF NOT EXISTS porcentaje_clinica NUMERIC(5,2);
+ALTER TABLE public.reparto_servicios ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "reparto_servicios_clinica" ON public.reparto_servicios;
+CREATE POLICY "reparto_servicios_clinica" ON public.reparto_servicios
+  USING (is_superadmin() OR clinica_id = get_my_clinica_id())
+  WITH CHECK (is_superadmin() OR clinica_id = get_my_clinica_id());

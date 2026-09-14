@@ -163,7 +163,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
 // ════════════════════ CACHE LOCAL ════════════════════
 // cli/mas/expMas/vac/desp/hosp son las tablas veterinarias; quedan vacías en clínicas humanas
-const C = { p:[], c:[], m:[], n:[], plantillasNota:[], e:[], historial:[], prof:[], inv:[], mov:[], fin:[], fact:[], factItems:[], procClin:[], hd:[], odo:[], perio:[], cli:[], mas:[], expMas:[], vac:[], desp:[], hosp:[] };
+const C = { p:[], c:[], m:[], n:[], plantillasNota:[], e:[], historial:[], prof:[], inv:[], mov:[], fin:[], fact:[], factItems:[], reparto:[], procClin:[], hd:[], odo:[], perio:[], cli:[], mas:[], expMas:[], vac:[], desp:[], hosp:[] };
 let currentClinicaId = null;
 let currentClinica   = null;
 
@@ -364,7 +364,8 @@ const fromOdo  = r => ({ id:r.id, pacienteId:r.paciente_id, dientes:r.dientes||{
 const fromPerio= r => ({ id:r.id, pacienteId:r.paciente_id, datos:r.datos||{}, observaciones:r.observaciones||'' });
 
 const fromFact    = r => ({ id:r.id, numero:r.numero, pacienteId:r.paciente_id, pacienteNombre:r.paciente_nombre||'Consumidor Final', fecha:r.fecha, estado:r.estado||'pendiente', subtotal:Number(r.subtotal||0), impuestoPct:Number(r.impuesto_pct||0), impuesto:Number(r.impuesto||0), total:Number(r.total||0), notas:r.notas||null, citaId:r.cita_id||null });
-const fromFactItem= r => ({ id:r.id, facturaId:r.factura_id, descripcion:r.descripcion, tipo:r.tipo||'servicio', cantidad:Number(r.cantidad||1), precioUnitario:Number(r.precio_unitario||0), subtotal:Number(r.subtotal||0), inventarioId:r.inventario_id||null });
+const fromFactItem= r => ({ id:r.id, facturaId:r.factura_id, descripcion:r.descripcion, tipo:r.tipo||'servicio', cantidad:Number(r.cantidad||1), precioUnitario:Number(r.precio_unitario||0), subtotal:Number(r.subtotal||0), inventarioId:r.inventario_id||null, porcentajeClinica:r.porcentaje_clinica!=null?Number(r.porcentaje_clinica):null });
+const fromReparto = r => ({ tipo:r.tipo, porcentaje:Number(r.porcentaje_clinica), actualizadoPor:r.actualizado_por||'', actualizadoEn:r.actualizado_en||null });
 // Veterinaria: el cliente es el dueño y la mascota es el paciente
 const fromCli = r => ({ id:r.id, nombre:r.nombre, apellidos:r.apellidos||'', identificacion:r.identificacion, telefono:r.telefono, telefonoAlt:r.telefono_alt, email:r.email, direccion:r.direccion, notas:r.notas, estado:r.estado||'activo', fechaRegistro:r.fecha_registro });
 const toCli   = x => ({ nombre:x.nombre, apellidos:x.apellidos||null, identificacion:x.identificacion||null, telefono:x.telefono||null, telefono_alt:x.telefonoAlt||null, email:x.email||null, direccion:x.direccion||null, notas:x.notas||null, estado:x.estado||'activo', fecha_registro:x.fechaRegistro||hoy(), clinica_id:currentClinicaId });
@@ -387,7 +388,7 @@ async function loadAll() {
   if(!currentClinicaId) { setDbStatus(true); setLoading(false); return; }
   setLoading(true);
   try {
-    const [rp,rc,rm,rn,re,rhist,rpf,ri,rmov,rfin,rfact,rplantillas] = await Promise.all([
+    const [rp,rc,rm,rn,re,rhist,rpf,ri,rmov,rfin,rfact,rplantillas,rreparto] = await Promise.all([
       sb.from('pacientes').select('*').eq('clinica_id', currentClinicaId).order('id'),
       sb.from('citas').select('*').eq('clinica_id', currentClinicaId).order('id'),
       sb.from('medicaciones').select('*').eq('clinica_id', currentClinicaId).order('id'),
@@ -399,7 +400,8 @@ async function loadAll() {
       sb.from('inventario_movimientos').select('*').eq('clinica_id', currentClinicaId).order('fecha', {ascending:false}).limit(500),
       sb.from('finanzas').select('*').eq('clinica_id', currentClinicaId).order('fecha', {ascending:false}).limit(1000),
       sb.from('facturas').select('*, factura_items(*)').eq('clinica_id', currentClinicaId).order('fecha', {ascending:false}).limit(500),
-      sb.from('plantillas_notas').select('*').eq('clinica_id', currentClinicaId).eq('activa',true).order('nombre')
+      sb.from('plantillas_notas').select('*').eq('clinica_id', currentClinicaId).eq('activa',true).order('nombre'),
+      sb.from('reparto_servicios').select('*').eq('clinica_id', currentClinicaId)
     ]);
     if(rp.error) throw rp.error;
     if(rc.error) throw rc.error;
@@ -430,6 +432,10 @@ async function loadAll() {
     const rawFact = rfact.error ? [] : (rfact.data||[]);
     C.fact = rawFact.map(r => fromFact(r));
     C.factItems = rawFact.flatMap(r => (r.factura_items||[]).map(fromFactItem));
+    // Sin migracion_balance_reparto.sql la tabla no existe: el balance lo avisa
+    // y la facturación sigue igual que antes.
+    _repartoDisponible = !rreparto.error;
+    C.reparto = rreparto.error ? [] : (rreparto.data||[]).map(fromReparto);
     // Tablas odontológicas (carga separada: tablas opcionales). Se cargan con el
     // MISMO criterio que decide si la interfaz dental se ve: si no, o faltarían
     // los datos, o se traerían para nadie.
@@ -6480,6 +6486,7 @@ const BACKUP_TABLAS = [
   {tabla:'inventario_movimientos', obligatoria:true},
   {tabla:'finanzas', obligatoria:true},
   {tabla:'facturas', obligatoria:true, select:'*,factura_items(*)'},
+  {tabla:'reparto_servicios', opcional:true},
   {tabla:'actividad_usuarios', opcional:true},
   {tabla:'clientes', opcional:true},
   {tabla:'mascotas', opcional:true},
@@ -6610,6 +6617,7 @@ async function _construirBackupClinica() {
     usuarios, pacientes, mascotas,
     datosClinica:{
       clientes:t.clientes||[], inventario:t.inventario||[], movimientosInventario:t.inventario_movimientos||[],
+      repartoServicios:t.reparto_servicios||[],
       actividadUsuarios:t.actividad_usuarios||[],
       registrosSinPaciente:{
         citas:sinSujeto(t.citas), medicaciones:sinSujeto(t.medicaciones), notas:sinSujeto(t.notas),
@@ -6782,6 +6790,7 @@ function _tablasDesdeBackupV2(b) {
   _agregarFilasBackup(t,'clientes',dc.clientes);
   _agregarFilasBackup(t,'inventario',dc.inventario);
   _agregarFilasBackup(t,'inventario_movimientos',dc.movimientosInventario);
+  _agregarFilasBackup(t,'reparto_servicios',dc.repartoServicios);
   const sin=dc.registrosSinPaciente||{};
   const mapaSinPaciente={
     expediente:'expediente',citas:'citas',medicaciones:'medicaciones',notas:'notas',examenes:'examenes',
@@ -6808,7 +6817,7 @@ async function _restaurarBackupV2(b) {
     throw new Error('Este backup pertenece a otra clínica. Selecciona la clínica correcta antes de importarlo.');
   }
   const tablas=_tablasDesdeBackupV2(b);
-  const orden=['profiles','pacientes','clientes','mascotas','expediente','citas','medicaciones','notas','examenes','historial_dental','odontograma','periodontograma','procedimientos_odontologicos','procedimientos_oftalmologicos','procedimientos_clinicos','expediente_mascota','vacunas_mascota','desparasitaciones','hospitalizaciones','hospitalizacion_seguimiento','inventario','inventario_movimientos','finanzas','facturas','factura_items'];
+  const orden=['profiles','pacientes','clientes','mascotas','expediente','citas','medicaciones','notas','examenes','historial_dental','odontograma','periodontograma','procedimientos_odontologicos','procedimientos_oftalmologicos','procedimientos_clinicos','expediente_mascota','vacunas_mascota','desparasitaciones','hospitalizaciones','hospitalizacion_seguimiento','inventario','inventario_movimientos','finanzas','facturas','factura_items','reparto_servicios'];
   const conClinica=new Set(orden.filter(x=>x!=='factura_items'));
   const restaurados=[],fallos=[],omitidos=[];
   if(isSuperAdmin() && b.clinica) {
@@ -12529,6 +12538,7 @@ function setFinPeriodo(p, el) {
   if(finTab==='resumen') renderResumenFinanzas();
   else if(finTab==='transacciones') renderTransacciones();
   else if(finTab==='facturas') renderFacturasList();
+  else if(finTab==='balance') renderBalanceFinanzas();
 }
 
 function setFinTipo(tipo, el) {
@@ -12542,7 +12552,7 @@ function renderFinanzas() { switchFinTab(finTab||'resumen'); }
 
 function switchFinTab(tab) {
   finTab = tab;
-  ['resumen','transacciones','facturas'].forEach(t => {
+  ['resumen','transacciones','facturas','balance'].forEach(t => {
     const p = document.getElementById('fin-panel-'+t);
     const b = document.getElementById('tab-fin-'+t);
     if(p) p.style.display = t===tab ? 'block' : 'none';
@@ -12553,6 +12563,7 @@ function switchFinTab(tab) {
   if(tab==='resumen') renderResumenFinanzas();
   else if(tab==='transacciones') renderTransacciones();
   else if(tab==='facturas') renderFacturasList();
+  else if(tab==='balance') renderBalanceFinanzas();
 }
 
 function renderResumenFinanzas() {
@@ -12610,12 +12621,7 @@ function renderResumenFinanzas() {
 function imprimirResumenFinanzas() {
   const cfg = getClinicaConfig();
   const {from, to} = getFinDateRange();
-  const periodoLabel = {
-    hoy: 'Hoy — ' + formatFecha(to),
-    semana: 'Últimos 7 días',
-    mes: new Date().toLocaleDateString('es-ES', {month:'long', year:'numeric'}),
-    anio: 'Año ' + new Date().getFullYear()
-  }[finPeriodo] || finPeriodo;
+  const periodoLabel = _etiquetaPeriodoFin();
 
   const finData  = (C.fin||[]).filter(f => f.fecha >= from && f.fecha <= to);
   const factData = (C.fact||[]).filter(f => f.fecha >= from && f.fecha <= to);
@@ -13182,11 +13188,8 @@ function renderFacturaItemsUI() {
   }
   el.innerHTML = facturaItems.map(item=>`
     <div class="fact-item-row">
-      <select style="width:120px;flex-shrink:0" onchange="updateFactItem(${item.id},'tipo',this.value)">
-        <option value="consulta"${item.tipo==='consulta'?' selected':''}>👨‍⚕️ Consulta</option>
-        <option value="servicio"${item.tipo==='servicio'?' selected':''}>🩺 Servicio</option>
-        <option value="producto"${item.tipo==='producto'?' selected':''}>📦 Producto</option>
-        <option value="procedimiento"${item.tipo==='procedimiento'?' selected':''}>🔬 Procedimiento</option>
+      <select style="width:140px;flex-shrink:0" onchange="updateFactItem(${item.id},'tipo',this.value)">
+        ${TIPOS_SERVICIO_FACTURA.map(t=>`<option value="${t.id}"${item.tipo===t.id?' selected':''}>${t.icon} ${t.label}</option>`).join('')}
       </select>
       <input type="text" value="${item.desc}" placeholder="Descripción..."
         oninput="updateFactItem(${item.id},'desc',this.value)" style="flex:1;min-width:120px">
@@ -13195,7 +13198,7 @@ function renderFacturaItemsUI() {
       <input type="number" value="${item.precio}" min="0" step="0.01" placeholder="Precio"
         oninput="updateFactItem(${item.id},'precio',parseFloat(this.value)||0)" style="width:100px;flex-shrink:0">
       <span class="fact-item-sub">${fmtC((item.cant||0)*(item.precio||0))}</span>
-      <button onclick="removeFacturaItem(${item.id})" style="background:#FEF2F2;color:#B91C1C;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;flex-shrink:0;font-size:13px">✕</button>
+      <button onclick="removeFacturaItem(${item.id})" style="background:#FEF2F2;color:#B91C1C;border:none;border-radius:6px;padding:4px 0;width:32px;cursor:pointer;flex-shrink:0;font-size:13px" title="Quitar línea" aria-label="Quitar línea">✕</button>
     </div>`).join('');
 }
 
@@ -13229,11 +13232,23 @@ async function guardarFactura() {
   }).select().single();
   if(factErr){ toast('Error al generar factura','error'); setLoading(false); _unlockSubmit('factura', btn); return; }
   if(facturaItems.length) {
-    const {error:itemsErr} = await sb.from('factura_items').insert(facturaItems.map(i=>({
-      factura_id:factData.id, descripcion:i.desc, tipo:i.tipo,
-      cantidad:i.cant, precio_unitario:i.precio,
-      subtotal:(i.cant||0)*(i.precio||0), inventario_id:i.invId||null
-    })));
+    const filas = facturaItems.map(i=>{
+      const fila = {
+        factura_id:factData.id, descripcion:i.desc, tipo:i.tipo,
+        cantidad:i.cant, precio_unitario:i.precio,
+        subtotal:(i.cant||0)*(i.precio||0), inventario_id:i.invId||null
+      };
+      // El porcentaje vigente queda fijado en la línea; solo se envía si la
+      // clínica usa el reparto, así las demás no dependen de la columna nueva.
+      const pct = _porcentajeClinica(i.tipo);
+      if(pct!=null) fila.porcentaje_clinica = pct;
+      return fila;
+    });
+    let {error:itemsErr} = await sb.from('factura_items').insert(filas);
+    if(itemsErr && _faltaColumna(itemsErr, 'porcentaje_clinica')) {
+      ({error:itemsErr} = await sb.from('factura_items').insert(filas.map(({porcentaje_clinica, ...resto})=>resto)));
+      if(!itemsErr) toast('Factura creada. Falta ejecutar migracion_balance_reparto.sql: el balance usará el porcentaje actual','warning');
+    }
     if(itemsErr) toast('Factura creada pero error al guardar ítems: '+itemsErr.message, 'warning');
   }
   toast('Factura generada 🧾');
@@ -13259,6 +13274,7 @@ async function pagarFactura(id) {
   const metodo = document.getElementById('pagar-metodo')?.value || 'efectivo';
   setLoading(true);
   await sb.from('facturas').update({estado:'pagada'}).eq('id',id);
+  await _fijarRepartoFactura(id);
   await sb.from('finanzas').insert({
     clinica_id:currentClinicaId, tipo:'ingreso', categoria:'factura',
     descripcion:`Pago factura ${fact.numero||'#'+id} — ${fact.pacienteNombre}`,
@@ -13288,6 +13304,310 @@ async function pagarFactura(id) {
   const invMsg = itemsFact.length ? ` · ${itemsFact.length} producto(s) descontado(s) del inventario` : '';
   toast('Factura pagada ✅ — ingreso registrado automáticamente' + invMsg);
   await loadAll(); renderFacturasList(); setLoading(false);
+}
+
+// ════════════════════ BALANCE DE REPARTO ════════════════════
+// Para clínicas que alquilan sus módulos: de cada servicio cobrado un
+// porcentaje queda a la clínica y el resto al profesional. El balance toma las
+// líneas de las facturas pagadas del período, según la fecha de la factura.
+const TIPOS_SERVICIO_FACTURA = [
+  { id:'consulta',      label:'Consulta',      icon:'👨‍⚕️' },
+  { id:'procedimiento', label:'Procedimiento', icon:'🔬' },
+  { id:'examen',        label:'Examen',        icon:'🧪' },
+  { id:'servicio',      label:'Servicio',      icon:'🩺' },
+  { id:'producto',      label:'Producto',      icon:'📦' },
+];
+let _repartoDisponible = true;
+
+function _tipoServicio(id) {
+  return TIPOS_SERVICIO_FACTURA.find(t=>t.id===id)
+    || { id, label: id ? id.charAt(0).toUpperCase()+id.slice(1) : 'Sin tipo', icon:'📄' };
+}
+
+function _porcentajeClinica(tipo) {
+  const r = (C.reparto||[]).find(x=>x.tipo===tipo);
+  return r && Number.isFinite(r.porcentaje) ? r.porcentaje : null;
+}
+
+const _fmtPct = n => (Math.round(n*100)/100).toLocaleString('es-NI',{maximumFractionDigits:2}) + ' %';
+
+// Al cobrar, las líneas emitidas antes de configurar el reparto reciben el
+// porcentaje vigente. Si la columna aún no existe, el cobro sigue igual.
+async function _fijarRepartoFactura(facturaId) {
+  const tipos = [...new Set((C.factItems||[])
+    .filter(i=>i.facturaId===facturaId && i.porcentajeClinica==null && _porcentajeClinica(i.tipo)!=null)
+    .map(i=>i.tipo))];
+  for(const tipo of tipos) {
+    const {error} = await sb.from('factura_items').update({porcentaje_clinica:_porcentajeClinica(tipo)})
+      .eq('factura_id', facturaId).eq('tipo', tipo).is('porcentaje_clinica', null);
+    if(error) { console.warn('Reparto de la factura:', error.message); break; }
+  }
+}
+
+function _lineasBalance(from, to) {
+  const pagadas = new Map((C.fact||[])
+    .filter(f=>f.estado==='pagada' && f.fecha>=from && f.fecha<=to).map(f=>[f.id,f]));
+  return (C.factItems||[]).filter(i=>pagadas.has(i.facturaId)).map(i=>{
+    const factura = pagadas.get(i.facturaId);
+    const total = i.subtotal || (i.cantidad*i.precioUnitario) || 0;
+    const pct = i.porcentajeClinica ?? _porcentajeClinica(i.tipo);
+    return {
+      factura, item:i, tipo:i.tipo, total, pct,
+      // Sin porcentaje fijado en la línea se usa el vigente; se marca para que
+      // quien lea el balance sepa que puede cambiar si se edita la configuración.
+      estimado: i.porcentajeClinica==null && pct!=null,
+      clinica: pct==null ? null : Math.round(total*pct)/100,
+    };
+  }).sort((a,b)=>b.factura.fecha.localeCompare(a.factura.fecha) || String(b.factura.numero||'').localeCompare(String(a.factura.numero||'')));
+}
+
+function _resumenBalance(lineas) {
+  const porTipo = new Map();
+  for(const l of lineas) {
+    const g = porTipo.get(l.tipo) || { tipo:l.tipo, cantidad:0, total:0, clinica:0, conPct:0, sinPct:0, pcts:new Set(), estimados:0 };
+    g.cantidad += l.item.cantidad || 1;
+    g.total += l.total;
+    if(l.pct==null) g.sinPct += l.total;
+    else { g.clinica += l.clinica; g.conPct += l.total; g.pcts.add(l.pct); }
+    if(l.estimado) g.estimados++;
+    porTipo.set(l.tipo, g);
+  }
+  const orden = t => { const i = TIPOS_SERVICIO_FACTURA.findIndex(x=>x.id===t); return i<0 ? 99 : i; };
+  const grupos = [...porTipo.values()].sort((a,b)=>orden(a.tipo)-orden(b.tipo));
+  const suma = k => grupos.reduce((s,g)=>s+g[k], 0);
+  const clinica = Math.round(suma('clinica')*100)/100;
+  return {
+    grupos, clinica,
+    total: suma('total'), cantidad: suma('cantidad'), sinPct: suma('sinPct'), estimados: suma('estimados'),
+    profesionales: Math.round((suma('conPct') - clinica)*100)/100,
+    facturas: new Set(lineas.map(l=>l.factura.id)).size,
+  };
+}
+
+// Un tipo puede reunir líneas con porcentajes distintos si la configuración
+// cambió dentro del período: entonces se muestra el porcentaje efectivo.
+function _pctGrupoBalance(g) {
+  if(!g.pcts.size) return null;
+  if(g.pcts.size===1) return { texto:_fmtPct([...g.pcts][0]), mixto:false };
+  return { texto:'≈ '+_fmtPct(g.conPct ? g.clinica/g.conPct*100 : 0), mixto:true };
+}
+
+function _etiquetaPeriodoFin() {
+  const {to} = getFinDateRange();
+  return {
+    hoy: 'Hoy — ' + formatFecha(to),
+    semana: 'Últimos 7 días',
+    mes: new Date().toLocaleDateString('es-ES', {month:'long', year:'numeric'}),
+    anio: 'Año ' + new Date().getFullYear()
+  }[finPeriodo] || finPeriodo;
+}
+
+function renderBalanceFinanzas() {
+  const el = document.getElementById('fin-balance');
+  if(!el) return;
+  const {from,to} = getFinDateRange();
+  const lineas = _lineasBalance(from, to);
+  const r = _resumenBalance(lineas);
+  const configurado = (C.reparto||[]).length > 0;
+  const nombresSinPct = r.grupos.filter(g=>g.sinPct>0).map(g=>_tipoServicio(g.tipo).label.toLowerCase());
+
+  const avisos = [
+    !_repartoDisponible ? '🛠️ Falta ejecutar <strong>migracion_balance_reparto.sql</strong> en Supabase para guardar los porcentajes.' : '',
+    nombresSinPct.length ? `⚠️ Sin porcentaje configurado: <strong>${escAttr(nombresSinPct.join(', '))}</strong>. Esos ${fmtC(r.sinPct)} no se reparten hasta que lo configures.` : '',
+    r.estimados ? `ℹ️ ${r.estimados} línea(s) se facturaron antes de configurar el reparto y usan el porcentaje actual (marcadas con *).` : '',
+  ].filter(Boolean).map(t=>`<div class="balance-aviso">${t}</div>`).join('');
+
+  const tabla = r.grupos.length ? `<div class="table-wrap"><table class="balance-tabla">
+    <thead><tr><th>Tipo de servicio</th><th class="num">Cantidad</th><th class="num">Total cobrado</th><th class="num">% clínica</th><th class="num">Queda a la clínica</th><th class="num">Profesionales</th></tr></thead>
+    <tbody>${r.grupos.map(g=>{
+      const t = _tipoServicio(g.tipo), p = _pctGrupoBalance(g);
+      return `<tr>
+        <td class="tipo">${t.icon} ${escAttr(t.label)}</td>
+        <td class="num" data-label="Cantidad">${g.cantidad.toLocaleString('es-NI')}</td>
+        <td class="num" data-label="Total cobrado">${fmtC(g.total)}</td>
+        <td class="num" data-label="% clínica">${p?`<span${p.mixto?' title="Porcentajes distintos en el período: se muestra el efectivo"':''}>${p.texto}</span>`:'<span class="tag tag-orange" style="font-size:10px">Sin %</span>'}${g.sinPct>0&&p?' <span class="tag tag-orange" style="font-size:10px">parcial</span>':''}</td>
+        <td class="num balance-clinica" data-label="Queda a la clínica">${p?fmtC(g.clinica):'—'}</td>
+        <td class="num" data-label="Profesionales">${p?fmtC(g.conPct-g.clinica):'—'}</td>
+      </tr>`;
+    }).join('')}</tbody>
+    <tfoot><tr>
+      <td class="tipo">Total</td>
+      <td class="num" data-label="Cantidad">${r.cantidad.toLocaleString('es-NI')}</td>
+      <td class="num" data-label="Total cobrado">${fmtC(r.total)}</td>
+      <td class="num" data-label="% clínica">${r.total-r.sinPct>0?_fmtPct(r.clinica/(r.total-r.sinPct)*100):'—'}</td>
+      <td class="num balance-clinica" data-label="Queda a la clínica">${fmtC(r.clinica)}</td>
+      <td class="num" data-label="Profesionales">${fmtC(r.profesionales)}</td>
+    </tr></tfoot></table></div>`
+    : '<div class="empty-state" style="padding:28px"><div class="empty-icon">⚖️</div><p>No hay facturas pagadas en este período</p></div>';
+
+  const balance = `<div class="card" style="margin-bottom:18px">
+    <div class="card-header doc-header">
+      <h3>⚖️ Balance de servicios cobrados</h3>
+      <div class="doc-acciones">
+        <button class="btn btn-secondary btn-sm" onclick="imprimirBalanceReparto()">🖨️ Imprimir</button>
+        <button class="btn btn-primary btn-sm" onclick="descargarDocumento(imprimirBalanceReparto)">⬇️ Descargar PDF</button>
+      </div>
+    </div>
+    <p class="balance-nota">Facturas pagadas del período (${escAttr(_etiquetaPeriodoFin())}). De cada servicio, la parte de la clínica sale del porcentaje de su tipo; el resto corresponde al profesional.</p>
+    ${avisos}
+    <div class="stats-grid balance-kpis">
+      <div class="stat-card"><div class="stat-icon si-blue">💵</div><div class="stat-info"><h3>${fmtC(r.total)}</h3><p>Total cobrado</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-green">🏥</div><div class="stat-info"><h3 style="color:var(--success)">${fmtC(r.clinica)}</h3><p>Queda a la clínica</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-orange">👨‍⚕️</div><div class="stat-info"><h3>${fmtC(r.profesionales)}</h3><p>Parte de los profesionales</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-cyan">🧾</div><div class="stat-info"><h3>${r.cantidad.toLocaleString('es-NI')}</h3><p>Servicios en ${r.facturas} factura(s)</p></div></div>
+    </div>
+    ${tabla}
+  </div>`;
+
+  const ultimo = [...(C.reparto||[])].filter(x=>x.actualizadoEn).sort((a,b)=>String(b.actualizadoEn).localeCompare(String(a.actualizadoEn)))[0];
+  const config = `<div class="card" style="margin-bottom:18px">
+    <div class="card-header"><h3>⚙️ Porcentaje que queda a la clínica</h3></div>
+    <p class="balance-nota">Por tipo de servicio. Se fija en cada línea al emitir o cobrar la factura, así que cambiarlo no altera lo ya cobrado. Deja vacío el tipo que no aplique.</p>
+    <div class="balance-config-grid">${TIPOS_SERVICIO_FACTURA.map(t=>{
+      const pct = _porcentajeClinica(t.id);
+      return `<label class="balance-pct" for="reparto-${t.id}">
+        <span>${t.icon} ${t.label}</span>
+        <span class="balance-pct-input"><input type="text" id="reparto-${t.id}" inputmode="decimal" autocomplete="off" maxlength="6" placeholder="—" value="${pct??''}" oninput="_previewReparto(this)"${_repartoDisponible?'':' disabled'}><b>%</b></span>
+        <small id="reparto-${t.id}-ejemplo">${_ejemploReparto(pct)}</small>
+      </label>`;
+    }).join('')}</div>
+    <div class="balance-config-pie">
+      <small class="text-light">${ultimo?`Actualizado por ${escAttr(ultimo.actualizadoPor||'—')} el ${formatFecha(String(ultimo.actualizadoEn).slice(0,10))}`:'Aún sin configurar'}</small>
+      <button class="btn btn-primary btn-sm" id="btn-guardar-reparto" onclick="guardarRepartoServicios()"${_repartoDisponible?'':' disabled'}>💾 Guardar porcentajes</button>
+    </div>
+  </div>`;
+
+  const abierto = lineas.length <= 40;
+  const detalle = lineas.length ? `<div class="card">
+    <details class="balance-detalle"${abierto?' open':''}>
+      <summary><span>📋 Detalle de servicios cobrados</span><span class="tag tag-gray">${lineas.length}</span></summary>
+      <div class="balance-lineas">${lineas.map(l=>{
+        const t = _tipoServicio(l.tipo);
+        return `<div class="balance-linea">
+          <div class="balance-linea-info">
+            <div class="balance-linea-desc">${t.icon} ${escAttr(l.item.descripcion||t.label)}${l.item.cantidad>1?` <span class="tag tag-gray" style="font-size:10px">×${l.item.cantidad.toLocaleString('es-NI')}</span>`:''}</div>
+            <div class="balance-linea-meta">${formatFecha(l.factura.fecha)} · ${escAttr(l.factura.numero||'#'+l.factura.id)} · ${escAttr(l.factura.pacienteNombre||'—')}</div>
+          </div>
+          <div class="balance-linea-montos">
+            <div><small>Cobrado</small><strong>${fmtC(l.total)}</strong></div>
+            <div><small>Clínica ${l.pct==null?'':_fmtPct(l.pct)+(l.estimado?'*':'')}</small><strong class="balance-clinica">${l.pct==null?'Sin %':fmtC(l.clinica)}</strong></div>
+          </div>
+        </div>`;
+      }).join('')}</div>
+    </details>
+  </div>` : '';
+
+  el.innerHTML = configurado ? balance + detalle + config : config + balance + detalle;
+}
+
+function _ejemploReparto(pct) {
+  if(pct==null || !Number.isFinite(pct) || pct<0 || pct>100) return '&nbsp;';
+  return `De ${fmtC(100)}: clínica ${fmtC(pct)} · profesional ${fmtC(100-pct)}`;
+}
+
+// El campo es de texto: en teléfonos en español se escribe "35,5", que un
+// input numérico descarta como vacío y acabaría borrando el porcentaje.
+function _leerPorcentaje(texto) {
+  const limpio = String(texto||'').trim().replace('%','').trim().replace(',','.');
+  if(limpio==='') return { vacio:true };
+  const n = /^\d{1,3}(\.\d{1,2})?$/.test(limpio) ? Number(limpio) : NaN;
+  return { valor: Number.isFinite(n) && n<=100 ? n : null };
+}
+
+function _previewReparto(input) {
+  const ejemplo = document.getElementById(input.id+'-ejemplo');
+  if(!ejemplo) return;
+  const leido = _leerPorcentaje(input.value);
+  ejemplo.innerHTML = leido.vacio ? '&nbsp;'
+    : leido.valor==null ? '<span style="color:var(--danger)">Escribe un número de 0 a 100</span>'
+    : _ejemploReparto(leido.valor);
+}
+
+async function guardarRepartoServicios() {
+  if(!_exigeClinica()) return;
+  const valores = [], vacios = [];
+  for(const t of TIPOS_SERVICIO_FACTURA) {
+    const input = document.getElementById('reparto-'+t.id);
+    const leido = _leerPorcentaje(input?.value);
+    if(leido.vacio) { vacios.push(t.id); continue; }
+    if(leido.valor==null) {
+      toast(`El porcentaje de ${t.label.toLowerCase()} debe ser un número de 0 a 100 (hasta 2 decimales)`, 'error');
+      input?.focus();
+      return;
+    }
+    valores.push({ tipo:t.id, pct:leido.valor });
+  }
+  const btn = document.getElementById('btn-guardar-reparto');
+  if(!_lockSubmit('reparto', btn)) return;
+  try {
+    const ahora = new Date().toISOString();
+    if(valores.length) {
+      const {error} = await sb.from('reparto_servicios').upsert(valores.map(v=>({
+        clinica_id:currentClinicaId, tipo:v.tipo, porcentaje_clinica:v.pct,
+        actualizado_por:currentUser?.name||null, actualizado_en:ahora
+      })), {onConflict:'clinica_id,tipo'});
+      if(error) throw error;
+    }
+    const quitar = vacios.filter(t=>(C.reparto||[]).some(x=>x.tipo===t));
+    if(quitar.length) {
+      const {error} = await sb.from('reparto_servicios').delete().eq('clinica_id', currentClinicaId).in('tipo', quitar);
+      if(error) throw error;
+    }
+    const {data, error} = await sb.from('reparto_servicios').select('*').eq('clinica_id', currentClinicaId);
+    if(error) throw error;
+    C.reparto = (data||[]).map(fromReparto);
+    _repartoDisponible = true;
+    toast('Porcentajes guardados');
+    renderBalanceFinanzas();
+  } catch(error) {
+    const msg = error?.message || 'error desconocido';
+    toast(/reparto_servicios|schema cache|does not exist/i.test(msg)
+      ? 'Falta ejecutar migracion_balance_reparto.sql en Supabase'
+      : 'No se pudieron guardar los porcentajes: '+msg, 'error');
+  } finally {
+    _unlockSubmit('reparto', btn);
+  }
+}
+
+function imprimirBalanceReparto() {
+  const cfg = getClinicaConfig();
+  const {from,to} = getFinDateRange();
+  const periodo = _etiquetaPeriodoFin();
+  const lineas = _lineasBalance(from, to);
+  const r = _resumenBalance(lineas);
+  const num = 'text-align:right;white-space:nowrap';
+  // Importes en una línea: a 28px, como en los demás reportes, "C$" y la cifra se separaban.
+  const kpiVal = 'font-size:18px;white-space:nowrap';
+  const body = `
+    <div style="font-size:22px;font-weight:900;color:#0F172A;margin-bottom:4px">Balance de servicios cobrados</div>
+    <div style="font-size:13px;color:#64748B;font-weight:600;margin-bottom:20px">Período: ${escAttr(periodo)} · Facturas pagadas · Generado: ${new Date().toLocaleString('es-ES')}</div>
+
+    <div class="kpi-grid">
+      <div class="kpi blue"><div class="kpi-val" style="${kpiVal}">${fmtC(r.total)}</div><div class="kpi-lbl">Total cobrado</div></div>
+      <div class="kpi green"><div class="kpi-val" style="${kpiVal};color:#15803D">${fmtC(r.clinica)}</div><div class="kpi-lbl">Queda a la clínica</div></div>
+      <div class="kpi orange"><div class="kpi-val" style="${kpiVal}">${fmtC(r.profesionales)}</div><div class="kpi-lbl">Profesionales</div></div>
+      <div class="kpi blue"><div class="kpi-val" style="${kpiVal}">${r.cantidad.toLocaleString('es-NI')}</div><div class="kpi-lbl">Servicios · ${r.facturas} factura(s)</div></div>
+    </div>
+
+    <div class="section-title">⚖️ Balance por tipo de servicio</div>
+    ${r.grupos.length ? `<table style="margin-bottom:12px"><thead><tr><th>Tipo</th><th style="${num}">Cantidad</th><th style="${num}">Total cobrado</th><th style="${num}">% clínica</th><th style="${num}">Queda a la clínica</th><th style="${num}">Profesionales</th></tr></thead>
+    <tbody>${r.grupos.map(g=>{
+      const t = _tipoServicio(g.tipo), p = _pctGrupoBalance(g);
+      return `<tr><td>${t.icon} ${escAttr(t.label)}</td><td style="${num}">${g.cantidad.toLocaleString('es-NI')}</td><td style="${num}">${fmtC(g.total)}</td><td style="${num}">${p?p.texto:'Sin %'}</td><td style="${num};font-weight:700;color:#15803D">${p?fmtC(g.clinica):'—'}</td><td style="${num}">${p?fmtC(g.conPct-g.clinica):'—'}</td></tr>`;
+    }).join('')}
+    <tr style="font-weight:800;background:#F1F5F9"><td>Total</td><td style="${num}">${r.cantidad.toLocaleString('es-NI')}</td><td style="${num}">${fmtC(r.total)}</td><td style="${num}">${r.total-r.sinPct>0?_fmtPct(r.clinica/(r.total-r.sinPct)*100):'—'}</td><td style="${num};color:#15803D">${fmtC(r.clinica)}</td><td style="${num}">${fmtC(r.profesionales)}</td></tr>
+    </tbody></table>` : '<p style="color:#94A3B8;text-align:center;padding:16px">Sin facturas pagadas en este período</p>'}
+    ${r.sinPct>0?`<p style="font-size:11px;color:#B45309;margin:0 0 6px">Sin porcentaje configurado: ${fmtC(r.sinPct)} no se incluyen en la parte de la clínica ni de los profesionales.</p>`:''}
+    ${r.estimados?`<p style="font-size:11px;color:#64748B;margin:0 0 6px">* Línea facturada antes de configurar el reparto: se usa el porcentaje actual.</p>`:''}
+
+    ${lineas.length ? `<div class="section-title" style="margin-top:18px">📋 Detalle de servicios cobrados</div>
+    <table><thead><tr><th>Fecha</th><th>Factura</th><th>Paciente</th><th>Servicio</th><th style="${num}">Cobrado</th><th style="${num}">% clínica</th><th style="${num}">Clínica</th></tr></thead>
+    <tbody>${lineas.map(l=>{
+      const t = _tipoServicio(l.tipo);
+      return `<tr><td style="white-space:nowrap">${formatFecha(l.factura.fecha)}</td><td style="white-space:nowrap"><code style="font-size:10px">${escAttr(l.factura.numero||'#'+l.factura.id)}</code></td><td style="white-space:nowrap">${escAttr(l.factura.pacienteNombre||'—')}</td><td>${t.icon} ${escAttr(l.item.descripcion||t.label)}${l.item.cantidad>1?` ×${l.item.cantidad.toLocaleString('es-NI')}`:''}</td><td style="${num}">${fmtC(l.total)}</td><td style="${num}">${l.pct==null?'Sin %':_fmtPct(l.pct)+(l.estimado?'*':'')}</td><td style="${num};font-weight:700;color:#15803D">${l.pct==null?'—':fmtC(l.clinica)}</td></tr>`;
+    }).join('')}</tbody></table>` : ''}`;
+
+  return pdfAbrir('Balance de servicios — ' + periodo, body, cfg);
 }
 
 async function anularFactura(id) {

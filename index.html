@@ -22,7 +22,7 @@
 <!-- Lectura local de machotes. El archivo se procesa en el navegador antes de
      guardarlo; Mammoth extrae DOCX y PDF.js se carga al elegir un PDF. -->
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js" defer></script>
-<link rel="stylesheet" href="css/styles.css?v=20260914a">
+<link rel="stylesheet" href="css/styles.css?v=20260914b">
 </head>
 <body>
 <script>
@@ -902,6 +902,7 @@
             <button class="tab active" id="tab-fin-resumen"       onclick="switchFinTab('resumen')">📊 Resumen</button>
             <button class="tab"        id="tab-fin-transacciones" onclick="switchFinTab('transacciones')">🔄 Transacciones</button>
             <button class="tab"        id="tab-fin-facturas"      onclick="switchFinTab('facturas')">🧾 Facturas</button>
+            <button class="tab"        id="tab-fin-balance"       onclick="switchFinTab('balance')">⚖️ Balance</button>
           </div>
         </div>
 
@@ -965,6 +966,11 @@
             </div>
             <div id="fin-fact-list"></div>
           </div>
+        </div>
+
+        <!-- Panel Balance: reparto clínica / profesional de lo cobrado -->
+        <div id="fin-panel-balance" style="display:none">
+          <div id="fin-balance"></div>
         </div>
       </div>
 
@@ -1364,12 +1370,12 @@
       </div>
       <div class="fact-items-scroll">
       <div class="fact-items-header">
-        <span style="width:110px">Tipo</span>
-        <span style="flex:1">Descripción</span>
-        <span style="width:70px;text-align:center">Cant.</span>
-        <span style="width:110px;text-align:right">Precio C$</span>
-        <span style="width:90px;text-align:right">Subtotal</span>
-        <span style="width:32px"></span>
+        <span style="width:140px;flex-shrink:0">Tipo</span>
+        <span style="flex:1;min-width:120px">Descripción</span>
+        <span style="width:65px;flex-shrink:0;text-align:center">Cant.</span>
+        <span style="width:100px;flex-shrink:0;text-align:right">Precio C$</span>
+        <span style="width:90px;flex-shrink:0;text-align:right">Subtotal</span>
+        <span style="width:32px;flex-shrink:0"></span>
       </div>
       <div id="fact-items-list"></div>
       </div>
@@ -2705,7 +2711,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260914a" defer></script>
+<script src="js/app.js?v=20260914b" defer></script>
 </body>
 </html>
 
