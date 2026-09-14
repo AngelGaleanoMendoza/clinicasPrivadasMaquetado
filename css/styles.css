@@ -484,6 +484,63 @@ body.dark .balance-pct{background:#0F172A}
 .nota-campos-detectados{display:flex;gap:6px;flex-wrap:wrap;min-height:32px;padding:9px;border:1px dashed var(--border);border-radius:10px;color:var(--text-light);font-size:12px}
 .nota-campos-detectados .tag{font-size:10px}
 @media(max-width:500px){.nota-plantilla-bar{align-items:stretch;flex-direction:column}.nota-plantilla-bar .btn{width:100%;justify-content:center}.nota-plantilla-campos{grid-template-columns:1fr}.nota-plantilla-panel,.nota-firma-panel{padding:10px}}
+/* Machotes con formato: la hoja del Word dentro de la app. La hoja conserva
+   sus colores de papel también en modo oscuro, como el impreso. */
+.modal.modal-documento{max-width:940px}
+.dx-marco{position:relative;overflow-x:auto;background:#E2E8F0;border:1px solid var(--border);border-radius:12px;padding:12px;-webkit-overflow-scrolling:touch}
+body.dark .dx-marco{background:#0B1220}
+.dx-marco-revision{max-height:62vh;overflow-y:auto;overscroll-behavior:contain}
+.dx-hoja{box-sizing:content-box!important;background:#fff;margin:0 auto;box-shadow:0 2px 14px rgba(15,23,42,.16);border-radius:2px;color:#000}
+.dx-hoja-enc{position:relative}
+.dx-hoja-cuerpo{position:relative;margin-top:14px}
+.dx-hoja-pie{position:relative;margin-top:30px}
+.dx-cargando{padding:26px 12px;text-align:center;color:var(--text-light);font-size:13px}
+.dx-edicion .dx-campo,.dx-revision .dx-campo{display:inline-block;min-width:1.6em;min-height:1.05em;padding:0 1px;margin:0;background:#FEF3C7;border-bottom:1.5px dashed #D97706;border-radius:3px;outline:none;white-space:pre-wrap;text-indent:0;vertical-align:baseline}
+.dx-edicion .dx-campo{cursor:text;transition:background .12s}
+.dx-edicion .dx-campo:hover{background:#FDE68A}
+.dx-edicion .dx-campo:focus{background:#FDE68A;box-shadow:0 0 0 2px #F59E0B}
+.dx-edicion .dx-editable{outline:1px dashed transparent;outline-offset:1px;border-radius:2px;cursor:text}
+.dx-edicion .dx-editable:hover{outline-color:#93C5FD}
+.dx-edicion .dx-editable:focus{outline:2px solid #3B82F6;background:rgba(59,130,246,.06)}
+.dx-revision .dx-campo,.dx-revision .dx-campo-fijo{cursor:pointer}
+.dx-revision .dx-campo::before{content:attr(data-original);color:#92400E;opacity:.6}
+.dx-revision .dx-campo-fijo::before{content:attr(data-original)}
+.dx-revision .dx-campo-fijo{outline:1px dashed #94A3B8;outline-offset:1px;border-radius:2px}
+.dx-revision .dx-campo-fijo:empty{display:inline-block;min-width:1.5em;min-height:1em}
+.nota-documento-panel{display:flex;flex-direction:column;gap:8px}
+.nota-documento-barra{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.nota-documento-barra>label{margin:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.nota-documento-barra .tag{font-size:10px;text-transform:none}
+.nota-documento-acciones{display:flex;gap:6px;flex-wrap:wrap}
+.nota-documento-lista{display:flex;flex-direction:column;gap:10px}
+.nota-doc-seccion{border:1px solid var(--border);border-radius:12px;padding:10px 12px;background:var(--card)}
+.nota-doc-seccion-titulo{font-size:11px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;color:var(--primary);margin-bottom:8px;line-height:1.35}
+.nota-doc-seccion-campos{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
+.form-group .nota-doc-item,.nota-doc-item{display:flex;flex-direction:column;justify-content:flex-end;gap:4px;min-width:0;margin:0;font-size:11px;font-weight:600;color:var(--text-light);text-transform:none;letter-spacing:0}
+.nota-doc-item span{overflow-wrap:anywhere;line-height:1.3}
+.nota-doc-item input{width:100%;min-width:0}
+.np-grafica{margin-top:12px;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--card)}
+.np-grafica.incompleta{border-color:#F59E0B;background:color-mix(in srgb,#F59E0B 7%,var(--card))}
+.np-grafica-titulo{font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px}
+.np-grafica-cuerpo{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:14px;align-items:start}
+.np-grafica-img{position:relative;background:#fff;border:1px solid var(--border);border-radius:8px;overflow:hidden;cursor:crosshair;line-height:0}
+.np-grafica-img .dx-imagen{display:block;width:100%}
+.np-grafica-img .dx-imagen img{width:100%!important;height:auto!important}
+.np-borde{position:absolute;top:0;bottom:0;width:0;border-left:2px solid #2563EB;pointer-events:none;transform:translateX(-1px)}
+.np-borde-eje{position:absolute;left:0;right:0;height:0;border-top:2px dashed #2563EB;pointer-events:none}
+.np-grafica-datos{display:flex;flex-direction:column;gap:9px;min-width:0}
+.np-grafica-datos label{display:flex;flex-direction:column;gap:4px;margin:0;font-size:11px;font-weight:700;color:var(--text-light);text-transform:none;letter-spacing:0}
+.np-grafica-datos select,.np-grafica-datos input{width:100%;min-width:0}
+.np-grafica-rango{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:end}
+@media(max-width:640px){
+  .nota-documento-acciones{width:100%}
+  .nota-documento-acciones .btn{flex:1;justify-content:center}
+  .nota-doc-seccion-campos{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .dx-marco{padding:8px;border-radius:10px}
+  .dx-marco-revision{max-height:48vh}
+  .np-grafica-cuerpo{grid-template-columns:1fr}
+}
+@media(max-width:380px){.nota-doc-seccion-campos{grid-template-columns:1fr}.np-grafica-rango{grid-template-columns:1fr}}
 /* Campo con un botón de alta al lado (p. ej. Dueño + "Nuevo"). El select se
    encoge con min-width:0 para que en 360 px el botón no lo empuje fuera. */
 .campo-con-accion{display:flex;gap:8px;align-items:stretch}

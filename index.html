@@ -22,7 +22,7 @@
 <!-- Lectura local de machotes. El archivo se procesa en el navegador antes de
      guardarlo; Mammoth extrae DOCX y PDF.js se carga al elegir un PDF. -->
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js" defer></script>
-<link rel="stylesheet" href="css/styles.css?v=20260914b">
+<link rel="stylesheet" href="css/styles.css?v=20260914c">
 </head>
 <body>
 <script>
@@ -2545,7 +2545,7 @@
           <select id="n-plantilla" onchange="aplicarPlantillaNota(this.value)"><option value="">Sin plantilla · nota libre</option></select>
           <button type="button" class="btn btn-secondary btn-sm" onclick="abrirGestorPlantillaNota()">📄 Subir machote</button>
         </div>
-        <small>Admite PDF, DOCX y TXT. El sistema detecta los espacios a rellenar y replica la estructura del documento.</small>
+        <small>Admite PDF, DOCX y TXT. Un Word conserva sus tablas, imágenes y gráficas, y se llena directamente sobre el documento.</small>
       </div>
       <div class="form-group full" id="n-plantilla-campos-wrap" style="display:none">
         <label>Campos del machote</label>
@@ -2557,7 +2557,19 @@
         <div class="signos-grid" id="n-signos-grid"></div>
         <div id="n-sv-imc" style="font-size:11.5px;color:var(--primary);font-weight:700;margin-top:7px;min-height:15px"></div>
       </div>
-      <div class="form-group"><label><span id="n-contenido-label">Nota de evolución</span> <span id="n-contenido-req">*</span></label><textarea id="n-contenido" placeholder="Evolución del paciente, cambios y conducta médica..." style="min-height:130px"></textarea></div>
+      <div class="form-group full nota-documento-panel" id="n-documento-wrap" style="display:none">
+        <div class="nota-documento-barra">
+          <label>📄 Documento de la nota <span id="n-documento-progreso" class="tag tag-blue"></span></label>
+          <div class="nota-documento-acciones">
+            <button type="button" class="btn btn-secondary btn-sm" id="n-documento-lista-btn" onclick="_dxAlternarListaNota()">📋 Llenar como lista</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="n-documento-zoom" onclick="_dxAlternarTamanoReal('n-documento',this)">🔍 Tamaño real</button>
+          </div>
+        </div>
+        <small>Escribe sobre los recuadros amarillos; el resto queda como en el Word. En un recuadro, Enter pasa al siguiente.</small>
+        <div id="n-documento" class="dx-marco"></div>
+        <div id="n-documento-lista" class="nota-documento-lista" style="display:none"></div>
+      </div>
+      <div class="form-group" id="n-contenido-wrap"><label><span id="n-contenido-label">Nota de evolución</span> <span id="n-contenido-req">*</span></label><textarea id="n-contenido" placeholder="Evolución del paciente, cambios y conducta médica..." style="min-height:130px"></textarea></div>
       <div class="form-group full nota-firma-panel">
         <label>Profesional que atendió <span id="n-profesional-req">*</span></label>
         <select id="n-profesional"><option value="">Selecciona el médico responsable</option></select>
@@ -2582,8 +2594,17 @@
       <div class="form-group"><label>Tipo de nota *</label><select id="np-tipo"></select></div>
       <div class="form-group full"><label>Archivo *</label><input type="file" id="np-archivo" accept=".pdf,.docx,.txt,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="analizarArchivoPlantillaNota(this)"></div>
       <div class="form-group full"><div id="np-estado" class="nota-analisis-estado">Selecciona un archivo para analizarlo.</div></div>
-      <div class="form-group full"><label>Estructura detectada</label><textarea id="np-contenido" style="min-height:220px" oninput="_pintarCamposPlantillaDetectados(_camposDeMachote(this.value))" placeholder="El texto extraído aparecerá aquí. También puedes usar marcadores como {{Motivo de consulta}}."></textarea><small>Puedes corregir el texto. Usa <strong>{{Nombre del campo}}</strong> donde quieras mostrar una casilla para rellenar.</small></div>
-      <div class="form-group full"><label>Campos detectados</label><div id="np-campos" class="nota-campos-detectados">Aún no hay campos.</div></div>
+      <div class="form-group full" id="np-documento-grupo" style="display:none">
+        <div class="nota-documento-barra">
+          <label>Vista del machote <span id="np-doc-resumen" class="tag tag-blue"></span></label>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="_dxAlternarTamanoReal('np-doc-vista',this)">🔍 Tamaño real</button>
+        </div>
+        <small>Los recuadros amarillos se llenarán en cada nota; lo demás queda fijo como en el Word. Toca un recuadro para dejarlo como texto fijo, o tócalo otra vez para volverlo campo.</small>
+        <div id="np-doc-vista" class="dx-marco dx-marco-revision"></div>
+        <div id="np-graficas"></div>
+      </div>
+      <div class="form-group full" id="np-estructura-grupo"><label>Estructura detectada</label><textarea id="np-contenido" style="min-height:220px" oninput="_pintarCamposPlantillaDetectados(_camposDeMachote(this.value))" placeholder="El texto extraído aparecerá aquí. También puedes usar marcadores como {{Motivo de consulta}}."></textarea><small>Puedes corregir el texto. Usa <strong>{{Nombre del campo}}</strong> donde quieras mostrar una casilla para rellenar.</small></div>
+      <div class="form-group full" id="np-campos-grupo"><label>Campos detectados</label><div id="np-campos" class="nota-campos-detectados">Aún no hay campos.</div></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-plantilla-nota')">Cancelar</button>
@@ -2711,7 +2732,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260914b" defer></script>
+<script src="js/app.js?v=20260914c" defer></script>
 </body>
 </html>
 

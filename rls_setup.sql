@@ -964,6 +964,9 @@ CREATE TABLE IF NOT EXISTS public.plantillas_notas (
 );
 ALTER TABLE public.notas ADD COLUMN IF NOT EXISTS plantilla_id BIGINT
   REFERENCES public.plantillas_notas(id) ON DELETE SET NULL;
+-- Machotes con formato (migracion_machotes_formato.sql)
+ALTER TABLE public.plantillas_notas ADD COLUMN IF NOT EXISTS documento JSONB;
+ALTER TABLE public.notas ADD COLUMN IF NOT EXISTS plantilla_valores JSONB;
 CREATE INDEX IF NOT EXISTS idx_notas_profesional ON public.notas(clinica_id, profesional_id, fecha DESC);
 CREATE INDEX IF NOT EXISTS idx_plantillas_notas_clinica_tipo
   ON public.plantillas_notas(clinica_id, tipo_nota) WHERE activa = TRUE;

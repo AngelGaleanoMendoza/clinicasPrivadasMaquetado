@@ -310,9 +310,9 @@ const toM   = x => ({
 });
 // Las notas anteriores a la columna `estado` se tratan como finalizadas: no
 // existían los borradores, así que ninguna lo era.
-const fromN   = r => ({ id:r.id, pacienteId:r.paciente_id, mascotaId:r.mascota_id||null, citaId:r.cita_id||null, tipo:r.tipo, fecha:r.fecha, titulo:r.titulo, contenido:r.contenido, signos:r.signos||null, estado:r.estado||'finalizada', profesionalId:r.profesional_id||null, profesionalNombre:r.profesional_nombre||'', profesionalEspecialidad:r.profesional_especialidad||'', profesionalFirmaUrl:r.profesional_firma_url||null, plantillaId:r.plantilla_id||null });
-const toN     = x => ({ paciente_id:x.pacienteId||null, mascota_id:x.mascotaId||null, cita_id:x.citaId||null, tipo:x.tipo||'evolucion', fecha:x.fecha||hoy(), titulo:x.titulo||null, contenido:x.contenido, signos:x.signos||null, estado:x.estado||'finalizada', profesional_id:x.profesionalId||null, profesional_nombre:x.profesionalNombre||null, profesional_especialidad:x.profesionalEspecialidad||null, profesional_firma_url:x.profesionalFirmaUrl||null, plantilla_id:x.plantillaId||null, clinica_id:currentClinicaId });
-const fromPlantillaNota = r => ({ id:r.id, nombre:r.nombre, tipo:r.tipo_nota||'evolucion', contenido:r.contenido_modelo||'', campos:Array.isArray(r.campos)?r.campos:[], archivoNombre:r.archivo_nombre||'', archivoUrl:r.archivo_url||null, activa:r.activa!==false });
+const fromN   = r => ({ id:r.id, pacienteId:r.paciente_id, mascotaId:r.mascota_id||null, citaId:r.cita_id||null, tipo:r.tipo, fecha:r.fecha, titulo:r.titulo, contenido:r.contenido, signos:r.signos||null, estado:r.estado||'finalizada', profesionalId:r.profesional_id||null, profesionalNombre:r.profesional_nombre||'', profesionalEspecialidad:r.profesional_especialidad||'', profesionalFirmaUrl:r.profesional_firma_url||null, plantillaId:r.plantilla_id||null, plantillaValores:r.plantilla_valores&&typeof r.plantilla_valores==='object'?r.plantilla_valores:null });
+const toN     = x => ({ paciente_id:x.pacienteId||null, mascota_id:x.mascotaId||null, cita_id:x.citaId||null, tipo:x.tipo||'evolucion', fecha:x.fecha||hoy(), titulo:x.titulo||null, contenido:x.contenido, signos:x.signos||null, estado:x.estado||'finalizada', profesional_id:x.profesionalId||null, profesional_nombre:x.profesionalNombre||null, profesional_especialidad:x.profesionalEspecialidad||null, profesional_firma_url:x.profesionalFirmaUrl||null, plantilla_id:x.plantillaId||null, ...('plantillaValores' in x ? { plantilla_valores:x.plantillaValores||null } : {}), clinica_id:currentClinicaId });
+const fromPlantillaNota = r => ({ id:r.id, nombre:r.nombre, tipo:r.tipo_nota||'evolucion', contenido:r.contenido_modelo||'', campos:Array.isArray(r.campos)?r.campos:[], archivoNombre:r.archivo_nombre||'', archivoUrl:r.archivo_url||null, activa:r.activa!==false, formato:/\.docx$/i.test(r.archivo_nombre||'')?'docx':'texto' });
 const fromInv = r => ({ id:r.id, nombre:r.nombre, categoria:r.categoria||'general', unidad:r.unidad||'unidad', stock:Number(r.stock_actual||0), stockMin:Number(r.stock_minimo||0), precio:r.precio_unitario!=null?Number(r.precio_unitario):null, descripcion:r.descripcion||null, codigoMinsa:r.codigo_minsa||null, fechaVenc:r.fecha_vencimiento||null, alertaMeses:r.alerta_meses_antes!=null?Number(r.alerta_meses_antes):1 });
 const toInv   = x => ({ nombre:x.nombre, categoria:x.categoria||'general', unidad:x.unidad||'unidad', stock_actual:Number(x.stock||0), stock_minimo:Number(x.stockMin||0), precio_unitario:x.precio||null, descripcion:x.descripcion||null, clinica_id:currentClinicaId, codigo_minsa:x.codigoMinsa||null, fecha_vencimiento:x.fechaVenc||null, alerta_meses_antes:Number(x.alertaMeses||1) });
 const fromMov     = r => ({ id:r.id, invId:r.inventario_id, tipo:r.tipo, cantidad:Number(r.cantidad), motivo:r.motivo||null, fecha:r.fecha, referencia:r.referencia||null, notas:r.notas||null });
@@ -400,7 +400,7 @@ async function loadAll() {
       sb.from('inventario_movimientos').select('*').eq('clinica_id', currentClinicaId).order('fecha', {ascending:false}).limit(500),
       sb.from('finanzas').select('*').eq('clinica_id', currentClinicaId).order('fecha', {ascending:false}).limit(1000),
       sb.from('facturas').select('*, factura_items(*)').eq('clinica_id', currentClinicaId).order('fecha', {ascending:false}).limit(500),
-      sb.from('plantillas_notas').select('*').eq('clinica_id', currentClinicaId).eq('activa',true).order('nombre'),
+      sb.from('plantillas_notas').select('id,nombre,tipo_nota,contenido_modelo,campos,archivo_nombre,archivo_url,activa').eq('clinica_id', currentClinicaId).eq('activa',true).order('nombre'),
       sb.from('reparto_servicios').select('*').eq('clinica_id', currentClinicaId)
     ]);
     if(rp.error) throw rp.error;
@@ -4195,6 +4195,7 @@ function _claveVisita(n) {
 
 function _snapshotNotaActual(tipoBase=_tipoNotaPrevio) {
   const esVet = esVeterinaria();
+  _dxDocumentoNotaCambio(true);
   return {
     pacienteId: esVet ? null : (parseInt(document.getElementById('n-paciente')?.value) || null),
     mascotaId: esVet ? (parseInt(document.getElementById('n-mascota')?.value) || null) : null,
@@ -4239,6 +4240,8 @@ function _aplicarTipoNotaVisual(tipo) {
   if(contenido) contenido.placeholder = presentacion.placeholder;
   if(_plantillaNotaActiva && _plantillaNotaActiva.tipo!==tipo) {
     _plantillaNotaActiva=null;
+    _turnoPlantillaNota++;
+    _cerrarDocumentoNota();
     const wrap=document.getElementById('n-plantilla-campos-wrap'); if(wrap) wrap.style.display='none';
     const box=document.getElementById('n-plantilla-campos'); if(box) box.innerHTML='';
   }
@@ -4569,10 +4572,24 @@ function _contenidoDesdePlantilla() {
   return contenido;
 }
 
-function aplicarPlantillaNota(id) {
+async function aplicarPlantillaNota(id, valores=null) {
+  const turno=++_turnoPlantillaNota;
   const wrap=document.getElementById('n-plantilla-campos-wrap'), box=document.getElementById('n-plantilla-campos');
+  _cerrarDocumentoNota();
   _plantillaNotaActiva=C.plantillasNota.find(p=>String(p.id)===String(id))||null;
   if(!_plantillaNotaActiva){wrap.style.display='none';box.innerHTML='';return;}
+  if(_plantillaNotaActiva.formato==='docx') {
+    // Machote con formato: se escribe directamente sobre el documento
+    const plantilla=_plantillaNotaActiva;
+    wrap.style.display='none';box.innerHTML='';
+    if(!document.getElementById('n-titulo').value) document.getElementById('n-titulo').value=plantilla.nombre;
+    _mostrarCargaDocumentoNota();
+    const documento=await _documentoPlantilla(plantilla.id);
+    if(turno!==_turnoPlantillaNota || _plantillaNotaActiva!==plantilla) return;
+    if(documento){ _abrirDocumentoNota(plantilla.id, documento, valores); return; }
+    // Machotes importados antes de conservar el formato: siguen como texto
+    _cerrarDocumentoNota();
+  }
   const campos=_plantillaNotaActiva.campos.length?_plantillaNotaActiva.campos:_camposDeMachote(_plantillaNotaActiva.contenido);
   box.innerHTML=campos.map((c,i)=>`<div class="nota-campo-dinamico"><label for="n-pcampo-${i}">${escAttr(c)}</label><textarea id="n-pcampo-${i}" data-campo="${escAttr(c)}" oninput="_contenidoDesdePlantilla()" placeholder="Escribe ${escAttr(c.toLowerCase())}"></textarea></div>`).join('');
   wrap.style.display=campos.length?'':'none';
@@ -4588,7 +4605,7 @@ function abrirGestorPlantillaNota() {
   document.getElementById('np-archivo').value=''; document.getElementById('np-contenido').value='';
   document.getElementById('np-campos').textContent='Aún no hay campos.';
   const st=document.getElementById('np-estado'); st.className='nota-analisis-estado';st.textContent='Selecciona un archivo para analizarlo.';
-  _archivoPlantillaNota=null; openModalOverlay('modal-plantilla-nota');
+  _archivoPlantillaNota=null; _liberarMachoteEnRevision(); openModalOverlay('modal-plantilla-nota');
 }
 
 async function analizarArchivoPlantillaNota(input) {
@@ -4596,8 +4613,22 @@ async function analizarArchivoPlantillaNota(input) {
   if(!file)return;
   if(file.size>8*1024*1024){input.value='';st.className='nota-analisis-estado error';st.textContent='El archivo supera el máximo de 8 MB.';return;}
   st.className='nota-analisis-estado';st.textContent='⏳ Analizando estructura del documento…';
+  _liberarMachoteEnRevision(); _archivoPlantillaNota=null;
   try {
-    let texto=''; const nombre=file.name.toLowerCase();
+    let texto=''; const nombre=file.name.toLowerCase(); let avisoFormato='';
+    if(nombre.endsWith('.docx')) {
+      try {
+        const doc=await _docxAMachote(file);
+        if(input.files?.[0]!==file) return;
+        _archivoPlantillaNota=file;
+        if(!document.getElementById('np-nombre').value) document.getElementById('np-nombre').value=file.name.replace(/\.[^.]+$/,'');
+        _mostrarMachoteEnRevision(doc);
+        return;
+      } catch(errFormato) {
+        console.warn('No se pudo conservar el formato del machote', errFormato);
+        avisoFormato=' No se pudo conservar el formato del Word ('+(errFormato?.message||errFormato)+'), así que se importó solo el texto.';
+      }
+    }
     if(nombre.endsWith('.txt')) texto=await file.text();
     else if(nombre.endsWith('.docx')) {
       if(!globalThis.mammoth) throw new Error('No se pudo cargar el lector de DOCX. Revisa la conexión e inténtalo de nuevo.');
@@ -4618,7 +4649,7 @@ async function analizarArchivoPlantillaNota(input) {
     if(!document.getElementById('np-nombre').value) document.getElementById('np-nombre').value=file.name.replace(/\.[^.]+$/,'');
     _pintarCamposPlantillaDetectados(analisis.campos);
     _archivoPlantillaNota=file;
-    st.className='nota-analisis-estado ok';st.textContent=`✅ Documento analizado: ${analisis.campos.length} campo${analisis.campos.length===1?'':'s'} rellenable${analisis.campos.length===1?'':'s'} detectado${analisis.campos.length===1?'':'s'}.`;
+    st.className='nota-analisis-estado ok';st.textContent=`✅ Documento analizado: ${analisis.campos.length} campo${analisis.campos.length===1?'':'s'} rellenable${analisis.campos.length===1?'':'s'} detectado${analisis.campos.length===1?'':'s'}.`+avisoFormato;
   } catch(e){_archivoPlantillaNota=null;st.className='nota-analisis-estado error';st.textContent='❌ '+(e.message||e);}
 }
 
@@ -4628,6 +4659,10 @@ function _pintarCamposPlantillaDetectados(campos) {
 
 async function guardarPlantillaNota() {
   const nombre=document.getElementById('np-nombre').value.trim(),tipo=document.getElementById('np-tipo').value;
+  if(_machoteEnRevision) {
+    if(!nombre||!tipo||!_archivoPlantillaNota){toast('Completa el nombre, tipo y archivo del machote','error');return;}
+    return _guardarMachoteConFormato(nombre,tipo);
+  }
   const analisis=_analizarEstructuraMachote(document.getElementById('np-contenido').value);
   if(!nombre||!tipo||!_archivoPlantillaNota||!analisis.contenido){toast('Completa el nombre, tipo y archivo del machote','error');return;}
   setLoading(true);
@@ -4652,6 +4687,1723 @@ async function guardarPlantillaNota() {
   finally{setLoading(false);}
 }
 
+// ════════════════════ MACHOTES CON FORMATO (DOCX) ════════════════════
+// Un machote de Word se convierte en un documento HTML fiel —tablas con bordes
+// y sombreados, colores, imágenes, encabezado, pie y marca de agua— sobre el
+// que el médico escribe directamente. mammoth solo extrae el texto: por eso el
+// DOCX se lee aquí desde su XML. Todo ocurre en el navegador.
+const JSZIP_URL = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
+const _scriptsExternos = new Map();
+function _cargarScriptExterno(url, disponible) {
+  if(disponible()) return Promise.resolve();
+  if(!_scriptsExternos.has(url)) {
+    _scriptsExternos.set(url, new Promise((listo, fallo) => {
+      const s = document.createElement('script');
+      s.src = url; s.async = true;
+      s.onload = () => disponible() ? listo() : fallo(new Error('La librería descargada no quedó disponible.'));
+      s.onerror = () => { _scriptsExternos.delete(url); fallo(new Error('No se pudo descargar el lector de Word. Revisa la conexión e inténtalo de nuevo.')); };
+      document.head.appendChild(s);
+    }));
+  }
+  return _scriptsExternos.get(url);
+}
+
+const DX_TWIP = 96/1440, DX_EMU = 96/914400;
+const DX_MIME = { png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg', gif:'image/gif', bmp:'image/bmp', svg:'image/svg+xml', webp:'image/webp' };
+const _dxHijos = (el, nombre) => el ? Array.from(el.children).filter(c => c.localName === nombre) : [];
+const _dxHijo = (el, nombre) => el ? (Array.from(el.children).find(c => c.localName === nombre) || null) : null;
+const _dxDesc = (el, nombre) => el ? Array.from(el.getElementsByTagNameNS('*', nombre)) : [];
+const _dxAttr = (el, nombre) => el ? (el.getAttribute('w:'+nombre) ?? el.getAttribute(nombre)) : null;
+const _dxNum = (el, nombre) => { const v = _dxAttr(el, nombre); return v==null || v==='' || isNaN(Number(v)) ? null : Number(v); };
+const _dxOn = el => { if(!el) return undefined; const v = _dxAttr(el, 'val'); return !(v==='0' || v==='false' || v==='off' || v==='none'); };
+const _dxR = n => Math.round(n*100)/100;
+const _dxRelId = el => el ? (el.getAttribute('r:embed') || el.getAttribute('r:id') || el.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','embed') || el.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id')) : null;
+
+// Estilos del documento: se comparten entre el editor, la vista y el impreso.
+// Todo va bajo .dx-doc para no chocar con los estilos generales de la app.
+const DOCX_CSS = `
+.dx-doc{font-family:Calibri,Carlito,Arial,sans-serif;font-size:11pt;color:#000;line-height:1.2;text-align:left}
+.dx-doc *{box-sizing:content-box}
+.dx-doc .dx-p{display:block;margin:0;padding:0;white-space:pre-wrap;tab-size:47px;-moz-tab-size:47px;overflow-wrap:break-word;position:relative;min-height:1em;font-size:inherit;color:inherit;background:transparent;border:0}
+.dx-doc .dx-num{display:inline-block;white-space:pre;text-indent:0}
+.dx-doc .dx-tabla{border-collapse:collapse;table-layout:fixed;width:auto;max-width:none;margin:0;background:transparent;box-shadow:none;border-radius:0}
+.dx-doc .dx-tabla tr{height:auto;background:transparent;transition:none}
+.dx-doc .dx-tabla td{display:table-cell!important;vertical-align:top;overflow-wrap:break-word;font-size:inherit;color:inherit;border:0;text-align:inherit;line-height:inherit}
+.dx-doc .dx-imagen{display:inline-block;position:relative;vertical-align:bottom;line-height:0}
+.dx-doc .dx-imagen img{display:block;max-width:none;border:0;border-radius:0}
+.dx-doc .dx-flotante{display:block;position:relative;line-height:0}
+.dx-doc .dx-ancla{position:absolute;line-height:0;pointer-events:none}
+.dx-doc .dx-ancla img{display:block;max-width:none}
+.dx-doc .dx-cuadro{display:block;position:relative;line-height:1.2}
+.dx-doc .dx-salto{display:block;height:0}
+.dx-doc .dx-guia{position:absolute;border-left:2px dashed #DC2626;width:0;pointer-events:none}
+.dx-doc .dx-marcador{position:absolute;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;pointer-events:none;line-height:1}
+.dx-doc .dx-marcador .dx-flecha{width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:12px solid #DC2626}
+.dx-doc .dx-marcador .dx-valor{margin-top:2px;padding:1px 5px;border-radius:4px;background:#DC2626;color:#fff;font:700 10px/1.3 Arial,sans-serif;white-space:nowrap}
+`;
+
+function _dxAsegurarEstilos() {
+  if(document.getElementById('dx-estilos')) return;
+  const s = document.createElement('style');
+  s.id = 'dx-estilos';
+  s.textContent = DOCX_CSS;
+  document.head.appendChild(s);
+}
+
+const _DX_RESALTADO = { yellow:'#FFFF00', green:'#00FF00', cyan:'#00FFFF', magenta:'#FF00FF', blue:'#0000FF', red:'#FF0000', darkBlue:'#000080', darkCyan:'#008080', darkGreen:'#008000', darkMagenta:'#800080', darkRed:'#800000', darkYellow:'#808000', darkGray:'#808080', lightGray:'#C0C0C0', black:'#000000', white:'#FFFFFF' };
+
+function _dxFuente(ctx, f) {
+  if(!f) return null;
+  if(f.startsWith('tema:')) f = /major/i.test(f) ? ctx.tema.fuenteTitulos : ctx.tema.fuenteTexto;
+  if(!f) return null;
+  // Comillas simples: el valor va dentro de un atributo style="…"
+  const alternas = { 'Aptos':'Calibri,Carlito,Arial,sans-serif', 'Aptos Display':'Calibri,Carlito,Arial,sans-serif', 'Calibri':'Carlito,Arial,sans-serif', 'Calibri Light':'Carlito,Arial,sans-serif', 'Cambria':'Caladea,Georgia,serif', 'Times New Roman':'Tinos,Times,serif', 'Arial':'Helvetica,sans-serif', 'Georgia':'serif', 'Verdana':'sans-serif', 'Tahoma':'Verdana,sans-serif', 'Century Gothic':'Arial,sans-serif', 'Monotype Corsiva':"'Lucida Calligraphy',cursive", 'Lucida Calligraphy':"'Monotype Corsiva',cursive", 'Garamond':'Georgia,serif', 'Book Antiqua':'Palatino,Georgia,serif', 'Courier New':'monospace' };
+  return `'${f.replace(/['"<>]/g,'')}',${alternas[f]||'Arial,sans-serif'}`;
+}
+
+// Colores del tema con sus variaciones de luminosidad (lumMod/lumOff), como
+// los aplica Word a rellenos de cuadros de texto.
+function _dxColorDrawing(ctx, relleno) {
+  if(!relleno) return null;
+  const srgb = _dxHijo(relleno,'srgbClr'), esquema = _dxHijo(relleno,'schemeClr'), sistema = _dxHijo(relleno,'sysClr');
+  const nodo = srgb || esquema || sistema;
+  if(!nodo) return null;
+  let hex = srgb ? srgb.getAttribute('val') : sistema ? (sistema.getAttribute('lastClr')||'000000') : ctx.tema.colores[{tx1:'dk1',bg1:'lt1',tx2:'dk2',bg2:'lt2'}[esquema.getAttribute('val')] || esquema.getAttribute('val')];
+  if(!hex) return null;
+  const mod = Number(_dxHijo(nodo,'lumMod')?.getAttribute('val')||100000)/100000;
+  const off = Number(_dxHijo(nodo,'lumOff')?.getAttribute('val')||0)/100000;
+  if(mod===1 && off===0) return '#'+hex;
+  let [r,g,b] = [0,2,4].map(i=>parseInt(hex.slice(i,i+2),16)/255);
+  const max=Math.max(r,g,b), min=Math.min(r,g,b); let h=0, s=0, l=(max+min)/2;
+  if(max!==min){ const d=max-min; s=l>0.5?d/(2-max-min):d/(max+min); h=max===r?(g-b)/d+(g<b?6:0):max===g?(b-r)/d+2:(r-g)/d+4; h/=6; }
+  l = Math.min(1, Math.max(0, l*mod+off));
+  const q = l<0.5 ? l*(1+s) : l+s-l*s, p = 2*l-q;
+  const canal = t => { t=(t+1)%1; return t<1/6?p+(q-p)*6*t:t<1/2?q:t<2/3?p+(q-p)*(2/3-t)*6:p; };
+  return '#'+[h+1/3,h,h-1/3].map(t=>Math.round(canal(t)*255).toString(16).padStart(2,'0')).join('');
+}
+
+function _dxLeerRPr(ctx, rPr, base) {
+  const p = {...base};
+  if(!rPr) return p;
+  for(const e of rPr.children) {
+    switch(e.localName) {
+      case 'b': p.negrita=_dxOn(e); break;
+      case 'i': p.cursiva=_dxOn(e); break;
+      case 'u': { const v=_dxAttr(e,'val'); p.subrayado = !!v && v!=='none'; break; }
+      case 'strike': case 'dstrike': p.tachado=_dxOn(e); break;
+      case 'caps': p.mayusculas=_dxOn(e); break;
+      case 'smallCaps': p.versalitas=_dxOn(e); break;
+      case 'vanish': p.oculto=_dxOn(e); break;
+      case 'color': { const v=_dxAttr(e,'val'); if(v && v!=='auto') p.color='#'+v; else if(v==='auto') p.color=null; break; }
+      case 'sz': { const v=_dxNum(e,'val'); if(v) p.tam=v/2; break; }
+      case 'rFonts': { const tema=_dxAttr(e,'asciiTheme')||_dxAttr(e,'hAnsiTheme'); const f=_dxAttr(e,'ascii')||_dxAttr(e,'hAnsi'); if(tema) p.fuente='tema:'+tema; else if(f) p.fuente=f; break; }
+      case 'highlight': { const v=_dxAttr(e,'val'); p.resaltado = v && v!=='none' ? (_DX_RESALTADO[v]||null) : null; break; }
+      case 'shd': { const f=_dxAttr(e,'fill'); p.fondo = f && f!=='auto' ? '#'+f : null; break; }
+      case 'vertAlign': p.vertical=_dxAttr(e,'val'); break;
+    }
+  }
+  return p;
+}
+
+function _dxBorde(b) {
+  if(!b) return undefined;
+  const v = _dxAttr(b,'val');
+  if(!v || v==='nil' || v==='none') return null;
+  const px = Math.max(1, Math.round((_dxNum(b,'sz')||4)/8*96/72));
+  const color = _dxAttr(b,'color');
+  const estilo = /double/.test(v) ? 'double' : /dash/.test(v) ? 'dashed' : /dot/.test(v) ? 'dotted' : 'solid';
+  return `${estilo==='double'?Math.max(3,px):px}px ${estilo} ${color && color!=='auto' ? '#'+color : '#000'}`;
+}
+
+function _dxLeerPPr(pPr, base) {
+  const p = {...base};
+  if(!pPr) return p;
+  for(const e of pPr.children) {
+    switch(e.localName) {
+      case 'jc': p.alineacion=_dxAttr(e,'val'); break;
+      case 'spacing': {
+        const b=_dxNum(e,'before'), a=_dxNum(e,'after'), l=_dxNum(e,'line');
+        if(b!=null) p.antes=b; if(a!=null) p.despues=a;
+        if(_dxAttr(e,'beforeAutospacing')==='1') p.antes=280;
+        if(_dxAttr(e,'afterAutospacing')==='1') p.despues=280;
+        if(l!=null){ p.linea=l; p.reglaLinea=_dxAttr(e,'lineRule')||'auto'; }
+        break;
+      }
+      case 'ind': {
+        const l=_dxNum(e,'left')??_dxNum(e,'start'), r=_dxNum(e,'right')??_dxNum(e,'end'), f=_dxNum(e,'firstLine'), h=_dxNum(e,'hanging');
+        if(l!=null) p.sangriaIzq=l; if(r!=null) p.sangriaDer=r;
+        if(h!=null) p.primeraLinea=-h; else if(f!=null) p.primeraLinea=f;
+        break;
+      }
+      case 'shd': { const f=_dxAttr(e,'fill'); p.fondo = f && f!=='auto' ? '#'+f : null; break; }
+      case 'pBdr': p.bordes={...(p.bordes||{})}; for(const b of e.children) p.bordes[b.localName]=_dxBorde(b); break;
+      case 'numPr': { const id=_dxAttr(_dxHijo(e,'numId'),'val'); const nivel=Number(_dxAttr(_dxHijo(e,'ilvl'),'val')||0); if(id!=null) p.numero = id==='0' ? null : {id, nivel}; break; }
+      case 'keepNext': p.mantenerSiguiente=_dxOn(e); break;
+      case 'pageBreakBefore': p.saltoAntes=_dxOn(e); break;
+      case 'contextualSpacing': p.contextual=_dxOn(e); break;
+      case 'rPr': p.marca=e; break;
+    }
+  }
+  return p;
+}
+
+function _dxCadenaEstilo(ctx, id) {
+  const cadena = [], vistos = new Set();
+  let s = id ? ctx.estilos.get(id) : null;
+  while(s && !vistos.has(s.id)) { vistos.add(s.id); cadena.unshift(s); s = s.basadoEn ? ctx.estilos.get(s.basadoEn) : null; }
+  return cadena;
+}
+
+const _dxRomano = n => { let r='', v=n; [[1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'],[90,'XC'],[50,'L'],[40,'XL'],[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']].forEach(([k,s])=>{ while(v>=k){ r+=s; v-=k; } }); return r; };
+const _dxLetra = n => { let r=''; while(n>0){ n--; r=String.fromCharCode(65+n%26)+r; n=Math.floor(n/26); } return r; };
+function _dxFormatoNumero(n, fmt) {
+  switch(fmt) {
+    case 'upperRoman': return _dxRomano(n);
+    case 'lowerRoman': return _dxRomano(n).toLowerCase();
+    case 'upperLetter': return _dxLetra(n);
+    case 'lowerLetter': return _dxLetra(n).toLowerCase();
+    case 'decimalZero': return String(n).padStart(2,'0');
+    default: return String(n);
+  }
+}
+
+function _dxMarcador(ctx, numero) {
+  const def = ctx.numeracion.get(String(numero.id));
+  const abs = def && ctx.abstractos.get(def.abstracto);
+  const nivel = abs?.niveles.get(numero.nivel);
+  if(!nivel) return null;
+  const inicio = l => def.inicios.get(l) ?? abs.niveles.get(l)?.inicio ?? 1;
+  const cont = ctx.contadores.get(numero.id) || [];
+  cont[numero.nivel] = cont[numero.nivel]==null ? inicio(numero.nivel) : cont[numero.nivel]+1;
+  cont.length = numero.nivel+1;
+  ctx.contadores.set(numero.id, cont);
+  if(nivel.formato==='none') return { texto:'', nivel };
+  let texto = nivel.texto.replace(/%(\d)/g, (_, d) => {
+    const l = Number(d)-1;
+    return _dxFormatoNumero(cont[l] ?? inicio(l), abs.niveles.get(l)?.formato || 'decimal');
+  });
+  // Viñetas de Symbol/Wingdings usan caracteres privados que un navegador no tiene
+  if(nivel.formato==='bullet') texto = /[-]/.test(texto) || !texto.trim() ? '•' : texto==='o' ? '◦' : texto;
+  return { texto, nivel };
+}
+
+function _dxSpan(ctx, texto, rp) {
+  if(rp.oculto || !texto) return '';
+  const css = [];
+  if(rp.negrita) css.push('font-weight:700');
+  if(rp.cursiva) css.push('font-style:italic');
+  const deco = [rp.subrayado && 'underline', rp.tachado && 'line-through'].filter(Boolean);
+  if(deco.length) css.push('text-decoration:'+deco.join(' '));
+  if(rp.color) css.push('color:'+rp.color);
+  if(rp.tam) css.push('font-size:'+rp.tam+'pt');
+  const fuente = _dxFuente(ctx, rp.fuente);
+  if(fuente) css.push('font-family:'+fuente);
+  if(rp.resaltado) css.push('background:'+rp.resaltado); else if(rp.fondo) css.push('background:'+rp.fondo);
+  if(rp.mayusculas) css.push('text-transform:uppercase');
+  if(rp.versalitas) css.push('font-variant:small-caps');
+  if(rp.vertical==='superscript') css.push('vertical-align:super;font-size:smaller');
+  if(rp.vertical==='subscript') css.push('vertical-align:sub;font-size:smaller');
+  return `<span style="${css.join(';')}">${escAttr(texto)}</span>`;
+}
+
+function _dxImagen(ctx, rId, ancho, alto, nombre, recorte) {
+  const destino = ctx.rels.get(rId);
+  const img = destino && ctx.medios.get(destino);
+  if(!img) { if(destino) ctx.avisos.add(`Se omitió una imagen en formato no compatible (${destino.split('.').pop().toUpperCase()}).`); return ''; }
+  ctx.usadas.add(img.url);
+  // Recorte de Word (srcRect): la imagen completa se agranda y el marco oculta lo recortado
+  const r = recorte && ['l','t','r','b'].map(k => Math.max(0, Number(recorte.getAttribute(k)||0)/100000));
+  if(r && r.some(Boolean) && r[0]+r[2] < 1 && r[1]+r[3] < 1) {
+    const w = ancho/(1-r[0]-r[2]), h = alto/(1-r[1]-r[3]);
+    return `<span class="dx-imagen" style="width:${_dxR(ancho)}px;height:${_dxR(alto)}px;overflow:hidden"><img src="${img.url}" alt="${escAttr(nombre||'')}" style="width:${_dxR(w)}px;height:${_dxR(h)}px;margin:${_dxR(-r[1]*h)}px 0 0 ${_dxR(-r[0]*w)}px"></span>`;
+  }
+  return `<span class="dx-imagen"><img src="${img.url}" alt="${escAttr(nombre||'')}" style="width:${_dxR(ancho)}px;height:${_dxR(alto)}px"></span>`;
+}
+
+function _dxDibujo(ctx, dibujo, bloques) {
+  const ancla = _dxHijo(dibujo,'anchor'), marco = ancla || _dxHijo(dibujo,'inline');
+  if(!marco) return '';
+  const ext = _dxHijo(marco,'extent');
+  const ancho = Number(ext?.getAttribute('cx')||0)*DX_EMU, alto = Number(ext?.getAttribute('cy')||0)*DX_EMU;
+  const docPr = _dxHijo(marco,'docPr');
+  const nombre = docPr?.getAttribute('descr') && !/[\\/]/.test(docPr.getAttribute('descr')) ? docPr.getAttribute('descr') : (docPr?.getAttribute('name')||'');
+  const blip = _dxDesc(marco,'blip')[0];
+  const cuadro = _dxDesc(marco,'txbxContent')[0];
+  let contenido = '';
+  if(blip) {
+    contenido = _dxImagen(ctx, _dxRelId(blip), ancho, alto, nombre, _dxDesc(marco,'srcRect')[0]);
+    if(!contenido) return '';
+  } else if(cuadro) {
+    const spPr = _dxDesc(marco,'spPr')[0];
+    const fondo = _dxColorDrawing(ctx, _dxHijo(spPr,'solidFill'));
+    const linea = _dxHijo(spPr,'ln');
+    const borde = linea && !_dxHijo(linea,'noFill') ? `${Math.max(1,Math.round(Number(linea.getAttribute('w')||9525)*DX_EMU))}px solid ${_dxColorDrawing(ctx,_dxHijo(linea,'solidFill'))||'#000'}` : '';
+    const bodyPr = _dxDesc(marco,'bodyPr')[0];
+    const ins = k => Number(bodyPr?.getAttribute(k) ?? (k[0]==='l'||k[0]==='r' ? 91440 : 45720))*DX_EMU;
+    const interior = _dxBloques(ctx, cuadro);
+    contenido = `<div class="dx-cuadro" style="${fondo?'background:'+fondo+';':''}${borde?'border:'+borde+';':''}padding:${_dxR(ins('tIns'))}px ${_dxR(ins('rIns'))}px ${_dxR(ins('bIns'))}px ${_dxR(ins('lIns'))}px;width:${_dxR(Math.max(0,ancho-ins('lIns')-ins('rIns')))}px;min-height:${_dxR(Math.max(0,alto-ins('tIns')-ins('bIns')))}px">${interior}</div>`;
+  } else {
+    return ''; // flechas, líneas y formas sueltas no se reproducen
+  }
+  if(!ancla) return contenido;
+
+  const detras = ancla.getAttribute('behindDoc')==='1';
+  const posH = _dxHijo(ancla,'positionH'), posV = _dxHijo(ancla,'positionV');
+  const relH = posH?.getAttribute('relativeFrom')||'column', relV = posV?.getAttribute('relativeFrom')||'paragraph';
+  const offH = Number(_dxHijo(posH,'posOffset')?.textContent||0)*DX_EMU, alH = _dxHijo(posH,'align')?.textContent||'';
+  const offV = Number(_dxHijo(posV,'posOffset')?.textContent||0)*DX_EMU;
+  const pg = ctx.pagina;
+  let izq;
+  if(relH==='leftMargin') izq = alH==='right' ? -ancho : alH==='center' ? -(pg.margenIzq+ancho)/2 : offH - pg.margenIzq;
+  else if(relH==='rightMargin') izq = pg.contenido + (alH==='left' ? 0 : offH);
+  else if(alH==='center') izq = (pg.contenido - ancho)/2 - (relH==='page' ? 0 : 0);
+  else if(alH==='right') izq = relH==='page' ? pg.ancho - pg.margenIzq - ancho : pg.contenido - ancho;
+  else if(alH==='left') izq = relH==='page' ? -pg.margenIzq : 0;
+  else izq = relH==='page' ? offH - pg.margenIzq : offH;
+
+  // Imagen detrás del texto que ocupa casi todo el ancho: marca de agua de página.
+  // Una gráfica también puede ir detrás del texto, pero es más estrecha.
+  if(ctx.parte==='cuerpo' && blip && detras && ancho >= pg.contenido*0.85) {
+    ctx.marcasAgua.push({ html:contenido, ancho, alto, izq });
+    return '';
+  }
+  if(ctx.parte!=='cuerpo') {
+    const arriba = relV==='paragraph' || relV==='line' ? offV : relV==='page' ? offV - (ctx.parte==='encabezado' ? pg.encabezado : 0) : offV;
+    return `<span class="dx-ancla" style="left:${_dxR(izq)}px;top:${_dxR(arriba)}px;z-index:${detras?0:3}">${contenido}</span>`;
+  }
+  // En el cuerpo lo anclado se lleva al flujo, en su posición horizontal: al
+  // editar, un objeto flotante taparía texto que cambia de tamaño.
+  const x = Math.max(0, Math.min(izq, Math.max(0, pg.contenido - ancho)));
+  // Un desplazamiento vertical corto respecto al párrafo se conserva como separación
+  const arriba = (relV==='paragraph' || relV==='line') && offV > 0 && offV < 120 ? offV : 0;
+  bloques.push(`<div class="dx-flotante" data-alto="${_dxR(alto)}" style="margin-left:${_dxR(x)}px;width:${_dxR(ancho)}px${arriba?`;margin-top:${_dxR(arriba)}px`:''}">${contenido}</div>`);
+  return '';
+}
+
+function _dxVml(ctx, pict, bloques) {
+  const img = _dxDesc(pict,'imagedata')[0];
+  const forma = _dxDesc(pict,'shape')[0];
+  if(!img) return '';
+  const estilo = forma?.getAttribute('style')||'';
+  const medida = k => { const m = estilo.match(new RegExp(k+':\\s*([\\d.]+)(pt|px|in)?')); if(!m) return 0; const v=Number(m[1]); return m[2]==='in' ? v*96 : m[2]==='px' ? v : v*96/72; };
+  const html = _dxImagen(ctx, _dxRelId(img), medida('width')||120, medida('height')||120, forma?.getAttribute('alt')||'');
+  if(!html) return '';
+  if(/position:\s*absolute/.test(estilo) && ctx.parte==='cuerpo') { bloques.push(`<div class="dx-flotante" data-alto="${medida('height')}" style="width:${medida('width')}px">${html}</div>`); return ''; }
+  return html;
+}
+
+function _dxRun(ctx, run, rpParrafo, bloques, estado) {
+  const rPr = _dxHijo(run,'rPr');
+  let rp = rpParrafo;
+  const rEstilo = _dxAttr(_dxHijo(rPr,'rStyle'),'val');
+  if(rEstilo) for(const s of _dxCadenaEstilo(ctx, rEstilo)) rp = _dxLeerRPr(ctx, s.rPr, rp);
+  rp = _dxLeerRPr(ctx, rPr, rp);
+  let texto = '', html = '';
+  const volcar = () => { html += _dxSpan(ctx, texto, rp); texto = ''; };
+  const procesar = nodo => {
+    for(const e of nodo.children) {
+      switch(e.localName) {
+        case 'fldChar': { const t=_dxAttr(e,'fldCharType'); estado.instruccion = t==='begin'; break; }
+        case 't': if(!estado.instruccion) texto += e.textContent; break;
+        case 'tab': if(!estado.instruccion) texto += '\t'; break;
+        case 'br': volcar(); if(_dxAttr(e,'type')==='page') estado.salto = true; else html += '<br>'; break;
+        case 'cr': volcar(); html += '<br>'; break;
+        case 'noBreakHyphen': texto += '‑'; break;
+        case 'sym': { const c=parseInt(_dxAttr(e,'char')||'',16); texto += c>=0xF000 ? '•' : (c ? String.fromCharCode(c) : ''); break; }
+        case 'drawing': volcar(); html += _dxDibujo(ctx, e, bloques); break;
+        case 'pict': case 'object': volcar(); html += _dxVml(ctx, e, bloques); break;
+        case 'AlternateContent': procesar(_dxHijo(e,'Choice') || _dxHijo(e,'Fallback') || e); break;
+      }
+    }
+  };
+  procesar(run);
+  volcar();
+  return html;
+}
+
+function _dxPropsParrafo(ctx, p) {
+  const directo = _dxHijo(p,'pPr');
+  const estiloId = _dxAttr(_dxHijo(directo,'pStyle'),'val') || ctx.estiloParrafo;
+  let pp = _dxLeerPPr(ctx.pPrDefecto, {}), rp = _dxLeerRPr(ctx, ctx.rPrDefecto, {});
+  for(const s of ctx.estiloTabla ? _dxCadenaEstilo(ctx, ctx.estiloTabla) : []) { pp = _dxLeerPPr(s.pPr, pp); rp = _dxLeerRPr(ctx, s.rPr, rp); }
+  for(const s of _dxCadenaEstilo(ctx, estiloId)) { pp = _dxLeerPPr(s.pPr, pp); rp = _dxLeerRPr(ctx, s.rPr, rp); }
+  const numDirecto = _dxHijo(directo,'numPr');
+  const numero = numDirecto ? _dxLeerPPr(directo, {}).numero : pp.numero;
+  let marcador = null;
+  if(numero) {
+    marcador = _dxMarcador(ctx, numero);
+    if(marcador) pp = _dxLeerPPr(marcador.nivel.pPr, pp);
+  }
+  pp = _dxLeerPPr(directo, pp);
+  return { pp, rp, estiloId, marcador };
+}
+
+function _dxFirmaBordes(ctx, p) {
+  const directo = _dxHijo(p,'pPr');
+  const cadena = [...(ctx.estiloTabla ? _dxCadenaEstilo(ctx, ctx.estiloTabla) : []), ..._dxCadenaEstilo(ctx, _dxAttr(_dxHijo(directo,'pStyle'),'val') || ctx.estiloParrafo)];
+  let pp = {};
+  for(const s of cadena) pp = _dxLeerPPr(s.pPr, pp);
+  pp = _dxLeerPPr(directo, pp);
+  const bordes = Object.entries(pp.bordes||{}).filter(([,v]) => v);
+  return bordes.length ? JSON.stringify([bordes.sort(), pp.sangriaIzq||0, pp.sangriaDer||0]) : '';
+}
+
+function _dxParrafo(ctx, p, grupo={}) {
+  const { pp, rp, estiloId, marcador } = _dxPropsParrafo(ctx, p);
+  const bloques = [], estado = {};
+  let interior = '';
+  const recorrer = nodo => {
+    for(const el of nodo.children) {
+      switch(el.localName) {
+        case 'r': interior += _dxRun(ctx, el, rp, bloques, estado); break;
+        case 'hyperlink': case 'smartTag': case 'customXml': case 'ins': case 'fldSimple': case 'dir': case 'bdo': recorrer(el); break;
+        case 'sdt': recorrer(_dxHijo(el,'sdtContent') || el); break;
+        case 'AlternateContent': recorrer(_dxHijo(el,'Choice') || el); break;
+      }
+    }
+  };
+  recorrer(p);
+  const rpMarca = _dxLeerRPr(ctx, pp.marca, rp);
+  const vacio = !interior.replace(/<span class="dx-ancla"[\s\S]*?<\/span><\/span>/g,'').replace(/<[^>]+>/g,'').trim() && !/<img|dx-cuadro/.test(interior);
+  let numHtml = '';
+  if(marcador && marcador.texto && !vacio) {
+    const rpNum = _dxLeerRPr(ctx, marcador.nivel.rPr, rpMarca);
+    const colgante = pp.primeraLinea < 0 ? -pp.primeraLinea*DX_TWIP : 0;
+    numHtml = `<span class="dx-num" style="min-width:${_dxR(colgante)}px">${_dxSpan(ctx, marcador.texto + (marcador.nivel.sufijo==='space' ? ' ' : ''), rpNum)}</span>`;
+  }
+  const css = [];
+  const al = { both:'justify', distribute:'justify', center:'center', right:'right', end:'right' }[pp.alineacion];
+  if(al) css.push('text-align:'+al);
+  const antes = (pp.antes||0)*DX_TWIP, despues = (pp.despues||0)*DX_TWIP;
+  css.push(`margin:${_dxR(antes)}px ${_dxR((pp.sangriaDer||0)*DX_TWIP)}px ${_dxR(despues)}px ${_dxR((pp.sangriaIzq||0)*DX_TWIP)}px`);
+  if(pp.primeraLinea) css.push(`text-indent:${_dxR(pp.primeraLinea*DX_TWIP)}px`);
+  if(pp.linea) css.push(pp.reglaLinea==='auto' ? `line-height:${_dxR(pp.linea/240*1.17)}` : `line-height:${_dxR(pp.linea*DX_TWIP)}px`);
+  if(rpMarca.tam) css.push(`font-size:${rpMarca.tam}pt`);
+  const fuente = _dxFuente(ctx, rpMarca.fuente); if(fuente) css.push('font-family:'+fuente);
+  if(pp.fondo) css.push('background:'+pp.fondo);
+  // Párrafos seguidos con los mismos bordes forman un solo recuadro, como en Word:
+  // la línea superior va en el primero, la inferior en el último y entre ellos "between".
+  const b = pp.bordes || {};
+  const lados = { top: grupo.sinArriba ? null : b.top, bottom: grupo.sinAbajo ? (b.between||null) : b.bottom, left: b.left, right: b.right };
+  Object.entries(lados).forEach(([lado, v]) => { if(v) css.push(`border-${lado}:${v};padding-${lado}:1px`); });
+  const attrs = [`class="dx-p${vacio?' dx-vacio':''}"`, `style="${css.join(';')}"`];
+  if(estiloId) attrs.push(`data-estilo="${escAttr(estiloId)}"`);
+  if(pp.contextual) attrs.push('data-contextual="1"');
+  if(marcador) attrs.push('data-numerado="1"');
+  if(pp.mantenerSiguiente) attrs.push('data-mantener="1"');
+  let html = pp.saltoAntes ? '<div class="dx-salto"></div>' : '';
+  // Un párrafo vacío que solo sostenía una imagen o un cuadro se sustituye por ellos
+  if(!(vacio && bloques.length)) html += `<p ${attrs.join(' ')}>${numHtml}${interior || '<br>'}</p>`;
+  html += bloques.join('');
+  if(estado.salto) html += '<div class="dx-salto"></div>';
+  return html;
+}
+
+function _dxLeerBordesTabla(nodo, base) {
+  const r = {...base};
+  for(const b of (nodo ? Array.from(nodo.children) : [])) { const v = _dxBorde(b); if(v !== undefined) r[{start:'left',end:'right'}[b.localName]||b.localName] = v; }
+  return r;
+}
+
+function _dxLeerMargenes(nodo, base) {
+  const r = {...base};
+  for(const m of (nodo ? Array.from(nodo.children) : [])) { const w = _dxNum(m,'w'); if(w!=null) r[{start:'left',end:'right'}[m.localName]||m.localName] = w*DX_TWIP; }
+  return r;
+}
+
+function _dxTabla(ctx, tabla) {
+  const tblPr = _dxHijo(tabla,'tblPr');
+  const estiloId = _dxAttr(_dxHijo(tblPr,'tblStyle'),'val') || ctx.estiloTablaDefecto;
+  const cadena = _dxCadenaEstilo(ctx, estiloId);
+  let bordes = {}, margen = { top:0, bottom:0, left:108*DX_TWIP, right:108*DX_TWIP };
+  for(const s of cadena) { bordes = _dxLeerBordesTabla(_dxHijo(s.tblPr,'tblBorders'), bordes); margen = _dxLeerMargenes(_dxHijo(s.tblPr,'tblCellMar'), margen); }
+  bordes = _dxLeerBordesTabla(_dxHijo(tblPr,'tblBorders'), bordes);
+  margen = _dxLeerMargenes(_dxHijo(tblPr,'tblCellMar'), margen);
+  const grid = _dxHijos(_dxHijo(tabla,'tblGrid'),'gridCol').map(g => (_dxNum(g,'w')||0)*DX_TWIP);
+  const ancho = grid.reduce((a,b)=>a+b, 0);
+  const flot = _dxHijo(tblPr,'tblpPr');
+  const jc = _dxAttr(_dxHijo(tblPr,'jc'),'val');
+  let izq = (_dxNum(_dxHijo(tblPr,'tblInd'),'w')||0)*DX_TWIP, centrada = jc==='center', derecha = jc==='right'||jc==='end';
+  let desplazamiento = 0;
+  if(flot) {
+    const xs = _dxAttr(flot,'tblpXSpec');
+    if(xs==='center') centrada = true; else if(xs==='right') derecha = true;
+    else izq = (_dxNum(flot,'tblpX')||0)*DX_TWIP - (_dxAttr(flot,'horzAnchor')==='page' ? ctx.pagina.margenIzq : 0);
+    desplazamiento = Math.max(0, (_dxNum(flot,'tblpY')||0)*DX_TWIP);
+  }
+  const estiloPrevio = ctx.estiloTabla;
+  ctx.estiloTabla = estiloId;
+  const filas = _dxHijos(tabla,'tr');
+  // Primero se arma la cuadrícula para resolver las celdas combinadas en vertical
+  const matriz = filas.map(tr => {
+    let col = 0;
+    return _dxHijos(tr,'tc').map(tc => {
+      const tcPr = _dxHijo(tc,'tcPr');
+      const span = _dxNum(_dxHijo(tcPr,'gridSpan'),'val') || 1;
+      const vm = _dxHijo(tcPr,'vMerge');
+      const celda = { tc, tcPr, col, span, vMerge: vm ? (_dxAttr(vm,'val')==='restart' ? 'inicio' : 'sigue') : null, filas:1 };
+      col += span;
+      return celda;
+    });
+  });
+  matriz.forEach((fila, fi) => fila.forEach(c => {
+    if(c.vMerge!=='inicio') return;
+    for(let k=fi+1; k<matriz.length; k++) {
+      const abajo = matriz[k].find(x => x.col===c.col && x.vMerge==='sigue');
+      if(!abajo) break;
+      c.filas++; abajo.oculta = true;
+    }
+  }));
+  const totalFilas = filas.length, totalCols = grid.length || Math.max(1, ...matriz.map(f => f.reduce((a,c)=>a+c.span,0)));
+  let cuerpo = '';
+  matriz.forEach((fila, fi) => {
+    const trPr = _dxHijo(filas[fi],'trPr');
+    const alto = _dxNum(_dxHijo(trPr,'trHeight'),'val');
+    const encabezado = _dxHijo(trPr,'tblHeader') ? ' data-encabezado="1"' : '';
+    cuerpo += `<tr${encabezado}${alto ? ` style="height:${_dxR(alto*DX_TWIP)}px"` : ''}>`;
+    fila.forEach(c => {
+      if(c.oculta) return;
+      const tcb = _dxLeerBordesTabla(_dxHijo(c.tcPr,'tcBorders'), {});
+      const ultimaFila = fi + c.filas >= totalFilas, ultimaCol = c.col + c.span >= totalCols;
+      const lado = (k, exterior, interior) => tcb[k] !== undefined ? tcb[k] : (exterior ? bordes[k] : bordes[interior]);
+      const bs = { top: lado('top', fi===0, 'insideH'), bottom: lado('bottom', ultimaFila, 'insideH'), left: lado('left', c.col===0, 'insideV'), right: lado('right', ultimaCol, 'insideV') };
+      const m = _dxLeerMargenes(_dxHijo(c.tcPr,'tcMar'), margen);
+      const shd = _dxAttr(_dxHijo(c.tcPr,'shd'),'fill');
+      const vAl = { center:'middle', bottom:'bottom' }[_dxAttr(_dxHijo(c.tcPr,'vAlign'),'val')] || 'top';
+      const css = [`padding:${_dxR(m.top)}px ${_dxR(m.right)}px ${_dxR(m.bottom)}px ${_dxR(m.left)}px`, `vertical-align:${vAl}`];
+      Object.entries(bs).forEach(([k,v]) => css.push(`border-${k}:${v || 'none'}`));
+      if(shd && shd!=='auto') css.push('background:#'+shd);
+      const interior = _dxBloques(ctx, c.tc);
+      cuerpo += `<td${c.span>1?` colspan="${c.span}"`:''}${c.filas>1?` rowspan="${c.filas}"`:''} style="${css.join(';')}">${interior || '<p class="dx-p dx-vacio"><br></p>'}</td>`;
+    });
+    cuerpo += '</tr>';
+  });
+  ctx.estiloTabla = estiloPrevio;
+  const cols = grid.map(w => `<col style="width:${_dxR(w)}px">`).join('');
+  const posicion = centrada ? 'margin-left:auto;margin-right:auto' : derecha ? 'margin-left:auto;margin-right:0' : `margin-left:${_dxR(Math.max(-40, izq))}px`;
+  return `<table class="dx-tabla"${flot?` data-flotante="1" data-desplazamiento="${_dxR(desplazamiento)}"`:''} style="${ancho?`width:${_dxR(ancho)}px;`:''}${posicion};margin-top:${_dxR(desplazamiento)}px"><colgroup>${cols}</colgroup><tbody>${cuerpo}</tbody></table>`;
+}
+
+function _dxBloques(ctx, contenedor) {
+  let html = '';
+  const hijos = Array.from(contenedor.children);
+  const firmas = hijos.map(el => el.localName==='p' ? _dxFirmaBordes(ctx, el) : '');
+  hijos.forEach((el, i) => {
+    const grupo = firmas[i] ? { sinArriba: firmas[i-1]===firmas[i], sinAbajo: firmas[i+1]===firmas[i] } : {};
+    if(el.localName==='p') html += _dxParrafo(ctx, el, grupo);
+    else if(el.localName==='tbl') html += _dxTabla(ctx, el);
+    else if(el.localName==='sdt') html += _dxBloques(ctx, _dxHijo(el,'sdtContent') || el);
+    else if(el.localName==='AlternateContent') html += _dxBloques(ctx, _dxHijo(el,'Choice') || el);
+    else if(el.localName==='customXml' || el.localName==='ins') html += _dxBloques(ctx, el);
+  });
+  return html;
+}
+
+async function _dxRelaciones(ctx, parte) {
+  const carpeta = parte.slice(0, parte.lastIndexOf('/')+1);
+  const nombre = parte.slice(parte.lastIndexOf('/')+1);
+  const xml = await ctx.xml(`${carpeta}_rels/${nombre}.rels`);
+  const mapa = new Map();
+  for(const r of _dxDesc(xml,'Relationship')) {
+    if(r.getAttribute('TargetMode')==='External') continue;
+    const partes = (carpeta + r.getAttribute('Target')).split('/');
+    const limpio = [];
+    partes.forEach(s => { if(s==='..') limpio.pop(); else if(s && s!=='.') limpio.push(s); });
+    mapa.set(r.getAttribute('Id'), limpio.join('/'));
+  }
+  return mapa;
+}
+
+// Lee un .docx y devuelve el documento en HTML listo para detectar campos.
+async function _docxAHtml(archivo) {
+  await _cargarScriptExterno(JSZIP_URL, () => !!globalThis.JSZip);
+  let zip;
+  try { zip = await globalThis.JSZip.loadAsync(await archivo.arrayBuffer()); }
+  catch(_) { throw new Error('El archivo no es un documento de Word válido (.docx).'); }
+  const parser = new DOMParser();
+  const xml = async ruta => { const f = zip.file(ruta); return f ? parser.parseFromString(await f.async('string'), 'application/xml') : null; };
+  const documento = await xml('word/document.xml');
+  if(!documento) throw new Error('El archivo no es un documento de Word válido (.docx).');
+  const ctx = { zip, xml, avisos:new Set(), marcasAgua:[], contadores:new Map(), estilos:new Map(), numeracion:new Map(), abstractos:new Map(), medios:new Map(), usadas:new Set(), tema:{colores:{}} };
+
+  const estilos = await xml('word/styles.xml');
+  const defectos = _dxDesc(estilos,'docDefaults')[0];
+  ctx.rPrDefecto = _dxDesc(_dxDesc(defectos,'rPrDefault')[0],'rPr')[0] || null;
+  ctx.pPrDefecto = _dxDesc(_dxDesc(defectos,'pPrDefault')[0],'pPr')[0] || null;
+  for(const s of _dxDesc(estilos,'style')) {
+    const id = _dxAttr(s,'styleId'), tipo = _dxAttr(s,'type');
+    ctx.estilos.set(id, { id, tipo, basadoEn:_dxAttr(_dxHijo(s,'basedOn'),'val'), pPr:_dxHijo(s,'pPr'), rPr:_dxHijo(s,'rPr'), tblPr:_dxHijo(s,'tblPr') });
+    if(_dxAttr(s,'default')==='1' && tipo==='paragraph') ctx.estiloParrafo = id;
+    if(_dxAttr(s,'default')==='1' && tipo==='table') ctx.estiloTablaDefecto = id;
+  }
+  const numeracion = await xml('word/numbering.xml');
+  for(const a of _dxDesc(numeracion,'abstractNum')) {
+    const niveles = new Map();
+    for(const l of _dxHijos(a,'lvl')) niveles.set(Number(_dxAttr(l,'ilvl')), {
+      formato:_dxAttr(_dxHijo(l,'numFmt'),'val')||'decimal', texto:_dxAttr(_dxHijo(l,'lvlText'),'val')||'',
+      inicio:_dxNum(_dxHijo(l,'start'),'val') ?? 1, sufijo:_dxAttr(_dxHijo(l,'suff'),'val')||'tab', pPr:_dxHijo(l,'pPr'), rPr:_dxHijo(l,'rPr') });
+    ctx.abstractos.set(_dxAttr(a,'abstractNumId'), { niveles });
+  }
+  for(const n of _dxDesc(numeracion,'num')) {
+    const inicios = new Map();
+    for(const o of _dxHijos(n,'lvlOverride')) { const v = _dxNum(_dxHijo(o,'startOverride'),'val'); if(v!=null) inicios.set(Number(_dxAttr(o,'ilvl')), v); }
+    ctx.numeracion.set(_dxAttr(n,'numId'), { abstracto:_dxAttr(_dxHijo(n,'abstractNumId'),'val'), inicios });
+  }
+  const tema = await xml('word/theme/theme1.xml');
+  const esquema = _dxDesc(tema,'clrScheme')[0];
+  for(const c of (esquema ? Array.from(esquema.children) : [])) {
+    const v = _dxHijo(c,'srgbClr')?.getAttribute('val') || _dxHijo(c,'sysClr')?.getAttribute('lastClr');
+    if(v) ctx.tema.colores[c.localName] = v;
+  }
+  ctx.tema.fuenteTitulos = _dxHijo(_dxDesc(tema,'majorFont')[0],'latin')?.getAttribute('typeface') || 'Calibri Light';
+  ctx.tema.fuenteTexto = _dxHijo(_dxDesc(tema,'minorFont')[0],'latin')?.getAttribute('typeface') || 'Calibri';
+
+  // Imágenes: se preparan una sola vez; las no dibujables en un navegador se omiten
+  for(const ruta of Object.keys(zip.files).filter(r => r.startsWith('word/media/'))) {
+    const ext = ruta.split('.').pop().toLowerCase();
+    if(!DX_MIME[ext]) continue;
+    const blob = new Blob([await zip.file(ruta).async('arraybuffer')], { type:DX_MIME[ext] });
+    ctx.medios.set(ruta, { url:URL.createObjectURL(blob), blob, ext });
+  }
+
+  const cuerpoXml = _dxDesc(documento,'body')[0];
+  const sect = _dxHijo(cuerpoXml,'sectPr') || _dxDesc(cuerpoXml,'sectPr').pop();
+  const pgSz = _dxHijo(sect,'pgSz'), pgMar = _dxHijo(sect,'pgMar');
+  const twip = (el, k, def) => (_dxNum(el,k) ?? def) * DX_TWIP;
+  const pagina = ctx.pagina = {
+    ancho:twip(pgSz,'w',12240), alto:twip(pgSz,'h',15840),
+    margenSup:Math.abs(twip(pgMar,'top',1440)), margenInf:Math.abs(twip(pgMar,'bottom',1440)),
+    margenIzq:twip(pgMar,'left',1440), margenDer:twip(pgMar,'right',1440),
+    encabezado:twip(pgMar,'header',708), pie:twip(pgMar,'footer',708),
+  };
+  pagina.contenido = pagina.ancho - pagina.margenIzq - pagina.margenDer;
+  const ajustes = await xml('word/settings.xml');
+  pagina.tabulador = (_dxNum(_dxDesc(ajustes,'defaultTabStop')[0],'val') || 708) * DX_TWIP;
+
+  const relsDoc = await _dxRelaciones(ctx, 'word/document.xml');
+  const referencia = tipo => {
+    const refs = _dxHijos(sect, tipo==='encabezado' ? 'headerReference' : 'footerReference');
+    const ref = refs.find(r => _dxAttr(r,'type')==='default') || refs[0];
+    return ref ? relsDoc.get(_dxRelId(ref)) : null;
+  };
+  const parte = async (tipo, ruta) => {
+    if(!ruta) return '';
+    const raiz = (await xml(ruta))?.documentElement;
+    if(!raiz) return '';
+    ctx.parte = tipo; ctx.rels = await _dxRelaciones(ctx, ruta); ctx.contadores = new Map();
+    return _dxBloques(ctx, raiz);
+  };
+  const encabezado = await parte('encabezado', referencia('encabezado'));
+  const pie = await parte('pie', referencia('pie'));
+  ctx.parte = 'cuerpo'; ctx.rels = relsDoc; ctx.contadores = new Map();
+  const cuerpo = _dxBloques(ctx, cuerpoXml);
+  // Las imágenes del zip que no terminaron en el documento se liberan
+  for(const m of ctx.medios.values()) if(!ctx.usadas.has(m.url)) URL.revokeObjectURL(m.url);
+  const imagenes = new Map([...ctx.medios.values()].filter(m => ctx.usadas.has(m.url)).map(m => [m.url, m]));
+  return { version:1, pagina, encabezado, pie, cuerpo, marcasAgua:ctx.marcasAgua, avisos:[...ctx.avisos], imagenes };
+}
+
+function _dxContenedorMedicion(pagina) {
+  _dxAsegurarEstilos();
+  const caja = document.createElement('div');
+  caja.className = 'dx-doc';
+  caja.style.cssText = `position:fixed;left:-99999px;top:0;width:${pagina.contenido}px;visibility:hidden;tab-size:${pagina.tabulador}px`;
+  document.body.appendChild(caja);
+  return caja;
+}
+
+// Word reserva el espacio bajo tablas e imágenes flotantes con párrafos vacíos,
+// que corren al costado del objeto. Al llevarlas al flujo ese espacio sobraría:
+// se retiran tantos párrafos vacíos como ocupe el objeto. Si el objeto casi no
+// deja margen a los lados, en Word esos párrafos quedan debajo y se conservan.
+function _dxAbsorberEspaciadores(raiz) {
+  const altoCompleto = el => { const cs = getComputedStyle(el); return el.getBoundingClientRect().height + parseFloat(cs.marginTop) + parseFloat(cs.marginBottom); };
+  const caja = raiz.getBoundingClientRect();
+  Array.from(raiz.children).filter(el => el.matches('.dx-flotante, table.dx-tabla[data-flotante]')).forEach(el => {
+    const r = el.getBoundingClientRect();
+    if(Math.max(r.left - caja.left, caja.right - r.right) < 48) return;
+    const alto = altoCompleto(el);
+    let quitado = 0, sig = el.nextElementSibling;
+    while(sig && sig.classList.contains('dx-vacio') && sig.matches('p')) {
+      const h = altoCompleto(sig);
+      if(quitado + h > alto + 6) break;
+      const siguiente = sig.nextElementSibling;
+      sig.remove();
+      quitado += h;
+      sig = siguiente;
+    }
+  });
+  // Espaciado contextual: entre párrafos del mismo estilo no hay separación
+  raiz.querySelectorAll('.dx-p[data-contextual]').forEach(p => {
+    const prev = p.previousElementSibling;
+    if(prev?.matches('.dx-p[data-contextual]') && prev.dataset.estilo===p.dataset.estilo) { prev.style.marginBottom = '0px'; p.style.marginTop = '0px'; }
+  });
+}
+
+// ── Detección de campos ──
+// Etiquetas "Nombre: valor" → el valor se vacía y queda como campo. Si el valor
+// tiene cifras, solo las cifras son campo y las unidades quedan fijas
+// ("25 años", "90/60 mmHg"). Celdas de valor de las tablas → campo. Títulos y
+// etiquetas quedan fijos. Los textos corridos se conservan editables.
+const _DX_MESES = 'enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre';
+
+function _dxTextoIndexado(p) {
+  const nodos = []; let texto = '';
+  const w = document.createTreeWalker(p, NodeFilter.SHOW_TEXT, { acceptNode: n => n.parentElement.closest('.dx-num,.dx-ancla,.dx-campo') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
+  while(w.nextNode()) { nodos.push({ nodo:w.currentNode, inicio:texto.length }); texto += w.currentNode.nodeValue; }
+  const pos = i => {
+    for(let j=nodos.length-1; j>=0; j--) if(nodos[j].inicio <= i) return { nodo:nodos[j].nodo, off:Math.min(i-nodos[j].inicio, nodos[j].nodo.nodeValue.length) };
+    return nodos[0] ? { nodo:nodos[0].nodo, off:0 } : null;
+  };
+  return { texto, pos, vacio:!nodos.length };
+}
+
+function _dxCrearCampo(p, tramos, nuevoId) {
+  const { pos } = _dxTextoIndexado(p);
+  [...tramos].sort((a,b) => b.ini-a.ini).forEach(t => {
+    const a = pos(t.ini), b = pos(t.fin);
+    if(!a || !b) return;
+    const r = document.createRange();
+    r.setStart(a.nodo, a.off); r.setEnd(b.nodo, b.off);
+    const original = r.toString();
+    r.deleteContents();
+    const campo = document.createElement('span');
+    campo.className = 'dx-campo';
+    campo.dataset.campo = nuevoId('c');
+    campo.dataset.etiqueta = t.etiqueta;
+    // El texto del ejemplo solo sirve mientras se revisa el machote; no se guarda
+    if(original) campo.dataset.original = original;
+    if(t.tipo) campo.dataset.tipo = t.tipo;
+    if(t.formato) campo.dataset.formato = t.formato;
+    r.insertNode(campo);
+    // "Diagnóstico:" sin espacio después: el dato no queda pegado a los dos puntos
+    if(t.espacio) campo.before(document.createTextNode(' '));
+  });
+}
+
+function _dxEsTitulo(p) {
+  if(p.closest('.dx-cuadro')) return true;
+  const t = p.textContent.replace(/\s+/g,' ').trim();
+  if(!t) return true;
+  // Renglones de firma: solo guiones bajos, guiones o puntos
+  if(/^[_\-–—.·\s]+$/.test(t)) return true;
+  const letras = t.replace(/[^A-Za-zÁÉÍÓÚÑÜáéíóúñü]/g,'');
+  const mayus = letras ? letras.replace(/[^A-ZÁÉÍÓÚÑÜ]/g,'').length / letras.length : 0;
+  // "I. SOMATOMETRÍA" es un título; "1. Continuar losartán…" es un renglón del plan
+  if(p.dataset.numerado && !p.closest('td') && t.length <= 160 && (mayus >= 0.6 || _dxTodoNegrita(p))) return true;
+  return mayus >= 0.85 && t.length <= 90 && letras.length >= 3 && !/:\s*\S/.test(t);
+}
+
+// "Etiqueta:" al comienzo, tras un tabulador o tras dos espacios. La etiqueta no
+// lleva dobles espacios: "23.05.25  a las  8.6 semanas    FPP:" es un valor
+// seguido de la etiqueta FPP, no una etiqueta larga.
+const _DX_ETIQUETA = /(^|\t|[ \u00a0]{2,})([A-Za-zÁÉÍÓÚÑÜáéíóúñü](?:[^:\t\n \u00a0]|[ \u00a0](?![ \u00a0]))*?)\s*:(?![\/\d])/g;
+
+function _dxMarcarEtiquetas(p, nuevoId) {
+  const { texto } = _dxTextoIndexado(p);
+  const etiquetas = []; let m;
+  _DX_ETIQUETA.lastIndex = 0;
+  while((m = _DX_ETIQUETA.exec(texto))) {
+    const nombre = m[2].replace(/\s+/g,' ').trim();
+    if(nombre.length <= 46) etiquetas.push({ ini:m.index+m[1].length, fin:_DX_ETIQUETA.lastIndex, nombre });
+  }
+  if(!etiquetas.length || texto.slice(0, etiquetas[0].ini).trim()) return false;
+  // "Historia clínica:" sin valor y seguida de más etiquetas es un subtítulo
+  if(etiquetas.length===1 && !texto.slice(etiquetas[0].fin).trim()) {
+    let sig = p.nextElementSibling;
+    while(sig && sig.matches('.dx-p') && !sig.textContent.trim()) sig = sig.nextElementSibling;
+    if(sig?.matches('.dx-p') && new RegExp(_DX_ETIQUETA.source).test(_dxTextoIndexado(sig).texto.trimStart())) return 'fijo';
+  }
+  const tramos = [];
+  for(let i=0; i<etiquetas.length; i++) {
+    const e = etiquetas[i];
+    let vi = e.fin, vf = i+1 < etiquetas.length ? etiquetas[i+1].ini : texto.length;
+    while(vi < vf && /\s/.test(texto[vi])) vi++;
+    while(vf > vi && /\s/.test(texto[vf-1])) vf--;
+    const valor = texto.slice(vi, vf);
+    if(!valor) { tramos.push({ ini:vi, fin:vi, etiqueta:e.nombre, espacio: !/\s/.test(texto[e.fin] || '') }); continue; }
+    if(/\d/.test(valor)) {
+      const reDato = /\d[\d.,:\/]*(?:\s*[-–]\s*\d[\d.,:\/]*)?|\([^()\d]{2,40}\)/g; let k;
+      while((k = reDato.exec(valor))) {
+        // "AGO: G 0 P 0 A 0": cada cifra toma la sigla que la precede
+        const sigla = valor.slice(0, k.index).match(/(?:^|\s)([A-ZÁÉÍÓÚÑ]{1,3})\s*$/);
+        tramos.push({ ini:vi+k.index, fin:vi+k.index+k[0].length, etiqueta:sigla ? `${e.nombre} ${sigla[1]}` : e.nombre });
+      }
+    } else {
+      // Una frase larga tras dos puntos es texto corrido, no un formulario
+      if(valor.length > 60) return false;
+      tramos.push({ ini:vi, fin:vf, etiqueta:e.nombre });
+    }
+  }
+  _dxCrearCampo(p, tramos, nuevoId);
+  return true;
+}
+
+function _dxMarcarFecha(p, nuevoId) {
+  if(p.closest('td')) return false;
+  const { texto } = _dxTextoIndexado(p);
+  if(texto.trim().length > 90) return false;
+  const m = texto.match(new RegExp(`\\b\\d{1,2}\\s+de\\s+(${_DX_MESES})\\s+(de|del)\\s+\\d{4}\\b|\\b\\d{1,2}[\\/.-]\\d{1,2}[\\/.-]\\d{2,4}\\b`, 'i'));
+  if(!m) return false;
+  // Se recuerda cómo escribía la fecha el Word para proponer la del día igual
+  const largo = /\s(de|del)\s+\d{4}$/i.exec(m[0]);
+  const partes = m[0].split(/[\/.-]/);
+  const formato = largo ? 'largo-' + largo[1].toLowerCase() : `corto${m[0].match(/[\/.-]/)[0]}${partes[2]?.length === 2 ? 2 : 4}`;
+  _dxCrearCampo(p, [{ ini:m.index, fin:m.index+m[0].length, etiqueta:'Fecha', tipo:'fecha', formato }], nuevoId);
+  return true;
+}
+
+function _dxTodoNegrita(el) {
+  const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  let alguno = false;
+  while(w.nextNode()) {
+    if(!w.currentNode.nodeValue.trim()) continue;
+    alguno = true;
+    if(Number(getComputedStyle(w.currentNode.parentElement).fontWeight) < 600) return false;
+  }
+  return alguno;
+}
+
+function _dxHacerEditable(p, nuevoId) {
+  // Con imágenes en línea el párrafo queda fijo: reescribir su texto las borraría
+  if(p.querySelector('.dx-imagen, .dx-cuadro')) return;
+  let destino = p;
+  if(p.querySelector('.dx-num, .dx-ancla')) {
+    // La viñeta o el número del Word no forma parte del texto editable
+    destino = document.createElement('span');
+    Array.from(p.childNodes).filter(n => !(n.nodeType === 1 && n.matches('.dx-num, .dx-ancla'))).forEach(n => destino.appendChild(n));
+    p.appendChild(destino);
+  }
+  destino.classList.add('dx-editable');
+  destino.dataset.campo = nuevoId('p');
+  destino.dataset.etiqueta = destino.textContent.replace(/\s+/g,' ').trim().slice(0, 48);
+}
+
+const _DX_UNIDADES = /^(.*\d[\d.,:\/]*)\s*(SDG|SG|mm|cm|m|kg|g|mg|ml|años|meses|días|lpm|mmHg|semanas|%|°C)\.?$/i;
+
+function _dxVaciarCelda(td, etiqueta, nuevoId) {
+  const texto = td.textContent.replace(/\s+/g,' ').trim();
+  let p = td.querySelector('.dx-p');
+  if(!p) { p = document.createElement('p'); p.className = 'dx-p'; td.appendChild(p); }
+  td.querySelectorAll('.dx-p').forEach(x => { if(x !== p) x.remove(); });
+  const run = p.querySelector('span[style]:not(.dx-num)');
+  const estilo = run?.getAttribute('style') || '';
+  // "1: 909" es una razón de riesgo: el "1:" queda fijo y solo la cifra es campo
+  const prefijo = texto.match(/^(1\s*:\s*)(?=\d)/);
+  const resto = prefijo ? texto.slice(prefijo[0].length) : texto;
+  const unidad = resto.match(_DX_UNIDADES);
+  p.classList.remove('dx-vacio');
+  p.innerHTML = '';
+  const envoltura = document.createElement('span');
+  if(estilo) envoltura.setAttribute('style', estilo);
+  const campo = document.createElement('span');
+  campo.className = 'dx-campo';
+  campo.dataset.campo = nuevoId('c');
+  campo.dataset.etiqueta = etiqueta;
+  campo.dataset.celda = '1';
+  const original = unidad ? unidad[1].trim() : resto;
+  if(original) campo.dataset.original = original;
+  if(prefijo) envoltura.appendChild(document.createTextNode(prefijo[1].replace(/\s+$/,' ')));
+  envoltura.appendChild(campo);
+  if(unidad) envoltura.appendChild(document.createTextNode(' '+unidad[2]));
+  p.appendChild(envoltura);
+}
+
+function _dxDetectarCampos(raiz) {
+  let n = 0;
+  const nuevoId = pref => pref + (++n);
+  raiz.querySelectorAll('.dx-p').forEach(p => {
+    if(!p.textContent.trim() || _dxEsTitulo(p)) return;
+    // Lo centrado fuera de tablas (bloque de firma, leyendas) es texto, no formulario
+    const centrado = p.style.textAlign==='center' && !p.closest('td');
+    if(!centrado && (_dxMarcarEtiquetas(p, nuevoId) || _dxMarcarFecha(p, nuevoId))) return;
+    if(!p.closest('td')) _dxHacerEditable(p, nuevoId);
+  });
+  const textoCelda = td => td.textContent.replace(/\s+/g,' ').trim();
+  // Un dato empieza con cifra ("130/85 mmHg", "1: 909"); "Saturación O2" es etiqueta
+  const esDato = t => /^[-+<>≤≥~]?\s*\d/.test(t);
+  raiz.querySelectorAll('table.dx-tabla').forEach(tabla => {
+    const filas = Array.from(tabla.rows);
+    const unaColumna = filas.every(f => f.cells.length <= 1);
+    const conEtiquetas = !!tabla.querySelector('.dx-campo');
+    // La primera fila es de títulos solo si no trae datos y se distingue de la siguiente
+    const negrita = fila => Array.from(fila.cells).filter(td => textoCelda(td)).every(td => _dxTodoNegrita(td));
+    const sombra = fila => Array.from(fila.cells).map(td => td.style.background || '').join('|');
+    const conEncabezado = filas.length > 1 && Array.from(filas[0].cells).some(td => textoCelda(td))
+      && Array.from(filas[0].cells).every(td => !esDato(textoCelda(td)))
+      && ((negrita(filas[0]) && !negrita(filas[1])) || sombra(filas[0]) !== sombra(filas[1]));
+    const encabezados = conEncabezado ? Array.from(filas[0].cells).map(textoCelda) : [];
+    // Sin títulos, cada columna es de etiquetas o de datos según lo que traiga la mayoría
+    let columnasEtiqueta = new Set([0]);
+    if(!conEncabezado) {
+      columnasEtiqueta = new Set();
+      const columnas = Math.max(0, ...filas.map(f => f.cells.length));
+      for(let c = 0; c < columnas; c++) {
+        const valores = filas.map(f => f.cells[c]).filter(Boolean).map(textoCelda).filter(Boolean);
+        if(valores.length && valores.filter(esDato).length / valores.length < 0.5) columnasEtiqueta.add(c);
+      }
+      // Una tabla solo de texto sin títulos: la primera columna nombra y el resto se llena
+      if(columnasEtiqueta.size === columnas) columnasEtiqueta = new Set([0]);
+    }
+    filas.forEach((fila, fi) => {
+      const celdas = Array.from(fila.cells);
+      const subtitulo = conEtiquetas && celdas.every(td => { const t = td.textContent.trim(); return !t || (!/[\d:]/.test(t) && _dxTodoNegrita(td)); });
+      celdas.forEach((td, ci) => {
+        if(td.querySelector('.dx-campo, .dx-editable') || td.closest('.dx-cuadro')) return;
+        const t = td.textContent.replace(/\s+/g,' ').trim();
+        if(unaColumna || t.length > 60 || td.querySelectorAll('.dx-p[data-numerado]').length) {
+          td.querySelectorAll('.dx-p').forEach(p => { if(p.textContent.trim() && !p.matches('.dx-editable') && !p.querySelector('.dx-editable')) _dxHacerEditable(p, nuevoId); });
+          return;
+        }
+        if(subtitulo || (conEtiquetas && !t)) return;
+        if(fi===0 && conEncabezado) return;
+        if(columnasEtiqueta.has(ci) && celdas.length > 1) return;
+        // La etiqueta es la celda de etiquetas más cercana a la izquierda
+        let filaEtiqueta = '';
+        for(let k = ci - 1; k >= 0; k--) if(columnasEtiqueta.has(k) && celdas[k]) { filaEtiqueta = textoCelda(celdas[k]); break; }
+        _dxVaciarCelda(td, [filaEtiqueta, encabezados[ci]].filter(Boolean).join(' · ') || `Celda ${fi+1}.${ci+1}`, nuevoId);
+      });
+    });
+  });
+  return n;
+}
+
+// ── Gráficas ──
+// Una gráfica de Word suele ser una imagen: la curva no se puede recalcular,
+// pero sí marcar sobre ella el valor del paciente. Se busca el recuadro del
+// área de trazado (las líneas oscuras más largas) para saber dónde empiezan y
+// terminan los ejes; la clínica solo indica qué campo y qué rango representa.
+function _dxAnalizarMarcoGrafica(url) {
+  return new Promise(listo => {
+    const img = new Image();
+    img.onerror = () => listo(null);
+    img.onload = () => {
+      try {
+        const escala = Math.min(1, 900 / img.naturalWidth);
+        const W = Math.max(1, Math.round(img.naturalWidth*escala)), H = Math.max(1, Math.round(img.naturalHeight*escala));
+        const lienzo = document.createElement('canvas');
+        lienzo.width = W; lienzo.height = H;
+        const g = lienzo.getContext('2d', { willReadFrequently:true });
+        g.drawImage(img, 0, 0, W, H);
+        const d = g.getImageData(0, 0, W, H).data;
+        const oscuro = (x, y) => { const i = (y*W+x)*4; return d[i+3] > 128 && (d[i]*0.3 + d[i+1]*0.59 + d[i+2]*0.11) < 140; };
+        const tramo = (largo, fn) => { let mejor = 0, actual = 0; for(let k=0; k<largo; k++) { if(fn(k)) { actual++; if(actual > mejor) mejor = actual; } else actual = 0; } return mejor; };
+        const grupos = (valores, minimo) => {
+          const r = []; let ini = -1;
+          valores.forEach((v, i) => { if(v >= minimo) { if(ini < 0) ini = i; } else if(ini >= 0) { r.push((ini+i-1)/2); ini = -1; } });
+          if(ini >= 0) r.push((ini+valores.length-1)/2);
+          return r;
+        };
+        const cols = grupos(Array.from({ length:W }, (_, x) => tramo(H, y => oscuro(x, y))), H*0.35);
+        if(cols.length < 2 || cols[cols.length-1] - cols[0] < W*0.3) return listo(null);
+        const x1 = cols[0], x2 = cols[cols.length-1];
+        const filas = grupos(Array.from({ length:H }, (_, y) => tramo(Math.round(x2-x1+1), k => oscuro(Math.round(x1)+k, y))), (x2-x1)*0.6);
+        listo({ x1:_dxR(x1/W*1000)/1000, x2:_dxR(x2/W*1000)/1000, y:filas.length ? _dxR(filas[filas.length-1]/H*1000)/1000 : 0.92, arriba:filas.length > 1 ? _dxR(filas[0]/H*1000)/1000 : 0.05 });
+      } catch(_) { listo(null); }
+    };
+    img.src = url;
+  });
+}
+
+async function _dxDetectarGraficas(raiz) {
+  const graficas = {};
+  let n = 0;
+  for(const marco of Array.from(raiz.querySelectorAll('.dx-imagen'))) {
+    const img = marco.querySelector('img');
+    const ancho = parseFloat(marco.style.width || img?.style.width) || 0, alto = parseFloat(marco.style.height || img?.style.height) || 0;
+    if(!img || ancho < 180 || alto < 100) continue;
+    const ejes = await _dxAnalizarMarcoGrafica(img.getAttribute('src'));
+    if(!ejes) continue;
+    const id = 'g' + (++n);
+    marco.dataset.grafica = id;
+    graficas[id] = { ...ejes, campo:'', min:null, max:null };
+  }
+  return graficas;
+}
+
+// Convierte un .docx en machote: HTML fiel + campos detectados y vaciados.
+async function _docxAMachote(archivo) {
+  const doc = await _docxAHtml(archivo);
+  const caja = _dxContenedorMedicion(doc.pagina);
+  try {
+    caja.innerHTML = doc.cuerpo;
+    _dxAbsorberEspaciadores(caja);
+    _dxDetectarCampos(caja);
+    doc.graficas = await _dxDetectarGraficas(caja);
+    doc.cuerpo = caja.innerHTML;
+  } finally {
+    caja.remove();
+  }
+  return doc;
+}
+
+// ── Documento relleno ──
+function _dxValorNumerico(texto) {
+  const m = String(texto||'').replace(',', '.').match(/-?\d+(\.\d+)?/);
+  return m ? Number(m[0]) : null;
+}
+
+function _dxPintarGraficas(raiz, graficas, leerValor) {
+  raiz.querySelectorAll('.dx-imagen[data-grafica]').forEach(img => {
+    img.querySelectorAll('.dx-guia, .dx-marcador').forEach(x => x.remove());
+    const g = graficas?.[img.dataset.grafica];
+    if(!g || !g.campo || g.x1==null || g.x2==null || g.min==null || g.max==null || Number(g.max)===Number(g.min)) return;
+    const v = _dxValorNumerico(leerValor(g.campo));
+    if(v==null) return;
+    const f = (v - Number(g.min)) / (Number(g.max) - Number(g.min));
+    if(f < -0.02 || f > 1.02) return;
+    const x = (g.x1 + (g.x2 - g.x1) * Math.min(1, Math.max(0, f))) * 100, y = (g.y ?? 0.92) * 100, arriba = (g.arriba ?? 0.05) * 100;
+    img.insertAdjacentHTML('beforeend', `<span class="dx-guia" style="left:${_dxR(x)}%;top:${_dxR(arriba)}%;height:${_dxR(Math.max(0, y-arriba))}%"></span><span class="dx-marcador" style="left:${_dxR(x)}%;top:${_dxR(y)}%"><span class="dx-flecha"></span><span class="dx-valor">${escAttr(String(v))}</span></span>`);
+  });
+}
+
+// Devuelve el HTML del cuerpo con los valores escritos y sin nada editable.
+function _dxCuerpoRelleno(documento, valores) {
+  const t = document.createElement('template');
+  t.innerHTML = documento.cuerpo;
+  const raiz = t.content;
+  raiz.querySelectorAll('[data-campo]').forEach(el => {
+    const v = valores?.[el.dataset.campo];
+    if(v != null) el.textContent = v;
+    el.removeAttribute('contenteditable');
+    if(el.classList.contains('dx-campo') && !el.textContent) el.classList.add('dx-campo-vacio');
+  });
+  const leer = id => valores?.[id] ?? raiz.querySelector(`[data-campo="${id}"]`)?.textContent ?? '';
+  _dxPintarGraficas(raiz, documento.graficas, leer);
+  const div = document.createElement('div');
+  div.appendChild(raiz);
+  return div.innerHTML;
+}
+
+function _dxTextoPlano(documento, valores) {
+  const t = document.createElement('template');
+  t.innerHTML = _dxCuerpoRelleno(documento, valores);
+  const lineas = [];
+  const recorrer = nodo => {
+    for(const el of Array.from(nodo.children)) {
+      if(el.matches('table.dx-tabla')) {
+        Array.from(el.rows).forEach(tr => {
+          const celdas = Array.from(tr.cells).map(td => td.textContent.replace(/\s+/g,' ').trim());
+          if(celdas.some(Boolean)) lineas.push(celdas.join(' | '));
+        });
+      } else if(el.matches('.dx-p')) {
+        lineas.push(el.textContent.replace(/[ \t ]+/g,' ').trim());
+      } else recorrer(el);
+    }
+  };
+  recorrer(t.content);
+  return lineas.join('\n').replace(/\n{3,}/g,'\n\n').trim();
+}
+
+// Paginación dentro del propio impreso: las páginas se arman con el encabezado,
+// el pie y la marca de agua del Word, y las tablas largas se parten por filas.
+// Se ejecuta tal cual en la ventana de impresión y en el marco del PDF.
+function _dxPaginarImpreso(opciones) {
+  const flujo = document.getElementById('dx-flujo');
+  const contenedor = document.getElementById('dx-paginas');
+  const plantilla = document.getElementById('dx-plantilla-pagina');
+  let numero = 0, cuerpo = null, limite = 0;
+  const nueva = () => {
+    const pagina = plantilla.content.firstElementChild.cloneNode(true);
+    const marcas = opciones.marcas || [];
+    if(marcas.length) {
+      const m = marcas[numero % marcas.length];
+      const div = document.createElement('div');
+      div.className = 'dx-marca-agua';
+      div.style.cssText = `left:${opciones.margenIzq + m.izq}px;top:${Math.max(0,(opciones.alto - m.alto)/2)}px`;
+      div.innerHTML = m.html;
+      pagina.insertBefore(div, pagina.firstChild);
+    }
+    contenedor.appendChild(pagina);
+    numero++;
+    const enc = pagina.querySelector('.dx-encabezado'), pie = pagina.querySelector('.dx-pie');
+    cuerpo = pagina.querySelector('.dx-cuerpo');
+    const arriba = Math.max(opciones.margenSup, enc.offsetTop + enc.offsetHeight + 4);
+    const abajo = Math.max(opciones.margenInf, opciones.alto - pie.offsetTop + 4);
+    cuerpo.style.top = arriba + 'px';
+    cuerpo.style.bottom = abajo + 'px';
+    limite = cuerpo.clientHeight;
+  };
+  const desborda = () => cuerpo.scrollHeight > limite + 1;
+  nueva();
+  const bloques = Array.from(flujo.children);
+  while(bloques.length) {
+    const b = bloques.shift();
+    if(b.classList.contains('dx-salto')) { if(cuerpo.children.length) nueva(); continue; }
+    // Un párrafo vacío al comienzo de una página solo empuja el contenido
+    if(!cuerpo.children.length && b.classList.contains('dx-vacio') && numero > 1) continue;
+    cuerpo.appendChild(b);
+    if(!desborda()) continue;
+    if(b.matches('table') && b.tBodies[0] && b.tBodies[0].rows.length > 1) {
+      const resto = b.cloneNode(false);
+      b.querySelector('colgroup') && resto.appendChild(b.querySelector('colgroup').cloneNode(true));
+      const cuerpoResto = document.createElement('tbody');
+      resto.appendChild(cuerpoResto);
+      resto.style.marginTop = '0px';
+      const filas = b.tBodies[0];
+      while(desborda() && filas.rows.length > 1) cuerpoResto.insertBefore(filas.lastElementChild, cuerpoResto.firstChild);
+      if(desborda()) { cuerpo.removeChild(b); filas.append(...Array.from(cuerpoResto.children)); bloques.unshift(b); nueva(); continue; }
+      Array.from(filas.querySelectorAll('tr[data-encabezado]')).reverse().forEach(tr => cuerpoResto.insertBefore(tr.cloneNode(true), cuerpoResto.firstChild));
+      bloques.unshift(resto);
+      nueva();
+      continue;
+    }
+    if(cuerpo.children.length > 1) {
+      cuerpo.removeChild(b);
+      // Un título no se queda solo al pie de la página
+      const previo = cuerpo.lastElementChild;
+      const arrastrar = previo && previo.matches('[data-mantener], [data-numerado]') && cuerpo.children.length > 1;
+      if(arrastrar) cuerpo.removeChild(previo);
+      nueva();
+      if(arrastrar) cuerpo.appendChild(previo);
+      bloques.unshift(b);
+    }
+  }
+  flujo.remove();
+}
+
+function _dxHtmlImpreso(documento, cuerpoHtml, titulo, extra={}) {
+  const pg = documento.pagina;
+  const alto = Math.floor(pg.alto) - 1;
+  const opciones = { margenSup:pg.margenSup, margenInf:pg.margenInf, margenIzq:pg.margenIzq, alto, marcas:documento.marcasAgua||[] };
+  return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>${escAttr(titulo)}</title><style>${DOCX_CSS}
+@page{size:${_dxR(pg.ancho*25.4/96)}mm ${_dxR(pg.alto*25.4/96)}mm;margin:0}
+html,body{margin:0;padding:0;background:#fff}
+body{print-color-adjust:exact;-webkit-print-color-adjust:exact}
+#dx-flujo{width:${_dxR(pg.contenido)}px;tab-size:${_dxR(pg.tabulador)}px}
+.dx-pagina{position:relative;width:${_dxR(pg.ancho)}px;height:${alto}px;overflow:hidden;background:#fff;break-after:page;page-break-after:always}
+.dx-pagina:last-child{break-after:auto;page-break-after:auto}
+.dx-encabezado{position:absolute;left:${_dxR(pg.margenIzq)}px;right:${_dxR(pg.margenDer)}px;top:${_dxR(pg.encabezado)}px;z-index:2}
+.dx-pie{position:absolute;left:${_dxR(pg.margenIzq)}px;right:${_dxR(pg.margenDer)}px;bottom:${_dxR(pg.pie)}px;z-index:2}
+.dx-cuerpo{position:absolute;left:${_dxR(pg.margenIzq)}px;right:${_dxR(pg.margenDer)}px;overflow:hidden;z-index:1;tab-size:${_dxR(pg.tabulador)}px}
+.dx-marca-agua{position:absolute;z-index:0;line-height:0}
+.dx-campo-vacio{display:inline-block;min-width:.9em}
+@media screen{body{background:#E5E7EB;padding:12px 0}.dx-pagina{margin:0 auto 12px;box-shadow:0 4px 18px rgba(15,23,42,.18)}}
+${extra.css||''}
+</style></head><body class="dx-doc">
+<div id="dx-flujo">${cuerpoHtml}</div>
+<template id="dx-plantilla-pagina"><div class="dx-pagina"><div class="dx-encabezado">${documento.encabezado||''}</div><div class="dx-cuerpo"></div><div class="dx-pie">${documento.pie||''}</div></div></template>
+<div id="dx-paginas"></div>
+<script>(${_dxPaginarImpreso.toString()})(${JSON.stringify(opciones)});<\/script>
+</body></html>`;
+}
+
+function _dxEntregarImpreso(documento, cuerpoHtml, titulo, { ventana=null, descargar=_salidaDocumento==='descargar' } = {}) {
+  const pg = documento.pagina;
+  return _entregarDocumento({
+    titulo, html:_dxHtmlImpreso(documento, cuerpoHtml, titulo), ventana, descargar,
+    hoja:{ ancho:pg.ancho*25.4/96, alto:pg.alto*25.4/96, margen:0 },
+    cssDescarga:'body{background:#fff!important;padding:0!important}.dx-pagina{margin:0!important;box-shadow:none!important}'
+  });
+}
+
+// ── Machotes con formato dentro de la app ──
+// El documento de un machote se descarga solo cuando se usa: loadAll() no lo
+// trae, para que la carga inicial no crezca con cada machote de la clínica.
+const _documentosPlantilla = new Map();
+function _documentoPlantilla(id) {
+  const clave = String(id);
+  if(!_documentosPlantilla.has(clave)) {
+    _documentosPlantilla.set(clave, (async () => {
+      const { data, error } = await sb.from('plantillas_notas').select('documento').eq('id', id).maybeSingle();
+      if(error) {
+        // Sin la columna el machote sigue funcionando como texto; otro error se reintenta luego
+        if(!_faltaColumna(error, 'documento')) _documentosPlantilla.delete(clave);
+        return null;
+      }
+      const d = data?.documento;
+      if(!d || typeof d !== 'object' || !d.cuerpo || !d.pagina) return null;
+      return { ...d, encabezado:_dxSanear(d.encabezado), pie:_dxSanear(d.pie), cuerpo:_dxSanear(d.cuerpo),
+        marcasAgua:(Array.isArray(d.marcasAgua) ? d.marcasAgua : []).map(m => ({ ...m, html:_dxSanear(m.html) })) };
+    })().catch(() => { _documentosPlantilla.delete(clave); return null; }));
+  }
+  return _documentosPlantilla.get(clave);
+}
+
+// El documento llega de la base y se pinta como HTML: se quita todo lo que
+// pueda ejecutar código aunque alguien lo haya escrito a mano en la tabla.
+function _dxSanear(html) {
+  const t = document.createElement('template');
+  t.innerHTML = String(html || '');
+  t.content.querySelectorAll('script,iframe,object,embed,link,meta,style,base,form,input,button,textarea,select').forEach(el => el.remove());
+  t.content.querySelectorAll('*').forEach(el => {
+    Array.from(el.attributes).forEach(a => {
+      const nombre = a.name.toLowerCase();
+      if(nombre.startsWith('on') || nombre === 'contenteditable' || ((nombre === 'src' || nombre === 'href' || nombre === 'xlink:href') && !/^(https?:|data:image\/|blob:)/i.test(a.value.trim()))) el.removeAttribute(a.name);
+    });
+  });
+  const div = document.createElement('div');
+  div.appendChild(t.content);
+  return div.innerHTML;
+}
+
+const _DX_SOLO_TEXTO = (() => {
+  try { const d = document.createElement('div'); d.contentEditable = 'plaintext-only'; return d.contentEditable === 'plaintext-only'; }
+  catch(_) { return false; }
+})();
+
+// La hoja se muestra continua (sin paginar) y a escala del ancho disponible.
+// modo: 'lectura' (valores ya escritos), 'edicion' (campos editables) o
+// 'revision' (al importar, para decidir qué es campo y qué es texto fijo).
+function _dxMontarHoja(marco, documento, { modo='lectura', valores=null } = {}) {
+  _dxAsegurarEstilos();
+  const pg = documento.pagina;
+  marco.classList.add('dx-marco');
+  marco.dataset.ancho = String(pg.ancho);
+  marco.innerHTML = '';
+  const hoja = document.createElement('div');
+  hoja.className = `dx-hoja dx-doc dx-${modo}`;
+  hoja.style.cssText = `width:${_dxR(pg.contenido)}px;padding:${_dxR(Math.max(18, pg.encabezado))}px ${_dxR(pg.margenDer)}px ${_dxR(Math.max(18, pg.pie))}px ${_dxR(pg.margenIzq)}px;tab-size:${_dxR(pg.tabulador)}px;-moz-tab-size:${_dxR(pg.tabulador)}px`;
+  hoja.innerHTML = `<div class="dx-hoja-enc">${documento.encabezado||''}</div><div class="dx-hoja-cuerpo">${modo==='lectura' ? _dxCuerpoRelleno(documento, valores) : documento.cuerpo}</div><div class="dx-hoja-pie">${documento.pie||''}</div>`;
+  marco.appendChild(hoja);
+  const cuerpo = hoja.querySelector('.dx-hoja-cuerpo');
+  if(modo === 'edicion') {
+    cuerpo.querySelectorAll('[data-campo]').forEach(el => {
+      el.dataset.texto = el.textContent; // lo que trae el machote, para saber qué cambió
+      const v = valores?.[el.dataset.campo];
+      if(v != null) el.textContent = v;
+    });
+  }
+  _dxAjustarZoom(marco);
+  if(!marco._dxObservador && 'ResizeObserver' in window) {
+    marco._dxObservador = new ResizeObserver(() => _dxAjustarZoom(marco));
+    marco._dxObservador.observe(marco);
+  }
+  return cuerpo;
+}
+
+function _dxAjustarZoom(marco) {
+  const hoja = marco?.querySelector(':scope > .dx-hoja');
+  if(!hoja) return;
+  const disponible = marco.clientWidth - 24;
+  const escala = marco.classList.contains('dx-tamano-real') || disponible <= 0 ? 1 : Math.min(1, disponible / (Number(marco.dataset.ancho) || 816));
+  const zoom = String(Math.round(escala*1000)/1000);
+  if(hoja.style.zoom !== zoom) hoja.style.zoom = zoom;
+}
+
+function _dxAlternarTamanoReal(idMarco, boton) {
+  const marco = document.getElementById(idMarco);
+  if(!marco) return;
+  const real = marco.classList.toggle('dx-tamano-real');
+  _dxAjustarZoom(marco);
+  if(boton) boton.textContent = real ? '🔍 Ajustar a la pantalla' : '🔍 Tamaño real';
+}
+
+function _dxTextoEditable(el) {
+  // innerText respeta los saltos de renglón escritos en el documento
+  return String(el.innerText ?? el.textContent ?? '').replace(/ /g, ' ').replace(/\n$/, '');
+}
+
+function _dxLeerValores(cuerpo) {
+  const valores = {};
+  cuerpo.querySelectorAll('[data-campo]').forEach(el => {
+    const v = _dxTextoEditable(el);
+    if(el.classList.contains('dx-campo')) { if(v.trim()) valores[el.dataset.campo] = v.trim(); return; }
+    // Un párrafo solo se guarda si cambió: así conserva negritas y colores del Word
+    const normal = t => String(t||'').replace(/\s+/g, ' ').trim();
+    if(normal(v) !== normal(el.dataset.texto)) valores[el.dataset.campo] = v;
+  });
+  return valores;
+}
+
+function _dxEnfocarAlFinal(el) {
+  el.focus({ preventScroll:true });
+  const r = document.createRange();
+  r.selectNodeContents(el);
+  r.collapse(false);
+  const s = getSelection();
+  s.removeAllRanges();
+  s.addRange(r);
+  el.scrollIntoView({ block:'nearest', inline:'nearest' });
+}
+
+function _dxRepintarGraficas(cuerpo, documento) {
+  _dxPintarGraficas(cuerpo, documento.graficas, id => {
+    const el = cuerpo.querySelector(`[data-campo="${CSS.escape(id)}"]`);
+    return el ? el.textContent : '';
+  });
+}
+
+function _dxActivarEdicion(cuerpo, documento, alCambiar) {
+  const editables = () => Array.from(cuerpo.querySelectorAll('.dx-campo, .dx-editable'));
+  editables().forEach(el => {
+    el.setAttribute('contenteditable', _DX_SOLO_TEXTO ? 'plaintext-only' : 'true');
+    el.spellcheck = true;
+    if(el.classList.contains('dx-campo')) {
+      el.setAttribute('role', 'textbox');
+      el.setAttribute('aria-label', el.dataset.etiqueta || 'Campo');
+      el.title = el.dataset.etiqueta || '';
+    }
+  });
+  const graficaDe = id => Object.values(documento.graficas||{}).some(g => g.campo === id);
+  cuerpo.addEventListener('keydown', e => {
+    const el = e.target.closest?.('.dx-campo, .dx-editable');
+    if(!el || e.key !== 'Enter') return;
+    if(el.classList.contains('dx-campo')) {
+      // En un campo, Enter pasa al siguiente (Mayús+Enter al anterior)
+      e.preventDefault();
+      const lista = editables(), i = lista.indexOf(el);
+      const destino = lista[e.shiftKey ? i-1 : i+1];
+      if(destino) _dxEnfocarAlFinal(destino);
+    } else if(!_DX_SOLO_TEXTO) {
+      e.preventDefault();
+      document.execCommand('insertLineBreak');
+    }
+  });
+  cuerpo.addEventListener('paste', e => {
+    const el = e.target.closest?.('.dx-campo, .dx-editable');
+    if(!el) return;
+    e.preventDefault();
+    let texto = e.clipboardData?.getData('text/plain') || '';
+    if(el.classList.contains('dx-campo')) texto = texto.replace(/\s*\n\s*/g, ' ');
+    document.execCommand('insertText', false, texto);
+  });
+  cuerpo.addEventListener('input', e => {
+    const el = e.target.closest?.('.dx-campo, .dx-editable');
+    if(!el) return;
+    // Un campo borrado puede quedarse con un <br> y perder su recuadro
+    if(el.classList.contains('dx-campo') && !el.textContent) el.innerHTML = '';
+    if(graficaDe(el.dataset.campo)) _dxRepintarGraficas(cuerpo, documento);
+    alCambiar?.(el);
+  });
+  _dxRepintarGraficas(cuerpo, documento);
+}
+
+// ── Machote en la nota ──
+let _machoteDocNota = null; // { plantillaId, documento, cuerpo, nueva }
+let _turnoPlantillaNota = 0;
+let _sincronizarDocNotaTimer = null;
+let _notasSinColumnaValores = false;
+
+function _mostrarCargaDocumentoNota() {
+  const wrap = document.getElementById('n-documento-wrap');
+  const marco = document.getElementById('n-documento');
+  if(!wrap || !marco) return;
+  marco.innerHTML = '<div class="dx-cargando">⏳ Cargando el machote…</div>';
+  wrap.style.display = '';
+  document.getElementById('n-documento-lista').style.display = 'none';
+  document.getElementById('n-contenido-wrap').style.display = 'none';
+}
+
+function _cerrarDocumentoNota() {
+  _machoteDocNota = null;
+  clearTimeout(_sincronizarDocNotaTimer);
+  const wrap = document.getElementById('n-documento-wrap');
+  if(wrap) wrap.style.display = 'none';
+  const marco = document.getElementById('n-documento');
+  if(marco) { marco.innerHTML = ''; marco.classList.remove('dx-tamano-real'); }
+  const lista = document.getElementById('n-documento-lista');
+  if(lista) { lista.innerHTML = ''; lista.style.display = 'none'; }
+  const zoom = document.getElementById('n-documento-zoom');
+  if(zoom) zoom.textContent = '🔍 Tamaño real';
+  const cont = document.getElementById('n-contenido-wrap');
+  if(cont) cont.style.display = '';
+  document.querySelector('#modal-nota > .modal')?.classList.remove('modal-documento');
+}
+
+function _abrirDocumentoNota(plantillaId, documento, valores) {
+  const marco = document.getElementById('n-documento');
+  if(!marco) return;
+  const cuerpo = _dxMontarHoja(marco, documento, { modo:'edicion', valores });
+  _machoteDocNota = { plantillaId, documento, cuerpo, nueva: !valores };
+  _dxActivarEdicion(cuerpo, documento, el => {
+    delete el.dataset.autollenado;
+    _dxSincronizarListaNota(el);
+    _dxDocumentoNotaCambio();
+  });
+  document.getElementById('n-documento-wrap').style.display = '';
+  document.getElementById('n-contenido-wrap').style.display = 'none';
+  document.querySelector('#modal-nota > .modal')?.classList.add('modal-documento');
+  const campoFecha = document.getElementById('n-fecha');
+  if(campoFecha && !campoFecha._dxEscucha) { campoFecha.addEventListener('change', () => _dxAutollenarNota()); campoFecha._dxEscucha = true; }
+  if(_machoteDocNota.nueva) _dxAutollenarNota();
+  _dxDocumentoNotaCambio(true);
+  // En el teléfono la hoja completa se ve pequeña: se abre también la lista de campos
+  const lista = document.getElementById('n-documento-lista');
+  lista.style.display = 'none';
+  if(window.matchMedia('(max-width: 640px)').matches) _dxAlternarListaNota(true);
+  else _dxActualizarBotonLista();
+  requestAnimationFrame(() => _dxAjustarZoom(marco));
+}
+
+function _dxDocumentoNotaCambio(inmediato=false) {
+  const d = _machoteDocNota;
+  if(!d) return;
+  const campos = Array.from(d.cuerpo.querySelectorAll('.dx-campo'));
+  const llenos = campos.filter(el => el.textContent.trim()).length;
+  const prog = document.getElementById('n-documento-progreso');
+  if(prog) prog.textContent = `${llenos} de ${campos.length} campo${campos.length===1?'':'s'}`;
+  clearTimeout(_sincronizarDocNotaTimer);
+  // El texto plano de la nota acompaña al documento para búsquedas, historial y
+  // respaldos. Mientras solo haya lo propuesto por el sistema (fecha, paciente,
+  // edad) no cuenta como avance: cambiar de tipo no debe dejar un borrador vacío.
+  const sincronizar = () => {
+    if(_machoteDocNota !== d) return;
+    const valores = _dxLeerValores(d.cuerpo);
+    const escrito = Object.keys(valores).some(id => !d.cuerpo.querySelector(`[data-campo="${CSS.escape(id)}"]`)?.dataset.autollenado);
+    document.getElementById('n-contenido').value = escrito ? _dxTextoPlano(d.documento, valores) : '';
+  };
+  if(inmediato) sincronizar(); else _sincronizarDocNotaTimer = setTimeout(sincronizar, 400);
+}
+
+const _DX_MESES_NOMBRES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+function _dxFechaConFormato(iso, formato='largo-de') {
+  const [a, m, d] = String(iso || hoy()).split('-').map(Number);
+  if(!a || !m || !d) return '';
+  const corto = /^corto(.)(\d)$/.exec(formato || '');
+  if(corto) {
+    const anio = corto[2] === '2' ? String(a).slice(-2) : String(a);
+    return [String(d).padStart(2,'0'), String(m).padStart(2,'0'), anio].join(corto[1]);
+  }
+  return `${d} de ${_DX_MESES_NOMBRES[m-1]} ${formato==='largo-del' ? 'del' : 'de'} ${a}`;
+}
+
+// Fecha, paciente y edad se proponen solos en una nota nueva. Nunca se pisa lo
+// que el médico ya escribió.
+function _dxAutollenarNota() {
+  const d = _machoteDocNota;
+  if(!d?.nueva) return;
+  const pid = parseInt(document.getElementById('n-paciente')?.value) || null;
+  const p = pid ? C.p.find(x => x.id === pid) : null;
+  const fecha = document.getElementById('n-fecha')?.value || hoy();
+  let cambio = false;
+  d.cuerpo.querySelectorAll('.dx-campo').forEach(el => {
+    if(el.textContent.trim() && !el.dataset.autollenado) return;
+    const etiqueta = String(el.dataset.etiqueta || '').toLocaleLowerCase('es').trim();
+    let v = null;
+    if(el.dataset.tipo === 'fecha') v = _dxFechaConFormato(fecha, el.dataset.formato);
+    else if(/^(paciente|nombre|nombre del paciente|nombre completo|nombre y apellidos)$/.test(etiqueta)) v = p ? `${p.nombre||''} ${p.apellidos||''}`.trim() : '';
+    else if(/^edad( materna| del paciente)?$/.test(etiqueta)) { const e = p?.fechaNac ? _getEdadNum(p.fechaNac) : null; v = e != null ? String(e) : ''; }
+    if(v == null || (v === '' && !el.dataset.autollenado)) return;
+    if(el.textContent !== v) { el.textContent = v; cambio = true; }
+    if(v) el.dataset.autollenado = '1'; else delete el.dataset.autollenado;
+  });
+  if(cambio) {
+    _dxRepintarGraficas(d.cuerpo, d.documento);
+    _dxSincronizarListaNota();
+    _dxDocumentoNotaCambio();
+  }
+}
+
+// Lista de campos: la forma cómoda de llenar el documento desde el teléfono.
+// Escribe en los mismos campos de la hoja, que se actualiza a la vista.
+function _dxSeccionesCampos(cuerpo) {
+  const grupos = [];
+  let actual = null;
+  const w = document.createTreeWalker(cuerpo, NodeFilter.SHOW_ELEMENT);
+  while(w.nextNode()) {
+    const el = w.currentNode;
+    const esTitulo = (el.matches('.dx-p[data-numerado]') && !el.closest('td') && !el.querySelector('.dx-campo')) || el.matches('.dx-cuadro');
+    if(esTitulo && el.textContent.trim()) {
+      const num = el.querySelector('.dx-num')?.textContent.trim();
+      const texto = Array.from(el.childNodes).filter(n => !(n.nodeType === 1 && n.matches('.dx-num'))).map(n => n.textContent).join('');
+      actual = { titulo:((num ? num+' ' : '') + texto).replace(/\s+/g, ' ').trim().slice(0, 80), campos:[] };
+      grupos.push(actual);
+    } else if(el.matches('.dx-campo')) {
+      if(!actual) { actual = { titulo:'Datos generales', campos:[] }; grupos.push(actual); }
+      actual.campos.push(el);
+    }
+  }
+  return grupos.filter(g => g.campos.length);
+}
+
+function _dxActualizarBotonLista() {
+  const boton = document.getElementById('n-documento-lista-btn');
+  const lista = document.getElementById('n-documento-lista');
+  if(boton && lista) boton.textContent = lista.style.display === 'none' ? '📋 Llenar como lista' : '📄 Ocultar lista';
+}
+
+function _dxAlternarListaNota(forzarAbrir) {
+  const d = _machoteDocNota;
+  const lista = document.getElementById('n-documento-lista');
+  if(!d || !lista) return;
+  const abrir = forzarAbrir === true || lista.style.display === 'none';
+  if(!abrir) { lista.style.display = 'none'; lista.innerHTML = ''; _dxActualizarBotonLista(); return; }
+  lista.innerHTML = _dxSeccionesCampos(d.cuerpo).map(g => {
+    // "Ultrasonido" con fecha y semanas: las etiquetas repetidas se numeran
+    const total = {}, vistas = {};
+    g.campos.forEach(el => { const e = el.dataset.etiqueta || 'Campo'; total[e] = (total[e] || 0) + 1; });
+    const nombre = el => { const e = el.dataset.etiqueta || 'Campo'; vistas[e] = (vistas[e] || 0) + 1; return total[e] > 1 ? `${e} (${vistas[e]})` : e; };
+    return `
+    <div class="nota-doc-seccion">
+      <div class="nota-doc-seccion-titulo">${escAttr(g.titulo)}</div>
+      <div class="nota-doc-seccion-campos">${g.campos.map(el => `
+        <label class="nota-doc-item"><span>${escAttr(nombre(el))}</span>
+          <input type="text" data-ref="${escAttr(el.dataset.campo)}" value="${escAttr(el.textContent)}" autocomplete="off" enterkeyhint="next"></label>`).join('')}
+      </div>
+    </div>`;
+  }).join('') || '<div class="dx-cargando">Este machote no tiene campos para llenar.</div>';
+  lista.oninput = e => {
+    const ref = e.target.dataset?.ref;
+    const el = ref && d.cuerpo.querySelector(`.dx-campo[data-campo="${CSS.escape(ref)}"]`);
+    if(!el) return;
+    el.textContent = e.target.value;
+    delete el.dataset.autollenado;
+    if(Object.values(d.documento.graficas||{}).some(g => g.campo === ref)) _dxRepintarGraficas(d.cuerpo, d.documento);
+    _dxDocumentoNotaCambio();
+  };
+  lista.onkeydown = e => {
+    if(e.key !== 'Enter' || !e.target.matches('input')) return;
+    e.preventDefault();
+    const entradas = Array.from(lista.querySelectorAll('input'));
+    entradas[entradas.indexOf(e.target) + 1]?.focus();
+  };
+  lista.style.display = '';
+  _dxActualizarBotonLista();
+}
+
+function _dxSincronizarListaNota(origen) {
+  const lista = document.getElementById('n-documento-lista');
+  const d = _machoteDocNota;
+  if(!d || !lista || lista.style.display === 'none') return;
+  lista.querySelectorAll('input[data-ref]').forEach(inp => {
+    const el = d.cuerpo.querySelector(`.dx-campo[data-campo="${CSS.escape(inp.dataset.ref)}"]`);
+    if(el && (!origen || el === origen) && inp !== document.activeElement) inp.value = el.textContent;
+  });
+}
+
+// Abre en edición el machote de una nota ya guardada, aunque la plantilla ya
+// no esté activa en la clínica: la nota conserva su documento.
+async function _abrirMachoteDeNota(nota) {
+  if(C.plantillasNota.some(p => String(p.id) === String(nota.plantillaId))) return aplicarPlantillaNota(nota.plantillaId, nota.plantillaValores);
+  const turno = ++_turnoPlantillaNota;
+  _mostrarCargaDocumentoNota();
+  const documento = await _documentoPlantilla(nota.plantillaId);
+  if(turno !== _turnoPlantillaNota) return;
+  if(!documento) { _cerrarDocumentoNota(); return; }
+  _plantillaNotaActiva = { id:nota.plantillaId, nombre:nota.titulo || '', tipo:nota.tipo, contenido:'', campos:[], formato:'docx', activa:false };
+  _abrirDocumentoNota(nota.plantillaId, documento, nota.plantillaValores);
+}
+
+// ── Impresión y vista de una nota hecha con machote ──
+async function _imprimirNotaMachote(n) {
+  const descargar = _salidaDocumento === 'descargar';
+  // La ventana se abre antes de esperar a la red: después el navegador la bloquearía
+  const ventana = descargar ? null : window.open('', '_blank', 'width=900,height=1100');
+  if(ventana) ventana.document.write('<p style="font:14px system-ui,sans-serif;color:#475569;padding:24px">Preparando el documento…</p>');
+  const documento = await _documentoPlantilla(n.plantillaId);
+  if(!documento) {
+    if(ventana && !ventana.closed) ventana.close();
+    toast('No se encontró el machote de esta nota; se imprime como texto', 'warning');
+    return imprimirNota(n.id, true);
+  }
+  const titulo = 'Nota Clínica — ' + (n.titulo || notaTipoLabel(n.tipo));
+  return _dxEntregarImpreso(documento, _dxCuerpoRelleno(documento, n.plantillaValores), titulo, { ventana, descargar });
+}
+
+async function _pintarNotaMachoteEnVista(n) {
+  const marco = document.getElementById('ver-nota-doc');
+  if(!marco) return;
+  const documento = await _documentoPlantilla(n.plantillaId);
+  if(currentNotaId !== n.id || !document.getElementById('ver-nota-doc')) return;
+  if(!documento) {
+    marco.outerHTML = `<div style="white-space:pre-wrap;line-height:1.8;font-size:14px;background:var(--bg);padding:16px;border-radius:10px;border:1px solid var(--border)">${escAttr(n.contenido||'')}</div>`;
+    document.querySelector('#modal-ver-nota > .modal')?.classList.remove('modal-documento');
+    return;
+  }
+  _dxMontarHoja(marco, documento, { modo:'lectura', valores:n.plantillaValores });
+}
+
+// ── Importación con vista previa ──
+let _machoteEnRevision = null; // { doc, clicBorde }
+
+function _mostrarGruposTextoPlantilla(visible) {
+  ['np-estructura-grupo', 'np-campos-grupo'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.style.display = visible ? '' : 'none';
+  });
+}
+
+function _liberarMachoteEnRevision() {
+  if(_machoteEnRevision?.doc?.imagenes) for(const url of _machoteEnRevision.doc.imagenes.keys()) URL.revokeObjectURL(url);
+  _machoteEnRevision = null;
+  const grupo = document.getElementById('np-documento-grupo');
+  if(grupo) grupo.style.display = 'none';
+  ['np-doc-vista', 'np-graficas'].forEach(id => { const el = document.getElementById(id); if(el) el.innerHTML = ''; });
+  _mostrarGruposTextoPlantilla(true);
+}
+
+function _mostrarMachoteEnRevision(doc) {
+  _machoteEnRevision = { doc, clicBorde:{} };
+  _mostrarGruposTextoPlantilla(false);
+  document.getElementById('np-documento-grupo').style.display = '';
+  const cuerpo = _dxMontarHoja(document.getElementById('np-doc-vista'), doc, { modo:'revision' });
+  cuerpo.addEventListener('click', e => {
+    const el = e.target.closest('.dx-campo, .dx-campo-fijo');
+    if(!el) return;
+    el.classList.toggle('dx-campo');
+    el.classList.toggle('dx-campo-fijo');
+    _actualizarResumenMachote();
+  });
+  document.getElementById('np-contenido').value = _dxTextoPlano(doc, {});
+  _pintarConfigGraficas();
+  _actualizarResumenMachote();
+}
+
+function _actualizarResumenMachote() {
+  const rev = _machoteEnRevision;
+  const cuerpo = document.querySelector('#np-doc-vista .dx-hoja-cuerpo');
+  if(!rev || !cuerpo) return;
+  const n = (k, uno, varios) => `${k} ${k === 1 ? uno : varios}`;
+  const campos = cuerpo.querySelectorAll('.dx-campo').length;
+  const tablas = cuerpo.querySelectorAll('table.dx-tabla').length;
+  const graficas = Object.keys(rev.doc.graficas || {}).length;
+  const resumen = [n(campos, 'campo para llenar', 'campos para llenar'), n(tablas, 'tabla', 'tablas'), n(graficas, 'gráfica', 'gráficas')].join(' · ');
+  const st = document.getElementById('np-estado');
+  st.className = 'nota-analisis-estado ok';
+  st.textContent = `✅ Documento analizado con su formato: ${resumen}.` + (rev.doc.avisos?.length ? ' ' + rev.doc.avisos.join(' ') : '');
+  document.getElementById('np-doc-resumen').textContent = resumen;
+  _pintarConfigGraficas(true);
+}
+
+function _camposParaGraficas() {
+  return Array.from(document.querySelectorAll('#np-doc-vista .dx-hoja-cuerpo .dx-campo')).map(el => ({
+    id:el.dataset.campo,
+    texto:(el.dataset.etiqueta || 'Campo') + (el.dataset.original ? ` (ej. ${el.dataset.original})` : '')
+  }));
+}
+
+function _pintarConfigGraficas(soloOpciones=false) {
+  const rev = _machoteEnRevision, box = document.getElementById('np-graficas');
+  if(!rev || !box) return;
+  const campos = _camposParaGraficas();
+  const opciones = g => '<option value="">No marcar ningún dato</option>' + campos.map(c => `<option value="${escAttr(c.id)}"${g.campo === c.id ? ' selected' : ''}>${escAttr(c.texto)}</option>`).join('');
+  const ids = Object.keys(rev.doc.graficas || {});
+  if(soloOpciones) {
+    box.querySelectorAll('select[data-k="campo"]').forEach(sel => {
+      const id = sel.closest('[data-grafica]').dataset.grafica, g = rev.doc.graficas[id];
+      // Si el dato elegido pasó a texto fijo, la gráfica deja de marcarlo
+      if(g.campo && !campos.some(c => c.id === g.campo)) g.campo = '';
+      sel.innerHTML = opciones(g);
+      _refrescarGraficaRevision(id);
+    });
+    return;
+  }
+  box.innerHTML = ids.map((id, i) => {
+    const g = rev.doc.graficas[id];
+    const src = document.querySelector(`#np-doc-vista .dx-imagen[data-grafica="${id}"] img`)?.getAttribute('src') || '';
+    return `<div class="np-grafica" data-grafica="${id}">
+      <div class="np-grafica-titulo">📈 Gráfica${ids.length > 1 ? ' '+(i+1) : ''}: marcar el dato del paciente</div>
+      <div class="np-grafica-cuerpo">
+        <div class="np-grafica-img dx-doc" onclick="_clicBordeGrafica(event,'${id}')" title="Toca para ajustar los extremos del eje">
+          <span class="dx-imagen" data-grafica="${id}"><img src="${escAttr(src)}" alt="Gráfica del machote"></span>
+          <span class="np-borde" data-borde="x1"></span><span class="np-borde" data-borde="x2"></span><span class="np-borde-eje"></span>
+        </div>
+        <div class="np-grafica-datos">
+          <label>Dato que se marca<select data-k="campo" onchange="_cambioGrafica('${id}',this)">${opciones(g)}</select></label>
+          <div class="np-grafica-rango">
+            <label>Valor en la línea azul izquierda<input type="number" step="any" inputmode="decimal" data-k="min" value="${g.min ?? ''}" placeholder="Ej. 15" oninput="_cambioGrafica('${id}',this)"></label>
+            <label>Valor en la línea azul derecha<input type="number" step="any" inputmode="decimal" data-k="max" value="${g.max ?? ''}" placeholder="Ej. 50" oninput="_cambioGrafica('${id}',this)"></label>
+          </div>
+          <label>Probar con un valor<input type="number" step="any" inputmode="decimal" data-k="prueba" placeholder="Ej. 32" oninput="_cambioGrafica('${id}',this)"></label>
+          <small>Las líneas azules son los extremos del eje horizontal que detectó el sistema. Si no coinciden con la gráfica, tócala dos veces: primero en el extremo izquierdo y luego en el derecho.</small>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  ids.forEach(_refrescarGraficaRevision);
+}
+
+function _refrescarGraficaRevision(id) {
+  const g = _machoteEnRevision?.doc.graficas?.[id];
+  const tarjeta = document.querySelector(`#np-graficas .np-grafica[data-grafica="${id}"]`);
+  if(!g || !tarjeta) return;
+  tarjeta.querySelector('[data-borde="x1"]').style.left = (g.x1 * 100) + '%';
+  tarjeta.querySelector('[data-borde="x2"]').style.left = (g.x2 * 100) + '%';
+  tarjeta.querySelector('.np-borde-eje').style.top = ((g.y ?? 0.92) * 100) + '%';
+  const prueba = tarjeta.querySelector('[data-k="prueba"]').value;
+  _dxPintarGraficas(tarjeta.querySelector('.np-grafica-img'), { [id]: { ...g, campo:'prueba' } }, () => prueba);
+  tarjeta.classList.toggle('incompleta', !!g.campo && (g.min == null || g.max == null));
+}
+
+function _cambioGrafica(id, el) {
+  const g = _machoteEnRevision?.doc.graficas?.[id];
+  if(!g) return;
+  const k = el.dataset.k;
+  if(k === 'campo') g.campo = el.value;
+  else if(k === 'min' || k === 'max') g[k] = el.value === '' || isNaN(Number(el.value)) ? null : Number(el.value);
+  _refrescarGraficaRevision(id);
+}
+
+function _clicBordeGrafica(e, id) {
+  const rev = _machoteEnRevision, g = rev?.doc.graficas?.[id];
+  if(!g) return;
+  const caja = e.currentTarget.getBoundingClientRect();
+  const f = Math.round(Math.min(1, Math.max(0, (e.clientX - caja.left) / caja.width)) * 1000) / 1000;
+  const borde = rev.clicBorde[id] === 'x1' ? 'x2' : 'x1';
+  g[borde] = f;
+  if(g.x1 > g.x2) [g.x1, g.x2] = [g.x2, g.x1];
+  rev.clicBorde[id] = borde;
+  _refrescarGraficaRevision(id);
+}
+
+async function _guardarMachoteConFormato(nombre, tipo) {
+  const rev = _machoteEnRevision, doc = rev.doc;
+  const incompleta = Object.values(doc.graficas || {}).some(g => g.campo && (g.min == null || g.max == null || Number(g.min) === Number(g.max)));
+  if(incompleta) { toast('Indica los valores de los extremos de la gráfica, o elige "No marcar ningún dato"', 'error'); return; }
+  const vista = document.querySelector('#np-doc-vista .dx-hoja-cuerpo');
+  const caja = document.createElement('div');
+  caja.innerHTML = vista.innerHTML;
+  caja.querySelectorAll('.dx-campo-fijo').forEach(el => el.replaceWith(document.createTextNode(el.dataset.original || '')));
+  caja.querySelectorAll('[data-original]').forEach(el => el.removeAttribute('data-original'));
+  if(!caja.querySelector('.dx-campo, .dx-editable')) { toast('El machote no tiene nada para llenar: toca al menos un recuadro para volverlo campo', 'error'); return; }
+  const etiquetas = [...new Set(Array.from(caja.querySelectorAll('.dx-campo')).map(el => el.dataset.etiqueta).filter(Boolean))];
+  setLoading(true);
+  const carpeta = `plantillas-notas/${currentClinicaId}/${Date.now()}`;
+  const subidas = [];
+  try {
+    // Las imágenes del Word pasan a Storage y el documento apunta a ellas
+    const partes = { cuerpo:caja.innerHTML, encabezado:doc.encabezado || '', pie:doc.pie || '', marcas:JSON.stringify(doc.marcasAgua || []) };
+    let i = 0;
+    for(const [url, img] of doc.imagenes) {
+      const ruta = `${carpeta}/imagen-${++i}.${img.ext}`;
+      const r = await sb.storage.from(STORAGE_BUCKET).upload(ruta, img.blob, { upsert:false, contentType:img.blob.type });
+      if(r.error) throw r.error;
+      subidas.push(ruta);
+      const publica = sb.storage.from(STORAGE_BUCKET).getPublicUrl(ruta).data.publicUrl;
+      Object.keys(partes).forEach(k => { partes[k] = partes[k].split(url).join(publica); });
+    }
+    const rutaDocx = `${carpeta}/${_archivoPlantillaNota.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const subida = await sb.storage.from(STORAGE_BUCKET).upload(rutaDocx, _archivoPlantillaNota, { upsert:false, contentType:_archivoPlantillaNota.type || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+    if(subida.error) throw subida.error;
+    subidas.push(rutaDocx);
+    const archivoUrl = sb.storage.from(STORAGE_BUCKET).getPublicUrl(rutaDocx).data.publicUrl;
+    const documento = { version:1, pagina:doc.pagina, encabezado:partes.encabezado, pie:partes.pie, cuerpo:partes.cuerpo, marcasAgua:JSON.parse(partes.marcas), graficas:doc.graficas || {} };
+    const texto = _dxTextoPlano(documento, {});
+    const columnas = 'id,nombre,tipo_nota,contenido_modelo,campos,archivo_nombre,archivo_url,activa';
+    const fila = { clinica_id:currentClinicaId, nombre, tipo_nota:tipo, contenido_modelo:texto || nombre, campos:etiquetas, archivo_nombre:_archivoPlantillaNota.name, archivo_url:archivoUrl, creado_por:currentUser?.id || null, documento };
+    let { data, error } = await sb.from('plantillas_notas').insert([fila]).select(columnas).single();
+    let soloTexto = false;
+    if(error && _faltaColumna(error, 'documento')) {
+      // Sin la migración el machote se guarda como texto rellenable, como antes
+      delete fila.documento;
+      const analisis = _analizarEstructuraMachote(texto);
+      fila.contenido_modelo = analisis.contenido || texto || nombre;
+      fila.campos = analisis.campos;
+      ({ data, error } = await sb.from('plantillas_notas').insert([fila]).select(columnas).single());
+      soloTexto = true;
+    }
+    if(error) throw error;
+    const nueva = fromPlantillaNota(data);
+    if(soloTexto) nueva.formato = 'texto';
+    else _documentosPlantilla.set(String(nueva.id), Promise.resolve(documento));
+    C.plantillasNota.push(nueva);
+    C.plantillasNota.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+    document.getElementById('n-tipo').value = tipo;
+    _llenarSelectorPlantillas(tipo, nueva.id);
+    closeModal('modal-plantilla-nota');
+    _liberarMachoteEnRevision();
+    aplicarPlantillaNota(nueva.id);
+    toast(soloTexto ? 'Machote guardado solo como texto: falta ejecutar migracion_machotes_formato.sql en Supabase para conservar tablas y gráficas' : 'Machote con formato guardado ✅', soloTexto ? 'warning' : 'success');
+  } catch(e) {
+    if(subidas.length) try { await sb.storage.from(STORAGE_BUCKET).remove(subidas); } catch(_) {}
+    const msg = String(e?.message || e || '');
+    toast(/plantillas_notas|does not exist/i.test(msg) ? 'Falta ejecutar migracion_profesional_plantillas_notas.sql en Supabase' : 'No se pudo guardar el machote: ' + msg, 'error');
+  } finally {
+    setLoading(false);
+  }
+}
+
 function _reiniciarFormularioNota(){
   currentNotaCitaId=null;
   fillSelect('n-paciente');
@@ -4664,6 +6416,8 @@ function _reiniciarFormularioNota(){
   document.getElementById('n-titulo').value='';
   document.getElementById('n-contenido').value='';
   _plantillaNotaActiva=null;
+  _turnoPlantillaNota++;
+  _cerrarDocumentoNota();
   _llenarSelectorPlantillas('evolucion');
   document.getElementById('n-plantilla-campos-wrap').style.display='none';
   document.getElementById('n-plantilla-campos').innerHTML='';
@@ -4709,6 +6463,7 @@ function openModalNota(id){
   onTipoNotaChange();
   _llenarProfesionalNota(notaEditada);
   _llenarSelectorPlantillas(document.getElementById('n-tipo').value,notaEditada?.plantillaId||'');
+  if(notaEditada?.plantillaId && notaEditada.plantillaValores) _abrirMachoteDeNota(notaEditada);
   _configurarAccionesNota(notaEditada);
   openModalOverlay('modal-nota');
 }
@@ -4727,6 +6482,9 @@ async function guardarNota(estadoSolicitado='borrador'){
   const mid=esVet?(parseInt(document.getElementById('n-mascota').value)||null):null;
   // Los campos dinámicos ya sincronizan el texto al escribirse. Leer el
   // textarea directamente conserva cualquier ajuste manual posterior.
+  const docNota=_machoteDocNota;
+  const plantillaValores=docNota?_dxLeerValores(docNota.cuerpo):null;
+  if(docNota) document.getElementById('n-contenido').value=_dxTextoPlano(docNota.documento,plantillaValores);
   const contenido=document.getElementById('n-contenido').value.trim();
   const tipo=document.getElementById('n-tipo').value;
   const esResumen=tipo==='resumen_clinico';
@@ -4745,6 +6503,10 @@ async function guardarNota(estadoSolicitado='borrador'){
     toast(esResumen?'Registra al menos un signo vital o escribe la nota':'Completa los campos obligatorios','error');
     return;
   }
+  if(!esBorrador && docNota && !Array.from(docNota.cuerpo.querySelectorAll('.dx-campo')).some(el=>el.textContent.trim())){
+    toast('Llena al menos un dato del machote antes de finalizar la nota','error');
+    return;
+  }
   if(!esBorrador && !profesional){
     toast('Selecciona el profesional que atendió antes de finalizar la nota','error');
     document.getElementById('n-profesional')?.focus();
@@ -4754,12 +6516,22 @@ async function guardarNota(estadoSolicitado='borrador'){
   const notaIdEditada=editingNotaId;
   const obj={pacienteId:pid,mascotaId:mid,citaId:currentNotaCitaId,tipo,fecha:document.getElementById('n-fecha').value||hoy(),titulo:document.getElementById('n-titulo').value.trim(),contenido,signos,estado,
     profesionalId:profesional?.id||null,profesionalNombre:profesional?.nombre||'',profesionalEspecialidad:profesional?.especialidad||'',profesionalFirmaUrl:profesional?.firmaUrl||null,plantillaId:_plantillaNotaActiva?.id||notaExistente?.plantillaId||null};
+  if(!_notasSinColumnaValores || docNota) obj.plantillaValores=plantillaValores;
   setLoading(true);
   const payload=toN(obj);
+  const escribirNota=datos=>notaIdEditada
+    ? sb.from('notas').update(datos).eq('id',notaIdEditada)
+    : sb.from('notas').insert([datos]);
   let err;
-  ({error:err} = notaIdEditada
-    ? await sb.from('notas').update(payload).eq('id',notaIdEditada)
-    : await sb.from('notas').insert([payload]));
+  ({error:err} = await escribirNota(payload));
+  // Sin la columna de valores la nota se guarda igual, con su texto
+  let valoresSinGuardar=false;
+  if(err && 'plantilla_valores' in payload && _faltaColumna(err,'plantilla_valores')){
+    _notasSinColumnaValores=true;
+    delete payload.plantilla_valores;
+    ({error:err} = await escribirNota(payload));
+    valoresSinGuardar=!!docNota;
+  }
   // Sin mascota_id la nota quedaría huérfana: no se degrada, se avisa.
   if(err && esVet && _faltaColumna(err,'mascota_id')){
     setLoading(false);
@@ -4805,6 +6577,7 @@ async function guardarNota(estadoSolicitado='borrador'){
   }
   toast(esBorrador ? (notaIdEditada?'Borrador actualizado':'Borrador guardado ✅')
                    : (notaIdEditada?'Nota actualizada':'Nota finalizada ✅'));
+  if(valoresSinGuardar) toast('La nota quedó guardada como texto: falta ejecutar migracion_machotes_formato.sql en Supabase para conservar el documento con su formato','warning');
   if(!notaIdEditada) logActivity('nota');
   _reiniciarFormularioNota();
   closeModal('modal-nota');
@@ -4829,6 +6602,7 @@ async function eliminarNota(id){
 function verNota(id){
   currentNotaId = id;
   const n=C.n.find(x=>x.id===id), p=_sujetoNota(n);
+  const conMachote=!!(n.plantillaId && n.plantillaValores && n.tipo!=='examen_visual');
   document.getElementById('ver-nota-title').textContent=`📝 ${n.titulo||'Nota Clínica'}`;
   document.getElementById('ver-nota-content').innerHTML=`
     <div style="margin-bottom:14px"><span class="tag tag-blue">${notaTipoLabel(n.tipo)}</span> ${notaEstadoTag(n)}<span style="margin-left:8px;font-size:12px;color:var(--text-light)">${formatFecha(n.fecha)}</span></div>
@@ -4836,8 +6610,10 @@ function verNota(id){
     ${n.profesionalNombre?`<p class="text-light" style="margin-bottom:12px">Atendido por: <strong style="color:var(--text)">${escAttr(n.profesionalNombre)}</strong>${n.profesionalEspecialidad?' · '+escAttr(n.profesionalEspecialidad):''}</p>`:''}
     ${n.titulo?`<h3 style="margin-bottom:12px">${n.titulo}</h3>`:''}
     ${_signosChipsHTML(n.signos)}
-    ${n.contenido?`<div style="white-space:pre-wrap;line-height:1.8;font-size:14px;background:var(--bg);padding:16px;border-radius:10px;border:1px solid var(--border)">${n.contenido}</div>`:''}`;
+    ${conMachote?'<div class="nota-documento-barra" style="margin-bottom:8px"><small>Documento tal como se imprime</small><button type="button" class="btn btn-secondary btn-sm" onclick="_dxAlternarTamanoReal(\'ver-nota-doc\',this)">🔍 Tamaño real</button></div><div id="ver-nota-doc" class="dx-marco"><div class="dx-cargando">⏳ Cargando el documento…</div></div>':(n.contenido?`<div style="white-space:pre-wrap;line-height:1.8;font-size:14px;background:var(--bg);padding:16px;border-radius:10px;border:1px solid var(--border)">${n.contenido}</div>`:'')}`;
+  document.querySelector('#modal-ver-nota > .modal')?.classList.toggle('modal-documento', conMachote);
   document.getElementById('modal-ver-nota').classList.add('open');
+  if(conMachote) _pintarNotaMachoteEnVista(n);
 }
 
 function normalizarOptico(v) {
@@ -4965,9 +6741,11 @@ function imprimirExamenVisual(n, p, cfg, fmtF, ini2) {
   pdfAbrir('Examen Visual - '+pNombre, body, cfg);
 }
 
-function imprimirNota(id) {
+function imprimirNota(id, sinMachote=false) {
   const n = C.n.find(x => x.id === id); if(!n) return;
   if(n.estado==='borrador'){ toast('Finaliza la nota antes de '+(_salidaDocumento==='descargar'?'descargarla':'imprimirla'),'warning'); return; }
+  // Hecha sobre un machote con formato: se imprime el documento tal como el Word
+  if(!sinMachote && n.plantillaId && n.plantillaValores && n.tipo !== 'examen_visual') return _imprimirNotaMachote(n);
   const p = C.p.find(x => x.id === n.pacienteId);
   const cfg = getClinicaConfig();
   const fmtF = f => { if(!f) return '—'; const d=new Date(f+'T12:00:00'); return d.toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'}); };
@@ -7069,6 +8847,7 @@ function selectPac(prefix, pid, nombre) {
   if(hiddenEl) hiddenEl.value = pid;
   if(txtEl) txtEl.value = nombre;
   hidePacSug(prefix);
+  if(prefix === 'n') _dxAutollenarNota();
 }
 
 function hidePacSug(prefix) {
@@ -7083,6 +8862,7 @@ function setPacienteSelect(sid, pid) {
   const txtEl = document.getElementById(prefix+'-pac-txt');
   if(hiddenEl) hiddenEl.value = pid || '';
   if(txtEl) txtEl.value = p ? p.nombre+' '+p.apellidos : '';
+  if(prefix === 'n') _dxAutollenarNota();
 }
 function openModalOverlay(id){
   const el = document.getElementById(id);
