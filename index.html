@@ -19,7 +19,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js" defer></script>
-<link rel="stylesheet" href="css/styles.css?v=20260906c">
+<!-- Lectura local de machotes. El archivo se procesa en el navegador antes de
+     guardarlo; Mammoth extrae DOCX y PDF.js se carga al elegir un PDF. -->
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js" defer></script>
+<link rel="stylesheet" href="css/styles.css?v=20260913a">
 </head>
 <body>
 <script>
@@ -1650,6 +1653,7 @@
         </div>
 
         <div class="form-group"><label>Observaciones adicionales</label><textarea id="ev-recomendaciones" placeholder="Próximo control, indicaciones especiales, referencias..." style="min-height:65px"></textarea></div>
+        <div class="form-group nota-firma-panel"><label>Profesional que atendió *</label><select id="ev-profesional"><option value="">Selecciona el profesional responsable</option></select><small>Su nombre, especialidad y firma quedarán asociados al examen.</small></div>
       </div>
     </div>
 
@@ -2517,6 +2521,18 @@
       </select></div>
       <div class="form-group"><label>Fecha</label><input type="date" id="n-fecha"></div>
       <div class="form-group"><label>Título</label><input type="text" id="n-titulo" placeholder="Breve título de la nota"></div>
+      <div class="form-group full nota-plantilla-panel">
+        <label>📄 Machote / plantilla de esta nota</label>
+        <div class="nota-plantilla-bar">
+          <select id="n-plantilla" onchange="aplicarPlantillaNota(this.value)"><option value="">Sin plantilla · nota libre</option></select>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="abrirGestorPlantillaNota()">📄 Subir machote</button>
+        </div>
+        <small>Admite PDF, DOCX y TXT. El sistema detecta los espacios a rellenar y replica la estructura del documento.</small>
+      </div>
+      <div class="form-group full" id="n-plantilla-campos-wrap" style="display:none">
+        <label>Campos del machote</label>
+        <div id="n-plantilla-campos" class="nota-plantilla-campos"></div>
+      </div>
       <div class="form-group full" id="n-signos-wrap" style="display:none">
         <label>🩺 Signos vitales <span style="font-size:11px;color:var(--text-light);font-weight:400">— todos opcionales, deja en blanco lo que no midas</span></label>
         <!-- Los campos se generan según el tipo de clínica: humanos o veterinarios -->
@@ -2524,11 +2540,36 @@
         <div id="n-sv-imc" style="font-size:11.5px;color:var(--primary);font-weight:700;margin-top:7px;min-height:15px"></div>
       </div>
       <div class="form-group"><label><span id="n-contenido-label">Nota de evolución</span> <span id="n-contenido-req">*</span></label><textarea id="n-contenido" placeholder="Evolución del paciente, cambios y conducta médica..." style="min-height:130px"></textarea></div>
+      <div class="form-group full nota-firma-panel">
+        <label>Profesional que atendió <span id="n-profesional-req">*</span></label>
+        <select id="n-profesional"><option value="">Selecciona el médico responsable</option></select>
+        <small>Es obligatorio al finalizar. Su nombre, especialidad y firma quedarán guardados con la nota.</small>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-nota')">Cancelar</button>
       <button class="btn btn-secondary" id="btn-nota-borrador" onclick="guardarNota('borrador')">💾 Guardar borrador</button>
       <button class="btn btn-primary" id="btn-nota-finalizar" onclick="guardarNota('finalizada')">✅ Finalizar nota</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL IMPORTAR MACHOTE DE NOTA -->
+<div class="modal-overlay" id="modal-plantilla-nota">
+  <div class="modal modal-lg">
+    <button class="modal-close-btn" onclick="closeModal('modal-plantilla-nota')" title="Cerrar">✕</button>
+    <h2>📄 Importar machote clínico</h2>
+    <div class="form-grid">
+      <div class="form-group"><label>Nombre de la plantilla *</label><input id="np-nombre" placeholder="Ej. Evolución de control"></div>
+      <div class="form-group"><label>Tipo de nota *</label><select id="np-tipo"></select></div>
+      <div class="form-group full"><label>Archivo *</label><input type="file" id="np-archivo" accept=".pdf,.docx,.txt,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="analizarArchivoPlantillaNota(this)"></div>
+      <div class="form-group full"><div id="np-estado" class="nota-analisis-estado">Selecciona un archivo para analizarlo.</div></div>
+      <div class="form-group full"><label>Estructura detectada</label><textarea id="np-contenido" style="min-height:220px" oninput="_pintarCamposPlantillaDetectados(_camposDeMachote(this.value))" placeholder="El texto extraído aparecerá aquí. También puedes usar marcadores como {{Motivo de consulta}}."></textarea><small>Puedes corregir el texto. Usa <strong>{{Nombre del campo}}</strong> donde quieras mostrar una casilla para rellenar.</small></div>
+      <div class="form-group full"><label>Campos detectados</label><div id="np-campos" class="nota-campos-detectados">Aún no hay campos.</div></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-plantilla-nota')">Cancelar</button>
+      <button class="btn btn-primary" id="np-guardar" onclick="guardarPlantillaNota()">💾 Guardar plantilla</button>
     </div>
   </div>
 </div>
@@ -2650,7 +2691,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260906i" defer></script>
+<script src="js/app.js?v=20260913a" defer></script>
 </body>
 </html>
 

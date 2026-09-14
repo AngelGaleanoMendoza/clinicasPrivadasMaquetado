@@ -375,6 +375,20 @@ body.dark .fact-item-row input,body.dark .fact-item-row select{background:#0F172
 .form-group input,.form-group select,.form-group textarea{padding:10px 14px;border:1.5px solid var(--border);border-radius:12px;font-size:14px;font-family:inherit;color:var(--text);background:var(--card);outline:none;transition:all .2s}
 .form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.08)}
 .form-group textarea{resize:vertical;min-height:90px}
+.nota-plantilla-panel,.nota-firma-panel{padding:13px;border:1px solid var(--border);border-radius:14px;background:color-mix(in srgb,var(--primary) 4%,var(--card))}
+.nota-plantilla-bar{display:flex;gap:9px;align-items:center}
+.nota-plantilla-bar select{flex:1;min-width:0}
+.nota-plantilla-panel small,.nota-firma-panel small,.form-group small{font-size:11px;color:var(--text-light);line-height:1.45}
+.nota-plantilla-campos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:12px;border:1px dashed var(--primary);border-radius:12px;background:var(--bg)}
+.nota-campo-dinamico{display:flex;flex-direction:column;gap:5px;min-width:0}
+.nota-campo-dinamico label{font-size:10px;font-weight:700;color:var(--text-light);text-transform:uppercase}
+.nota-campo-dinamico textarea{min-height:64px;padding:9px 11px;border:1.5px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font:inherit;resize:vertical}
+.nota-analisis-estado{padding:10px 12px;border-radius:10px;background:var(--bg);border:1px solid var(--border);font-size:12px;color:var(--text-light)}
+.nota-analisis-estado.ok{background:#ECFDF5;border-color:#A7F3D0;color:#047857}
+.nota-analisis-estado.error{background:#FEF2F2;border-color:#FECACA;color:#B91C1C}
+.nota-campos-detectados{display:flex;gap:6px;flex-wrap:wrap;min-height:32px;padding:9px;border:1px dashed var(--border);border-radius:10px;color:var(--text-light);font-size:12px}
+.nota-campos-detectados .tag{font-size:10px}
+@media(max-width:500px){.nota-plantilla-bar{align-items:stretch;flex-direction:column}.nota-plantilla-bar .btn{width:100%;justify-content:center}.nota-plantilla-campos{grid-template-columns:1fr}.nota-plantilla-panel,.nota-firma-panel{padding:10px}}
 /* Campo con un botón de alta al lado (p. ej. Dueño + "Nuevo"). El select se
    encoge con min-width:0 para que en 360 px el botón no lo empuje fuera. */
 .campo-con-accion{display:flex;gap:8px;align-items:stretch}

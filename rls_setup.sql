@@ -939,6 +939,45 @@ CREATE TRIGGER trg_historial_periodontograma AFTER INSERT OR UPDATE OR DELETE ON
 DROP TRIGGER IF EXISTS trg_historial_proc_odontologicos ON public.procedimientos_odontologicos;
 CREATE TRIGGER trg_historial_proc_odontologicos AFTER INSERT OR UPDATE OR DELETE ON public.procedimientos_odontologicos
   FOR EACH ROW EXECUTE FUNCTION public.registrar_historial_expediente();
+
+-- ============================================================
+-- PASO 13: Profesional responsable y machotes de notas
+-- ============================================================
+ALTER TABLE public.notas ADD COLUMN IF NOT EXISTS profesional_id UUID;
+ALTER TABLE public.notas ADD COLUMN IF NOT EXISTS profesional_nombre TEXT;
+ALTER TABLE public.notas ADD COLUMN IF NOT EXISTS profesional_especialidad TEXT;
+ALTER TABLE public.notas ADD COLUMN IF NOT EXISTS profesional_firma_url TEXT;
+
+CREATE TABLE IF NOT EXISTS public.plantillas_notas (
+  id BIGSERIAL PRIMARY KEY,
+  clinica_id BIGINT NOT NULL REFERENCES public.clinicas(id) ON DELETE CASCADE,
+  nombre TEXT NOT NULL,
+  tipo_nota TEXT NOT NULL DEFAULT 'evolucion',
+  contenido_modelo TEXT NOT NULL,
+  campos JSONB NOT NULL DEFAULT '[]'::jsonb,
+  archivo_nombre TEXT,
+  archivo_url TEXT,
+  creado_por UUID,
+  activa BOOLEAN NOT NULL DEFAULT TRUE,
+  creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  actualizado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE public.notas ADD COLUMN IF NOT EXISTS plantilla_id BIGINT
+  REFERENCES public.plantillas_notas(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_notas_profesional ON public.notas(clinica_id, profesional_id, fecha DESC);
+CREATE INDEX IF NOT EXISTS idx_plantillas_notas_clinica_tipo
+  ON public.plantillas_notas(clinica_id, tipo_nota) WHERE activa = TRUE;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='notas_finalizada_profesional_check' AND conrelid='public.notas'::regclass) THEN
+    ALTER TABLE public.notas ADD CONSTRAINT notas_finalizada_profesional_check
+      CHECK (estado <> 'finalizada' OR NULLIF(BTRIM(profesional_nombre),'') IS NOT NULL) NOT VALID;
+  END IF;
+END $$;
+ALTER TABLE public.plantillas_notas ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "plantillas_notas_clinica" ON public.plantillas_notas;
+CREATE POLICY "plantillas_notas_clinica" ON public.plantillas_notas
+  USING (is_superadmin() OR clinica_id = get_my_clinica_id())
+  WITH CHECK (is_superadmin() OR clinica_id = get_my_clinica_id());
 DROP TRIGGER IF EXISTS trg_historial_proc_oftalmologicos ON public.procedimientos_oftalmologicos;
 CREATE TRIGGER trg_historial_proc_oftalmologicos AFTER INSERT OR UPDATE OR DELETE ON public.procedimientos_oftalmologicos
   FOR EACH ROW EXECUTE FUNCTION public.registrar_historial_expediente();
