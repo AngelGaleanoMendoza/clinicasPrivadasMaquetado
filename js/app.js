@@ -4572,7 +4572,7 @@ function _contenidoDesdePlantilla() {
   return contenido;
 }
 
-async function aplicarPlantillaNota(id, valores=null) {
+async function aplicarPlantillaNota(id, valores=null, pantallaCompleta=false) {
   const turno=++_turnoPlantillaNota;
   const wrap=document.getElementById('n-plantilla-campos-wrap'), box=document.getElementById('n-plantilla-campos');
   _cerrarDocumentoNota();
@@ -4586,7 +4586,7 @@ async function aplicarPlantillaNota(id, valores=null) {
     _mostrarCargaDocumentoNota();
     const documento=await _documentoPlantilla(plantilla.id);
     if(turno!==_turnoPlantillaNota || _plantillaNotaActiva!==plantilla) return;
-    if(documento){ _abrirDocumentoNota(plantilla.id, documento, valores); return; }
+    if(documento){ _abrirDocumentoNota(plantilla.id, documento, valores, pantallaCompleta); return; }
     // Machotes importados antes de conservar el formato: siguen como texto
     _cerrarDocumentoNota();
   }
@@ -5658,10 +5658,50 @@ function _dxPintarGraficas(raiz, graficas, leerValor) {
 }
 
 // Devuelve el HTML del cuerpo con los valores escritos y sin nada editable.
+// En la nota se puede reescribir todo el texto del cuerpo, no solo los campos.
+// Cada tramo de texto fijo (etiquetas, títulos, celdas) y cada renglón vacío
+// recibe un identificador por su orden en el machote: lo que cambie se guarda
+// con la nota y el machote queda intacto. Los párrafos largos (dx-editable) y
+// los campos ya tienen el suyo.
+function _dxPrepararPiezas(raiz) {
+  let t = 0, v = 0;
+  const ajeno = '.dx-campo, .dx-editable, .dx-num, .dx-ancla, .dx-imagen, .dx-marcador, .dx-guia';
+  raiz.querySelectorAll('.dx-p').forEach(p => {
+    if(p.matches('.dx-editable') || p.querySelector('.dx-editable')) return;
+    if(p.classList.contains('dx-vacio') && !p.textContent.trim() && !p.querySelector('.dx-imagen, .dx-cuadro, .dx-campo')) {
+      p.dataset.pieza = 'v' + (++v);
+      return;
+    }
+    const nodos = [];
+    const w = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+    while(w.nextNode()) {
+      const n = w.currentNode;
+      if(/\S/.test(n.nodeValue) && !n.parentElement.closest(ajeno)) nodos.push(n);
+    }
+    nodos.forEach(n => {
+      const s = document.createElement('span');
+      s.className = 'dx-libre';
+      s.dataset.pieza = 't' + (++t);
+      n.replaceWith(s);
+      s.appendChild(n);
+    });
+  });
+}
+
+const _dxNormalTexto = s => String(s ?? '').replace(/ /g, ' ').replace(/\n$/, '');
+
 function _dxCuerpoRelleno(documento, valores) {
   const t = document.createElement('template');
   t.innerHTML = documento.cuerpo;
   const raiz = t.content;
+  _dxPrepararPiezas(raiz);
+  raiz.querySelectorAll('[data-pieza]').forEach(el => {
+    const v = valores?.[el.dataset.pieza];
+    if(v == null) return;
+    el.textContent = v;
+    // Un renglón vacío en el que se escribió deja de ser espaciador al paginar
+    if(el.matches('.dx-p')) el.classList.toggle('dx-vacio', !v.trim());
+  });
   raiz.querySelectorAll('[data-campo]').forEach(el => {
     const v = valores?.[el.dataset.campo];
     if(v != null) el.textContent = v;
@@ -5850,6 +5890,7 @@ function _dxMontarHoja(marco, documento, { modo='lectura', valores=null } = {}) 
   const pg = documento.pagina;
   marco.classList.add('dx-marco');
   marco.dataset.ancho = String(pg.ancho);
+  marco.dataset.contenido = String(pg.contenido);
   marco.innerHTML = '';
   const hoja = document.createElement('div');
   hoja.className = `dx-hoja dx-doc dx-${modo}`;
@@ -5858,9 +5899,10 @@ function _dxMontarHoja(marco, documento, { modo='lectura', valores=null } = {}) 
   marco.appendChild(hoja);
   const cuerpo = hoja.querySelector('.dx-hoja-cuerpo');
   if(modo === 'edicion') {
-    cuerpo.querySelectorAll('[data-campo]').forEach(el => {
+    _dxPrepararPiezas(cuerpo);
+    cuerpo.querySelectorAll('[data-campo], [data-pieza]').forEach(el => {
       el.dataset.texto = el.textContent; // lo que trae el machote, para saber qué cambió
-      const v = valores?.[el.dataset.campo];
+      const v = valores?.[el.dataset.campo || el.dataset.pieza];
       if(v != null) el.textContent = v;
     });
   }
@@ -5876,7 +5918,11 @@ function _dxAjustarZoom(marco) {
   const hoja = marco?.querySelector(':scope > .dx-hoja');
   if(!hoja) return;
   const disponible = marco.clientWidth - 24;
-  const escala = marco.classList.contains('dx-tamano-real') || disponible <= 0 ? 1 : Math.min(1, disponible / (Number(marco.dataset.ancho) || 816));
+  // En pantallas angostas la hoja pierde parte del margen de papel (CSS) para
+  // que el texto se vea más grande; lo impreso conserva los márgenes del Word.
+  const angosta = window.matchMedia('(max-width: 640px)').matches && marco.dataset.contenido;
+  const ancho = angosta ? Number(marco.dataset.contenido) + 80 : (Number(marco.dataset.ancho) || 816);
+  const escala = marco.classList.contains('dx-tamano-real') || disponible <= 0 ? 1 : Math.min(1, disponible / ancho);
   const zoom = String(Math.round(escala*1000)/1000);
   if(hoja.style.zoom !== zoom) hoja.style.zoom = zoom;
 }
@@ -5903,6 +5949,11 @@ function _dxLeerValores(cuerpo) {
     const normal = t => String(t||'').replace(/\s+/g, ' ').trim();
     if(normal(v) !== normal(el.dataset.texto)) valores[el.dataset.campo] = v;
   });
+  // Etiquetas, títulos y renglones reescritos en la nota
+  cuerpo.querySelectorAll('[data-pieza]').forEach(el => {
+    const v = _dxNormalTexto(_dxTextoEditable(el));
+    if(v !== _dxNormalTexto(el.dataset.texto)) valores[el.dataset.pieza] = v;
+  });
   return valores;
 }
 
@@ -5925,8 +5976,10 @@ function _dxRepintarGraficas(cuerpo, documento) {
 }
 
 function _dxActivarEdicion(cuerpo, documento, alCambiar) {
+  const EDITABLE = '.dx-campo, .dx-editable, [data-pieza]';
+  // Enter recorre los datos a llenar; el resto del texto se toca directamente
   const editables = () => Array.from(cuerpo.querySelectorAll('.dx-campo, .dx-editable'));
-  editables().forEach(el => {
+  cuerpo.querySelectorAll(EDITABLE).forEach(el => {
     el.setAttribute('contenteditable', _DX_SOLO_TEXTO ? 'plaintext-only' : 'true');
     el.spellcheck = true;
     if(el.classList.contains('dx-campo')) {
@@ -5937,7 +5990,7 @@ function _dxActivarEdicion(cuerpo, documento, alCambiar) {
   });
   const graficaDe = id => Object.values(documento.graficas||{}).some(g => g.campo === id);
   cuerpo.addEventListener('keydown', e => {
-    const el = e.target.closest?.('.dx-campo, .dx-editable');
+    const el = e.target.closest?.(EDITABLE);
     if(!el || e.key !== 'Enter') return;
     if(el.classList.contains('dx-campo')) {
       // En un campo, Enter pasa al siguiente (Mayús+Enter al anterior)
@@ -5951,7 +6004,7 @@ function _dxActivarEdicion(cuerpo, documento, alCambiar) {
     }
   });
   cuerpo.addEventListener('paste', e => {
-    const el = e.target.closest?.('.dx-campo, .dx-editable');
+    const el = e.target.closest?.(EDITABLE);
     if(!el) return;
     e.preventDefault();
     let texto = e.clipboardData?.getData('text/plain') || '';
@@ -5959,7 +6012,7 @@ function _dxActivarEdicion(cuerpo, documento, alCambiar) {
     document.execCommand('insertText', false, texto);
   });
   cuerpo.addEventListener('input', e => {
-    const el = e.target.closest?.('.dx-campo, .dx-editable');
+    const el = e.target.closest?.(EDITABLE);
     if(!el) return;
     // Un campo borrado puede quedarse con un <br> y perder su recuadro
     if(el.classList.contains('dx-campo') && !el.textContent) el.innerHTML = '';
@@ -5998,10 +6051,36 @@ function _cerrarDocumentoNota() {
   if(zoom) zoom.textContent = '🔍 Tamaño real';
   const cont = document.getElementById('n-contenido-wrap');
   if(cont) cont.style.display = '';
+  _dxPantallaCompletaNota(false);
   document.querySelector('#modal-nota > .modal')?.classList.remove('modal-documento');
 }
 
-function _abrirDocumentoNota(plantillaId, documento, valores) {
+// Pantalla completa: la hoja ocupa toda la pantalla, sin el formulario de la
+// nota alrededor. Paciente, profesional y los botones de guardar siguen en el
+// formulario, al que se vuelve con un toque (o con Esc).
+function _dxTeclaPantallaCompleta(e) {
+  if(e.key === 'Escape' && document.getElementById('n-documento-wrap')?.classList.contains('nota-documento-completa')) {
+    e.preventDefault();
+    _dxPantallaCompletaNota(false);
+  }
+}
+
+function _dxPantallaCompletaNota(activar) {
+  const wrap = document.getElementById('n-documento-wrap');
+  if(!wrap) return;
+  const antes = wrap.classList.contains('nota-documento-completa');
+  const ahora = activar === undefined ? !antes : !!activar;
+  wrap.classList.toggle('nota-documento-completa', ahora);
+  document.getElementById('n-documento-pantalla-btn')?.classList.toggle('dx-oculto', ahora);
+  document.getElementById('n-documento-volver-btn')?.classList.toggle('dx-oculto', !ahora);
+  document.removeEventListener('keydown', _dxTeclaPantallaCompleta);
+  if(ahora) document.addEventListener('keydown', _dxTeclaPantallaCompleta);
+  const marco = document.getElementById('n-documento');
+  if(marco) requestAnimationFrame(() => _dxAjustarZoom(marco));
+  if(antes && !ahora && wrap.style.display !== 'none') wrap.scrollIntoView({ block:'start' });
+}
+
+function _abrirDocumentoNota(plantillaId, documento, valores, pantallaCompleta=false) {
   const marco = document.getElementById('n-documento');
   if(!marco) return;
   const cuerpo = _dxMontarHoja(marco, documento, { modo:'edicion', valores });
@@ -6023,6 +6102,7 @@ function _abrirDocumentoNota(plantillaId, documento, valores) {
   lista.style.display = 'none';
   if(window.matchMedia('(max-width: 640px)').matches) _dxAlternarListaNota(true);
   else _dxActualizarBotonLista();
+  _dxPantallaCompletaNota(pantallaCompleta);
   requestAnimationFrame(() => _dxAjustarZoom(marco));
 }
 
@@ -6393,7 +6473,7 @@ async function _guardarMachoteConFormato(nombre, tipo) {
     _llenarSelectorPlantillas(tipo, nueva.id);
     closeModal('modal-plantilla-nota');
     _liberarMachoteEnRevision();
-    aplicarPlantillaNota(nueva.id);
+    aplicarPlantillaNota(nueva.id, null, true);
     toast(soloTexto ? 'Machote guardado solo como texto: falta ejecutar migracion_machotes_formato.sql en Supabase para conservar tablas y gráficas' : 'Machote con formato guardado ✅', soloTexto ? 'warning' : 'success');
   } catch(e) {
     if(subidas.length) try { await sb.storage.from(STORAGE_BUCKET).remove(subidas); } catch(_) {}
@@ -8705,13 +8785,10 @@ function updateBottomNav(view){
   renderNavQuickGrid(view);
 }
 
-// Cerrar modal al hacer click fuera del contenido
-document.addEventListener('click', e => {
-  if(e.target.classList.contains('modal-overlay') && e.target.classList.contains('open')) {
-    const modalId = e.target.id;
-    if(modalId && !['modal-confirm'].includes(modalId)) closeModal(modalId);
-  }
-}, { capture: false });
+// Los modales NO se cierran al tocar el fondo. Un toque accidental fuera de la
+// hoja —o seleccionar texto y soltar fuera, que el navegador cuenta como clic
+// en el fondo— hacía perder formularios a medio llenar. Todos tienen su botón
+// de Cerrar o Cancelar.
 
 // ════════════════════ FILTRO PACIENTES ════════════════════
 let filtroEstado='todos';

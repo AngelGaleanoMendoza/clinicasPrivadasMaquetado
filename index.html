@@ -22,7 +22,7 @@
 <!-- Lectura local de machotes. El archivo se procesa en el navegador antes de
      guardarlo; Mammoth extrae DOCX y PDF.js se carga al elegir un PDF. -->
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js" defer></script>
-<link rel="stylesheet" href="css/styles.css?v=20260914c">
+<link rel="stylesheet" href="css/styles.css?v=20260914d">
 </head>
 <body>
 <script>
@@ -2542,7 +2542,7 @@
       <div class="form-group full nota-plantilla-panel">
         <label>📄 Machote / plantilla de esta nota</label>
         <div class="nota-plantilla-bar">
-          <select id="n-plantilla" onchange="aplicarPlantillaNota(this.value)"><option value="">Sin plantilla · nota libre</option></select>
+          <select id="n-plantilla" onchange="aplicarPlantillaNota(this.value,null,true)"><option value="">Sin plantilla · nota libre</option></select>
           <button type="button" class="btn btn-secondary btn-sm" onclick="abrirGestorPlantillaNota()">📄 Subir machote</button>
         </div>
         <small>Admite PDF, DOCX y TXT. Un Word conserva sus tablas, imágenes y gráficas, y se llena directamente sobre el documento.</small>
@@ -2561,13 +2561,17 @@
         <div class="nota-documento-barra">
           <label>📄 Documento de la nota <span id="n-documento-progreso" class="tag tag-blue"></span></label>
           <div class="nota-documento-acciones">
+            <button type="button" class="btn btn-primary btn-sm dx-oculto" id="n-documento-volver-btn" onclick="_dxPantallaCompletaNota(false)">↩️ Volver al formulario</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="n-documento-pantalla-btn" onclick="_dxPantallaCompletaNota(true)">⛶ Pantalla completa</button>
             <button type="button" class="btn btn-secondary btn-sm" id="n-documento-lista-btn" onclick="_dxAlternarListaNota()">📋 Llenar como lista</button>
             <button type="button" class="btn btn-secondary btn-sm" id="n-documento-zoom" onclick="_dxAlternarTamanoReal('n-documento',this)">🔍 Tamaño real</button>
           </div>
         </div>
-        <small>Escribe sobre los recuadros amarillos; el resto queda como en el Word. En un recuadro, Enter pasa al siguiente.</small>
-        <div id="n-documento" class="dx-marco"></div>
-        <div id="n-documento-lista" class="nota-documento-lista" style="display:none"></div>
+        <small class="nota-documento-ayuda">Los recuadros amarillos son los datos de la nota; también puedes tocar cualquier otro texto o renglón vacío para cambiarlo o escribir. En un recuadro, Enter pasa al siguiente.</small>
+        <div class="nota-documento-area">
+          <div id="n-documento" class="dx-marco"></div>
+          <div id="n-documento-lista" class="nota-documento-lista" style="display:none"></div>
+        </div>
       </div>
       <div class="form-group" id="n-contenido-wrap"><label><span id="n-contenido-label">Nota de evolución</span> <span id="n-contenido-req">*</span></label><textarea id="n-contenido" placeholder="Evolución del paciente, cambios y conducta médica..." style="min-height:130px"></textarea></div>
       <div class="form-group full nota-firma-panel">
@@ -2732,7 +2736,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260914c" defer></script>
+<script src="js/app.js?v=20260914d" defer></script>
 </body>
 </html>
 

@@ -502,6 +502,12 @@ body.dark .dx-marco{background:#0B1220}
 .dx-edicion .dx-editable{outline:1px dashed transparent;outline-offset:1px;border-radius:2px;cursor:text}
 .dx-edicion .dx-editable:hover{outline-color:#93C5FD}
 .dx-edicion .dx-editable:focus{outline:2px solid #3B82F6;background:rgba(59,130,246,.06)}
+/* Resto del texto: se puede reescribir, pero sin recuadro para no ensuciar la hoja */
+.dx-edicion .dx-libre,.dx-edicion .dx-p[data-pieza]{outline:1px dashed transparent;outline-offset:1px;border-radius:2px;cursor:text}
+.dx-edicion .dx-libre:hover,.dx-edicion .dx-p[data-pieza]:hover{outline-color:#CBD5E1}
+.dx-edicion .dx-libre:focus,.dx-edicion .dx-p[data-pieza]:focus{outline:2px solid #3B82F6;background:rgba(59,130,246,.06)}
+.dx-edicion .dx-libre:empty{display:inline-block;min-width:.7em;min-height:1em;vertical-align:baseline}
+.dx-oculto{display:none!important}
 .dx-revision .dx-campo,.dx-revision .dx-campo-fijo{cursor:pointer}
 .dx-revision .dx-campo::before{content:attr(data-original);color:#92400E;opacity:.6}
 .dx-revision .dx-campo-fijo::before{content:attr(data-original)}
@@ -513,6 +519,16 @@ body.dark .dx-marco{background:#0B1220}
 .nota-documento-barra .tag{font-size:10px;text-transform:none}
 .nota-documento-acciones{display:flex;gap:6px;flex-wrap:wrap}
 .nota-documento-lista{display:flex;flex-direction:column;gap:10px}
+.nota-documento-area{display:flex;flex-direction:column;gap:10px;min-width:0}
+/* Pantalla completa: la hoja cubre la pantalla por encima del formulario */
+.nota-documento-panel.nota-documento-completa{position:fixed;inset:0;z-index:1000;margin:0;border-radius:0;border:0;background:var(--bg);padding:12px max(16px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));overflow:hidden;animation:none}
+.nota-documento-completa .nota-documento-barra{flex-shrink:0;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.nota-documento-completa .nota-documento-ayuda{flex-shrink:0}
+.nota-documento-completa .nota-documento-area{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+.nota-documento-completa .nota-documento-area:has(.nota-documento-lista:not([style*="none"])){grid-template-columns:minmax(0,1fr) minmax(280px,360px)}
+.nota-documento-completa #n-documento{min-height:0;overflow:auto;overscroll-behavior:contain}
+.nota-documento-completa .nota-documento-lista{min-height:0;overflow-y:auto;overscroll-behavior:contain;padding-right:2px}
+.nota-documento-completa .nota-doc-seccion-campos{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
 .nota-doc-seccion{border:1px solid var(--border);border-radius:12px;padding:10px 12px;background:var(--card)}
 .nota-doc-seccion-titulo{font-size:11px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;color:var(--primary);margin-bottom:8px;line-height:1.35}
 .nota-doc-seccion-campos{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
@@ -537,8 +553,17 @@ body.dark .dx-marco{background:#0B1220}
   .nota-documento-acciones .btn{flex:1;justify-content:center}
   .nota-doc-seccion-campos{grid-template-columns:repeat(2,minmax(0,1fr))}
   .dx-marco{padding:8px;border-radius:10px}
+  .dx-marco:not(.dx-tamano-real)>.dx-hoja{padding-left:40px!important;padding-right:40px!important}
   .dx-marco-revision{max-height:48vh}
   .np-grafica-cuerpo{grid-template-columns:1fr}
+}
+@media(max-width:760px){
+  .nota-documento-completa .nota-documento-area,
+  .nota-documento-completa .nota-documento-area:has(.nota-documento-lista:not([style*="none"])){display:flex;flex-direction:column;overflow-y:auto;overscroll-behavior:contain}
+  .nota-documento-completa #n-documento{flex-shrink:0;overflow-y:visible}
+  .nota-documento-completa .nota-documento-lista{overflow:visible;flex-shrink:0}
+  .nota-documento-completa .nota-documento-ayuda{display:none}
+  .nota-documento-completa{padding-top:max(10px,env(safe-area-inset-top))}
 }
 @media(max-width:380px){.nota-doc-seccion-campos{grid-template-columns:1fr}.np-grafica-rango{grid-template-columns:1fr}}
 /* Campo con un botón de alta al lado (p. ej. Dueño + "Nuevo"). El select se
