@@ -503,16 +503,27 @@ body.dark .dx-marco{background:#0B1220}
 .dx-edicion .dx-editable:hover{outline-color:#93C5FD}
 .dx-edicion .dx-editable:focus{outline:2px solid #3B82F6;background:rgba(59,130,246,.06)}
 /* Resto del texto: se puede reescribir, pero sin recuadro para no ensuciar la hoja */
-.dx-edicion .dx-libre,.dx-edicion .dx-p[data-pieza]{outline:1px dashed transparent;outline-offset:1px;border-radius:2px;cursor:text}
-.dx-edicion .dx-libre:hover,.dx-edicion .dx-p[data-pieza]:hover{outline-color:#CBD5E1}
-.dx-edicion .dx-libre:focus,.dx-edicion .dx-p[data-pieza]:focus{outline:2px solid #3B82F6;background:rgba(59,130,246,.06)}
-.dx-edicion .dx-libre:empty{display:inline-block;min-width:.7em;min-height:1em;vertical-align:baseline}
+.dx-edicion .dx-libre,.dx-edicion .dx-p[data-pieza],.dx-revision:not(.dx-herr-campos) :is(.dx-libre,.dx-p[data-pieza],.dx-editable,.dx-campo-fijo){outline:1px dashed transparent;outline-offset:1px;border-radius:2px;cursor:text}
+.dx-edicion .dx-libre:hover,.dx-edicion .dx-p[data-pieza]:hover,.dx-revision:not(.dx-herr-campos) :is(.dx-libre,.dx-p[data-pieza],.dx-editable,.dx-campo-fijo):hover{outline-color:#CBD5E1}
+.dx-edicion .dx-libre:focus,.dx-edicion .dx-p[data-pieza]:focus,.dx-revision:not(.dx-herr-campos) :is(.dx-libre,.dx-p[data-pieza],.dx-editable,.dx-campo-fijo):focus{outline:2px solid #3B82F6;background:rgba(59,130,246,.06)}
+.dx-edicion .dx-libre:empty,.dx-revision .dx-libre:empty{display:inline-block;min-width:.7em;min-height:1em;vertical-align:baseline}
+.np-herramientas{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.np-modos{display:inline-flex;padding:3px;gap:3px;border:1px solid var(--border);border-radius:11px;background:var(--bg)}
+.np-modo{border:0;background:transparent;padding:7px 12px;border-radius:8px;font:inherit;font-size:12px;font-weight:700;color:var(--text-light);cursor:pointer;white-space:nowrap;min-height:34px}
+.np-modo.activo{background:var(--primary);color:#fff;box-shadow:0 1px 4px rgba(15,23,42,.18)}
+#np-origen{padding:10px 12px;border-radius:10px;background:color-mix(in srgb,var(--primary) 7%,var(--card));border:1px solid var(--border);font-size:12px;color:var(--text)}
+#np-documento-grupo.nota-documento-completa .nota-documento-area{display:block;overflow-y:auto;overscroll-behavior:contain}
+#np-documento-grupo.nota-documento-completa .dx-marco-revision{max-height:none;overflow-y:visible}
 .dx-oculto{display:none!important}
-.dx-revision .dx-campo,.dx-revision .dx-campo-fijo{cursor:pointer}
-.dx-revision .dx-campo::before{content:attr(data-original);color:#92400E;opacity:.6}
-.dx-revision .dx-campo-fijo::before{content:attr(data-original)}
-.dx-revision .dx-campo-fijo{outline:1px dashed #94A3B8;outline-offset:1px;border-radius:2px}
+/* Diseño del machote: el texto del Word queda como guía mientras el recuadro está vacío */
+.dx-revision .dx-campo{cursor:text}
+.dx-revision .dx-campo:empty::before{content:attr(data-original);color:#92400E;opacity:.42}
+.dx-revision .dx-campo:focus{background:#FDE68A;box-shadow:0 0 0 2px #F59E0B}
 .dx-revision .dx-campo-fijo:empty{display:inline-block;min-width:1.5em;min-height:1em}
+.dx-herr-campos .dx-campo,.dx-herr-campos .dx-campo-fijo{cursor:pointer}
+.dx-herr-campos .dx-campo:hover{box-shadow:0 0 0 2px #F59E0B}
+.dx-herr-campos .dx-campo-fijo{outline:1px dashed #94A3B8;outline-offset:1px;border-radius:2px}
+.dx-herr-campos .dx-campo-fijo:hover{outline:2px solid #64748B}
 .nota-documento-panel{display:flex;flex-direction:column;gap:8px}
 .nota-documento-barra{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
 .nota-documento-barra>label{margin:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
@@ -564,6 +575,14 @@ body.dark .dx-marco{background:#0B1220}
   .nota-documento-completa .nota-documento-lista{overflow:visible;flex-shrink:0}
   .nota-documento-completa .nota-documento-ayuda{display:none}
   .nota-documento-completa{padding-top:max(10px,env(safe-area-inset-top))}
+}
+@media(max-width:640px){
+  .np-herramientas>*{flex:1 1 auto;justify-content:center}
+  .np-modos{width:100%}
+  .np-modo{flex:1}
+  #modal-plantilla-nota .modal-footer{flex-wrap:wrap}
+  #modal-plantilla-nota .modal-footer .btn{flex:1 1 auto}
+  #np-quitar{margin-right:0!important}
 }
 @media(max-width:380px){.nota-doc-seccion-campos{grid-template-columns:1fr}.np-grafica-rango{grid-template-columns:1fr}}
 /* Campo con un botón de alta al lado (p. ej. Dueño + "Nuevo"). El select se

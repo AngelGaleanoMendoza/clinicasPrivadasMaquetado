@@ -4598,14 +4598,8 @@ async function aplicarPlantillaNota(id, valores=null, pantallaCompleta=false) {
 }
 
 function abrirGestorPlantillaNota() {
-  document.getElementById('np-nombre').value='';
-  const tipos=document.getElementById('n-tipo').querySelectorAll('option:not(.nota-tipo-historico)');
-  document.getElementById('np-tipo').innerHTML=Array.from(tipos).map(o=>`<option value="${escAttr(o.value)}">${escAttr(o.textContent.trim())}</option>`).join('');
-  document.getElementById('np-tipo').value=document.getElementById('n-tipo').value;
-  document.getElementById('np-archivo').value=''; document.getElementById('np-contenido').value='';
-  document.getElementById('np-campos').textContent='Aún no hay campos.';
-  const st=document.getElementById('np-estado'); st.className='nota-analisis-estado';st.textContent='Selecciona un archivo para analizarlo.';
-  _archivoPlantillaNota=null; _liberarMachoteEnRevision(); openModalOverlay('modal-plantilla-nota');
+  _prepararModalPlantilla();
+  openModalOverlay('modal-plantilla-nota');
 }
 
 async function analizarArchivoPlantillaNota(input) {
@@ -4660,7 +4654,7 @@ function _pintarCamposPlantillaDetectados(campos) {
 async function guardarPlantillaNota() {
   const nombre=document.getElementById('np-nombre').value.trim(),tipo=document.getElementById('np-tipo').value;
   if(_machoteEnRevision) {
-    if(!nombre||!tipo||!_archivoPlantillaNota){toast('Completa el nombre, tipo y archivo del machote','error');return;}
+    if(!nombre||!tipo||(!_archivoPlantillaNota&&!_machoteEnRevision.editando)){toast('Completa el nombre, tipo y archivo del machote','error');return;}
     return _guardarMachoteConFormato(nombre,tipo);
   }
   const analisis=_analizarEstructuraMachote(document.getElementById('np-contenido').value);
@@ -5665,9 +5659,9 @@ function _dxPintarGraficas(raiz, graficas, leerValor) {
 // los campos ya tienen el suyo.
 function _dxPrepararPiezas(raiz) {
   let t = 0, v = 0;
-  const ajeno = '.dx-campo, .dx-editable, .dx-num, .dx-ancla, .dx-imagen, .dx-marcador, .dx-guia';
+  const ajeno = '.dx-campo, .dx-campo-fijo, .dx-editable, .dx-libre, .dx-num, .dx-ancla, .dx-imagen, .dx-marcador, .dx-guia';
   raiz.querySelectorAll('.dx-p').forEach(p => {
-    if(p.matches('.dx-editable') || p.querySelector('.dx-editable')) return;
+    if(p.dataset.pieza || p.matches('.dx-editable') || p.querySelector('.dx-editable')) return;
     if(p.classList.contains('dx-vacio') && !p.textContent.trim() && !p.querySelector('.dx-imagen, .dx-cuadro, .dx-campo')) {
       p.dataset.pieza = 'v' + (++v);
       return;
@@ -5944,7 +5938,8 @@ function _dxLeerValores(cuerpo) {
   const valores = {};
   cuerpo.querySelectorAll('[data-campo]').forEach(el => {
     const v = _dxTextoEditable(el);
-    if(el.classList.contains('dx-campo')) { if(v.trim()) valores[el.dataset.campo] = v.trim(); return; }
+    // Un recuadro se guarda si difiere de lo que trae el machote (también si se vació)
+    if(el.classList.contains('dx-campo')) { const actual = v.trim(); if(actual !== String(el.dataset.texto || '').trim()) valores[el.dataset.campo] = actual; return; }
     // Un párrafo solo se guarda si cambió: así conserva negritas y colores del Word
     const normal = t => String(t||'').replace(/\s+/g, ' ').trim();
     if(normal(v) !== normal(el.dataset.texto)) valores[el.dataset.campo] = v;
@@ -6053,6 +6048,7 @@ function _cerrarDocumentoNota() {
   if(cont) cont.style.display = '';
   _dxPantallaCompletaNota(false);
   document.querySelector('#modal-nota > .modal')?.classList.remove('modal-documento');
+  _dxBotonEditarPlantilla();
 }
 
 // Pantalla completa: la hoja ocupa toda la pantalla, sin el formulario de la
@@ -6103,6 +6099,7 @@ function _abrirDocumentoNota(plantillaId, documento, valores, pantallaCompleta=f
   if(window.matchMedia('(max-width: 640px)').matches) _dxAlternarListaNota(true);
   else _dxActualizarBotonLista();
   _dxPantallaCompletaNota(pantallaCompleta);
+  _dxBotonEditarPlantilla();
   requestAnimationFrame(() => _dxAjustarZoom(marco));
 }
 
@@ -6148,7 +6145,7 @@ function _dxAutollenarNota() {
   const fecha = document.getElementById('n-fecha')?.value || hoy();
   let cambio = false;
   d.cuerpo.querySelectorAll('.dx-campo').forEach(el => {
-    if(el.textContent.trim() && !el.dataset.autollenado) return;
+    if(el.textContent.trim() && !el.dataset.autollenado && el.textContent !== (el.dataset.texto || '')) return;
     const etiqueta = String(el.dataset.etiqueta || '').toLocaleLowerCase('es').trim();
     let v = null;
     if(el.dataset.tipo === 'fecha') v = _dxFechaConFormato(fecha, el.dataset.formato);
@@ -6284,8 +6281,12 @@ async function _pintarNotaMachoteEnVista(n) {
   _dxMontarHoja(marco, documento, { modo:'lectura', valores:n.plantillaValores });
 }
 
-// ── Importación con vista previa ──
-let _machoteEnRevision = null; // { doc, clicBorde }
+// ── Diseño del machote: al importarlo o al editar uno guardado ──
+// La hoja se trabaja con dos herramientas. "Escribir": todo el texto y los
+// recuadros se pueden escribir, y lo que quede en un recuadro sale ya cargado en
+// cada nota nueva. "Elegir campos": un toque cambia un recuadro a texto fijo o al
+// revés, y un texto seleccionado se puede volver recuadro.
+let _machoteEnRevision = null; // { doc, clicBorde, editando, modo, rango }
 
 function _mostrarGruposTextoPlantilla(visible) {
   ['np-estructura-grupo', 'np-campos-grupo'].forEach(id => {
@@ -6297,32 +6298,226 @@ function _mostrarGruposTextoPlantilla(visible) {
 function _liberarMachoteEnRevision() {
   if(_machoteEnRevision?.doc?.imagenes) for(const url of _machoteEnRevision.doc.imagenes.keys()) URL.revokeObjectURL(url);
   _machoteEnRevision = null;
+  _dxPantallaCompletaRevision(false);
   const grupo = document.getElementById('np-documento-grupo');
   if(grupo) grupo.style.display = 'none';
-  ['np-doc-vista', 'np-graficas'].forEach(id => { const el = document.getElementById(id); if(el) el.innerHTML = ''; });
+  ['np-doc-vista', 'np-graficas'].forEach(id => { const el = document.getElementById(id); if(el) { el.innerHTML = ''; el.classList.remove('dx-tamano-real'); } });
   _mostrarGruposTextoPlantilla(true);
 }
 
-function _mostrarMachoteEnRevision(doc) {
-  _machoteEnRevision = { doc, clicBorde:{} };
+// Deja el modal listo para importar un Word nuevo o para editar un machote guardado
+function _prepararModalPlantilla(plantilla=null) {
+  const editar = !!plantilla;
+  document.getElementById('np-titulo').textContent = editar ? '✏️ Editar machote' : '📄 Importar machote clínico';
+  document.getElementById('np-archivo-grupo').style.display = editar ? 'none' : '';
+  const origen = document.getElementById('np-origen');
+  origen.style.display = editar ? '' : 'none';
+  origen.textContent = editar ? `Editando «${plantilla.nombre}». Las notas que ya se hicieron con este machote no cambian.` : '';
+  document.getElementById('np-guardar').textContent = editar ? '💾 Guardar cambios' : '💾 Guardar plantilla';
+  document.getElementById('np-guardar-copia').style.display = editar ? '' : 'none';
+  document.getElementById('np-quitar').style.display = editar ? '' : 'none';
+  const tipos = document.getElementById('n-tipo').querySelectorAll('option:not(.nota-tipo-historico)');
+  document.getElementById('np-tipo').innerHTML = Array.from(tipos).map(o => `<option value="${escAttr(o.value)}">${escAttr(o.textContent.trim())}</option>`).join('');
+  document.getElementById('np-tipo').value = editar ? plantilla.tipo : document.getElementById('n-tipo').value;
+  document.getElementById('np-nombre').value = editar ? plantilla.nombre : '';
+  document.getElementById('np-archivo').value = '';
+  document.getElementById('np-contenido').value = '';
+  document.getElementById('np-campos').textContent = 'Aún no hay campos.';
+  const st = document.getElementById('np-estado');
+  st.className = 'nota-analisis-estado';
+  st.textContent = editar ? '⏳ Abriendo el machote…' : 'Selecciona un archivo para analizarlo.';
+  _archivoPlantillaNota = null;
+  _liberarMachoteEnRevision();
+}
+
+function _cuerpoRevision() {
+  return document.querySelector('#np-doc-vista .dx-hoja-cuerpo');
+}
+
+function _mostrarMachoteEnRevision(doc, editando=null) {
+  _machoteEnRevision = { doc, clicBorde:{}, editando, modo:'escribir', rango:null };
   _mostrarGruposTextoPlantilla(false);
   document.getElementById('np-documento-grupo').style.display = '';
   const cuerpo = _dxMontarHoja(document.getElementById('np-doc-vista'), doc, { modo:'revision' });
+  _dxPrepararPiezas(cuerpo);
+  cuerpo.addEventListener('pointerdown', () => { if(_machoteEnRevision) _machoteEnRevision.rango = null; });
   cuerpo.addEventListener('click', e => {
+    if(_machoteEnRevision?.modo !== 'campos' || !getSelection().isCollapsed) return;
     const el = e.target.closest('.dx-campo, .dx-campo-fijo');
-    if(!el) return;
-    el.classList.toggle('dx-campo');
-    el.classList.toggle('dx-campo-fijo');
-    _actualizarResumenMachote();
+    if(el) _dxAlternarCampoRevision(el);
   });
+  cuerpo.addEventListener('keydown', e => {
+    const campo = e.target.closest?.('.dx-campo');
+    if(!campo || e.key !== 'Enter') return;
+    e.preventDefault();
+    const lista = Array.from(cuerpo.querySelectorAll('.dx-campo'));
+    const destino = lista[lista.indexOf(campo) + (e.shiftKey ? -1 : 1)];
+    if(destino) _dxEnfocarAlFinal(destino);
+  });
+  cuerpo.addEventListener('paste', e => {
+    const el = e.target.closest?.('[contenteditable]');
+    if(!el) return;
+    e.preventDefault();
+    let texto = e.clipboardData?.getData('text/plain') || '';
+    if(el.classList.contains('dx-campo')) texto = texto.replace(/\s*\n\s*/g, ' ');
+    document.execCommand('insertText', false, texto);
+  });
+  cuerpo.addEventListener('input', e => {
+    const campo = e.target.closest?.('.dx-campo');
+    if(campo && !campo.textContent) campo.innerHTML = '';
+  });
+  document.getElementById('np-valores-word').style.display = cuerpo.querySelector('.dx-campo[data-original]') ? '' : 'none';
   document.getElementById('np-contenido').value = _dxTextoPlano(doc, {});
+  _dxModoRevision('escribir');
   _pintarConfigGraficas();
   _actualizarResumenMachote();
 }
 
+// Recuerda el último texto seleccionado en la hoja: en el teléfono, tocar el
+// botón "Hacer recuadro" puede quitar la selección antes del clic.
+document.addEventListener('selectionchange', () => {
+  const rev = _machoteEnRevision, cuerpo = rev && _cuerpoRevision();
+  const sel = getSelection();
+  if(!cuerpo || !sel.rangeCount || sel.isCollapsed) return;
+  const r = sel.getRangeAt(0);
+  if(cuerpo.contains(r.commonAncestorContainer)) rev.rango = r.cloneRange();
+});
+
+function _dxModoRevision(modo) {
+  const rev = _machoteEnRevision, cuerpo = _cuerpoRevision();
+  if(!rev || !cuerpo) return;
+  rev.modo = modo;
+  const escribir = modo === 'escribir';
+  cuerpo.querySelectorAll('.dx-campo, .dx-campo-fijo, .dx-editable, [data-pieza]').forEach(el => {
+    if(escribir) { el.setAttribute('contenteditable', _DX_SOLO_TEXTO ? 'plaintext-only' : 'true'); el.spellcheck = true; }
+    else el.removeAttribute('contenteditable');
+  });
+  cuerpo.closest('.dx-hoja')?.classList.toggle('dx-herr-campos', !escribir);
+  document.querySelectorAll('#np-documento-grupo .np-modo').forEach(b => {
+    const activo = b.dataset.modo === modo;
+    b.classList.toggle('activo', activo);
+    b.setAttribute('aria-pressed', String(activo));
+  });
+  document.getElementById('np-seleccion-campo').classList.toggle('dx-oculto', escribir);
+  document.getElementById('np-ayuda-modo').textContent = escribir
+    ? 'Escribe dentro del documento como en Word. Lo que dejes en los recuadros amarillos saldrá ya cargado en cada nota nueva, y ahí se podrá cambiar. También puedes corregir cualquier texto o escribir en los renglones vacíos.'
+    : 'Toca un recuadro amarillo para dejarlo como texto fijo, o un texto con borde gris para volverlo recuadro. Para crear un recuadro nuevo, selecciona el texto y pulsa «Hacer recuadro con lo seleccionado».';
+}
+
+function _dxAlternarCampoRevision(el) {
+  if(el.classList.contains('dx-campo')) {
+    el.classList.replace('dx-campo', 'dx-campo-fijo');
+    if(!el.textContent && el.dataset.original) el.textContent = el.dataset.original;
+  } else {
+    el.classList.replace('dx-campo-fijo', 'dx-campo');
+  }
+  _actualizarResumenMachote();
+}
+
+function _dxValoresDelWord() {
+  const cuerpo = _cuerpoRevision();
+  if(!cuerpo) return;
+  let n = 0;
+  cuerpo.querySelectorAll('.dx-campo[data-original]').forEach(el => { if(!el.textContent.trim()) { el.textContent = el.dataset.original; n++; } });
+  toast(n ? `Se cargaron ${n} valor${n === 1 ? '' : 'es'} del Word en los recuadros vacíos` : 'Los recuadros ya tienen texto', n ? 'success' : 'info');
+}
+
+async function _dxVaciarRecuadros() {
+  const cuerpo = _cuerpoRevision();
+  const llenos = cuerpo ? Array.from(cuerpo.querySelectorAll('.dx-campo')).filter(el => el.textContent.trim()) : [];
+  if(!llenos.length) { toast('Los recuadros ya están vacíos', 'info'); return; }
+  const ok = await customConfirm({ icon:'🧹', title:'Vaciar recuadros', msg:`Se borrará lo escrito en ${llenos.length} recuadro${llenos.length === 1 ? '' : 's'} del machote. Los textos fijos no cambian.`, okText:'Vaciar' });
+  if(!ok) return;
+  llenos.forEach(el => { el.innerHTML = ''; });
+}
+
+function _dxSeleccionACampo() {
+  const rev = _machoteEnRevision, cuerpo = _cuerpoRevision();
+  const r = rev?.rango;
+  if(!cuerpo || !r || r.collapsed || !cuerpo.contains(r.commonAncestorContainer)) {
+    toast('Primero selecciona en la hoja el texto que quieres volver recuadro', 'info');
+    return;
+  }
+  // Word parte las palabras en tramos internos: se acepta cualquier selección
+  // dentro de un mismo renglón que no incluya recuadros, viñetas ni imágenes
+  const elDe = n => n.nodeType === Node.TEXT_NODE ? n.parentElement : n;
+  const p = elDe(r.startContainer).closest('.dx-p');
+  if(!p || p !== elDe(r.endContainer).closest('.dx-p')) {
+    toast('Selecciona un texto dentro de un mismo renglón', 'warning');
+    return;
+  }
+  if(elDe(r.startContainer).closest('.dx-campo, .dx-campo-fijo') || elDe(r.endContainer).closest('.dx-campo, .dx-campo-fijo')) { toast('Ese texto ya es un recuadro: tócalo para cambiarlo', 'info'); return; }
+  if(r.cloneContents().querySelector('.dx-campo, .dx-campo-fijo, .dx-num, .dx-imagen, .dx-cuadro, .dx-ancla')) {
+    toast('La selección incluye otro recuadro o una imagen: selecciona solo el texto', 'warning');
+    return;
+  }
+  const seleccionado = r.toString();
+  if(!seleccionado.trim()) { toast('La selección está vacía', 'info'); return; }
+  const estilo = elDe(r.startContainer).closest('span[style]');
+  // Nombre del recuadro: la etiqueta con dos puntos que lo precede, la primera
+  // celda de su fila o, si no hay, el propio texto
+  const previo = document.createRange();
+  previo.setStart(p, 0);
+  previo.setEnd(r.startContainer, r.startOffset);
+  let etiqueta = (previo.toString().match(/([^:\t\n]{1,46}):\s*$/)?.[1] || '').replace(/\s+/g, ' ').trim();
+  const td = p.closest('td');
+  if(!etiqueta && td && td.parentElement.cells[0] !== td) etiqueta = td.parentElement.cells[0].textContent.replace(/\s+/g, ' ').trim().slice(0, 60);
+  if(!etiqueta) etiqueta = seleccionado.replace(/\s+/g, ' ').trim().slice(0, 40);
+  const usados = Array.from(cuerpo.querySelectorAll('[data-campo]')).map(el => parseInt(String(el.dataset.campo).replace(/^\D+/, ''), 10) || 0);
+  const campo = document.createElement('span');
+  campo.className = 'dx-campo';
+  campo.dataset.campo = 'c' + (Math.max(0, ...usados) + 1);
+  campo.dataset.etiqueta = etiqueta;
+  campo.dataset.original = seleccionado;
+  campo.textContent = seleccionado;
+  r.deleteContents();
+  // El recuadro conserva la letra (negrita, tamaño, color) del texto elegido
+  if(estilo && !estilo.contains(r.startContainer)) {
+    const envoltura = document.createElement('span');
+    envoltura.setAttribute('style', estilo.getAttribute('style'));
+    envoltura.appendChild(campo);
+    r.insertNode(envoltura);
+  } else {
+    r.insertNode(campo);
+  }
+  // Un párrafo largo editable pasa a ser texto con recuadros
+  const editable = campo.closest('.dx-editable');
+  if(editable) { editable.classList.remove('dx-editable'); delete editable.dataset.campo; delete editable.dataset.etiqueta; }
+  // Los tramos editables del renglón se rehacen alrededor del recuadro nuevo
+  p.querySelectorAll('.dx-libre').forEach(el => el.replaceWith(...el.childNodes));
+  p.querySelectorAll('span:not([class])').forEach(el => { if(!el.childNodes.length) el.remove(); });
+  p.normalize();
+  _dxPrepararPiezas(cuerpo);
+  getSelection().removeAllRanges();
+  rev.rango = null;
+  _dxModoRevision(rev.modo);
+  _actualizarResumenMachote();
+  toast(`Recuadro «${etiqueta}» creado`);
+}
+
+function _dxTeclaPantallaRevision(e) {
+  if(e.key === 'Escape' && document.getElementById('np-documento-grupo')?.classList.contains('nota-documento-completa')) {
+    e.preventDefault();
+    _dxPantallaCompletaRevision(false);
+  }
+}
+
+function _dxPantallaCompletaRevision(activar) {
+  const grupo = document.getElementById('np-documento-grupo');
+  if(!grupo) return;
+  const ahora = !!activar;
+  grupo.classList.toggle('nota-documento-completa', ahora);
+  document.getElementById('np-pantalla-btn')?.classList.toggle('dx-oculto', ahora);
+  document.getElementById('np-volver-btn')?.classList.toggle('dx-oculto', !ahora);
+  document.removeEventListener('keydown', _dxTeclaPantallaRevision);
+  if(ahora) document.addEventListener('keydown', _dxTeclaPantallaRevision);
+  const marco = document.getElementById('np-doc-vista');
+  if(marco) requestAnimationFrame(() => _dxAjustarZoom(marco));
+}
+
 function _actualizarResumenMachote() {
   const rev = _machoteEnRevision;
-  const cuerpo = document.querySelector('#np-doc-vista .dx-hoja-cuerpo');
+  const cuerpo = _cuerpoRevision();
   if(!rev || !cuerpo) return;
   const n = (k, uno, varios) => `${k} ${k === 1 ? uno : varios}`;
   const campos = cuerpo.querySelectorAll('.dx-campo').length;
@@ -6331,16 +6526,16 @@ function _actualizarResumenMachote() {
   const resumen = [n(campos, 'campo para llenar', 'campos para llenar'), n(tablas, 'tabla', 'tablas'), n(graficas, 'gráfica', 'gráficas')].join(' · ');
   const st = document.getElementById('np-estado');
   st.className = 'nota-analisis-estado ok';
-  st.textContent = `✅ Documento analizado con su formato: ${resumen}.` + (rev.doc.avisos?.length ? ' ' + rev.doc.avisos.join(' ') : '');
+  st.textContent = (rev.editando ? `✏️ Machote con formato: ${resumen}.` : `✅ Documento analizado con su formato: ${resumen}.`) + (rev.doc.avisos?.length ? ' ' + rev.doc.avisos.join(' ') : '');
   document.getElementById('np-doc-resumen').textContent = resumen;
   _pintarConfigGraficas(true);
 }
 
 function _camposParaGraficas() {
-  return Array.from(document.querySelectorAll('#np-doc-vista .dx-hoja-cuerpo .dx-campo')).map(el => ({
-    id:el.dataset.campo,
-    texto:(el.dataset.etiqueta || 'Campo') + (el.dataset.original ? ` (ej. ${el.dataset.original})` : '')
-  }));
+  return Array.from(document.querySelectorAll('#np-doc-vista .dx-hoja-cuerpo .dx-campo')).map(el => {
+    const ejemplo = el.dataset.original || el.textContent.trim();
+    return { id:el.dataset.campo, texto:(el.dataset.etiqueta || 'Campo') + (ejemplo ? ` (ej. ${ejemplo.slice(0, 30)})` : '') };
+  });
 }
 
 function _pintarConfigGraficas(soloOpciones=false) {
@@ -6417,25 +6612,40 @@ function _clicBordeGrafica(e, id) {
   _refrescarGraficaRevision(id);
 }
 
-async function _guardarMachoteConFormato(nombre, tipo) {
-  const rev = _machoteEnRevision, doc = rev.doc;
+// Quita de la hoja de diseño todo lo que solo sirve mientras se edita
+function _dxLimpiarCuerpoDiseno(caja) {
+  caja.querySelectorAll('.dx-campo-fijo').forEach(el => el.replaceWith(document.createTextNode(el.textContent)));
+  caja.querySelectorAll('.dx-libre').forEach(el => el.replaceWith(...el.childNodes));
+  caja.querySelectorAll('.dx-guia, .dx-marcador').forEach(el => el.remove());
+  ['contenteditable', 'spellcheck', 'role', 'aria-label', 'title', 'data-pieza', 'data-original', 'data-texto', 'data-autollenado'].forEach(a =>
+    caja.querySelectorAll(`[${a}]`).forEach(el => el.removeAttribute(a)));
+  caja.querySelectorAll('.dx-p').forEach(p => {
+    const lleno = !!p.textContent.trim() || !!p.querySelector('.dx-imagen, .dx-cuadro, .dx-campo');
+    p.classList.toggle('dx-vacio', !lleno);
+    if(!p.firstChild) p.innerHTML = '<br>';
+  });
+  caja.normalize();
+}
+
+async function _guardarMachoteConFormato(nombre, tipo, { comoCopia=false } = {}) {
+  const rev = _machoteEnRevision, doc = rev.doc, editando = rev.editando;
   const incompleta = Object.values(doc.graficas || {}).some(g => g.campo && (g.min == null || g.max == null || Number(g.min) === Number(g.max)));
   if(incompleta) { toast('Indica los valores de los extremos de la gráfica, o elige "No marcar ningún dato"', 'error'); return; }
-  const vista = document.querySelector('#np-doc-vista .dx-hoja-cuerpo');
+  if(comoCopia && editando && nombre === editando.nombre) nombre = `${nombre} (copia)`;
   const caja = document.createElement('div');
-  caja.innerHTML = vista.innerHTML;
-  caja.querySelectorAll('.dx-campo-fijo').forEach(el => el.replaceWith(document.createTextNode(el.dataset.original || '')));
-  caja.querySelectorAll('[data-original]').forEach(el => el.removeAttribute('data-original'));
-  if(!caja.querySelector('.dx-campo, .dx-editable')) { toast('El machote no tiene nada para llenar: toca al menos un recuadro para volverlo campo', 'error'); return; }
+  caja.innerHTML = _cuerpoRevision().innerHTML;
+  _dxLimpiarCuerpoDiseno(caja);
+  if(!caja.querySelector('.dx-campo, .dx-editable')) { toast('El machote no tiene nada para llenar: en «Elegir campos» marca al menos un recuadro', 'error'); return; }
   const etiquetas = [...new Set(Array.from(caja.querySelectorAll('.dx-campo')).map(el => el.dataset.etiqueta).filter(Boolean))];
   setLoading(true);
   const carpeta = `plantillas-notas/${currentClinicaId}/${Date.now()}`;
   const subidas = [];
   try {
-    // Las imágenes del Word pasan a Storage y el documento apunta a ellas
+    // Las imágenes del Word pasan a Storage y el documento apunta a ellas. Un
+    // machote editado ya las tiene allí.
     const partes = { cuerpo:caja.innerHTML, encabezado:doc.encabezado || '', pie:doc.pie || '', marcas:JSON.stringify(doc.marcasAgua || []) };
     let i = 0;
-    for(const [url, img] of doc.imagenes) {
+    for(const [url, img] of doc.imagenes || []) {
       const ruta = `${carpeta}/imagen-${++i}.${img.ext}`;
       const r = await sb.storage.from(STORAGE_BUCKET).upload(ruta, img.blob, { upsert:false, contentType:img.blob.type });
       if(r.error) throw r.error;
@@ -6443,18 +6653,22 @@ async function _guardarMachoteConFormato(nombre, tipo) {
       const publica = sb.storage.from(STORAGE_BUCKET).getPublicUrl(ruta).data.publicUrl;
       Object.keys(partes).forEach(k => { partes[k] = partes[k].split(url).join(publica); });
     }
-    const rutaDocx = `${carpeta}/${_archivoPlantillaNota.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-    const subida = await sb.storage.from(STORAGE_BUCKET).upload(rutaDocx, _archivoPlantillaNota, { upsert:false, contentType:_archivoPlantillaNota.type || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-    if(subida.error) throw subida.error;
-    subidas.push(rutaDocx);
-    const archivoUrl = sb.storage.from(STORAGE_BUCKET).getPublicUrl(rutaDocx).data.publicUrl;
+    let archivoNombre = editando?.archivoNombre || '', archivoUrl = editando?.archivoUrl || null;
+    if(_archivoPlantillaNota) {
+      const rutaDocx = `${carpeta}/${_archivoPlantillaNota.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      const subida = await sb.storage.from(STORAGE_BUCKET).upload(rutaDocx, _archivoPlantillaNota, { upsert:false, contentType:_archivoPlantillaNota.type || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      if(subida.error) throw subida.error;
+      subidas.push(rutaDocx);
+      archivoNombre = _archivoPlantillaNota.name;
+      archivoUrl = sb.storage.from(STORAGE_BUCKET).getPublicUrl(rutaDocx).data.publicUrl;
+    }
     const documento = { version:1, pagina:doc.pagina, encabezado:partes.encabezado, pie:partes.pie, cuerpo:partes.cuerpo, marcasAgua:JSON.parse(partes.marcas), graficas:doc.graficas || {} };
     const texto = _dxTextoPlano(documento, {});
     const columnas = 'id,nombre,tipo_nota,contenido_modelo,campos,archivo_nombre,archivo_url,activa';
-    const fila = { clinica_id:currentClinicaId, nombre, tipo_nota:tipo, contenido_modelo:texto || nombre, campos:etiquetas, archivo_nombre:_archivoPlantillaNota.name, archivo_url:archivoUrl, creado_por:currentUser?.id || null, documento };
+    const fila = { clinica_id:currentClinicaId, nombre, tipo_nota:tipo, contenido_modelo:texto || nombre, campos:etiquetas, archivo_nombre:archivoNombre, archivo_url:archivoUrl, creado_por:currentUser?.id || null, documento };
     let { data, error } = await sb.from('plantillas_notas').insert([fila]).select(columnas).single();
     let soloTexto = false;
-    if(error && _faltaColumna(error, 'documento')) {
+    if(error && _faltaColumna(error, 'documento') && !editando) {
       // Sin la migración el machote se guarda como texto rellenable, como antes
       delete fila.documento;
       const analisis = _analizarEstructuraMachote(texto);
@@ -6468,13 +6682,23 @@ async function _guardarMachoteConFormato(nombre, tipo) {
     if(soloTexto) nueva.formato = 'texto';
     else _documentosPlantilla.set(String(nueva.id), Promise.resolve(documento));
     C.plantillasNota.push(nueva);
+    // Editar guarda una versión nueva y oculta la anterior: las notas que ya se
+    // hicieron conservan intacto el documento con el que se escribieron.
+    let avisoVersion = '';
+    if(editando && !comoCopia) {
+      const { error:errOcultar } = await sb.from('plantillas_notas').update({ activa:false }).eq('id', editando.id);
+      if(errOcultar) avisoVersion = ' No se pudo ocultar la versión anterior: ' + errOcultar.message;
+      else C.plantillasNota = C.plantillasNota.filter(p => String(p.id) !== String(editando.id));
+    }
     C.plantillasNota.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
     document.getElementById('n-tipo').value = tipo;
     _llenarSelectorPlantillas(tipo, nueva.id);
     closeModal('modal-plantilla-nota');
     _liberarMachoteEnRevision();
     aplicarPlantillaNota(nueva.id, null, true);
-    toast(soloTexto ? 'Machote guardado solo como texto: falta ejecutar migracion_machotes_formato.sql en Supabase para conservar tablas y gráficas' : 'Machote con formato guardado ✅', soloTexto ? 'warning' : 'success');
+    if(soloTexto) toast('Machote guardado solo como texto: falta ejecutar migracion_machotes_formato.sql en Supabase para conservar tablas y gráficas', 'warning');
+    else if(avisoVersion) toast('Machote guardado.' + avisoVersion, 'warning');
+    else toast(!editando ? 'Machote con formato guardado ✅' : comoCopia ? `Copia «${nombre}» guardada ✅` : 'Machote actualizado ✅');
   } catch(e) {
     if(subidas.length) try { await sb.storage.from(STORAGE_BUCKET).remove(subidas); } catch(_) {}
     const msg = String(e?.message || e || '');
@@ -6482,6 +6706,57 @@ async function _guardarMachoteConFormato(nombre, tipo) {
   } finally {
     setLoading(false);
   }
+}
+
+function guardarCopiaPlantillaNota() {
+  const nombre = document.getElementById('np-nombre').value.trim(), tipo = document.getElementById('np-tipo').value;
+  if(!_machoteEnRevision?.editando) return;
+  if(!nombre || !tipo) { toast('Completa el nombre y el tipo del machote', 'error'); return; }
+  return _guardarMachoteConFormato(nombre, tipo, { comoCopia:true });
+}
+
+async function quitarPlantillaNota() {
+  const plantilla = _machoteEnRevision?.editando;
+  if(!plantilla) return;
+  const ok = await customConfirm({ icon:'🗑️', title:'Quitar machote', msg:`«${escAttr(plantilla.nombre)}» dejará de aparecer para notas nuevas. Las notas que ya se hicieron con él conservan su documento.`, okText:'Quitar' });
+  if(!ok) return;
+  setLoading(true);
+  const { error } = await sb.from('plantillas_notas').update({ activa:false }).eq('id', plantilla.id);
+  setLoading(false);
+  if(error) { toast('No se pudo quitar el machote: ' + error.message, 'error'); return; }
+  C.plantillasNota = C.plantillasNota.filter(p => String(p.id) !== String(plantilla.id));
+  closeModal('modal-plantilla-nota');
+  _liberarMachoteEnRevision();
+  if(String(_plantillaNotaActiva?.id) === String(plantilla.id)) await aplicarPlantillaNota('');
+  _llenarSelectorPlantillas(document.getElementById('n-tipo').value, _plantillaNotaActiva?.id || '');
+  toast('Machote quitado de la lista');
+}
+
+// Abre el machote elegido en la nota para escribir dentro de él
+async function editarPlantillaNotaSeleccionada() {
+  const plantilla = _plantillaNotaActiva;
+  if(!plantilla || plantilla.formato !== 'docx' || !C.plantillasNota.some(p => String(p.id) === String(plantilla.id))) return;
+  const d = _machoteDocNota;
+  const escrito = d && Object.keys(_dxLeerValores(d.cuerpo)).some(id => !d.cuerpo.querySelector(`[data-campo="${CSS.escape(id)}"]`)?.dataset.autollenado);
+  if(escrito) {
+    const ok = await customConfirm({ icon:'✏️', title:'Editar el machote', msg:'Al guardar los cambios, esta nota se volverá a abrir con el machote editado y se perderá lo que escribiste en ella.', okText:'Editar machote' });
+    if(!ok) return;
+  }
+  setLoading(true);
+  const documento = await _documentoPlantilla(plantilla.id);
+  setLoading(false);
+  if(!documento) { toast('No se pudo abrir el machote. Revisa la conexión e inténtalo de nuevo.', 'error'); return; }
+  _prepararModalPlantilla(plantilla);
+  // Copia propia: lo que se cambie no toca el documento de las notas ya hechas
+  _mostrarMachoteEnRevision({ ...JSON.parse(JSON.stringify(documento)), imagenes:new Map(), avisos:[] }, plantilla);
+  openModalOverlay('modal-plantilla-nota');
+}
+
+function _dxBotonEditarPlantilla() {
+  const boton = document.getElementById('n-plantilla-editar');
+  if(!boton) return;
+  const p = _plantillaNotaActiva;
+  boton.style.display = _machoteDocNota && p?.formato === 'docx' && C.plantillasNota.some(x => String(x.id) === String(p.id)) ? '' : 'none';
 }
 
 function _reiniciarFormularioNota(){

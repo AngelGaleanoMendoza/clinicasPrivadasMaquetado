@@ -22,7 +22,7 @@
 <!-- Lectura local de machotes. El archivo se procesa en el navegador antes de
      guardarlo; Mammoth extrae DOCX y PDF.js se carga al elegir un PDF. -->
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js" defer></script>
-<link rel="stylesheet" href="css/styles.css?v=20260914d">
+<link rel="stylesheet" href="css/styles.css?v=20260914e">
 </head>
 <body>
 <script>
@@ -2543,6 +2543,7 @@
         <label>📄 Machote / plantilla de esta nota</label>
         <div class="nota-plantilla-bar">
           <select id="n-plantilla" onchange="aplicarPlantillaNota(this.value,null,true)"><option value="">Sin plantilla · nota libre</option></select>
+          <button type="button" class="btn btn-secondary btn-sm" id="n-plantilla-editar" style="display:none" onclick="editarPlantillaNotaSeleccionada()">✏️ Editar machote</button>
           <button type="button" class="btn btn-secondary btn-sm" onclick="abrirGestorPlantillaNota()">📄 Subir machote</button>
         </div>
         <small>Admite PDF, DOCX y TXT. Un Word conserva sus tablas, imágenes y gráficas, y se llena directamente sobre el documento.</small>
@@ -2592,26 +2593,44 @@
 <div class="modal-overlay" id="modal-plantilla-nota">
   <div class="modal modal-lg">
     <button class="modal-close-btn" onclick="closeModal('modal-plantilla-nota')" title="Cerrar">✕</button>
-    <h2>📄 Importar machote clínico</h2>
+    <h2 id="np-titulo">📄 Importar machote clínico</h2>
     <div class="form-grid">
       <div class="form-group"><label>Nombre de la plantilla *</label><input id="np-nombre" placeholder="Ej. Evolución de control"></div>
       <div class="form-group"><label>Tipo de nota *</label><select id="np-tipo"></select></div>
-      <div class="form-group full"><label>Archivo *</label><input type="file" id="np-archivo" accept=".pdf,.docx,.txt,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="analizarArchivoPlantillaNota(this)"></div>
+      <div class="form-group full" id="np-origen" style="display:none"></div>
+      <div class="form-group full" id="np-archivo-grupo"><label>Archivo *</label><input type="file" id="np-archivo" accept=".pdf,.docx,.txt,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="analizarArchivoPlantillaNota(this)"></div>
       <div class="form-group full"><div id="np-estado" class="nota-analisis-estado">Selecciona un archivo para analizarlo.</div></div>
-      <div class="form-group full" id="np-documento-grupo" style="display:none">
+      <div class="form-group full nota-documento-panel" id="np-documento-grupo" style="display:none">
         <div class="nota-documento-barra">
-          <label>Vista del machote <span id="np-doc-resumen" class="tag tag-blue"></span></label>
-          <button type="button" class="btn btn-secondary btn-sm" onclick="_dxAlternarTamanoReal('np-doc-vista',this)">🔍 Tamaño real</button>
+          <label>Machote <span id="np-doc-resumen" class="tag tag-blue"></span></label>
+          <div class="nota-documento-acciones">
+            <button type="button" class="btn btn-primary btn-sm dx-oculto" id="np-volver-btn" onclick="_dxPantallaCompletaRevision(false)">↩️ Volver</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="np-pantalla-btn" onclick="_dxPantallaCompletaRevision(true)">⛶ Pantalla completa</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="_dxAlternarTamanoReal('np-doc-vista',this)">🔍 Tamaño real</button>
+          </div>
         </div>
-        <small>Los recuadros amarillos se llenarán en cada nota; lo demás queda fijo como en el Word. Toca un recuadro para dejarlo como texto fijo, o tócalo otra vez para volverlo campo.</small>
-        <div id="np-doc-vista" class="dx-marco dx-marco-revision"></div>
-        <div id="np-graficas"></div>
+        <div class="np-herramientas">
+          <div class="np-modos" role="group" aria-label="Herramienta">
+            <button type="button" class="np-modo activo" data-modo="escribir" aria-pressed="true" onclick="_dxModoRevision('escribir')">✏️ Escribir</button>
+            <button type="button" class="np-modo" data-modo="campos" aria-pressed="false" onclick="_dxModoRevision('campos')">🔲 Elegir campos</button>
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm dx-oculto" id="np-seleccion-campo" onpointerdown="event.preventDefault()" onclick="_dxSeleccionACampo()">➕ Hacer recuadro con lo seleccionado</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="np-valores-word" onclick="_dxValoresDelWord()">↺ Poner valores del Word</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="_dxVaciarRecuadros()">🧹 Vaciar recuadros</button>
+        </div>
+        <small id="np-ayuda-modo"></small>
+        <div class="nota-documento-area">
+          <div id="np-doc-vista" class="dx-marco dx-marco-revision"></div>
+          <div id="np-graficas"></div>
+        </div>
       </div>
       <div class="form-group full" id="np-estructura-grupo"><label>Estructura detectada</label><textarea id="np-contenido" style="min-height:220px" oninput="_pintarCamposPlantillaDetectados(_camposDeMachote(this.value))" placeholder="El texto extraído aparecerá aquí. También puedes usar marcadores como {{Motivo de consulta}}."></textarea><small>Puedes corregir el texto. Usa <strong>{{Nombre del campo}}</strong> donde quieras mostrar una casilla para rellenar.</small></div>
       <div class="form-group full" id="np-campos-grupo"><label>Campos detectados</label><div id="np-campos" class="nota-campos-detectados">Aún no hay campos.</div></div>
     </div>
     <div class="modal-footer">
+      <button class="btn btn-danger" id="np-quitar" style="display:none;margin-right:auto" onclick="quitarPlantillaNota()">🗑️ Quitar</button>
       <button class="btn btn-secondary" onclick="closeModal('modal-plantilla-nota')">Cancelar</button>
+      <button class="btn btn-secondary" id="np-guardar-copia" style="display:none" onclick="guardarCopiaPlantillaNota()">📄 Guardar como copia</button>
       <button class="btn btn-primary" id="np-guardar" onclick="guardarPlantillaNota()">💾 Guardar plantilla</button>
     </div>
   </div>
@@ -2736,7 +2755,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260914d" defer></script>
+<script src="js/app.js?v=20260914e" defer></script>
 </body>
 </html>
 
