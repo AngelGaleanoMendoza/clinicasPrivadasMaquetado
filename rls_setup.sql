@@ -967,6 +967,8 @@ ALTER TABLE public.notas ADD COLUMN IF NOT EXISTS plantilla_id BIGINT
 -- Machotes con formato (migracion_machotes_formato.sql)
 ALTER TABLE public.plantillas_notas ADD COLUMN IF NOT EXISTS documento JSONB;
 ALTER TABLE public.notas ADD COLUMN IF NOT EXISTS plantilla_valores JSONB;
+-- Código del médico escrito en la nota (migracion_codigo_medico_notas.sql)
+ALTER TABLE public.notas ADD COLUMN IF NOT EXISTS profesional_codigo TEXT;
 CREATE INDEX IF NOT EXISTS idx_notas_profesional ON public.notas(clinica_id, profesional_id, fecha DESC);
 CREATE INDEX IF NOT EXISTS idx_plantillas_notas_clinica_tipo
   ON public.plantillas_notas(clinica_id, tipo_nota) WHERE activa = TRUE;

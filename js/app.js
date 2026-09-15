@@ -310,8 +310,8 @@ const toM   = x => ({
 });
 // Las notas anteriores a la columna `estado` se tratan como finalizadas: no
 // existían los borradores, así que ninguna lo era.
-const fromN   = r => ({ id:r.id, pacienteId:r.paciente_id, mascotaId:r.mascota_id||null, citaId:r.cita_id||null, tipo:r.tipo, fecha:r.fecha, titulo:r.titulo, contenido:r.contenido, signos:r.signos||null, estado:r.estado||'finalizada', profesionalId:r.profesional_id||null, profesionalNombre:r.profesional_nombre||'', profesionalEspecialidad:r.profesional_especialidad||'', profesionalFirmaUrl:r.profesional_firma_url||null, plantillaId:r.plantilla_id||null, plantillaValores:r.plantilla_valores&&typeof r.plantilla_valores==='object'?r.plantilla_valores:null });
-const toN     = x => ({ paciente_id:x.pacienteId||null, mascota_id:x.mascotaId||null, cita_id:x.citaId||null, tipo:x.tipo||'evolucion', fecha:x.fecha||hoy(), titulo:x.titulo||null, contenido:x.contenido, signos:x.signos||null, estado:x.estado||'finalizada', profesional_id:x.profesionalId||null, profesional_nombre:x.profesionalNombre||null, profesional_especialidad:x.profesionalEspecialidad||null, profesional_firma_url:x.profesionalFirmaUrl||null, plantilla_id:x.plantillaId||null, ...('plantillaValores' in x ? { plantilla_valores:x.plantillaValores||null } : {}), clinica_id:currentClinicaId });
+const fromN   = r => ({ id:r.id, pacienteId:r.paciente_id, mascotaId:r.mascota_id||null, citaId:r.cita_id||null, tipo:r.tipo, fecha:r.fecha, titulo:r.titulo, contenido:r.contenido, signos:r.signos||null, estado:r.estado||'finalizada', profesionalId:r.profesional_id||null, profesionalNombre:r.profesional_nombre||'', profesionalEspecialidad:r.profesional_especialidad||'', profesionalFirmaUrl:r.profesional_firma_url||null, profesionalCodigo:r.profesional_codigo||'', plantillaId:r.plantilla_id||null, plantillaValores:r.plantilla_valores&&typeof r.plantilla_valores==='object'?r.plantilla_valores:null });
+const toN     = x => ({ paciente_id:x.pacienteId||null, mascota_id:x.mascotaId||null, cita_id:x.citaId||null, tipo:x.tipo||'evolucion', fecha:x.fecha||hoy(), titulo:x.titulo||null, contenido:x.contenido, signos:x.signos||null, estado:x.estado||'finalizada', profesional_id:x.profesionalId||null, profesional_nombre:x.profesionalNombre||null, profesional_especialidad:x.profesionalEspecialidad||null, profesional_firma_url:x.profesionalFirmaUrl||null, plantilla_id:x.plantillaId||null, ...('profesionalCodigo' in x ? { profesional_codigo:x.profesionalCodigo||null } : {}), ...('plantillaValores' in x ? { plantilla_valores:x.plantillaValores||null } : {}), clinica_id:currentClinicaId });
 const fromPlantillaNota = r => ({ id:r.id, nombre:r.nombre, tipo:r.tipo_nota||'evolucion', contenido:r.contenido_modelo||'', campos:Array.isArray(r.campos)?r.campos:[], archivoNombre:r.archivo_nombre||'', archivoUrl:r.archivo_url||null, activa:r.activa!==false, formato:/\.docx$/i.test(r.archivo_nombre||'')?'docx':'texto' });
 const fromInv = r => ({ id:r.id, nombre:r.nombre, categoria:r.categoria||'general', unidad:r.unidad||'unidad', stock:Number(r.stock_actual||0), stockMin:Number(r.stock_minimo||0), precio:r.precio_unitario!=null?Number(r.precio_unitario):null, descripcion:r.descripcion||null, codigoMinsa:r.codigo_minsa||null, fechaVenc:r.fecha_vencimiento||null, alertaMeses:r.alerta_meses_antes!=null?Number(r.alerta_meses_antes):1 });
 const toInv   = x => ({ nombre:x.nombre, categoria:x.categoria||'general', unidad:x.unidad||'unidad', stock_actual:Number(x.stock||0), stock_minimo:Number(x.stockMin||0), precio_unitario:x.precio||null, descripcion:x.descripcion||null, clinica_id:currentClinicaId, codigo_minsa:x.codigoMinsa||null, fecha_vencimiento:x.fechaVenc||null, alerta_meses_antes:Number(x.alertaMeses||1) });
@@ -876,7 +876,7 @@ function guardarBorradoresSesion() {
       drafts.push({ id: Date.now()+3, modulo:'nota', titulo:'Nota clínica pendiente'+(p?` — ${p.nombre} ${p.apellidos}`:''),
         icono:'📝', data:{ pacienteId:pid||null, tipo:document.getElementById('n-tipo')?.value,
         tituloNota:document.getElementById('n-titulo')?.value, contenido,
-        profesionalId:document.getElementById('n-profesional')?.value||null }});
+        medicoNombre:document.getElementById('n-medico-nombre')?.value||'', medicoCodigo:document.getElementById('n-medico-codigo')?.value||'' }});
     }
   }
 
@@ -990,7 +990,8 @@ function recuperarDraft(idx) {
       }
       if(d.data.tituloNota)document.getElementById('n-titulo').value   = d.data.tituloNota;
       if(d.data.contenido) document.getElementById('n-contenido').value= d.data.contenido;
-      if(d.data.profesionalId) document.getElementById('n-profesional').value=d.data.profesionalId;
+      if(d.data.medicoNombre) document.getElementById('n-medico-nombre').value=d.data.medicoNombre;
+      if(d.data.medicoCodigo) document.getElementById('n-medico-codigo').value=d.data.medicoCodigo;
       onTipoNotaChange();
     }, 80);
   } else if(d.modulo === 'paciente') {
@@ -4042,7 +4043,7 @@ function _notaItemHTML(n) {
     <div class="timeline-date">${formatFecha(n.fecha)} · <span class="tag tag-blue" style="font-size:10px">${NOTA_TIPO_ICON[n.tipo]||'📝'} ${notaTipoLabel(n.tipo)}</span> ${notaEstadoTag(n)}</div>
     <div class="timeline-content">
       ${n.titulo?`<strong style="display:block;margin-bottom:5px">${escAttr(n.titulo)}</strong>`:''}
-      ${n.profesionalNombre?`<div style="font-size:11px;color:var(--primary);font-weight:600;margin-bottom:5px">🩺 ${escAttr(n.profesionalNombre)}${n.profesionalEspecialidad?' · '+escAttr(n.profesionalEspecialidad):''}</div>`:''}
+      ${n.profesionalNombre?`<div style="font-size:11px;color:var(--primary);font-weight:600;margin-bottom:5px">🩺 ${escAttr(n.profesionalNombre)}${n.profesionalCodigo?' · '+_etiquetaCodigoMedico(true)+' '+escAttr(n.profesionalCodigo):''}${n.profesionalEspecialidad?' · '+escAttr(n.profesionalEspecialidad):''}</div>`:''}
       ${_signosChipsHTML(n.signos)}
       ${n.contenido?`<p style="white-space:pre-wrap;line-height:1.7">${escAttr(n.contenido)}</p>`:''}
       <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
@@ -4482,32 +4483,139 @@ function _profesionalesParaNota() {
   return lista;
 }
 
+// ── Médico que atendió la nota ──
+// Los médicos de una clínica cambian de un día a otro y no siempre tienen cuenta
+// en el sistema: el nombre y el código se escriben en cada nota. Quienes ya
+// atendieron antes (o tienen cuenta) aparecen como sugerencia con su código.
+const _normalMedico = s => String(s || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s+/g, ' ').trim();
+const _claveMedico = s => _normalMedico(s).replace(/^(dra|dr|doctora|doctor|lic|licda|licdo)\.?\s+/, '');
+// Veterinaria no tiene código MINSA: se pide el registro profesional
+const _etiquetaCodigoMedico = (corta=false) => esVeterinaria() ? (corta ? 'Reg.' : 'Registro profesional') : (corta ? 'Cód. MINSA' : 'Código MINSA');
+
+function _medicosConocidosNota() {
+  const vistos = new Map();
+  // Primero las notas más recientes: su código es el vigente
+  [...C.n].sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')) || (Number(b.id) || 0) - (Number(a.id) || 0)).forEach(n => {
+    const clave = _claveMedico(n.profesionalNombre);
+    if(!clave) return;
+    const previo = vistos.get(clave);
+    if(!previo) vistos.set(clave, { nombre:n.profesionalNombre.trim(), codigo:n.profesionalCodigo || '', especialidad:n.profesionalEspecialidad || '', firmaUrl:n.profesionalFirmaUrl || null, id:n.profesionalId || null });
+    else if(!previo.codigo && n.profesionalCodigo) previo.codigo = n.profesionalCodigo;
+  });
+  _profesionalesParaNota().forEach(p => {
+    const clave = _claveMedico(p.nombre);
+    if(!clave) return;
+    const previo = vistos.get(clave);
+    const cuenta = { id:String(p.id), especialidad:p.especialidad || '', firmaUrl:p.firma_url || null };
+    if(previo) Object.assign(previo, { id:previo.id || cuenta.id, especialidad:previo.especialidad || cuenta.especialidad, firmaUrl:previo.firmaUrl || cuenta.firmaUrl });
+    else vistos.set(clave, { nombre:p.nombre, codigo:'', ...cuenta });
+  });
+  return [...vistos.values()];
+}
+
 function _llenarProfesionalNota(nota) {
-  const sel=document.getElementById('n-profesional'); if(!sel) return;
-  const profesionales=_profesionalesParaNota();
-  let html='<option value="">Selecciona el médico responsable</option>'+profesionales.map(p=>
-    `<option value="${escAttr(String(p.id))}">${escAttr(p.nombre)}${p.especialidad?' · '+escAttr(p.especialidad):''}</option>`).join('');
-  if(nota?.profesionalId && !profesionales.some(p=>String(p.id)===String(nota.profesionalId))) {
-    html+=`<option value="${escAttr(String(nota.profesionalId))}">${escAttr(nota.profesionalNombre||'Profesional ya no disponible')}</option>`;
-  }
-  sel.innerHTML=html;
-  const porCita=!nota && currentNotaCitaId ? C.c.find(c=>String(c.id)===String(currentNotaCitaId))?.medicoId : null;
-  const elegido=nota?.profesionalId || porCita || (profesionales.some(p=>String(p.id)===String(currentUser?.id)) ? currentUser.id : '');
-  if(elegido) sel.value=String(elegido);
+  const nombre = document.getElementById('n-medico-nombre'), codigo = document.getElementById('n-medico-codigo');
+  if(!nombre || !codigo) return;
+  nombre.value = nota?.profesionalNombre || '';
+  codigo.value = nota?.profesionalCodigo || '';
+  nombre._medico = nota?.profesionalNombre
+    ? { id:nota.profesionalId || null, nombre:nota.profesionalNombre, especialidad:nota.profesionalEspecialidad || '', firmaUrl:nota.profesionalFirmaUrl || null, codigo:nota.profesionalCodigo || '' }
+    : null;
   // En una nota ya cerrada la atribución y la firma son parte del historial.
-  sel.disabled=nota?.estado==='finalizada' && !!nota.profesionalId;
+  const bloqueado = nota?.estado === 'finalizada' && !!nota.profesionalNombre;
+  nombre.readOnly = codigo.readOnly = bloqueado;
+  [nombre, codigo].forEach(el => el.classList.remove('campo-invalido'));
+  const etiqueta = document.getElementById('n-medico-codigo-label');
+  if(etiqueta) etiqueta.textContent = _etiquetaCodigoMedico();
+  codigo.placeholder = esVeterinaria() ? 'Ej. 1234' : 'Ej. 21601';
+  _ocultarSugMedicoNota();
+}
+
+function _sugerirMedicoNota(texto) {
+  const caja = document.getElementById('n-medico-sug'), input = document.getElementById('n-medico-nombre');
+  if(!caja || !input || input.readOnly) return;
+  // Si se cambió el nombre elegido, deja de estar vinculado a ese médico
+  if(input._medico && _claveMedico(input._medico.nombre) !== _claveMedico(texto)) input._medico = null;
+  const q = _claveMedico(texto);
+  const lista = _medicosConocidosNota()
+    .filter(m => !q || _claveMedico(m.nombre).includes(q) || _normalMedico(m.codigo).includes(q))
+    .filter(m => !(q && _claveMedico(m.nombre) === q && document.getElementById('n-medico-codigo').value.trim()))
+    .slice(0, 8);
+  caja._lista = lista;
+  if(!lista.length) { _ocultarSugMedicoNota(); return; }
+  const etiqueta = _etiquetaCodigoMedico(true);
+  caja.innerHTML = lista.map((m, i) => `<button type="button" class="nota-medico-opcion" onpointerdown="event.preventDefault()" onclick="_elegirMedicoNota(${i})">
+      <strong>${escAttr(m.nombre)}</strong>
+      <span>${m.codigo ? `${etiqueta} ${escAttr(m.codigo)}` : 'Sin código registrado'}${m.especialidad ? ' · ' + escAttr(m.especialidad) : ''}</span>
+    </button>`).join('');
+  caja.style.display = '';
+  // El campo va al final del formulario: si la lista no cabe debajo, se abre hacia arriba
+  const contenedor = input.closest('.modal');
+  const limite = contenedor ? Math.min(contenedor.getBoundingClientRect().bottom, window.innerHeight) : window.innerHeight;
+  const campo = input.getBoundingClientRect();
+  const alto = Math.min(caja.scrollHeight, 240) + 8;
+  caja.classList.toggle('arriba', limite - campo.bottom < alto && campo.top - (contenedor?.getBoundingClientRect().top || 0) > alto);
+}
+
+function _elegirMedicoNota(i) {
+  const caja = document.getElementById('n-medico-sug'), m = caja?._lista?.[i];
+  if(!m) return;
+  const nombre = document.getElementById('n-medico-nombre'), codigo = document.getElementById('n-medico-codigo');
+  nombre.value = m.nombre;
+  nombre._medico = m;
+  if(m.codigo) codigo.value = m.codigo;
+  [nombre, codigo].forEach(el => el.classList.remove('campo-invalido'));
+  _ocultarSugMedicoNota();
+  if(!codigo.value.trim()) codigo.focus();
+}
+
+function _ocultarSugMedicoNota() {
+  const caja = document.getElementById('n-medico-sug');
+  if(caja) { caja.style.display = 'none'; caja.innerHTML = ''; }
+}
+
+function _teclaSugMedicoNota(e) {
+  if(e.key === 'Escape') { _ocultarSugMedicoNota(); return; }
+  if(e.key === 'ArrowDown') {
+    const primera = document.querySelector('#n-medico-sug .nota-medico-opcion');
+    if(primera) { e.preventDefault(); primera.focus(); }
+  }
 }
 
 function _profesionalNotaSeleccionado(notaExistente) {
-  if(notaExistente?.estado==='finalizada' && notaExistente.profesionalId) return {
-    id:notaExistente.profesionalId,nombre:notaExistente.profesionalNombre,
-    especialidad:notaExistente.profesionalEspecialidad,firmaUrl:notaExistente.profesionalFirmaUrl
+  if(notaExistente?.estado === 'finalizada' && notaExistente.profesionalNombre) return {
+    id:notaExistente.profesionalId, nombre:notaExistente.profesionalNombre,
+    especialidad:notaExistente.profesionalEspecialidad, firmaUrl:notaExistente.profesionalFirmaUrl, codigo:notaExistente.profesionalCodigo || ''
   };
-  const id=document.getElementById('n-profesional')?.value;
-  if(!id) return null;
-  if(String(id)===String(currentUser?.id)) return {id,nombre:currentUser.name||'',especialidad:currentUser.especialidad||'',firmaUrl:currentUser.firmaUrl||null};
-  const p=C.prof.find(x=>String(x.id)===String(id));
-  return p ? {id:String(p.id),nombre:p.nombre||'',especialidad:p.especialidad||'',firmaUrl:p.firma_url||null} : null;
+  const input = document.getElementById('n-medico-nombre');
+  const nombre = (input?.value || '').replace(/\s+/g, ' ').trim();
+  const codigo = (document.getElementById('n-medico-codigo')?.value || '').trim();
+  if(!nombre) return null;
+  // Especialidad, firma y cuenta solo se toman si el nombre es el de un médico conocido
+  const clave = _claveMedico(nombre);
+  const conocido = (input._medico && _claveMedico(input._medico.nombre) === clave ? input._medico : null)
+    || _medicosConocidosNota().find(m => _claveMedico(m.nombre) === clave);
+  return { id:conocido?.id || null, nombre, especialidad:conocido?.especialidad || '', firmaUrl:conocido?.firmaUrl || null, codigo };
+}
+
+// Nombre y código son obligatorios para guardar la nota, salvo en una nota ya
+// cerrada, cuya atribución no se toca.
+function _validarMedicoNota(notaExistente) {
+  if(notaExistente?.estado === 'finalizada' && notaExistente.profesionalNombre) return true;
+  const nombre = document.getElementById('n-medico-nombre'), codigo = document.getElementById('n-medico-codigo');
+  if(!nombre || !codigo) return true;
+  const faltaNombre = !nombre.value.trim(), faltaCodigo = !codigo.value.trim();
+  nombre.classList.toggle('campo-invalido', faltaNombre);
+  codigo.classList.toggle('campo-invalido', faltaCodigo);
+  if(!faltaNombre && !faltaCodigo) return true;
+  _dxPantallaCompletaNota(false);
+  const etiqueta = esVeterinaria() ? 'registro profesional' : 'código MINSA';
+  toast(faltaNombre && faltaCodigo ? `Escribe el nombre del médico que atendió y su ${etiqueta}`
+    : faltaNombre ? 'Escribe el nombre del médico que atendió' : `Escribe el ${etiqueta} del médico que atendió`, 'error');
+  const destino = faltaNombre ? nombre : codigo;
+  destino.scrollIntoView({ block:'center' });
+  destino.focus({ preventScroll:true });
+  return false;
 }
 
 function _profesionalPorId(id) {
@@ -6862,15 +6970,11 @@ async function guardarNota(estadoSolicitado='borrador'){
     toast('Llena al menos un dato del machote antes de finalizar la nota','error');
     return;
   }
-  if(!esBorrador && !profesional){
-    toast('Selecciona el profesional que atendió antes de finalizar la nota','error');
-    document.getElementById('n-profesional')?.focus();
-    return;
-  }
+  if(!_validarMedicoNota(notaExistente)) return;
   // Se captura el modo al comenzar para que cada guardado afecte una sola fila.
   const notaIdEditada=editingNotaId;
   const obj={pacienteId:pid,mascotaId:mid,citaId:currentNotaCitaId,tipo,fecha:document.getElementById('n-fecha').value||hoy(),titulo:document.getElementById('n-titulo').value.trim(),contenido,signos,estado,
-    profesionalId:profesional?.id||null,profesionalNombre:profesional?.nombre||'',profesionalEspecialidad:profesional?.especialidad||'',profesionalFirmaUrl:profesional?.firmaUrl||null,plantillaId:_plantillaNotaActiva?.id||notaExistente?.plantillaId||null};
+    profesionalId:profesional?.id||null,profesionalNombre:profesional?.nombre||'',profesionalEspecialidad:profesional?.especialidad||'',profesionalFirmaUrl:profesional?.firmaUrl||null,profesionalCodigo:profesional?.codigo||'',plantillaId:_plantillaNotaActiva?.id||notaExistente?.plantillaId||null};
   if(!_notasSinColumnaValores || docNota) obj.plantillaValores=plantillaValores;
   setLoading(true);
   const payload=toN(obj);
@@ -6879,13 +6983,18 @@ async function guardarNota(estadoSolicitado='borrador'){
     : sb.from('notas').insert([datos]);
   let err;
   ({error:err} = await escribirNota(payload));
-  // Sin la columna de valores la nota se guarda igual, con su texto
-  let valoresSinGuardar=false;
-  if(err && 'plantilla_valores' in payload && _faltaColumna(err,'plantilla_valores')){
-    _notasSinColumnaValores=true;
-    delete payload.plantilla_valores;
+  // Sin las columnas nuevas la nota se guarda igual y se avisa qué falta
+  let valoresSinGuardar=false, codigoSinGuardar=false;
+  const opcionales=[
+    ['plantilla_valores',()=>{ _notasSinColumnaValores=true; valoresSinGuardar=!!docNota; }],
+    ['profesional_codigo',()=>{ codigoSinGuardar=true; }]
+  ];
+  for(let intento=0; err && intento<opcionales.length; intento++){
+    const faltante=opcionales.find(([col])=>col in payload && _faltaColumna(err,col));
+    if(!faltante) break;
+    delete payload[faltante[0]];
+    faltante[1]();
     ({error:err} = await escribirNota(payload));
-    valoresSinGuardar=!!docNota;
   }
   // Sin mascota_id la nota quedaría huérfana: no se degrada, se avisa.
   if(err && esVet && _faltaColumna(err,'mascota_id')){
@@ -6932,6 +7041,7 @@ async function guardarNota(estadoSolicitado='borrador'){
   }
   toast(esBorrador ? (notaIdEditada?'Borrador actualizado':'Borrador guardado ✅')
                    : (notaIdEditada?'Nota actualizada':'Nota finalizada ✅'));
+  if(codigoSinGuardar) toast('La nota se guardó, pero falta ejecutar migracion_codigo_medico_notas.sql en Supabase para guardar el código del médico','warning');
   if(valoresSinGuardar) toast('La nota quedó guardada como texto: falta ejecutar migracion_machotes_formato.sql en Supabase para conservar el documento con su formato','warning');
   if(!notaIdEditada) logActivity('nota');
   _reiniciarFormularioNota();
@@ -6962,7 +7072,7 @@ function verNota(id){
   document.getElementById('ver-nota-content').innerHTML=`
     <div style="margin-bottom:14px"><span class="tag tag-blue">${notaTipoLabel(n.tipo)}</span> ${notaEstadoTag(n)}<span style="margin-left:8px;font-size:12px;color:var(--text-light)">${formatFecha(n.fecha)}</span></div>
     ${p?`<p class="text-light" style="margin-bottom:12px">${esVeterinaria()?'Mascota':'Paciente'}: <strong style="color:var(--text)">${escAttr(p.titulo)}</strong>${p.subtitulo?` <span style="font-size:12px">(${escAttr(p.subtitulo)})</span>`:''}</p>`:''}
-    ${n.profesionalNombre?`<p class="text-light" style="margin-bottom:12px">Atendido por: <strong style="color:var(--text)">${escAttr(n.profesionalNombre)}</strong>${n.profesionalEspecialidad?' · '+escAttr(n.profesionalEspecialidad):''}</p>`:''}
+    ${n.profesionalNombre?`<p class="text-light" style="margin-bottom:12px">Atendido por: <strong style="color:var(--text)">${escAttr(n.profesionalNombre)}</strong>${n.profesionalCodigo?' · '+_etiquetaCodigoMedico(true)+' '+escAttr(n.profesionalCodigo):''}${n.profesionalEspecialidad?' · '+escAttr(n.profesionalEspecialidad):''}</p>`:''}
     ${n.titulo?`<h3 style="margin-bottom:12px">${n.titulo}</h3>`:''}
     ${_signosChipsHTML(n.signos)}
     ${conMachote?'<div class="nota-documento-barra" style="margin-bottom:8px"><small>Documento tal como se imprime</small><button type="button" class="btn btn-secondary btn-sm" onclick="_dxAlternarTamanoReal(\'ver-nota-doc\',this)">🔍 Tamaño real</button></div><div id="ver-nota-doc" class="dx-marco"><div class="dx-cargando">⏳ Cargando el documento…</div></div>':(n.contenido?`<div style="white-space:pre-wrap;line-height:1.8;font-size:14px;background:var(--bg);padding:16px;border-radius:10px;border:1px solid var(--border)">${n.contenido}</div>`:'')}`;
@@ -7106,8 +7216,11 @@ function imprimirNota(id, sinMachote=false) {
   const fmtF = f => { if(!f) return '—'; const d=new Date(f+'T12:00:00'); return d.toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'}); };
   const tipoColor = {evolucion:'#1D4ED8',resumen_clinico:'#0E7490',constancia:'#475569',diagnostico:'#7C3AED',tratamiento:'#059669',laboratorio:'#D97706',imagen:'#0891B2',cirugia:'#DC2626',alta:'#065F46',otro:'#475569'}[n.tipo]||'#1D4ED8';
   const profesionalNombre=n.profesionalNombre||currentUser?.name||cfg.nombreDoctor||'Médico Responsable';
-  const profesionalEspecialidad=n.profesionalEspecialidad||especialidadFirma(cfg);
-  const profesionalFirma=n.profesionalFirmaUrl||cfg.firmaUrl||null;
+  // Con código propio la nota es de un médico concreto: no se le atribuye la
+  // especialidad ni la firma de la clínica
+  const conCodigo=!!n.profesionalCodigo;
+  const profesionalEspecialidad=n.profesionalEspecialidad||(conCodigo?'':especialidadFirma(cfg));
+  const profesionalFirma=n.profesionalFirmaUrl||(conCodigo?null:cfg.firmaUrl)||null;
 
   const ini2 = (a,b) => ((a||'')[0]||'').toUpperCase()+((b||'')[0]||'').toUpperCase();
   if(n.tipo === 'examen_visual') { imprimirExamenVisual(n, p, cfg, fmtF, ini2); return; }
@@ -7130,7 +7243,7 @@ function imprimirNota(id, sinMachote=false) {
     + '<div class="section-title">&#128203; Datos de la nota</div>'
     + '<table><tbody>'
     +   '<tr><td style="width:130px;font-weight:700;color:#475569">Fecha</td><td>'+fmtF(n.fecha)+'</td><td style="width:130px;font-weight:700;color:#475569">Tipo</td><td><span class="tag tag-blue">'+n.tipo+'</span></td></tr>'
-    +   '<tr><td style="font-weight:700;color:#475569">N&deg; Nota</td><td>NC-'+n.id+'</td><td style="font-weight:700;color:#475569">Profesional</td><td>'+escAttr(profesionalNombre)+'</td></tr>'
+    +   '<tr><td style="font-weight:700;color:#475569">N&deg; Nota</td><td>NC-'+n.id+'</td><td style="font-weight:700;color:#475569">Profesional</td><td>'+escAttr(profesionalNombre)+(conCodigo?'<br><span style="font-size:11px;color:#64748B">'+_etiquetaCodigoMedico(true)+' '+escAttr(n.profesionalCodigo)+'</span>':'')+'</td></tr>'
     + '</tbody></table>'
     + _signosPrintHTML(n.signos)
     + (n.contenido ? '<div class="section-title">&#128203; Contenido de la nota</div>'
@@ -7138,7 +7251,7 @@ function imprimirNota(id, sinMachote=false) {
     + '<div class="sig-wrap"><div class="sig-box">'+_firmaImgUrlHTML(profesionalFirma,46)+'<div class="sig-line"></div>'
     +   '<div class="sig-name">'+escAttr(profesionalNombre)+'</div>'
     +   (profesionalEspecialidad?'<div class="sig-role">'+escAttr(profesionalEspecialidad)+'</div>':'')
-    +   (cfg.registro?'<div class="sig-role">Reg. Med. '+cfg.registro+'</div>':'')
+    +   (conCodigo?'<div class="sig-role">'+_etiquetaCodigoMedico(true)+' '+escAttr(n.profesionalCodigo)+'</div>':(cfg.registro?'<div class="sig-role">Reg. Med. '+cfg.registro+'</div>':''))
     + '</div></div>';
   pdfAbrir('Nota Clínica — '+(n.titulo||n.tipo), body, cfg);
 }
@@ -8809,6 +8922,7 @@ const BACKUP_PDF_LABELS = {
   tratamientos_previos:'Tratamientos previos',habitos_orales:'Hábitos orales',higiene_oral:'Higiene oral',
   procedimiento_realizado:'Procedimiento realizado',tecnica_utilizada:'Técnica utilizada',
   indicaciones_posteriores:'Indicaciones posteriores',fecha_proximo_control:'Próximo control',
+  profesional_nombre:'Profesional',profesional_codigo:'Código del profesional',profesional_especialidad:'Especialidad del profesional',
 };
 
 function _etiquetaBackupPDF(campo) {

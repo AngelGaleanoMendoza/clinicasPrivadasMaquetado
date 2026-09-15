@@ -474,6 +474,20 @@ body.dark .balance-pct{background:#0F172A}
 .nota-plantilla-bar{display:flex;gap:9px;align-items:center}
 .nota-plantilla-bar select{flex:1;min-width:0}
 .nota-plantilla-panel small,.nota-firma-panel small,.form-group small{font-size:11px;color:var(--text-light);line-height:1.45}
+.nota-medico-grid{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:10px;margin:6px 0 4px}
+.nota-medico-campo{display:flex;flex-direction:column;gap:5px;min-width:0;position:relative}
+.nota-firma-panel .nota-medico-campo label{font-size:10px;margin:0}
+.nota-medico-campo input{width:100%;min-width:0}
+.nota-medico-campo input[readonly]{background:var(--bg);color:var(--text-light);cursor:not-allowed}
+.nota-medico-sug{position:absolute;top:100%;left:0;right:0;margin-top:4px;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;z-index:300;max-height:240px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.15)}
+.nota-medico-sug.arriba{top:auto;bottom:100%;margin:0 0 4px}
+.nota-medico-opcion{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;padding:10px 14px;border:0;border-bottom:1px solid var(--border);background:transparent;color:var(--text);font:inherit;text-align:left;cursor:pointer;min-height:44px}
+.nota-medico-opcion:last-child{border-bottom:0}
+.nota-medico-opcion:hover,.nota-medico-opcion:focus{background:var(--primary-light);outline:none}
+.nota-medico-opcion strong{font-size:13px;font-weight:600}
+.nota-medico-opcion span{font-size:11px;color:var(--text-light)}
+.campo-invalido{border-color:#DC2626!important;box-shadow:0 0 0 3px rgba(220,38,38,.15)!important}
+@media(max-width:500px){.nota-medico-grid{grid-template-columns:1fr}}
 .nota-plantilla-campos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:12px;border:1px dashed var(--primary);border-radius:12px;background:var(--bg)}
 .nota-campo-dinamico{display:flex;flex-direction:column;gap:5px;min-width:0}
 .nota-campo-dinamico label{font-size:10px;font-weight:700;color:var(--text-light);text-transform:uppercase}
