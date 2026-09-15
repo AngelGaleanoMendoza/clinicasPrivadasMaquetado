@@ -22,7 +22,7 @@
 <!-- Lectura local de machotes. El archivo se procesa en el navegador antes de
      guardarlo; Mammoth extrae DOCX y PDF.js se carga al elegir un PDF. -->
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js" defer></script>
-<link rel="stylesheet" href="css/styles.css?v=20260914f">
+<link rel="stylesheet" href="css/styles.css?v=20260914g">
 </head>
 <body>
 <script>
@@ -1671,7 +1671,14 @@
         </div>
 
         <div class="form-group"><label>Observaciones adicionales</label><textarea id="ev-recomendaciones" placeholder="Próximo control, indicaciones especiales, referencias..." style="min-height:65px"></textarea></div>
-        <div class="form-group nota-firma-panel"><label>Profesional que atendió *</label><select id="ev-profesional"><option value="">Selecciona el profesional responsable</option></select><small>Su nombre, especialidad y firma quedarán asociados al examen.</small></div>
+        <div class="form-group nota-firma-panel">
+          <label for="ev-medico-nombre">Nombre completo del médico *</label>
+          <input id="ev-medico-nombre" type="text" list="ev-medicos" maxlength="120" autocomplete="off" placeholder="Escribe el nombre del médico" oninput="_sugerirMedicoExamenVisual()">
+          <datalist id="ev-medicos"></datalist>
+          <label for="ev-medico-codigo">Código MINSA *</label>
+          <input id="ev-medico-codigo" type="text" maxlength="20" inputmode="numeric" placeholder="Ej. 21601" oninput="this.classList.remove('campo-invalido')">
+          <small>Elige una sugerencia o escribe un médico nuevo. Los datos se conservan al finalizar.</small>
+        </div>
       </div>
     </div>
 
@@ -2626,6 +2633,7 @@
             <button type="button" class="np-modo" data-modo="campos" aria-pressed="false" onclick="_dxModoRevision('campos')">🔲 Elegir campos</button>
           </div>
           <button type="button" class="btn btn-secondary btn-sm dx-oculto" id="np-seleccion-campo" onpointerdown="event.preventDefault()" onclick="_dxSeleccionACampo()">➕ Hacer recuadro con lo seleccionado</button>
+          <button type="button" class="btn btn-secondary btn-sm dx-oculto" id="np-seleccion-firma" onpointerdown="event.preventDefault()" onclick="_dxSeleccionAFirma()">✍️ Firma del médico de la nota</button>
           <button type="button" class="btn btn-secondary btn-sm" id="np-valores-word" onclick="_dxValoresDelWord()">↺ Poner valores del Word</button>
           <button type="button" class="btn btn-secondary btn-sm" onclick="_dxVaciarRecuadros()">🧹 Vaciar recuadros</button>
         </div>
@@ -2766,12 +2774,9 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260914f" defer></script>
+<script src="js/app.js?v=20260914g" defer></script>
 </body>
 </html>
-
-
-
 
 
 

@@ -4567,6 +4567,7 @@ function _elegirMedicoNota(i) {
   [nombre, codigo].forEach(el => el.classList.remove('campo-invalido'));
   _ocultarSugMedicoNota();
   if(!codigo.value.trim()) codigo.focus();
+  _dxActualizarFirmaNota();
 }
 
 function _ocultarSugMedicoNota() {
@@ -4626,14 +4627,31 @@ function _profesionalPorId(id) {
 }
 
 function _llenarProfesionalExamenVisual(examen) {
-  const sel=document.getElementById('ev-profesional');if(!sel)return;
-  const profesionales=_profesionalesParaNota();
-  sel.innerHTML='<option value="">Selecciona el profesional responsable</option>'+profesionales.map(p=>`<option value="${escAttr(String(p.id))}">${escAttr(p.nombre)}${p.especialidad?' · '+escAttr(p.especialidad):''}</option>`).join('');
-  if(examen?.profesionalId&&!profesionales.some(p=>String(p.id)===String(examen.profesionalId))) sel.innerHTML+=`<option value="${escAttr(String(examen.profesionalId))}">${escAttr(examen.profesionalNombre||'Profesional ya no disponible')}</option>`;
-  const elegido=examen?.profesionalId||(profesionales.some(p=>String(p.id)===String(currentUser?.id))?currentUser.id:'');
-  if(elegido)sel.value=String(elegido);
-  sel.disabled=!!examen?.profesionalId;
+  const nombre=document.getElementById('ev-medico-nombre'), codigo=document.getElementById('ev-medico-codigo');
+  nombre.value=examen?.profesionalNombre||''; codigo.value=examen?.profesionalCodigo||'';
+  nombre.readOnly=codigo.readOnly=examen?.estado==='finalizada' && !!examen.profesionalNombre;
+  [nombre,codigo].forEach(el=>el.classList.remove('campo-invalido'));
+  document.getElementById('ev-medicos').innerHTML=_medicosConocidosNota().map(m=>`<option value="${escAttr(m.nombre)}">${escAttr(m.codigo?'MINSA '+m.codigo:'Sin código registrado')}</option>`).join('');
 }
+
+function _sugerirMedicoExamenVisual() {
+  const nombre=document.getElementById('ev-medico-nombre'), codigo=document.getElementById('ev-medico-codigo');
+  if(nombre.readOnly) return;
+  nombre.classList.remove('campo-invalido');
+  const m=_medicosConocidosNota().find(m=>_claveMedico(m.nombre)===_claveMedico(nombre.value));
+  if(m) codigo.value=m.codigo||'';
+}
+
+function _medicoExamenVisual(existente) {
+  if(existente?.estado==='finalizada' && existente.profesionalNombre) return {id:existente.profesionalId,nombre:existente.profesionalNombre,codigo:existente.profesionalCodigo||'',especialidad:existente.profesionalEspecialidad,firmaUrl:existente.profesionalFirmaUrl};
+  const nombre=document.getElementById('ev-medico-nombre'), codigo=document.getElementById('ev-medico-codigo');
+  const falta=[nombre,codigo].filter(el=>!el.value.trim());
+  [nombre,codigo].forEach(el=>el.classList.toggle('campo-invalido',!el.value.trim()));
+  if(falta.length) {toast('Escribe el nombre del médico y su código MINSA','error');falta[0].focus();return null;}
+  const m=_medicosConocidosNota().find(m=>_claveMedico(m.nombre)===_claveMedico(nombre.value));
+  return {id:m?.id||null,nombre:nombre.value.trim(),codigo:codigo.value.trim(),especialidad:m?.especialidad||'',firmaUrl:m?.firmaUrl||null};
+}
+
 
 function _camposDeMachote(texto) {
   const vistos=new Set(), campos=[];
@@ -5792,6 +5810,91 @@ function _dxPrepararPiezas(raiz) {
 
 const _dxNormalTexto = s => String(s ?? '').replace(/ /g, ' ').replace(/\n$/, '');
 
+// La firma es un bloque semántico: los datos pertenecen a la nota, nunca al
+// médico que figuraba en el Word de ejemplo.
+function _dxMarcarFirma(raiz, bloques) {
+  if(!bloques.length) return;
+  bloques.forEach((el, i) => {
+    el.dataset.firmaMedico = i === 0 ? 'principal' : 'continuacion';
+    el.title = 'Firma del médico de la nota';
+  });
+}
+
+function _dxDetectarFirma(raiz, agregar=false) {
+  if(raiz.querySelector('[data-firma-medico]')) return;
+  const ps = Array.from(raiz.querySelectorAll('.dx-p'));
+  // Exige código MINSA y nombre contiguos; evita confundir un nombre del
+  // paciente o una mención del médico en la descripción clínica con la firma.
+  for(let i=0;i<ps.length;i++) {
+    if(!/\bminsa\b/i.test(ps[i].textContent)) continue;
+    let inicio=-1;
+    for(let j=Math.max(0,i-4);j<=i;j++) {
+      if(ps[j].parentElement!==ps[i].parentElement) continue;
+      if(/^\s*(?:dra?\.?|doctor[ae]?|lic(?:da|do)?\.?)\s+\p{L}/iu.test(ps[j].textContent)) { inicio=j; break; }
+    }
+    if(inicio<0) continue;
+    if(inicio>0 && ps[inicio-1].parentElement===ps[i].parentElement && /^[\s_—–-]{3,}$/.test(ps[inicio-1].textContent)) inicio--;
+    _dxMarcarFirma(raiz,ps.slice(inicio,i+1));
+    return;
+  }
+  if(agregar) {
+    const p=document.createElement('p');
+    p.className='dx-p'; p.dataset.firmaMedico='principal'; p.dataset.firmaAgregada='true';
+    p.style.cssText='text-align:center;margin-top:32px;break-inside:avoid';
+    p.textContent='Firma del médico de la nota';
+    raiz.appendChild(p);
+  }
+}
+
+function _dxRellenarFirma(raiz, medico) {
+  if(!medico) return;
+  _dxDetectarFirma(raiz,true);
+  raiz.querySelectorAll('[data-firma-medico]').forEach(el=>{
+    el.removeAttribute('data-campo'); el.removeAttribute('data-pieza');
+    el.classList.remove('dx-editable','dx-campo','dx-vacio');
+    el.setAttribute('contenteditable','false');
+    if(el.dataset.firmaMedico!=='principal') { el.replaceChildren(); el.style.display='none'; return; }
+    el.style.textAlign='center'; el.style.breakInside='avoid';
+    el.replaceChildren();
+    ['____________________________',medico.nombre||'Nombre del médico',medico.especialidad||'',medico.codigo?`${_etiquetaCodigoMedico()}: ${medico.codigo}`:_etiquetaCodigoMedico()].filter(Boolean).forEach((linea,i)=>{
+      if(i) el.appendChild(document.createElement('br'));
+      el.appendChild(document.createTextNode(linea));
+    });
+  });
+}
+
+function _dxFirmaActual() {
+  const nota=C.n.find(n=>String(n.id)===String(editingNotaId));
+  return _profesionalNotaSeleccionado(nota)||{nombre:'',codigo:''};
+}
+
+function _dxActualizarFirmaNota() {
+  if(!_machoteDocNota) return;
+  const d=_machoteDocNota, medico=_dxFirmaActual();
+  _dxRellenarFirma(d.cuerpo,medico);
+  d.cuerpo._firmaMedico={...medico};
+  _dxDocumentoNotaCambio();
+}
+
+function _dxSeleccionAFirma() {
+  const rev=_machoteEnRevision, cuerpo=_cuerpoRevision(), r=rev?.rango;
+  if(!cuerpo||!r||r.collapsed) { toast('Selecciona los renglones de la firma en el documento','warning'); return; }
+  const ps=Array.from(cuerpo.querySelectorAll('.dx-p')).filter(p=>r.intersectsNode(p));
+  if(!ps.length) { toast('Selecciona la línea y los renglones de nombre y código','warning'); return; }
+  cuerpo.querySelectorAll('[data-firma-medico]').forEach(el=>{
+    if(el.dataset.firmaAgregada && !ps.includes(el)) {el.remove();return;}
+    delete el.dataset.firmaMedico;el.removeAttribute('title');
+  });
+  _dxMarcarFirma(cuerpo,ps);
+  rev.rango=null;
+  getSelection().removeAllRanges();
+  toast('Bloque marcado como Firma del médico de la nota');
+}
+
+document.addEventListener('input', e=>{
+  if(['n-medico-nombre','n-medico-codigo'].includes(e.target.id)) _dxActualizarFirmaNota();
+});
+
 function _dxCuerpoRelleno(documento, valores) {
   const t = document.createElement('template');
   t.innerHTML = documento.cuerpo;
@@ -5814,6 +5917,7 @@ function _dxCuerpoRelleno(documento, valores) {
   _dxPintarGraficas(raiz, documento.graficas, leer);
   const div = document.createElement('div');
   div.appendChild(raiz);
+  if(valores?.__firmaMedico) _dxRellenarFirma(div,valores.__firmaMedico);
   return div.innerHTML;
 }
 
@@ -6044,6 +6148,7 @@ function _dxTextoEditable(el) {
 
 function _dxLeerValores(cuerpo) {
   const valores = {};
+  if(cuerpo._firmaMedico) valores.__firmaMedico={...cuerpo._firmaMedico};
   cuerpo.querySelectorAll('[data-campo]').forEach(el => {
     const v = _dxTextoEditable(el);
     // Un recuadro se guarda si difiere de lo que trae el machote (también si se vació)
@@ -6200,6 +6305,7 @@ function _abrirDocumentoNota(plantillaId, documento, valores, pantallaCompleta=f
   const campoFecha = document.getElementById('n-fecha');
   if(campoFecha && !campoFecha._dxEscucha) { campoFecha.addEventListener('change', () => _dxAutollenarNota()); campoFecha._dxEscucha = true; }
   if(_machoteDocNota.nueva) _dxAutollenarNota();
+  _dxActualizarFirmaNota();
   _dxDocumentoNotaCambio(true);
   // En el teléfono la hoja completa se ve pequeña: se abre también la lista de campos
   const lista = document.getElementById('n-documento-lista');
@@ -6225,7 +6331,7 @@ function _dxDocumentoNotaCambio(inmediato=false) {
   const sincronizar = () => {
     if(_machoteDocNota !== d) return;
     const valores = _dxLeerValores(d.cuerpo);
-    const escrito = Object.keys(valores).some(id => !d.cuerpo.querySelector(`[data-campo="${CSS.escape(id)}"]`)?.dataset.autollenado);
+    const escrito = Object.keys(valores).some(id => id!=='__firmaMedico' && !d.cuerpo.querySelector(`[data-campo="${CSS.escape(id)}"]`)?.dataset.autollenado);
     document.getElementById('n-contenido').value = escrito ? _dxTextoPlano(d.documento, valores) : '';
   };
   if(inmediato) sincronizar(); else _sincronizarDocNotaTimer = setTimeout(sincronizar, 400);
@@ -6373,7 +6479,7 @@ async function _imprimirNotaMachote(n) {
     return imprimirNota(n.id, true);
   }
   const titulo = 'Nota Clínica — ' + (n.titulo || notaTipoLabel(n.tipo));
-  return _dxEntregarImpreso(documento, _dxCuerpoRelleno(documento, n.plantillaValores), titulo, { ventana, descargar });
+  return _dxEntregarImpreso(documento, _dxCuerpoRelleno(documento, _dxValoresFirmadosNota(n)), titulo, { ventana, descargar });
 }
 
 async function _pintarNotaMachoteEnVista(n) {
@@ -6386,7 +6492,13 @@ async function _pintarNotaMachoteEnVista(n) {
     document.querySelector('#modal-ver-nota > .modal')?.classList.remove('modal-documento');
     return;
   }
-  _dxMontarHoja(marco, documento, { modo:'lectura', valores:n.plantillaValores });
+  _dxMontarHoja(marco, documento, { modo:'lectura', valores:_dxValoresFirmadosNota(n) });
+}
+
+function _dxValoresFirmadosNota(n) {
+  const valores={...(n.plantillaValores||{})};
+  if(n.profesionalNombre) valores.__firmaMedico={nombre:n.profesionalNombre,codigo:n.profesionalCodigo||'',especialidad:n.profesionalEspecialidad||''};
+  return valores;
 }
 
 // ── Diseño del machote: al importarlo o al editar uno guardado ──
@@ -6448,6 +6560,7 @@ function _mostrarMachoteEnRevision(doc, editando=null) {
   document.getElementById('np-documento-grupo').style.display = '';
   const cuerpo = _dxMontarHoja(document.getElementById('np-doc-vista'), doc, { modo:'revision' });
   _dxPrepararPiezas(cuerpo);
+  _dxDetectarFirma(cuerpo,true);
   cuerpo.addEventListener('pointerdown', () => { if(_machoteEnRevision) _machoteEnRevision.rango = null; });
   cuerpo.addEventListener('click', e => {
     if(_machoteEnRevision?.modo !== 'campos' || !getSelection().isCollapsed) return;
@@ -6507,6 +6620,7 @@ function _dxModoRevision(modo) {
     b.setAttribute('aria-pressed', String(activo));
   });
   document.getElementById('np-seleccion-campo').classList.toggle('dx-oculto', escribir);
+  document.getElementById('np-seleccion-firma').classList.toggle('dx-oculto', escribir);
   document.getElementById('np-ayuda-modo').textContent = escribir
     ? 'Escribe dentro del documento como en Word. Lo que dejes en los recuadros amarillos saldrá ya cargado en cada nota nueva, y ahí se podrá cambiar. También puedes corregir cualquier texto o escribir en los renglones vacíos.'
     : 'Toca un recuadro amarillo para dejarlo como texto fijo, o un texto con borde gris para volverlo recuadro. Para crear un recuadro nuevo, selecciona el texto y pulsa «Hacer recuadro con lo seleccionado».';
@@ -6845,7 +6959,7 @@ async function editarPlantillaNotaSeleccionada() {
   const plantilla = _plantillaNotaActiva;
   if(!plantilla || plantilla.formato !== 'docx' || !C.plantillasNota.some(p => String(p.id) === String(plantilla.id))) return;
   const d = _machoteDocNota;
-  const escrito = d && Object.keys(_dxLeerValores(d.cuerpo)).some(id => !d.cuerpo.querySelector(`[data-campo="${CSS.escape(id)}"]`)?.dataset.autollenado);
+  const escrito = d && Object.keys(_dxLeerValores(d.cuerpo)).some(id => id!=='__firmaMedico' && !d.cuerpo.querySelector(`[data-campo="${CSS.escape(id)}"]`)?.dataset.autollenado);
   if(escrito) {
     const ok = await customConfirm({ icon:'✏️', title:'Editar el machote', msg:'Al guardar los cambios, esta nota se volverá a abrir con el machote editado y se perderá lo que escribiste en ella.', okText:'Editar machote' });
     if(!ok) return;
@@ -6946,6 +7060,7 @@ async function guardarNota(estadoSolicitado='borrador'){
   // Los campos dinámicos ya sincronizan el texto al escribirse. Leer el
   // textarea directamente conserva cualquier ajuste manual posterior.
   const docNota=_machoteDocNota;
+  if(docNota) _dxActualizarFirmaNota();
   const plantillaValores=docNota?_dxLeerValores(docNota.cuerpo):null;
   if(docNota) document.getElementById('n-contenido').value=_dxTextoPlano(docNota.documento,plantillaValores);
   const contenido=document.getElementById('n-contenido').value.trim();
@@ -7200,7 +7315,7 @@ function imprimirExamenVisual(n, p, cfg, fmtF, ini2) {
     + '<div class="sig-wrap"><div class="sig-box">'+_firmaImgUrlHTML(profesionalFirma,46)+'<div class="sig-line"></div>'
     +   '<div class="sig-name">'+h(profesionalNombre)+'</div>'
     +   (profesionalEspecialidad?'<div class="sig-role">'+h(profesionalEspecialidad)+'</div>':'')
-    +   (cfg.registro?'<div class="sig-role">Reg. Med. '+h(cfg.registro)+'</div>':'')
+    +   (n.profesionalCodigo?'<div class="sig-role">Código MINSA: '+h(n.profesionalCodigo)+'</div>':'')
     + '</div></div>';
 
   pdfAbrir('Examen Visual - '+pNombre, body, cfg);
@@ -13446,8 +13561,8 @@ async function guardarExamenVisual() {
   const pid = document.getElementById('ev-paciente-id').value;
   if(!pid){ toast('Error: paciente no encontrado','error'); return; }
   const existente=editingExamenVisualId?C.n.find(n=>n.id===editingExamenVisualId):null;
-  const profesional=existente?.profesionalId?{id:existente.profesionalId,nombre:existente.profesionalNombre,especialidad:existente.profesionalEspecialidad,firmaUrl:existente.profesionalFirmaUrl}:_profesionalPorId(document.getElementById('ev-profesional')?.value);
-  if(!profesional){toast('Selecciona el profesional que realizó el examen','error');document.getElementById('ev-profesional')?.focus();return;}
+  const profesional=_medicoExamenVisual(existente);
+  if(!profesional) return;
   const g = id => (document.getElementById(id)?.value||'').trim();
   const fila = (lbl,val) => val ? `  ${lbl.padEnd(12)}: ${val}` : '';
 
@@ -13522,7 +13637,7 @@ async function guardarExamenVisual() {
   const payload=toN({
     pacienteId: Number(pid), tipo:'examen_visual',
     fecha: existente?.fecha||hoy(), titulo:existente?.titulo||`Examen Visual — ${formatFecha(hoy())}`, contenido,
-    profesionalId:profesional.id,profesionalNombre:profesional.nombre,profesionalEspecialidad:profesional.especialidad,profesionalFirmaUrl:profesional.firmaUrl,estado:'finalizada'
+    profesionalId:profesional.id,profesionalNombre:profesional.nombre,profesionalEspecialidad:profesional.especialidad,profesionalFirmaUrl:profesional.firmaUrl,profesionalCodigo:profesional.codigo,estado:'finalizada'
   });
   const eraEdicion=!!editingExamenVisualId;
   setLoading(true);
@@ -13530,7 +13645,7 @@ async function guardarExamenVisual() {
     ? await sb.from('notas').update(payload).eq('id',editingExamenVisualId)
     : await sb.from('notas').insert([payload]);
   setLoading(false);
-  if(error){ toast('Error al guardar: '+error.message,'error'); return; }
+  if(error){ toast(_faltaColumna(error,'profesional_codigo')?'Ejecuta migracion_codigo_medico_notas.sql en Supabase para guardar el código MINSA del examen.':'Error al guardar: '+error.message,'error'); return; }
   toast(eraEdicion?'Examen visual actualizado ✅':'Examen visual guardado ✅','success');
   closeModal('modal-examen-visual');
   await loadAll();

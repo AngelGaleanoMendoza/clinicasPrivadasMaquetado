@@ -1988,3 +1988,6 @@ body.dark .proc-oft-empty-db{background:rgba(245,158,11,.1);color:#FCD34D}
   .proc-oft-data{grid-template-columns:1fr 1fr}
   .proc-oft-actions .btn{font-size:11px;padding:8px 9px}
 }
+.dx-revision [data-firma-medico]{outline:1px dashed #2563eb;background:#eff6ff}
+.dx-revision [data-firma-medico="principal"]::before{content:'✍ Firma del médico de la nota';display:block;font:11px/1.5 system-ui;color:#1d4ed8}
+.dx-hoja [data-firma-medico]{overflow-wrap:anywhere}
