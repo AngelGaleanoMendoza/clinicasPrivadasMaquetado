@@ -1,440 +1,167 @@
 -- ============================================================
--- LUMEA MED — Auditoría de migraciones aplicadas
+-- LUMEA MED - Auditoria de migraciones
 --
--- Ejecutar en: Supabase → SQL Editor
--- Este script verifica cuál de las 7 migraciones están aplicadas.
+-- Ejecutar en: Supabase -> SQL Editor. Solo lee catalogos, no modifica nada.
+--
+-- Devuelve una fila por migracion, en el orden en que deben ejecutarse, con
+-- lo que falta de cada una. Las migraciones se comprueban por sus objetos
+-- reales (tabla, columna, indice, restriccion, disparador, politica), asi que
+-- una migracion a medias aparece como PENDIENTE y dice que le falta.
+--
+-- El orden importa: migracion_profesional_plantillas_notas necesita
+-- notas.estado (notas_borrador) para su restriccion, y codigo_medico_notas y
+-- machotes_formato necesitan la tabla plantillas_notas que aquella crea.
 -- ============================================================
 
--- Tabla para acumular resultados
-WITH migraciones_estado AS (
+WITH requisitos(orden, migracion, clase, objeto) AS (VALUES
 
-  -- 1. migracion_notas_borrador.sql
-  -- Verifica: columna 'estado' en notas, constraint y índice
+  -- 1. Estado editable de las notas (borrador / finalizada)
+  (1, 'notas_borrador',              'columna',     'notas.estado'),
+  (1, 'notas_borrador',              'restriccion', 'notas_estado_check'),
+  (1, 'notas_borrador',              'indice',      'idx_notas_estado'),
+
+  -- 2. Signos vitales por consulta
+  (2, 'signos_vitales_por_cita',     'columna',     'notas.cita_id'),
+  (2, 'signos_vitales_por_cita',     'indice',      'idx_notas_cita_id'),
+  (2, 'signos_vitales_por_cita',     'indice',      'idx_notas_paciente_fecha_signos'),
+
+  -- 3. Recetas separadas por medico prescriptor
+  (3, 'recetas_por_medico',          'columna',     'medicaciones.receta_id'),
+  (3, 'recetas_por_medico',          'columna',     'medicaciones.fecha_emision'),
+  (3, 'recetas_por_medico',          'columna',     'medicaciones.prescriptor_id'),
+  (3, 'recetas_por_medico',          'columna',     'medicaciones.prescriptor_nombre'),
+  (3, 'recetas_por_medico',          'columna',     'medicaciones.prescriptor_especialidad'),
+  (3, 'recetas_por_medico',          'columna',     'medicaciones.prescriptor_firma_url'),
+  (3, 'recetas_por_medico',          'indice',      'medicaciones_receta_id_idx'),
+
+  -- 4. Configuracion del recetario por medico (antes de recetario_digital:
+  --    esa migracion comenta recetario_config, que se crea aqui)
+  (4, 'plantillas_recetario',        'columna',     'profiles.recetario_url'),
+  (4, 'plantillas_recetario',        'columna',     'profiles.recetario_config'),
+  (4, 'plantillas_recetario',        'columna',     'medicaciones.recetario_url'),
+  (4, 'plantillas_recetario',        'columna',     'medicaciones.recetario_config'),
+
+  -- 5. Formulario digital de recetas
+  (5, 'recetario_digital',           'columna',     'medicaciones.diagnostico'),
+  (5, 'recetario_digital',           'columna',     'medicaciones.receta_notas'),
+  (5, 'recetario_digital',           'columna',     'medicaciones.proxima_cita'),
+
+  -- 6. Borrar pacientes conservando el historial
+  (6, 'historial_borrado_paciente',  'tabla',       'historial_expediente'),
+  (6, 'historial_borrado_paciente',  'sin_fk',      'historial_expediente.paciente_id'),
+
+  -- 7. Productividad y ultima conexion
+  (7, 'productividad_superadmin',    'columna',     'profiles.ultimo_acceso'),
+  (7, 'productividad_superadmin',    'columna',     'actividad_usuarios.created_at'),
+  (7, 'productividad_superadmin',    'indice',      'actividad_usuarios_clinica_fecha_idx'),
+  (7, 'productividad_superadmin',    'indice',      'actividad_usuarios_usuario_fecha_idx'),
+  (7, 'productividad_superadmin',    'indice',      'actividad_usuarios_accion_fecha_idx'),
+  (7, 'productividad_superadmin',    'indice',      'profiles_ultimo_acceso_idx'),
+  (7, 'productividad_superadmin',    'disparador',  'actividad_usuarios_ultimo_acceso'),
+
+  -- 8. Profesional responsable y machotes de notas (necesita notas.estado)
+  (8, 'profesional_plantillas_notas','tabla',       'plantillas_notas'),
+  (8, 'profesional_plantillas_notas','columna',     'notas.profesional_id'),
+  (8, 'profesional_plantillas_notas','columna',     'notas.profesional_nombre'),
+  (8, 'profesional_plantillas_notas','columna',     'notas.profesional_especialidad'),
+  (8, 'profesional_plantillas_notas','columna',     'notas.profesional_firma_url'),
+  (8, 'profesional_plantillas_notas','columna',     'notas.plantilla_id'),
+  (8, 'profesional_plantillas_notas','indice',      'idx_notas_profesional'),
+  (8, 'profesional_plantillas_notas','indice',      'idx_plantillas_notas_clinica_tipo'),
+  (8, 'profesional_plantillas_notas','restriccion', 'notas_finalizada_profesional_check'),
+  (8, 'profesional_plantillas_notas','politica',    'plantillas_notas_clinica'),
+
+  -- 9. Codigo MINSA del medico en cada nota (necesita la 8)
+  (9, 'codigo_medico_notas',         'columna',     'notas.profesional_codigo'),
+
+  -- 10. Machotes con formato (necesita la 8)
+  (10, 'machotes_formato',           'columna',     'plantillas_notas.documento'),
+  (10, 'machotes_formato',           'columna',     'notas.plantilla_valores'),
+
+  -- 11. Balance de reparto por servicio. La restriccion factura_items_tipo_check
+  --     solo se crea si existia otra que no admitia 'examen', asi que no se exige.
+  (11, 'balance_reparto',            'tabla',       'reparto_servicios'),
+  (11, 'balance_reparto',            'columna',     'factura_items.porcentaje_clinica'),
+  (11, 'balance_reparto',            'politica',    'reparto_servicios_clinica')
+
+),
+
+evaluado AS (
   SELECT
-    'notas_borrador' AS migracion,
-    CASE
-      WHEN EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'notas'
-          AND column_name = 'estado'
-      )
-      AND EXISTS (
-        SELECT 1 FROM pg_constraint
-        WHERE conname = 'notas_estado_check'
-          AND conrelid = 'public.notas'::regclass
-      )
-      AND EXISTS (
-        SELECT 1 FROM pg_indexes
-        WHERE schemaname = 'public' AND tablename = 'notas'
-          AND indexname = 'idx_notas_estado'
-      )
-      THEN 'APLICADA ✓'
-      ELSE 'PENDIENTE ✗'
-    END AS estado,
-    CASE
-      WHEN NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'notas'
-          AND column_name = 'estado'
-      ) THEN 'Falta columna estado'
-      WHEN NOT EXISTS (
-        SELECT 1 FROM pg_constraint
-        WHERE conname = 'notas_estado_check'
-          AND conrelid = 'public.notas'::regclass
-      ) THEN 'Falta constraint notas_estado_check'
-      WHEN NOT EXISTS (
-        SELECT 1 FROM pg_indexes
-        WHERE schemaname = 'public' AND tablename = 'notas'
-          AND indexname = 'idx_notas_estado'
-      ) THEN 'Falta índice idx_notas_estado'
-      ELSE 'Completa'
-    END AS detalles
+    r.orden,
+    r.migracion,
+    r.clase,
+    r.objeto,
+    CASE r.clase
 
-  UNION ALL
+      WHEN 'tabla' THEN EXISTS (
+        SELECT 1 FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND c.relname = r.objeto
+          AND c.relkind IN ('r','p')
+      )
 
-  -- 2. migracion_historial_borrado_paciente.sql
-  -- Verifica: FK sobre historial_expediente.paciente_id debe estar eliminada
-  SELECT
-    'historial_borrado_paciente' AS migracion,
-    CASE
-      WHEN NOT EXISTS (
-        SELECT 1 FROM pg_constraint con
-        JOIN pg_class rel ON rel.oid = con.conrelid
-        JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
-        JOIN pg_attribute att ON att.attrelid = rel.oid
-          AND att.attnum = ANY(con.conkey)
-        WHERE nsp.nspname = 'public' AND rel.relname = 'historial_expediente'
-          AND att.attname = 'paciente_id' AND con.contype = 'f'
+      WHEN 'columna' THEN EXISTS (
+        SELECT 1 FROM pg_attribute a
+        JOIN pg_class c ON c.oid = a.attrelid
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public'
+          AND c.relname = split_part(r.objeto, '.', 1)
+          AND a.attname = split_part(r.objeto, '.', 2)
+          AND a.attnum > 0 AND NOT a.attisdropped
       )
-      THEN 'APLICADA ✓'
-      ELSE 'PENDIENTE ✗'
-    END AS estado,
-    CASE
-      WHEN EXISTS (
-        SELECT 1 FROM pg_constraint con
-        JOIN pg_class rel ON rel.oid = con.conrelid
-        JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
-        JOIN pg_attribute att ON att.attrelid = rel.oid
-          AND att.attnum = ANY(con.conkey)
-        WHERE nsp.nspname = 'public' AND rel.relname = 'historial_expediente'
-          AND att.attname = 'paciente_id' AND con.contype = 'f'
-      )
-      THEN format('FK aún existe: %s',
-        (SELECT con.conname FROM pg_constraint con
-         JOIN pg_class rel ON rel.oid = con.conrelid
-         JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
-         JOIN pg_attribute att ON att.attrelid = rel.oid
-           AND att.attnum = ANY(con.conkey)
-         WHERE nsp.nspname = 'public' AND rel.relname = 'historial_expediente'
-           AND att.attname = 'paciente_id' AND con.contype = 'f' LIMIT 1)
-      )
-      ELSE 'FK eliminada correctamente'
-    END AS detalles
 
-  UNION ALL
+      WHEN 'indice' THEN EXISTS (
+        SELECT 1 FROM pg_indexes i
+        WHERE i.schemaname = 'public' AND i.indexname = r.objeto
+      )
 
-  -- 3. migracion_productividad_superadmin.sql
-  -- Verifica: columna ultimo_acceso en profiles, created_at en actividad_usuarios, trigger
-  SELECT
-    'productividad_superadmin' AS migracion,
-    CASE
-      WHEN EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'profiles'
-          AND column_name = 'ultimo_acceso'
+      WHEN 'restriccion' THEN EXISTS (
+        SELECT 1 FROM pg_constraint k
+        JOIN pg_class c ON c.oid = k.conrelid
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND k.conname = r.objeto
       )
-      AND EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'actividad_usuarios'
-          AND column_name = 'created_at'
-      )
-      AND EXISTS (
-        SELECT 1 FROM information_schema.triggers
-        WHERE trigger_schema = 'public' AND trigger_name = 'actividad_usuarios_ultimo_acceso'
-      )
-      THEN 'APLICADA ✓'
-      ELSE 'PENDIENTE ✗'
-    END AS estado,
-    CONCAT_WS(', ',
-      CASE WHEN NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'profiles'
-          AND column_name = 'ultimo_acceso'
-      ) THEN 'Falta profiles.ultimo_acceso' END,
-      CASE WHEN NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'actividad_usuarios'
-          AND column_name = 'created_at'
-      ) THEN 'Falta actividad_usuarios.created_at' END,
-      CASE WHEN NOT EXISTS (
-        SELECT 1 FROM information_schema.triggers
-        WHERE trigger_schema = 'public' AND trigger_name = 'actividad_usuarios_ultimo_acceso'
-      ) THEN 'Falta trigger' END,
-      CASE WHEN EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'profiles'
-          AND column_name = 'ultimo_acceso'
-      )
-      AND EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'actividad_usuarios'
-          AND column_name = 'created_at'
-      )
-      AND EXISTS (
-        SELECT 1 FROM information_schema.triggers
-        WHERE trigger_schema = 'public' AND trigger_name = 'actividad_usuarios_ultimo_acceso'
-      ) THEN 'Completa' END
-    ) AS detalles
 
-  UNION ALL
+      WHEN 'disparador' THEN EXISTS (
+        SELECT 1 FROM pg_trigger t
+        JOIN pg_class c ON c.oid = t.tgrelid
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND t.tgname = r.objeto
+          AND NOT t.tgisinternal
+      )
 
-  -- 4. migracion_recetario_digital.sql
-  -- Verifica: columnas diagnostico, receta_notas, proxima_cita en medicaciones
-  SELECT
-    'recetario_digital' AS migracion,
-    CASE
-      WHEN EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'medicaciones'
-          AND column_name IN ('diagnostico', 'receta_notas', 'proxima_cita')
-        GROUP BY table_name HAVING COUNT(*) = 3
+      WHEN 'politica' THEN EXISTS (
+        SELECT 1 FROM pg_policies p
+        WHERE p.schemaname = 'public' AND p.policyname = r.objeto
       )
-      THEN 'APLICADA ✓'
-      ELSE 'PENDIENTE ✗'
-    END AS estado,
-    CONCAT_WS(', ',
-      CASE WHEN NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'medicaciones'
-          AND column_name = 'diagnostico'
-      ) THEN 'Falta medicaciones.diagnostico' END,
-      CASE WHEN NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'medicaciones'
-          AND column_name = 'receta_notas'
-      ) THEN 'Falta medicaciones.receta_notas' END,
-      CASE WHEN NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'medicaciones'
-          AND column_name = 'proxima_cita'
-      ) THEN 'Falta medicaciones.proxima_cita' END,
-      CASE WHEN EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'medicaciones'
-          AND column_name IN ('diagnostico', 'receta_notas', 'proxima_cita')
-        GROUP BY table_name HAVING COUNT(*) = 3
-      ) THEN 'Completa' END
-    ) AS detalles
 
-  UNION ALL
+      -- La migracion consiste en quitar la FK: esta aplicada si YA NO existe.
+      WHEN 'sin_fk' THEN NOT EXISTS (
+        SELECT 1 FROM pg_constraint k
+        JOIN pg_class c ON c.oid = k.conrelid
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(k.conkey)
+        WHERE n.nspname = 'public' AND k.contype = 'f'
+          AND c.relname = split_part(r.objeto, '.', 1)
+          AND a.attname = split_part(r.objeto, '.', 2)
+      )
 
-  -- 5. migracion_plantillas_recetario.sql
-  -- Verifica: columnas recetario_url, recetario_config en profiles y medicaciones
-  SELECT
-    'plantillas_recetario' AS migracion,
-    CASE
-      WHEN EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'profiles'
-          AND column_name IN ('recetario_url', 'recetario_config')
-        GROUP BY table_name HAVING COUNT(*) = 2
-      )
-      AND EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'medicaciones'
-          AND column_name IN ('recetario_url', 'recetario_config')
-        GROUP BY table_name HAVING COUNT(*) = 2
-      )
-      THEN 'APLICADA ✓'
-      ELSE 'PENDIENTE ✗'
-    END AS estado,
-    CONCAT_WS(', ',
-      CASE WHEN NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'profiles'
-          AND column_name = 'recetario_url'
-      ) THEN 'Falta profiles.recetario_url' END,
-      CASE WHEN NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'profiles'
-          AND column_name = 'recetario_config'
-      ) THEN 'Falta profiles.recetario_config' END,
-      CASE WHEN NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'medicaciones'
-          AND column_name = 'recetario_url'
-      ) THEN 'Falta medicaciones.recetario_url' END,
-      CASE WHEN NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'medicaciones'
-          AND column_name = 'recetario_config'
-      ) THEN 'Falta medicaciones.recetario_config' END,
-      CASE WHEN EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'profiles'
-          AND column_name IN ('recetario_url', 'recetario_config')
-        GROUP BY table_name HAVING COUNT(*) = 2
-      )
-      AND EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'medicaciones'
-          AND column_name IN ('recetario_url', 'recetario_config')
-        GROUP BY table_name HAVING COUNT(*) = 2
-      ) THEN 'Completa' END
-    ) AS detalles
-
-  UNION ALL
-
-  -- 6. migracion_recetas_por_medico.sql
-  -- Verifica: columnas receta_id, fecha_emision, prescriptor_* en medicaciones, índice
-  SELECT
-    'recetas_por_medico' AS migracion,
-    CASE
-      WHEN EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'medicaciones'
-          AND column_name IN ('receta_id', 'fecha_emision', 'prescriptor_id',
-                             'prescriptor_nombre', 'prescriptor_especialidad',
-                             'prescriptor_firma_url')
-        GROUP BY table_name HAVING COUNT(*) = 6
-      )
-      AND EXISTS (
-        SELECT 1 FROM pg_indexes
-        WHERE schemaname = 'public' AND tablename = 'medicaciones'
-          AND indexname = 'medicaciones_receta_id_idx'
-      )
-      THEN 'APLICADA ✓'
-      ELSE 'PENDIENTE ✗'
-    END AS estado,
-    CONCAT_WS(', ',
-      CASE WHEN NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'medicaciones'
-          AND column_name IN ('receta_id', 'fecha_emision', 'prescriptor_id',
-                             'prescriptor_nombre', 'prescriptor_especialidad',
-                             'prescriptor_firma_url')
-      ) THEN 'Faltan columnas prescriptor' END,
-      CASE WHEN NOT EXISTS (
-        SELECT 1 FROM pg_indexes
-        WHERE schemaname = 'public' AND tablename = 'medicaciones'
-          AND indexname = 'medicaciones_receta_id_idx'
-      ) THEN 'Falta índice medicaciones_receta_id_idx' END,
-      CASE WHEN EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'medicaciones'
-          AND column_name IN ('receta_id', 'fecha_emision', 'prescriptor_id',
-                             'prescriptor_nombre', 'prescriptor_especialidad',
-                             'prescriptor_firma_url')
-        GROUP BY table_name HAVING COUNT(*) = 6
-      )
-      AND EXISTS (
-        SELECT 1 FROM pg_indexes
-        WHERE schemaname = 'public' AND tablename = 'medicaciones'
-          AND indexname = 'medicaciones_receta_id_idx'
-      ) THEN 'Completa' END
-    ) AS detalles
-
-  UNION ALL
-
-  -- 7. migracion_signos_vitales_por_cita.sql
-  -- Verifica: columna cita_id en notas, índices
-  SELECT
-    'signos_vitales_por_cita' AS migracion,
-    CASE
-      WHEN EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'notas'
-          AND column_name = 'cita_id'
-      )
-      AND EXISTS (
-        SELECT 1 FROM pg_indexes
-        WHERE schemaname = 'public' AND tablename = 'notas'
-          AND indexname = 'idx_notas_cita_id'
-      )
-      AND EXISTS (
-        SELECT 1 FROM pg_indexes
-        WHERE schemaname = 'public' AND tablename = 'notas'
-          AND indexname = 'idx_notas_paciente_fecha_signos'
-      )
-      THEN 'APLICADA ✓'
-      ELSE 'PENDIENTE ✗'
-    END AS estado,
-    CONCAT_WS(', ',
-      CASE WHEN NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'notas'
-          AND column_name = 'cita_id'
-      ) THEN 'Falta columna notas.cita_id' END,
-      CASE WHEN NOT EXISTS (
-        SELECT 1 FROM pg_indexes
-        WHERE schemaname = 'public' AND tablename = 'notas'
-          AND indexname = 'idx_notas_cita_id'
-      ) THEN 'Falta índice idx_notas_cita_id' END,
-      CASE WHEN NOT EXISTS (
-        SELECT 1 FROM pg_indexes
-        WHERE schemaname = 'public' AND tablename = 'notas'
-          AND indexname = 'idx_notas_paciente_fecha_signos'
-      ) THEN 'Falta índice idx_notas_paciente_fecha_signos' END,
-      CASE WHEN EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'notas'
-          AND column_name = 'cita_id'
-      )
-      AND EXISTS (
-        SELECT 1 FROM pg_indexes
-        WHERE schemaname = 'public' AND tablename = 'notas'
-          AND indexname = 'idx_notas_cita_id'
-      )
-      AND EXISTS (
-        SELECT 1 FROM pg_indexes
-        WHERE schemaname = 'public' AND tablename = 'notas'
-          AND indexname = 'idx_notas_paciente_fecha_signos'
-      ) THEN 'Completa' END
-    ) AS detalles
-
+    END AS presente
+  FROM requisitos r
 )
 
 SELECT
-  migracion,
-  estado,
-  detalles
-FROM migraciones_estado
-ORDER BY
-  CASE WHEN estado = 'APLICADA ✓' THEN 1 ELSE 2 END,
-  migracion;
-
--- Resumen
-SELECT
-  '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━' AS "",
-  COUNT(*) FILTER (WHERE estado = 'APLICADA ✓') as "Aplicadas",
-  COUNT(*) FILTER (WHERE estado = 'PENDIENTE ✗') as "Pendientes",
-  COUNT(*) as "Total"
-FROM (
-  WITH migraciones AS (
-    SELECT 'notas_borrador' m UNION ALL
-    SELECT 'historial_borrado_paciente' UNION ALL
-    SELECT 'productividad_superadmin' UNION ALL
-    SELECT 'recetario_digital' UNION ALL
-    SELECT 'plantillas_recetario' UNION ALL
-    SELECT 'recetas_por_medico' UNION ALL
-    SELECT 'signos_vitales_por_cita'
-  ),
-  estado_migraciones AS (
-    SELECT
-      m,
-      CASE
-        WHEN m = 'notas_borrador' THEN
-          CASE WHEN EXISTS (
-            SELECT 1 FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'notas'
-              AND column_name = 'estado'
-          ) AND EXISTS (
-            SELECT 1 FROM pg_constraint
-            WHERE conname = 'notas_estado_check'
-              AND conrelid = 'public.notas'::regclass
-          ) THEN 'APLICADA ✓' ELSE 'PENDIENTE ✗' END
-        WHEN m = 'historial_borrado_paciente' THEN
-          CASE WHEN NOT EXISTS (
-            SELECT 1 FROM pg_constraint con
-            JOIN pg_class rel ON rel.oid = con.conrelid
-            JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
-            JOIN pg_attribute att ON att.attrelid = rel.oid
-              AND att.attnum = ANY(con.conkey)
-            WHERE nsp.nspname = 'public' AND rel.relname = 'historial_expediente'
-              AND att.attname = 'paciente_id' AND con.contype = 'f'
-          ) THEN 'APLICADA ✓' ELSE 'PENDIENTE ✗' END
-        WHEN m = 'productividad_superadmin' THEN
-          CASE WHEN EXISTS (
-            SELECT 1 FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'profiles'
-              AND column_name = 'ultimo_acceso'
-          ) THEN 'APLICADA ✓' ELSE 'PENDIENTE ✗' END
-        WHEN m = 'recetario_digital' THEN
-          CASE WHEN EXISTS (
-            SELECT 1 FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'medicaciones'
-              AND column_name = 'diagnostico'
-          ) THEN 'APLICADA ✓' ELSE 'PENDIENTE ✗' END
-        WHEN m = 'plantillas_recetario' THEN
-          CASE WHEN EXISTS (
-            SELECT 1 FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'profiles'
-              AND column_name = 'recetario_url'
-          ) THEN 'APLICADA ✓' ELSE 'PENDIENTE ✗' END
-        WHEN m = 'recetas_por_medico' THEN
-          CASE WHEN EXISTS (
-            SELECT 1 FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'medicaciones'
-              AND column_name = 'receta_id'
-          ) THEN 'APLICADA ✓' ELSE 'PENDIENTE ✗' END
-        WHEN m = 'signos_vitales_por_cita' THEN
-          CASE WHEN EXISTS (
-            SELECT 1 FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'notas'
-              AND column_name = 'cita_id'
-          ) THEN 'APLICADA ✓' ELSE 'PENDIENTE ✗' END
-      END estado
-    FROM migraciones
-  )
-  SELECT m, estado FROM estado_migraciones
-);
+  orden                                                        AS "#",
+  CASE WHEN bool_and(presente) THEN 'APLICADA' ELSE 'PENDIENTE' END
+                                                               AS "Estado",
+  'migracion_' || migracion || '.sql'                          AS "Archivo",
+  count(*) FILTER (WHERE presente) || ' de ' || count(*)        AS "Objetos",
+  COALESCE(
+    string_agg(clase || ' ' || objeto, ' | ' ORDER BY clase, objeto)
+      FILTER (WHERE NOT presente),
+    '-'
+  )                                                            AS "Que falta"
+FROM evaluado
+GROUP BY orden, migracion
+ORDER BY orden;
