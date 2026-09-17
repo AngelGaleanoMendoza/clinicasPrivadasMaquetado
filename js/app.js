@@ -3976,7 +3976,7 @@ async function guardarMedicacion() {
     const valid = medItems.filter(item => item.nombre && item.dosisQty && item.frecuencia);
     if(!valid.length) { toast('Agrega al menos un medicamento con nombre, dosificación y frecuencia','error'); return; }
     const recetaId = _nuevoRecetaId();
-    const recetaBase = {recetaId,fechaEmision:hoy(),prescriptorId:prescriptor.id,prescriptorNombre:prescriptor.nombre,prescriptorEspecialidad:prescriptor.especialidad,prescriptorFirmaUrl:prescriptor.firmaUrl,recetarioUrl:null,recetarioConfig:prescriptor.recetarioConfig,diagnostico,recetaNotas,proximaCita};
+    const recetaBase = {recetaId,fechaEmision:hoy(),prescriptorId:prescriptor.id,prescriptorNombre:prescriptor.nombre,prescriptorEspecialidad:prescriptor.especialidad,prescriptorFirmaUrl:prescriptor.firmaUrl,recetarioUrl:null,recetarioConfig:_configRecetarioClinica(),diagnostico,recetaNotas,proximaCita};
     const rows = valid.map(item => toM({...recetaBase,pacienteId:pid,mascotaId:mid,nombre:item.nombre,dosis:buildDosis(item),frecuencia:item.frecuencia,inicio,fin,via:item.via,estado,indicaciones:item.indicaciones}));
     setLoading(true);
     const {error} = await sb.from('medicaciones').insert(rows);
@@ -7439,8 +7439,22 @@ const TAMANOS_RECETA = {
   a4:    { w:210, h:297, label:'A4 (21 × 29.7 cm)' }
 };
 
-function _disenoRecetarioDigital(receta, cfg) {
-  const d = receta?.recetarioConfig?.version===2 ? receta.recetarioConfig : {};
+// El recetario es institucional: no pertenece al médico que emitió la receta.
+// Así toda persona de una clínica imprime la misma identidad, incluso al abrir
+// recetas históricas que guardaron una configuración personal antigua.
+function _configRecetarioClinica(cfg=getClinicaConfig()) {
+  return {
+    version:2, tamano:'media', layout:'clasico', color:'#1D4ED8', fuente:'Arial',
+    titulo:cfg.nombreClinica||'Clínica', subtitulo:cfg.especialidad||'',
+    registro:cfg.registro||'', institucion:cfg.institucion||cfg.nombreClinica||'',
+    logoUrl:cfg.logoUrl||'', logoPos:'left', encabezadoCompleto:true,
+    lista:[], secciones:{diagnostico:true,indicaciones:true,proximaCita:true,sexo:true,telefono:true},
+    pie:[cfg.telefono,cfg.email,cfg.direccion].filter(Boolean).join(' · ')
+  };
+}
+
+function _disenoRecetarioDigital(_receta, cfg) {
+  const d = _configRecetarioClinica(cfg);
   const fuentes=['Arial','Georgia','Times New Roman','Verdana','Trebuchet MS','Courier New'];
   const secciones={
     diagnostico:d.secciones?.diagnostico!==false,
@@ -7452,10 +7466,10 @@ function _disenoRecetarioDigital(receta, cfg) {
   return {
     // La receta siempre usa una sola columna; se retiró el panel de "Áreas de atención".
     layout:'clasico', color:d.color||'#be185d', fuente:fuentes.includes(d.fuente)?d.fuente:'Arial',
-    titulo:d.titulo||receta?.prescriptorNombre||cfg.nombreDoctor||'Profesional responsable',
-    subtitulo:d.subtitulo||receta?.prescriptorEspecialidad||cfg.especialidad||'',
+    titulo:d.titulo||cfg.nombreClinica||'Clínica',
+    subtitulo:d.subtitulo||cfg.especialidad||'',
     registro:d.registro||cfg.registro||'', institucion:d.institucion||cfg.institucion||cfg.nombreClinica||'',
-    logoUrl:d.logoUrl||cfg.logoUrl||'', logoPos:['left','center','right'].includes(d.logoPos)?d.logoPos:'left',
+    logoUrl:d.logoUrl||cfg.logoUrl||'', logoPos:'left',
     lista:Array.isArray(d.lista)?d.lista:[], pie:d.pie||[cfg.telefono,cfg.email,cfg.direccion].filter(Boolean).join(' · '),
     tamano:TAMANOS_RECETA[d.tamano]?d.tamano:'media', secciones,
     encabezadoCompleto:d.encabezadoCompleto===true,
@@ -8299,6 +8313,7 @@ function _configDeClinica(cl, local = {}) {
     institucion:   cl.institucion   || local.institucion   || '',
     logoUrl:       cl.logo_url      || local.logoUrl       || '',
     firmaUrl:      cl.firma_url     || local.firmaUrl      || '',
+    tipoDocumentoFactura: cl.tipo_documento_factura === 'comprobante_pago' ? 'comprobante_pago' : 'factura',
   };
 }
 
@@ -8380,6 +8395,8 @@ function _limpiarFormConfig() {
    'config-telefono','config-email','config-direccion','config-nota-pie',
    'config-padecimientos','config-institucion','config-logo-url']
     .forEach(id => { const e = document.getElementById(id); if(e) e.value = ''; });
+  const tipoDoc = document.getElementById('config-tipo-doc-factura');
+  if(tipoDoc) tipoDoc.value = 'factura';
   setConfigLogoPreview(null);
   _resetFirmaClinica(null);
   const nom = document.getElementById('config-clinica-nom');
@@ -8407,6 +8424,8 @@ function cargarConfigClinica(id) {
   if(padEl) padEl.value = cfg.padecimientos || '';
   const instEl = document.getElementById('config-institucion');
   if(instEl) instEl.value = cfg.institucion || '';
+  const tipoDoc = document.getElementById('config-tipo-doc-factura');
+  if(tipoDoc) tipoDoc.value = cfg.tipoDocumentoFactura;
   const nom = document.getElementById('config-clinica-nom');
   if(nom) nom.textContent = cl.nombre || '';
   _resetFirmaClinica(cfg.firmaUrl || null);
@@ -8525,13 +8544,14 @@ async function guardarConfigClinica() {
     nota_pie:      document.getElementById('config-nota-pie').value.trim() || null,
     padecimientos: document.getElementById('config-padecimientos')?.value.trim() || null,
     institucion:   document.getElementById('config-institucion')?.value.trim() || null,
+    tipo_documento_factura: document.getElementById('config-tipo-doc-factura')?.value === 'comprobante_pago' ? 'comprobante_pago' : 'factura',
     logo_url:      document.getElementById('config-logo-url').value.trim() || null,
     firma_url
   };
 
   // Las columnas nuevas pueden no existir todavía en Supabase: se reintenta sin
   // ellas para no perder el resto del formulario, avisando qué quedó fuera.
-  const OPCIONALES = ['firma_url','email','institucion','padecimientos'];
+  const OPCIONALES = ['firma_url','email','institucion','padecimientos','tipo_documento_factura'];
   let { error } = await sb.from('clinicas').update(payload).eq('id', configClinicaId);
   const faltantes = [];
   while(error && OPCIONALES.some(col => (col in payload) && _faltaColumna(error, col))) {
@@ -14427,7 +14447,8 @@ function _syncEspecialidadUsuario() {
   wrap.style.display = aplica ? '' : 'none';
   if(!aplica) { const inp = document.getElementById('u-especialidad'); if(inp) inp.value = ''; }
   const recWrap = document.getElementById('u-recetario-wrap');
-  if(recWrap) recWrap.style.display = ROLES_PRESCRIPTORES.includes(rol) ? '' : 'none';
+  // La identidad del recetario se configura una vez por clínica, no por usuario.
+  if(recWrap) recWrap.style.display = 'none';
 }
 
 function onRolChange() {
@@ -14517,12 +14538,8 @@ async function guardarUsuario() {
       try { firma_url = await subirFirmaUsuario(_pendingFirmaFile, editingUsuarioId); }
       catch(e) { toast('No se pudo subir la firma: '+(e.message||e),'error'); setLoading(false); return; }
     }
-    if(_pendingRecetarioLogoFile) {
-      try {_recetarioLogoUrlActual=await subirLogoRecetario(_pendingRecetarioLogoFile,editingUsuarioId);}
-      catch(e){toast('No se pudo subir el logo: '+(e.message||e),'error');setLoading(false);return;}
-    }
-    const recetario_url = null; // las recetas nuevas son digitales, sin imagen de fondo
-    const recetario_config = ROLES_PRESCRIPTORES.includes(rol) ? _configRecetarioFormulario() : null;
+    const recetario_url = null;
+    const recetario_config = null;
     const upd = {nombre,email:email||null,rol,icono,clinica_id,permisos,especialidad,firma_url,recetario_url,recetario_config};
     // La contraseña real vive en Supabase Auth. Desde el navegador solo se puede
     // cambiar la PROPIA (updateUser); la de otra persona exigiría la clave de
@@ -14594,8 +14611,7 @@ async function guardarUsuario() {
     // Auth, que la almacena cifrada. Guardarla aquí la dejaría legible para
     // cualquier compañero de la misma clínica y volvería a marcar al usuario
     // como "pendiente de migrar" desde el primer día.
-    let recetario_config = ROLES_PRESCRIPTORES.includes(rol) ? _configRecetarioFormulario() : null;
-    if(recetario_config && _pendingRecetarioLogoFile) recetario_config.logoUrl='';
+    let recetario_config = null;
     const nuevo = {id:newId,nombre,email:emailNorm,rol,icono,clinica_id,permisos,especialidad,recetario_config};
     let {error} = await sb.from('profiles').insert(nuevo);
     if(error && _faltaColumnaEspecialidad(error)) {
@@ -14604,14 +14620,6 @@ async function guardarUsuario() {
       if(!error) _avisarFaltaColumnaEspecialidad();
     }
     if(error){ toast('Error al crear: '+error.message,'error'); setLoading(false); return; }
-    if(_pendingRecetarioLogoFile) {
-      try {
-        _recetarioLogoUrlActual=await subirLogoRecetario(_pendingRecetarioLogoFile,newId);
-        recetario_config=_configRecetarioFormulario();
-        const {error:logoError}=await sb.from('profiles').update({recetario_config}).eq('id',newId);
-        if(logoError)throw logoError;
-      } catch(e){toast('Usuario creado, pero no se pudo guardar el logo: '+(e.message||e),'warning');}
-    }
     if(faltaConfirmar) toast(`Usuario creado, pero ${emailNorm} debe confirmar su correo antes de poder entrar. Para evitarlo, desactiva "Confirm email" en Supabase → Authentication → Settings.`,'warning');
     else toast('Usuario creado exitosamente','success');
   }
@@ -16334,10 +16342,12 @@ function verFacturaPDF(id) {
   const fact = (C.fact||[]).find(f=>f.id===id);
   if(!fact) return;
   const items = (C.factItems||[]).filter(i=>i.facturaId===id);
+  const tipoDocumento = currentClinica?.tipo_documento_factura === 'comprobante_pago'
+    ? 'COMPROBANTE DE PAGO' : 'FACTURA';
   const body = `
     <div style="display:flex;justify-content:space-between;margin-bottom:20px;padding:14px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0">
       <div>
-        <p style="font-size:18px;font-weight:800;color:#0f172a">FACTURA</p>
+        <p style="font-size:18px;font-weight:800;color:#0f172a">${tipoDocumento}</p>
         <p style="color:#64748b;font-size:13px">N°: <strong>${fact.numero||'—'}</strong></p>
         <p style="color:#64748b;font-size:13px">Fecha: ${formatFecha(fact.fecha)}</p>
         <p style="color:#64748b;font-size:13px">Estado: <strong style="color:${fact.estado==='pagada'?'#16a34a':'#b45309'}">${fact.estado.toUpperCase()}</strong></p>
@@ -16379,7 +16389,7 @@ function verFacturaPDF(id) {
     <div style="text-align:center;margin-top:28px;color:#94a3b8;font-size:11px">
       Lumea Med — Sistema de Gestión Clínica | lumeamed.net
     </div>`;
-  pdfAbrir(`Factura ${fact.numero||'#'+id}`, body, {orientation:'portrait'});
+  pdfAbrir(`${tipoDocumento} ${fact.numero||'#'+id}`, body, {orientation:'portrait'});
 }
 
 // ═══════════════════════════════════════════════

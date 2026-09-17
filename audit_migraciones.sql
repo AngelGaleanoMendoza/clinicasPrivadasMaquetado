@@ -105,7 +105,11 @@ WITH requisitos(orden, migracion, clase, objeto) AS (VALUES
   (14, 'borrado_facturas',           'indice',      'idx_finanzas_factura_id'),
   (14, 'borrado_facturas',           'indice',      'idx_inv_mov_factura_id'),
   (14, 'borrado_facturas',           'funcion',     'reservar_numero_factura'),
-  (14, 'borrado_facturas',           'funcion',     'eliminar_factura_completa')
+  (14, 'borrado_facturas',           'funcion',     'eliminar_factura_completa'),
+
+  -- 15. Título de la impresión de facturas, configurable por clínica
+  (15, 'tipo_documento_factura',     'columna',     'clinicas.tipo_documento_factura'),
+  (15, 'tipo_documento_factura',     'restriccion', 'clinicas_tipo_documento_factura_check')
 
 ),
 

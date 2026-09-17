@@ -523,7 +523,7 @@
                   <button class="btn btn-secondary btn-sm" onclick="document.getElementById('config-logo-file').click()">📁 Subir logo</button>
                   <button class="btn btn-sm" id="config-logo-remove" onclick="removeConfigLogo()" style="display:none;background:#FEE2E2;color:#DC2626;border:1px solid #FECACA">✕ Quitar</button>
                 </div>
-                <p class="text-light" style="margin-top:6px;font-size:11px">PNG, JPG o SVG · Aparece en todos los PDFs e impresiones</p>
+                <p class="text-light" style="margin-top:6px;font-size:11px">PNG, JPG o SVG · Aparece en todos los PDFs e impresiones, incluido el recetario institucional de todos los usuarios de esta clínica</p>
               </div>
             </div>
             <div class="form-group full" style="margin-bottom:20px">
@@ -551,6 +551,7 @@
               <div class="form-group full"><label>Dirección</label><input type="text" id="config-direccion" placeholder="Calle, Ciudad, País"></div>
               <div class="form-group full"><label>Nota al pie (en notas de consulta)</label><input type="text" id="config-nota-pie" placeholder="Horario: Lunes a Viernes 8am–5pm"></div>
               <div class="form-group full"><label>Línea institucional <span style="font-size:11px;color:var(--text-light);font-weight:400">— aparece bajo la especialidad en el membrete</span></label><input type="text" id="config-institucion" placeholder="Universidad Nacional Autónoma de México / Tiroides Center"></div>
+              <div class="form-group full"><label>Documento para imprimir facturas</label><select id="config-tipo-doc-factura"><option value="factura">Factura</option><option value="comprobante_pago">Comprobante de pago</option></select><small class="text-light">Cambia únicamente el título del documento impreso. La numeración consecutiva actual se conserva.</small></div>
               <div class="form-group full"><label>Padecimientos del recetario <span style="font-size:11px;color:var(--text-light);font-weight:400">— uno por línea; se imprimen al pie de la receta para marcar a mano. Vacío = no se imprime nada</span></label>
                 <textarea id="config-padecimientos" placeholder="Hipotiroidismo&#10;Nódulo Tiroideo&#10;Bocio&#10;Hipertiroidismo&#10;Diabetes tipo 1&#10;Diabetes tipo 2&#10;Diabetes Gestacional&#10;Ovarios Poliquísticos&#10;Menopausia" style="min-height:120px;font-size:13px"></textarea></div>
             </div>
@@ -1852,7 +1853,7 @@
         <span style="font-size:11px;color:var(--text-light);margin-top:5px">Ideal: firma sobre fondo blanco o PNG con fondo transparente. Máx. 2 MB.</span>
       </div>
       <div class="form-group full" id="u-recetario-wrap">
-        <label>🧾 Diseño digital del recetario <span style="font-size:11px;color:var(--text-light);font-weight:400">— estructura propia de las recetas de este médico</span></label>
+        <label>🧾 Diseño digital del recetario <span style="font-size:11px;color:var(--text-light);font-weight:400">— se configura de forma institucional en Configuración Clínica</span></label>
         <div class="recetario-editor-grid">
           <div id="u-recetario-preview" class="recetario-digital-preview"></div>
           <div class="recetario-config-campos">
