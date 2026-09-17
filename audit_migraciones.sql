@@ -82,7 +82,13 @@ WITH requisitos(orden, migracion, clase, objeto) AS (VALUES
   --     solo se crea si existia otra que no admitia 'examen', asi que no se exige.
   (11, 'balance_reparto',            'tabla',       'reparto_servicios'),
   (11, 'balance_reparto',            'columna',     'factura_items.porcentaje_clinica'),
-  (11, 'balance_reparto',            'politica',    'reparto_servicios_clinica')
+  (11, 'balance_reparto',            'politica',    'reparto_servicios_clinica'),
+
+  -- 12. Baja de un profesional que deja la clínica
+  (12, 'baja_profesional',           'columna',     'profiles.activo'),
+  (12, 'baja_profesional',           'columna',     'profiles.baja_fecha'),
+  (12, 'baja_profesional',           'columna',     'profiles.baja_motivo'),
+  (12, 'baja_profesional',           'indice',      'profiles_clinica_activo_idx')
 
 ),
 

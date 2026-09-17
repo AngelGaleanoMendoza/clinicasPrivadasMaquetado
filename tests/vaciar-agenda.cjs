@@ -9,12 +9,17 @@ const root=path.resolve(__dirname,'..');
 const source=fs.readFileSync(path.join(root,'js/app.js'),'utf8');
 
 // Las funciones se leen del archivo real para que la prueba falle si cambian.
-const functions=['puedeVaciarAgenda','vaciarAgendaDoctor','renderAgendasRight'];
-const code=functions.map(name=>{
+function extraer(name) {
   const start=source.search(new RegExp('^(async )?function '+name+'\\(','m'));
   assert(start>=0,'No se encontró '+name);
+  const primeraLinea=source.slice(start,source.indexOf('\n',start));
+  let abiertas=0;
+  for(const ch of primeraLinea) { if(ch==='{') abiertas++; else if(ch==='}') abiertas--; }
+  if(abiertas===0 && primeraLinea.includes('{')) return primeraLinea;   // función de una línea
   return source.slice(start,source.indexOf('\n}',start)+2);
-}).join('\n');
+}
+const code=['_profActivo','puedeVaciarAgenda','puedeDarDeBajaProfesional',
+  'vaciarAgendaDoctor','renderAgendasRight'].map(extraer).join('\n');
 
 // Entorno mínimo alrededor de las funciones reales.
 const preambulo=`
@@ -194,10 +199,13 @@ const lanzar=()=>process.env.PLAYWRIGHT_CHROMIUM
       'Debe avisar de que falta la columna');
 
     // ── Cómo se ve, en escritorio y en teléfono ──
+    // Como Super Admin la cabecera lleva los dos botones a la vez: es el caso
+    // más apretado y el que hay que medir.
     const cabecera=await page.evaluate(()=>{
-      window.__comoUsuario({key:'medico_admin',nombre:'Carlos'});
+      window.__comoUsuario({key:'superadmin',nombre:'Seba'});
       window.__citas([{estado:'pendiente'},{estado:'completada'}]);
       renderAgendasRight();
+      if(!document.querySelector('.agenda-doc-baja')) throw Error('Falta el botón de dar de baja');
       return document.querySelector('.agenda-doc-head').outerHTML;
     });
     const css=fs.readFileSync(path.join(root,'css/styles.css'),'utf8');
@@ -207,13 +215,17 @@ const lanzar=()=>process.env.PLAYWRIGHT_CHROMIUM
         +`<div style="padding:12px;background:var(--bg)"><div class="card">${cabecera}</div></div>`);
       const medida=await page.evaluate(()=>{
         const b=document.querySelector('.agenda-doc-vaciar').getBoundingClientRect();
-        return {desborde:document.documentElement.scrollWidth-innerWidth,alto:b.height,ancho:b.width};
+        const baja=document.querySelector('.agenda-doc-baja').getBoundingClientRect();
+        return {desborde:document.documentElement.scrollWidth-innerWidth,
+                alto:Math.min(b.height,baja.height),ancho:b.width,
+                apilados:baja.top>=b.bottom-1};
       });
       assert.equal(medida.desborde,0,'Desbordamiento horizontal a '+width+' px');
       // En el teléfono el botón ocupa su propio renglón y se toca con el dedo;
       // en escritorio mantiene el alto de cualquier otro btn-sm de la cabecera.
       const minimo=width<=560?40:24;
       assert.ok(medida.alto>=minimo,'Botón demasiado bajo a '+width+' px ('+medida.alto+')');
+      if(width<=560) assert.ok(medida.apilados,'Los dos botones deben ir en renglones distintos a '+width+' px');
       const dest=path.join(process.env.TEMP||'/tmp','lumea-vaciar-agenda-'+width+'.png');
       await page.screenshot({path:dest});
       console.log('Layout '+width+' px: '+dest+'  botón '+Math.round(medida.ancho)+'×'+Math.round(medida.alto));
