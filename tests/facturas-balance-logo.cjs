@@ -15,6 +15,7 @@ assert.match(app, /factura_id:id/);
 assert.match(app, /cfg = \{\.\.\.getClinicaConfig\(\), \.\.\.cfg\}/);
 assert.match(app, /logoUrl:d\.logoUrl\|\|cfg\.logoUrl/);
 assert.match(app, /tipo_documento_factura === 'comprobante_pago'[\s\S]*'COMPROBANTE DE PAGO' : 'FACTURA'/);
+assert.match(app, /tipoDocumento === 'COMPROBANTE DE PAGO' \? 'Recibido de:' : 'Facturar a:'/);
 assert.match(app, /pdfAbrir\(`\$\{tipoDocumento\} \$\{fact\.numero/);
 assert.match(html, /id="fact-numero"[^>]+readonly/);
 assert.match(migration, /CREATE OR REPLACE FUNCTION public\.reservar_numero_factura/);

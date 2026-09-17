@@ -16344,6 +16344,7 @@ function verFacturaPDF(id) {
   const items = (C.factItems||[]).filter(i=>i.facturaId===id);
   const tipoDocumento = currentClinica?.tipo_documento_factura === 'comprobante_pago'
     ? 'COMPROBANTE DE PAGO' : 'FACTURA';
+  const etiquetaDestinatario = tipoDocumento === 'COMPROBANTE DE PAGO' ? 'Recibido de:' : 'Facturar a:';
   const body = `
     <div style="display:flex;justify-content:space-between;margin-bottom:20px;padding:14px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0">
       <div>
@@ -16353,7 +16354,7 @@ function verFacturaPDF(id) {
         <p style="color:#64748b;font-size:13px">Estado: <strong style="color:${fact.estado==='pagada'?'#16a34a':'#b45309'}">${fact.estado.toUpperCase()}</strong></p>
       </div>
       <div style="text-align:right">
-        <p style="font-weight:700;color:#0f172a">Facturar a:</p>
+        <p style="font-weight:700;color:#0f172a">${etiquetaDestinatario}</p>
         <p style="font-size:14px">${fact.pacienteNombre}</p>
       </div>
     </div>
