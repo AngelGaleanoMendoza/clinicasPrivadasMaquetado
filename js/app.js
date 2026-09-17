@@ -364,7 +364,7 @@ const fromOdo  = r => ({ id:r.id, pacienteId:r.paciente_id, dientes:r.dientes||{
 const fromPerio= r => ({ id:r.id, pacienteId:r.paciente_id, datos:r.datos||{}, observaciones:r.observaciones||'' });
 
 const fromFact    = r => ({ id:r.id, numero:r.numero, pacienteId:r.paciente_id, pacienteNombre:r.paciente_nombre||'Consumidor Final', fecha:r.fecha, estado:r.estado||'pendiente', subtotal:Number(r.subtotal||0), impuestoPct:Number(r.impuesto_pct||0), impuesto:Number(r.impuesto||0), total:Number(r.total||0), notas:r.notas||null, citaId:r.cita_id||null });
-const fromFactItem= r => ({ id:r.id, facturaId:r.factura_id, descripcion:r.descripcion, tipo:r.tipo||'servicio', cantidad:Number(r.cantidad||1), precioUnitario:Number(r.precio_unitario||0), subtotal:Number(r.subtotal||0), inventarioId:r.inventario_id||null, porcentajeClinica:r.porcentaje_clinica!=null?Number(r.porcentaje_clinica):null });
+const fromFactItem= r => ({ id:r.id, facturaId:r.factura_id, descripcion:r.descripcion, tipo:r.tipo||'servicio', cantidad:Number(r.cantidad||1), precioUnitario:Number(r.precio_unitario||0), subtotal:Number(r.subtotal||0), inventarioId:r.inventario_id||null, porcentajeClinica:r.porcentaje_clinica!=null?Number(r.porcentaje_clinica):null, montoClinica:r.monto_clinica!=null?Number(r.monto_clinica):null });
 const fromReparto = r => ({ tipo:r.tipo, porcentaje:Number(r.porcentaje_clinica), actualizadoPor:r.actualizado_por||'', actualizadoEn:r.actualizado_en||null });
 // Veterinaria: el cliente es el dueño y la mascota es el paciente
 const fromCli = r => ({ id:r.id, nombre:r.nombre, apellidos:r.apellidos||'', identificacion:r.identificacion, telefono:r.telefono, telefonoAlt:r.telefono_alt, email:r.email, direccion:r.direccion, notas:r.notas, estado:r.estado||'activo', fechaRegistro:r.fecha_registro });
@@ -15328,6 +15328,7 @@ function renderFacturasList() {
           <button class="btn btn-sm btn-secondary" onclick="verFacturaPDF(${f.id})" title="Imprimir factura">🖨️</button>
           <button class="btn btn-sm btn-secondary" onclick="descargarDocumento(()=>verFacturaPDF(${f.id}))" title="Descargar factura en PDF" aria-label="Descargar factura en PDF">⬇️</button>
           ${esPend?`<button class="btn btn-sm btn-danger" onclick="anularFactura(${f.id})" title="Anular factura">❌</button>`:''}
+          ${f.estado==='anulada'?`<button class="btn btn-sm btn-danger" onclick="eliminarFactura(${f.id})" title="Eliminar esta factura anulada" aria-label="Eliminar factura anulada">🗑️</button>`:''}
         </div>
       </div>
     </div>`;
@@ -15682,7 +15683,7 @@ function openModalFactura(citaId=null, pacienteId=null) {
 
 function addFacturaItem(desc='', tipo='servicio', cant=1, precio=0, invId=null) {
   const id = ++_factItemCounter;
-  facturaItems.push({id, desc, tipo, cant:Number(cant)||1, precio:Number(precio)||0, invId});
+  facturaItems.push({id, desc, tipo, cant:Number(cant)||1, precio:Number(precio)||0, invId, ganancia:null});
   renderFacturaItemsUI();
   calcFacturaTotals();
 }
@@ -15720,6 +15721,7 @@ function renderFacturaItemsUI() {
     el.innerHTML='<p style="color:var(--text-light);font-size:13px;text-align:center;padding:20px 0">Agrega líneas usando los botones de arriba</p>';
     return;
   }
+  const manual = _balanceManual();
   el.innerHTML = facturaItems.map(item=>`
     <div class="fact-item-row">
       <select style="width:140px;flex-shrink:0" onchange="updateFactItem(${item.id},'tipo',this.value)">
@@ -15731,6 +15733,9 @@ function renderFacturaItemsUI() {
         oninput="updateFactItem(${item.id},'cant',parseFloat(this.value)||0)" style="width:65px;flex-shrink:0">
       <input type="number" value="${item.precio}" min="0" step="0.01" placeholder="Precio"
         oninput="updateFactItem(${item.id},'precio',parseFloat(this.value)||0)" style="width:100px;flex-shrink:0">
+      ${manual?`<input type="number" value="${item.ganancia??''}" min="0" step="0.01" placeholder="Gana clínica" class="fact-item-gana"
+        oninput="updateFactItem(${item.id},'ganancia',this.value===''?null:(parseFloat(this.value)||0))" style="width:110px;flex-shrink:0"
+        title="De lo cobrado, cuánto queda a la clínica">`:''}
       <span class="fact-item-sub">${fmtC((item.cant||0)*(item.precio||0))}</span>
       <button onclick="removeFacturaItem(${item.id})" style="background:#FEF2F2;color:#B91C1C;border:none;border-radius:6px;padding:4px 0;width:32px;cursor:pointer;flex-shrink:0;font-size:13px" title="Quitar línea" aria-label="Quitar línea">✕</button>
     </div>`).join('');
@@ -15741,6 +15746,17 @@ function calcFacturaTotals() {
   const s=document.getElementById('fact-subtotal'), t=document.getElementById('fact-total');
   if(s) s.textContent=fmtC(sub);
   if(t) t.textContent=fmtC(sub);
+
+  const manual = _balanceManual();
+  const col = document.getElementById('fact-col-gana');
+  const fila = document.getElementById('fact-gana-row');
+  if(col)  col.hidden  = !manual;
+  if(fila) fila.hidden = !manual;
+  if(manual) {
+    const gana = facturaItems.reduce((acc,i)=>acc+(Number.isFinite(i.ganancia)?i.ganancia:0),0);
+    const el = document.getElementById('fact-gana-total');
+    if(el) el.textContent = fmtC(gana);
+  }
 }
 
 async function guardarFactura() {
@@ -15776,9 +15792,15 @@ async function guardarFactura() {
       // clínica usa el reparto, así las demás no dependen de la columna nueva.
       const pct = _porcentajeClinica(i.tipo);
       if(pct!=null) fila.porcentaje_clinica = pct;
+      // Lo escrito a mano se guarda tal cual y manda sobre el porcentaje.
+      if(_balanceManual() && Number.isFinite(i.ganancia)) fila.monto_clinica = i.ganancia;
       return fila;
     });
     let {error:itemsErr} = await sb.from('factura_items').insert(filas);
+    if(itemsErr && _faltaColumna(itemsErr, 'monto_clinica')) {
+      ({error:itemsErr} = await sb.from('factura_items').insert(filas.map(({monto_clinica, ...resto})=>resto)));
+      if(!itemsErr) toast('Factura creada, pero falta ejecutar migracion_balance_manual.sql: la ganancia escrita no se guardó','warning');
+    }
     if(itemsErr && _faltaColumna(itemsErr, 'porcentaje_clinica')) {
       ({error:itemsErr} = await sb.from('factura_items').insert(filas.map(({porcentaje_clinica, ...resto})=>resto)));
       if(!itemsErr) toast('Factura creada. Falta ejecutar migracion_balance_reparto.sql: el balance usará el porcentaje actual','warning');
@@ -15863,6 +15885,10 @@ function _porcentajeClinica(tipo) {
   return r && Number.isFinite(r.porcentaje) ? r.porcentaje : null;
 }
 
+// Hay clínicas donde lo que queda a la clínica se acuerda servicio por servicio
+// y no sale de ninguna regla: quien cobra lo escribe al facturar.
+function _balanceManual() { return currentClinica?.balance_modo === 'manual'; }
+
 const _fmtPct = n => (Math.round(n*100)/100).toLocaleString('es-NI',{maximumFractionDigits:2}) + ' %';
 
 // Al cobrar, las líneas emitidas antes de configurar el reparto reciben el
@@ -15884,13 +15910,16 @@ function _lineasBalance(from, to) {
   return (C.factItems||[]).filter(i=>pagadas.has(i.facturaId)).map(i=>{
     const factura = pagadas.get(i.facturaId);
     const total = i.subtotal || (i.cantidad*i.precioUnitario) || 0;
-    const pct = i.porcentajeClinica ?? _porcentajeClinica(i.tipo);
+    // Lo escrito a mano manda: se acordó para ese servicio concreto y ninguna
+    // regla posterior debe recalcularlo. Cambiar de modo no altera lo cobrado.
+    const manual = Number.isFinite(i.montoClinica) ? i.montoClinica : null;
+    const pct = manual!=null ? null : (i.porcentajeClinica ?? _porcentajeClinica(i.tipo));
     return {
-      factura, item:i, tipo:i.tipo, total, pct,
+      factura, item:i, tipo:i.tipo, total, pct, manual: manual!=null,
       // Sin porcentaje fijado en la línea se usa el vigente; se marca para que
       // quien lea el balance sepa que puede cambiar si se edita la configuración.
-      estimado: i.porcentajeClinica==null && pct!=null,
-      clinica: pct==null ? null : Math.round(total*pct)/100,
+      estimado: manual==null && i.porcentajeClinica==null && pct!=null,
+      clinica: manual!=null ? manual : (pct==null ? null : Math.round(total*pct)/100),
     };
   }).sort((a,b)=>b.factura.fecha.localeCompare(a.factura.fecha) || String(b.factura.numero||'').localeCompare(String(a.factura.numero||'')));
 }
@@ -15898,11 +15927,15 @@ function _lineasBalance(from, to) {
 function _resumenBalance(lineas) {
   const porTipo = new Map();
   for(const l of lineas) {
-    const g = porTipo.get(l.tipo) || { tipo:l.tipo, cantidad:0, total:0, clinica:0, conPct:0, sinPct:0, pcts:new Set(), estimados:0 };
+    const g = porTipo.get(l.tipo) || { tipo:l.tipo, cantidad:0, total:0, clinica:0, conPct:0, sinPct:0, pcts:new Set(), estimados:0, manuales:0 };
     g.cantidad += l.item.cantidad || 1;
     g.total += l.total;
-    if(l.pct==null) g.sinPct += l.total;
-    else { g.clinica += l.clinica; g.conPct += l.total; g.pcts.add(l.pct); }
+    // Lo que no tiene reparto —ni escrito ni por porcentaje— queda fuera.
+    if(l.clinica==null) g.sinPct += l.total;
+    else {
+      g.clinica += l.clinica; g.conPct += l.total;
+      if(l.manual) g.manuales++; else g.pcts.add(l.pct);
+    }
     if(l.estimado) g.estimados++;
     porTipo.set(l.tipo, g);
   }
@@ -15918,11 +15951,13 @@ function _resumenBalance(lineas) {
   };
 }
 
-// Un tipo puede reunir líneas con porcentajes distintos si la configuración
-// cambió dentro del período: entonces se muestra el porcentaje efectivo.
+// Un tipo puede reunir líneas con porcentajes distintos —si la configuración
+// cambió dentro del período— o mezclar escritas a mano con calculadas: en
+// cualquiera de los dos casos se muestra el porcentaje efectivo.
 function _pctGrupoBalance(g) {
-  if(!g.pcts.size) return null;
-  if(g.pcts.size===1) return { texto:_fmtPct([...g.pcts][0]), mixto:false };
+  if(!g.pcts.size && !g.manuales) return null;
+  if(!g.pcts.size) return { texto:'a mano', mixto:false, manual:true };
+  if(g.pcts.size===1 && !g.manuales) return { texto:_fmtPct([...g.pcts][0]), mixto:false };
   return { texto:'≈ '+_fmtPct(g.conPct ? g.clinica/g.conPct*100 : 0), mixto:true };
 }
 
@@ -15942,24 +15977,28 @@ function renderBalanceFinanzas() {
   const {from,to} = getFinDateRange();
   const lineas = _lineasBalance(from, to);
   const r = _resumenBalance(lineas);
-  const configurado = (C.reparto||[]).length > 0;
+  const manual = _balanceManual();
+  // En modo manual no hay nada que configurar de antemano: el balance manda.
+  const configurado = manual || (C.reparto||[]).length > 0;
   const nombresSinPct = r.grupos.filter(g=>g.sinPct>0).map(g=>_tipoServicio(g.tipo).label.toLowerCase());
 
   const avisos = [
     !_repartoDisponible ? '🛠️ Falta ejecutar <strong>migracion_balance_reparto.sql</strong> en Supabase para guardar los porcentajes.' : '',
-    nombresSinPct.length ? `⚠️ Sin porcentaje configurado: <strong>${escAttr(nombresSinPct.join(', '))}</strong>. Esos ${fmtC(r.sinPct)} no se reparten hasta que lo configures.` : '',
+    !nombresSinPct.length ? ''
+      : manual ? `⚠️ ${fmtC(r.sinPct)} se cobraron sin escribir cuánto quedaba a la clínica, así que no entran en el reparto.`
+      : `⚠️ Sin porcentaje configurado: <strong>${escAttr(nombresSinPct.join(', '))}</strong>. Esos ${fmtC(r.sinPct)} no se reparten hasta que lo configures.`,
     r.estimados ? `ℹ️ ${r.estimados} línea(s) se facturaron antes de configurar el reparto y usan el porcentaje actual (marcadas con *).` : '',
   ].filter(Boolean).map(t=>`<div class="balance-aviso">${t}</div>`).join('');
 
   const tabla = r.grupos.length ? `<div class="table-wrap"><table class="balance-tabla">
-    <thead><tr><th>Tipo de servicio</th><th class="num">Cantidad</th><th class="num">Total cobrado</th><th class="num">% clínica</th><th class="num">Queda a la clínica</th><th class="num">Profesionales</th></tr></thead>
+    <thead><tr><th>Tipo de servicio</th><th class="num">Cantidad</th><th class="num">Total cobrado</th><th class="num">${manual?'Reparto':'% clínica'}</th><th class="num">Queda a la clínica</th><th class="num">Profesionales</th></tr></thead>
     <tbody>${r.grupos.map(g=>{
       const t = _tipoServicio(g.tipo), p = _pctGrupoBalance(g);
       return `<tr>
         <td class="tipo">${t.icon} ${escAttr(t.label)}</td>
         <td class="num" data-label="Cantidad">${g.cantidad.toLocaleString('es-NI')}</td>
         <td class="num" data-label="Total cobrado">${fmtC(g.total)}</td>
-        <td class="num" data-label="% clínica">${p?`<span${p.mixto?' title="Porcentajes distintos en el período: se muestra el efectivo"':''}>${p.texto}</span>`:'<span class="tag tag-orange" style="font-size:10px">Sin %</span>'}${g.sinPct>0&&p?' <span class="tag tag-orange" style="font-size:10px">parcial</span>':''}</td>
+        <td class="num" data-label="${manual?'Reparto':'% clínica'}">${p?`<span${p.mixto?' title="Porcentajes distintos en el período: se muestra el efectivo"':''}>${p.texto}</span>`:`<span class="tag tag-orange" style="font-size:10px">${manual?'Sin escribir':'Sin %'}</span>`}${g.sinPct>0&&p?' <span class="tag tag-orange" style="font-size:10px">parcial</span>':''}</td>
         <td class="num balance-clinica" data-label="Queda a la clínica">${p?fmtC(g.clinica):'—'}</td>
         <td class="num" data-label="Profesionales">${p?fmtC(g.conPct-g.clinica):'—'}</td>
       </tr>`;
@@ -15982,7 +16021,7 @@ function renderBalanceFinanzas() {
         <button class="btn btn-primary btn-sm" onclick="descargarDocumento(imprimirBalanceReparto)">⬇️ Descargar PDF</button>
       </div>
     </div>
-    <p class="balance-nota">Facturas pagadas del período (${escAttr(_etiquetaPeriodoFin())}). De cada servicio, la parte de la clínica sale del porcentaje de su tipo; el resto corresponde al profesional.</p>
+    <p class="balance-nota">Facturas pagadas del período (${escAttr(_etiquetaPeriodoFin())}). De cada servicio, la parte de la clínica ${manual?'es la que se escribió al cobrar':'sale del porcentaje de su tipo'}; el resto corresponde al profesional.</p>
     ${avisos}
     <div class="stats-grid balance-kpis">
       <div class="stat-card"><div class="stat-icon si-blue">💵</div><div class="stat-info"><h3>${fmtC(r.total)}</h3><p>Total cobrado</p></div></div>
@@ -15994,9 +16033,22 @@ function renderBalanceFinanzas() {
   </div>`;
 
   const ultimo = [...(C.reparto||[])].filter(x=>x.actualizadoEn).sort((a,b)=>String(b.actualizadoEn).localeCompare(String(a.actualizadoEn)))[0];
+  const modos = `<div class="balance-modos">
+    ${[['porcentaje','％','Por porcentaje','Un % fijo por tipo de servicio. La clínica no escribe nada al cobrar.'],
+       ['manual','✍️','Escrito a mano','Al cobrar se escribe cuánto queda a la clínica en cada servicio.']]
+      .map(([id,icon,titulo,desc])=>`
+        <button type="button" class="balance-modo${(manual?'manual':'porcentaje')===id?' activo':''}"
+          onclick="cambiarModoBalance('${id}')" aria-pressed="${(manual?'manual':'porcentaje')===id}">
+          <span class="balance-modo-icon">${icon}</span>
+          <span><strong>${titulo}</strong><small>${desc}</small></span>
+        </button>`).join('')}
+  </div>`;
+
   const config = `<div class="card" style="margin-bottom:18px">
-    <div class="card-header"><h3>⚙️ Porcentaje que queda a la clínica</h3></div>
-    <p class="balance-nota">Por tipo de servicio. Se fija en cada línea al emitir o cobrar la factura, así que cambiarlo no altera lo ya cobrado. Deja vacío el tipo que no aplique.</p>
+    <div class="card-header"><h3>⚙️ Cómo se calcula la parte de la clínica</h3></div>
+    ${modos}
+    ${manual ? `<p class="balance-nota" style="margin-top:14px">Al generar una factura aparece una casilla <strong>Gana clínica</strong> junto al precio de cada línea: ahí se escribe cuánto de lo cobrado queda a la clínica. Lo ya cobrado no cambia si vuelves al modo por porcentaje.</p>`
+    : `<p class="balance-nota" style="margin-top:14px">Por tipo de servicio. Se fija en cada línea al emitir o cobrar la factura, así que cambiarlo no altera lo ya cobrado. Deja vacío el tipo que no aplique.</p>
     <div class="balance-config-grid">${TIPOS_SERVICIO_FACTURA.map(t=>{
       const pct = _porcentajeClinica(t.id);
       return `<label class="balance-pct" for="reparto-${t.id}">
@@ -16008,7 +16060,7 @@ function renderBalanceFinanzas() {
     <div class="balance-config-pie">
       <small class="text-light">${ultimo?`Actualizado por ${escAttr(ultimo.actualizadoPor||'—')} el ${formatFecha(String(ultimo.actualizadoEn).slice(0,10))}`:'Aún sin configurar'}</small>
       <button class="btn btn-primary btn-sm" id="btn-guardar-reparto" onclick="guardarRepartoServicios()"${_repartoDisponible?'':' disabled'}>💾 Guardar porcentajes</button>
-    </div>
+    </div>`}
   </div>`;
 
   const abierto = lineas.length <= 40;
@@ -16024,7 +16076,7 @@ function renderBalanceFinanzas() {
           </div>
           <div class="balance-linea-montos">
             <div><small>Cobrado</small><strong>${fmtC(l.total)}</strong></div>
-            <div><small>Clínica ${l.pct==null?'':_fmtPct(l.pct)+(l.estimado?'*':'')}</small><strong class="balance-clinica">${l.pct==null?'Sin %':fmtC(l.clinica)}</strong></div>
+            <div><small>Clínica ${l.manual?'a mano':l.pct==null?'':_fmtPct(l.pct)+(l.estimado?'*':'')}</small><strong class="balance-clinica">${l.clinica==null?'Sin repartir':fmtC(l.clinica)}</strong></div>
           </div>
         </div>`;
       }).join('')}</div>
@@ -16032,6 +16084,21 @@ function renderBalanceFinanzas() {
   </div>` : '';
 
   el.innerHTML = configurado ? balance + detalle + config : config + balance + detalle;
+}
+
+async function cambiarModoBalance(modo) {
+  if(!_exigeClinica()) return;
+  if((currentClinica?.balance_modo || 'porcentaje') === modo) return;
+  const {error} = await sb.from('clinicas').update({balance_modo:modo}).eq('id', currentClinicaId);
+  if(error && _faltaColumna(error,'balance_modo')) {
+    toast('Falta ejecutar migracion_balance_manual.sql en Supabase para poder cambiar de modo.','error');
+    return;
+  }
+  if(error) { toast('Error: '+error.message,'error'); return; }
+  // Lo ya cobrado no se recalcula: cada línea guarda con qué criterio se repartió.
+  currentClinica.balance_modo = modo;
+  renderBalanceFinanzas();
+  toast(modo==='manual' ? 'Ahora se escribe la ganancia al facturar' : 'Ahora se reparte por porcentaje','success');
 }
 
 function _ejemploReparto(pct) {
@@ -16151,6 +16218,33 @@ async function anularFactura(id) {
   await sb.from('facturas').update({estado:'anulada'}).eq('id',id);
   toast('Factura anulada');
   await loadAll(); renderFacturasList(); setLoading(false);
+}
+
+// Solo las anuladas. Una pagada sostiene un ingreso en finanzas y una pendiente
+// todavía se puede cobrar: borrar cualquiera de las dos descuadra las cuentas.
+async function eliminarFactura(id) {
+  if(!_exigeClinica()) return;
+  const f = (C.fact||[]).find(x=>x.id===id);
+  if(!f) return;
+  if(f.estado !== 'anulada') { toast('Solo se pueden eliminar facturas anuladas','error'); return; }
+
+  const ok = await customConfirm({
+    icon:'🗑️', title:'Eliminar factura anulada',
+    msg:`Se borrará la factura <strong>${escAttr(f.numero||'#'+id)}</strong> de ${escAttr(f.pacienteNombre||'Consumidor Final')} y sus líneas.`
+      + `<br><br><small style="color:var(--text-light)">Está anulada, así que no afecta a ingresos ni al balance. Desaparece del historial y no se puede deshacer.</small>`,
+    okText:'Eliminar', cancelText:'Cancelar'
+  });
+  if(!ok) return;
+
+  setLoading(true);
+  // Las líneas primero: la factura es su padre y la clave foránea lo exige.
+  const {error:errItems} = await sb.from('factura_items').delete().eq('factura_id', id);
+  if(errItems) { setLoading(false); toast('Error al borrar las líneas: '+errItems.message,'error'); return; }
+  const {error} = await sb.from('facturas').delete().eq('id', id).eq('clinica_id', currentClinicaId);
+  setLoading(false);
+  if(error) { toast('Error al eliminar: '+error.message,'error'); return; }
+  toast('Factura eliminada');
+  await loadAll(); renderFinanzas();
 }
 
 function verFacturaPDF(id) {

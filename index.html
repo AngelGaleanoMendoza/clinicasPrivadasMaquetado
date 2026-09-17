@@ -22,7 +22,7 @@
 <!-- Lectura local de machotes. El archivo se procesa en el navegador antes de
      guardarlo; Mammoth extrae DOCX y PDF.js se carga al elegir un PDF. -->
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js" defer></script>
-<link rel="stylesheet" href="css/styles.css?v=20260917c">
+<link rel="stylesheet" href="css/styles.css?v=20260917d">
 </head>
 <body>
 <script>
@@ -1374,6 +1374,7 @@
         <span style="flex:1;min-width:120px">Descripción</span>
         <span style="width:65px;flex-shrink:0;text-align:center">Cant.</span>
         <span style="width:100px;flex-shrink:0;text-align:right">Precio C$</span>
+        <span style="width:110px;flex-shrink:0;text-align:right" id="fact-col-gana" hidden>Gana clínica</span>
         <span style="width:90px;flex-shrink:0;text-align:right">Subtotal</span>
         <span style="width:32px;flex-shrink:0"></span>
       </div>
@@ -1391,6 +1392,11 @@
       <div class="fact-total-row fact-total-final">
         <span>TOTAL</span>
         <span id="fact-total">C$ 0.00</span>
+      </div>
+
+      <div class="fact-total-row" id="fact-gana-row" hidden>
+        <span>Queda a la clínica</span>
+        <span id="fact-gana-total">C$ 0.00</span>
       </div>
     </div>
 
@@ -2774,7 +2780,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260917c" defer></script>
+<script src="js/app.js?v=20260917d" defer></script>
 </body>
 </html>
 

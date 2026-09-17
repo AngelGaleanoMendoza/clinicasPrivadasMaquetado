@@ -89,7 +89,12 @@ WITH requisitos(orden, migracion, clase, objeto) AS (VALUES
   (12, 'agenda_profesional',         'indice',      'profiles_clinica_agenda_idx'),
   -- Sustituye a migracion_baja_profesional.sql: si `activo` sigue ahí, esa
   -- versión quedó a medias y puede dejar gente sin poder entrar.
-  (12, 'agenda_profesional',         'sin_columna', 'profiles.activo')
+  (12, 'agenda_profesional',         'sin_columna', 'profiles.activo'),
+
+  -- 13. Ganancia de la clínica escrita a mano (necesita la 11)
+  (13, 'balance_manual',             'columna',     'factura_items.monto_clinica'),
+  (13, 'balance_manual',             'columna',     'clinicas.balance_modo'),
+  (13, 'balance_manual',             'restriccion', 'clinicas_balance_modo_check')
 
 ),
 
