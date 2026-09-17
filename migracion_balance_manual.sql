@@ -39,6 +39,43 @@ COMMENT ON COLUMN public.clinicas.balance_modo IS
   'porcentaje = la parte de la clínica sale del % de cada tipo; manual = se escribe al facturar.';
 
 -- Comprobación: debe devolver las dos columnas.
+-- La tabla clinicas protege sus datos generales para el Super Admin. Esta RPC
+-- abre únicamente balance_modo al médico administrativo de la misma clínica.
+CREATE OR REPLACE FUNCTION public.cambiar_modo_balance_clinica(
+  p_clinica_id BIGINT,
+  p_modo TEXT
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_autorizado BOOLEAN;
+BEGIN
+  IF p_modo NOT IN ('porcentaje','manual') THEN
+    RAISE EXCEPTION 'Modo de balance inválido';
+  END IF;
+
+  SELECT public.is_superadmin() OR EXISTS (
+    SELECT 1 FROM public.profiles p
+    WHERE (p.id = auth.uid() OR lower(p.email) = lower(nullif(auth.jwt() ->> 'email', '')))
+      AND p.clinica_id = p_clinica_id
+      AND p.rol = 'medico_admin'
+  ) INTO v_autorizado;
+
+  IF NOT v_autorizado THEN
+    RAISE EXCEPTION 'Solo un médico administrativo puede configurar el balance';
+  END IF;
+
+  UPDATE public.clinicas SET balance_modo = p_modo WHERE id = p_clinica_id;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.cambiar_modo_balance_clinica(BIGINT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.cambiar_modo_balance_clinica(BIGINT, TEXT) TO authenticated;
+NOTIFY pgrst, 'reload schema';
+
 SELECT table_name, column_name, data_type, column_default
 FROM information_schema.columns
 WHERE table_schema = 'public'

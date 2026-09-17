@@ -94,7 +94,18 @@ WITH requisitos(orden, migracion, clase, objeto) AS (VALUES
   -- 13. Ganancia de la clínica escrita a mano (necesita la 11)
   (13, 'balance_manual',             'columna',     'factura_items.monto_clinica'),
   (13, 'balance_manual',             'columna',     'clinicas.balance_modo'),
-  (13, 'balance_manual',             'restriccion', 'clinicas_balance_modo_check')
+  (13, 'balance_manual',             'restriccion', 'clinicas_balance_modo_check'),
+  (13, 'balance_manual',             'funcion',     'cambiar_modo_balance_clinica'),
+
+  -- 14. Borrado integral y consecutivo de facturas
+  (14, 'borrado_facturas',           'columna',     'finanzas.factura_id'),
+  (14, 'borrado_facturas',           'columna',     'inventario_movimientos.factura_id'),
+  (14, 'borrado_facturas',           'columna',     'clinicas.factura_periodo'),
+  (14, 'borrado_facturas',           'columna',     'clinicas.factura_ultimo_numero'),
+  (14, 'borrado_facturas',           'indice',      'idx_finanzas_factura_id'),
+  (14, 'borrado_facturas',           'indice',      'idx_inv_mov_factura_id'),
+  (14, 'borrado_facturas',           'funcion',     'reservar_numero_factura'),
+  (14, 'borrado_facturas',           'funcion',     'eliminar_factura_completa')
 
 ),
 
@@ -146,6 +157,12 @@ evaluado AS (
       WHEN 'politica' THEN EXISTS (
         SELECT 1 FROM pg_policies p
         WHERE p.schemaname = 'public' AND p.policyname = r.objeto
+      )
+
+      WHEN 'funcion' THEN EXISTS (
+        SELECT 1 FROM pg_proc p
+        JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = 'public' AND p.proname = r.objeto
       )
 
       -- La migracion elimina la columna: esta aplicada si YA NO existe.

@@ -1,4 +1,4 @@
-// Balance con la ganancia escrita a mano, y borrado de facturas anuladas.
+// Balance con la ganancia escrita a mano, y borrado integral de facturas.
 // Ejecutar con PLAYWRIGHT_MODULE apuntando a una instalación de playwright.
 // PLAYWRIGHT_CHROMIUM permite usar un Chromium propio en vez del canal msedge.
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
@@ -40,7 +40,9 @@ const preambulo=`
     {id:'producto',label:'Producto',icon:'X'}];
 
   window.__errBorrado=null;   // simula un fallo al borrar las líneas
-  const sb={from:tabla=>({delete:()=>{
+  const sb={
+    rpc:async(nombre,args)=>{window.__sb.push({tabla:nombre,op:'rpc',filtros:args});return {error:null};},
+    from:tabla=>({delete:()=>{
     const filtros={};
     const api={
       eq:(k,v)=>{filtros[k]=v;return api;},
@@ -182,47 +184,23 @@ const FACT=[{id:1,fecha:'2026-09-10',estado:'pagada',numero:'F-1',pacienteNombre
     assert.equal(casilla.man.total,'C$ 800.00','700 + 100');
     assert.equal(casilla.man.factura,'C$ 1400.00','El total de la factura no cambia');
 
-    // ── Borrar factura: solo las anuladas ──
-    const noAnulada=await page.evaluate(async()=>{
+    // ── Borrar factura: pagadas, pendientes y anuladas usan limpieza atómica ──
+    const estados=await page.evaluate(async()=>{
       const r={};
-      for(const estado of ['pagada','pendiente']) {
+      for(const estado of ['pagada','pendiente','anulada']) {
         window.__datos([{id:9,fecha:'2026-09-10',estado,numero:'F-9',pacienteNombre:'Ana'}],[]);
         window.__limpiar();
         await eliminarFactura(9);
-        r[estado]={escrituras:window.__sb.length,toast:window.__toasts.at(-1)?.t};
+        r[estado]={sb:window.__sb.slice(),toast:window.__toasts.at(-1)};
       }
       return r;
     });
-    assert.equal(noAnulada.pagada.escrituras,0,'Una pagada sostiene un ingreso: no se borra');
-    assert.equal(noAnulada.pagada.toast,'error');
-    assert.equal(noAnulada.pendiente.escrituras,0,'Una pendiente todavía se puede cobrar');
-
-    // ── Borrar una anulada: primero las líneas, luego la factura ──
-    const borrado=await page.evaluate(async()=>{
-      window.__datos([{id:9,fecha:'2026-09-10',estado:'anulada',numero:'F-9',pacienteNombre:'Ana'}],[]);
-      window.__limpiar();
-      await eliminarFactura(9);
-      return {sb:window.__sb,toast:window.__toasts.at(-1)};
-    });
-    assert.equal(borrado.sb.length,2,'Dos borrados');
-    assert.equal(borrado.sb[0].tabla,'factura_items','Las líneas primero, por la clave foránea');
-    assert.equal(borrado.sb[0].filtros.factura_id,9);
-    assert.equal(borrado.sb[1].tabla,'facturas');
-    assert.equal(borrado.sb[1].filtros.id,9);
-    assert.equal(borrado.sb[1].filtros.clinica_id,7,'Filtra por la clínica');
-    assert.match(borrado.toast.m,/eliminada/);
-
-    // ── Si fallan las líneas, la factura NO se borra ──
-    const falla=await page.evaluate(async()=>{
-      window.__datos([{id:9,fecha:'2026-09-10',estado:'anulada',numero:'F-9',pacienteNombre:'Ana'}],[]);
-      window.__errBorrado='factura_items';
-      window.__limpiar();
-      await eliminarFactura(9);
-      window.__errBorrado=null;
-      return {sb:window.__sb,toast:window.__toasts.at(-1)};
-    });
-    assert.equal(falla.sb.length,1,'No debe borrar la factura si sus líneas quedaron');
-    assert.equal(falla.toast.t,'error');
+    for(const estado of ['pagada','pendiente','anulada']) {
+      assert.equal(estados[estado].sb.length,1,estado+' debe ejecutar una sola RPC');
+      assert.equal(estados[estado].sb[0].tabla,'eliminar_factura_completa');
+      assert.equal(estados[estado].sb[0].filtros.p_factura_id,9);
+      assert.match(estados[estado].toast.m,/eliminada/);
+    }
 
     // ── Si se cancela el diálogo no pasa nada ──
     const cancelado=await page.evaluate(async()=>{
@@ -274,6 +252,6 @@ const FACT=[{id:1,fecha:'2026-09-10',estado:'pagada',numero:'F-1',pacienteNombre
       console.log('Layout '+width+' px: '+dest);
     }
 
-    console.log('OK: manual manda, cero cuenta, mezcla, cambio de modo, casilla, y borrado de anuladas.');
+    console.log('OK: manual manda, cero cuenta, mezcla, cambio de modo, casilla, y borrado integral.');
   } finally {await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

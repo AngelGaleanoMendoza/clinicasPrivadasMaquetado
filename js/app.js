@@ -316,7 +316,7 @@ const fromPlantillaNota = r => ({ id:r.id, nombre:r.nombre, tipo:r.tipo_nota||'e
 const fromInv = r => ({ id:r.id, nombre:r.nombre, categoria:r.categoria||'general', unidad:r.unidad||'unidad', stock:Number(r.stock_actual||0), stockMin:Number(r.stock_minimo||0), precio:r.precio_unitario!=null?Number(r.precio_unitario):null, descripcion:r.descripcion||null, codigoMinsa:r.codigo_minsa||null, fechaVenc:r.fecha_vencimiento||null, alertaMeses:r.alerta_meses_antes!=null?Number(r.alerta_meses_antes):1 });
 const toInv   = x => ({ nombre:x.nombre, categoria:x.categoria||'general', unidad:x.unidad||'unidad', stock_actual:Number(x.stock||0), stock_minimo:Number(x.stockMin||0), precio_unitario:x.precio||null, descripcion:x.descripcion||null, clinica_id:currentClinicaId, codigo_minsa:x.codigoMinsa||null, fecha_vencimiento:x.fechaVenc||null, alerta_meses_antes:Number(x.alertaMeses||1) });
 const fromMov     = r => ({ id:r.id, invId:r.inventario_id, tipo:r.tipo, cantidad:Number(r.cantidad), motivo:r.motivo||null, fecha:r.fecha, referencia:r.referencia||null, notas:r.notas||null });
-const fromFin     = r => ({ id:r.id, tipo:r.tipo, categoria:r.categoria||'general', descripcion:r.descripcion, monto:Number(r.monto), fecha:r.fecha, metodoPago:r.metodo_pago||'efectivo', referencia:r.referencia||null, citaId:r.cita_id||null, pacienteId:r.paciente_id||null, invMovId:r.inventario_mov_id||null, creadoPor:r.creado_por||null });
+const fromFin     = r => ({ id:r.id, tipo:r.tipo, categoria:r.categoria||'general', descripcion:r.descripcion, monto:Number(r.monto), fecha:r.fecha, metodoPago:r.metodo_pago||'efectivo', referencia:r.referencia||null, facturaId:r.factura_id||null, citaId:r.cita_id||null, pacienteId:r.paciente_id||null, invMovId:r.inventario_mov_id||null, creadoPor:r.creado_por||null });
 const fromProcClin = r => ({
   id:r.id, pacienteId:r.paciente_id, citaId:r.cita_id||null,
   servicio:r.servicio||'consulta', procedimiento:r.procedimiento, categoria:r.categoria, tipo:r.tipo,
@@ -7455,7 +7455,7 @@ function _disenoRecetarioDigital(receta, cfg) {
     titulo:d.titulo||receta?.prescriptorNombre||cfg.nombreDoctor||'Profesional responsable',
     subtitulo:d.subtitulo||receta?.prescriptorEspecialidad||cfg.especialidad||'',
     registro:d.registro||cfg.registro||'', institucion:d.institucion||cfg.institucion||cfg.nombreClinica||'',
-    logoUrl:d.logoUrl||'', logoPos:['left','center','right'].includes(d.logoPos)?d.logoPos:'left',
+    logoUrl:d.logoUrl||cfg.logoUrl||'', logoPos:['left','center','right'].includes(d.logoPos)?d.logoPos:'left',
     lista:Array.isArray(d.lista)?d.lista:[], pie:d.pie||[cfg.telefono,cfg.email,cfg.direccion].filter(Boolean).join(' · '),
     tamano:TAMANOS_RECETA[d.tamano]?d.tamano:'media', secciones,
     encabezadoCompleto:d.encabezadoCompleto===true,
@@ -12700,7 +12700,10 @@ function pdfFooter(cfg) {
   </div>`;
 }
 
-function pdfAbrir(titulo, body, cfg) {
+function pdfAbrir(titulo, body, cfg={}) {
+  // Todos los documentos comparten la identidad de la clínica. Las opciones
+  // particulares (por ejemplo orientación) complementan, no reemplazan, el logo.
+  cfg = {...getClinicaConfig(), ...cfg};
   return _entregarDocumento({
     titulo,
     html:`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>${titulo}</title>
@@ -13197,6 +13200,9 @@ function hasPermiso(perm) {
   const base = permisosEfectivos(currentUser?.key,p);
   return base.includes(perm);
 }
+function puedeVerBalance() {
+  return isSuperAdmin() || currentUser?.key === 'medico_admin';
+}
 function puedeGestionarProcedimientosClinicos() {
   return !esVeterinaria() && hasPermiso('procedimientos');
 }
@@ -13261,6 +13267,7 @@ function applyRoleMenu() {
   vis('menu-gestion-section', hasGestion);
   vis('menu-inventario',      invAccess);
   vis('menu-finanzas',        finAccess);
+  vis('tab-fin-balance',      finAccess && puedeVerBalance());
   vis('menu-estadisticas',    statAccess);
   vis('menu-exportar',        expAccess);
 
@@ -14404,6 +14411,10 @@ function _faltaColumna(error, col) {
   const m = (error?.message || '').toLowerCase();
   return m.includes(col) && (m.includes('column') || m.includes('schema') || m.includes('does not exist'));
 }
+function _faltaFuncion(error, nombre) {
+  const m = `${error?.code||''} ${error?.message||''}`.toLowerCase();
+  return m.includes(nombre.toLowerCase()) && (m.includes('pgrst202') || m.includes('function') || m.includes('schema cache'));
+}
 function _avisarFaltaColumnaEspecialidad() {
   toast('Usuario guardado, pero falta la columna "especialidad" en la tabla profiles de Supabase','warning');
 }
@@ -15082,9 +15093,18 @@ function setFinTipo(tipo, el) {
   renderTransacciones();
 }
 
-function renderFinanzas() { switchFinTab(finTab||'resumen'); }
+function renderFinanzas() {
+  if(finTab === 'balance' && !puedeVerBalance()) finTab = 'resumen';
+  const tabBalance = document.getElementById('tab-fin-balance');
+  if(tabBalance) tabBalance.style.display = puedeVerBalance() ? '' : 'none';
+  switchFinTab(finTab||'resumen');
+}
 
 function switchFinTab(tab) {
+  if(tab === 'balance' && !puedeVerBalance()) {
+    toast('El balance solo está disponible para médicos administrativos','warning');
+    tab = 'resumen';
+  }
   finTab = tab;
   ['resumen','transacciones','facturas','balance'].forEach(t => {
     const p = document.getElementById('fin-panel-'+t);
@@ -15328,7 +15348,7 @@ function renderFacturasList() {
           <button class="btn btn-sm btn-secondary" onclick="verFacturaPDF(${f.id})" title="Imprimir factura">🖨️</button>
           <button class="btn btn-sm btn-secondary" onclick="descargarDocumento(()=>verFacturaPDF(${f.id}))" title="Descargar factura en PDF" aria-label="Descargar factura en PDF">⬇️</button>
           ${esPend?`<button class="btn btn-sm btn-danger" onclick="anularFactura(${f.id})" title="Anular factura">❌</button>`:''}
-          ${f.estado==='anulada'?`<button class="btn btn-sm btn-danger" onclick="eliminarFactura(${f.id})" title="Eliminar esta factura anulada" aria-label="Eliminar factura anulada">🗑️</button>`:''}
+          <button class="btn btn-sm btn-danger" onclick="eliminarFactura(${f.id})" title="Borrar factura definitivamente" aria-label="Borrar factura">🗑️</button>
         </div>
       </div>
     </div>`;
@@ -15664,6 +15684,15 @@ function generarNumFactura() {
   return `${prefix}${String(next).padStart(4,'0')}`;
 }
 
+async function reservarNumFactura() {
+  // La migración mantiene el consecutivo aunque la última factura sea borrada
+  // y bloquea la fila de la clínica para evitar números repetidos entre equipos.
+  const {data,error} = await sb.rpc('reservar_numero_factura',{p_clinica_id:currentClinicaId});
+  if(!error && data) return data;
+  if(error && !_faltaFuncion(error,'reservar_numero_factura')) console.warn('Consecutivo de factura:',error.message);
+  return generarNumFactura();
+}
+
 function openModalFactura(citaId=null, pacienteId=null) {
   editingFacturaId = null;
   facturaItems = [];
@@ -15766,7 +15795,8 @@ async function guardarFactura() {
   if(sub <= 0){ toast('El total de la factura debe ser mayor a cero','error'); return; }
   const btn = document.querySelector('[onclick="guardarFactura()"]');
   if(!_lockSubmit('factura', btn)) return;
-  const numero  = document.getElementById('fact-numero').value.trim()||generarNumFactura();
+  const numero  = await reservarNumFactura();
+  document.getElementById('fact-numero').value = numero;
   const fecha   = document.getElementById('fact-fecha').value||hoy();
   const pacId   = parseInt(document.getElementById('fact-paciente').value)||null;
   const citaId  = parseInt(document.getElementById('fact-cita-id').value)||null;
@@ -15831,21 +15861,35 @@ async function pagarFactura(id) {
   setLoading(true);
   await sb.from('facturas').update({estado:'pagada'}).eq('id',id);
   await _fijarRepartoFactura(id);
-  await sb.from('finanzas').insert({
+  let pago = {
     clinica_id:currentClinicaId, tipo:'ingreso', categoria:'factura',
     descripcion:`Pago factura ${fact.numero||'#'+id} — ${fact.pacienteNombre}`,
     monto:fact.total, fecha:hoy(), metodo_pago:metodo,
-    referencia:fact.numero||null, creado_por:currentUser?.name
-  });
+    referencia:fact.numero||null, factura_id:id, creado_por:currentUser?.name
+  };
+  let {error:pagoErr} = await sb.from('finanzas').insert(pago);
+  if(pagoErr && _faltaColumna(pagoErr,'factura_id')) {
+    delete pago.factura_id;
+    ({error:pagoErr} = await sb.from('finanzas').insert(pago));
+  }
+  if(pagoErr) {
+    await sb.from('facturas').update({estado:'pendiente'}).eq('id',id).eq('clinica_id',currentClinicaId);
+    setLoading(false);
+    toast('No se pudo registrar el pago: '+pagoErr.message,'error');
+    return;
+  }
 
   // Descontar inventario para ítems de tipo producto con inventario_id
   const itemsFact = (C.factItems||[]).filter(i => i.facturaId === id && i.inventarioId);
   if(itemsFact.length) {
     const movsInv = itemsFact.map(i => ({
       inventario_id: i.inventarioId, tipo: 'salida', cantidad: i.cantidad,
-      motivo: `factura:${fact.numero||id}`, fecha: hoy(), clinica_id: currentClinicaId
+      motivo: `factura:${fact.numero||id}`, factura_id:id, fecha: hoy(), clinica_id: currentClinicaId
     }));
-    const { error: movErr } = await sb.from('inventario_movimientos').insert(movsInv);
+    let { error: movErr } = await sb.from('inventario_movimientos').insert(movsInv);
+    if(movErr && _faltaColumna(movErr,'factura_id')) {
+      ({error:movErr} = await sb.from('inventario_movimientos').insert(movsInv.map(({factura_id,...resto})=>resto)));
+    }
     if(!movErr) {
       for(const item of itemsFact) {
         const prod = C.inv.find(p => p.id === item.inventarioId);
@@ -15974,6 +16018,10 @@ function _etiquetaPeriodoFin() {
 function renderBalanceFinanzas() {
   const el = document.getElementById('fin-balance');
   if(!el) return;
+  if(!puedeVerBalance()) {
+    el.innerHTML = '';
+    return;
+  }
   const {from,to} = getFinDateRange();
   const lineas = _lineasBalance(from, to);
   const r = _resumenBalance(lineas);
@@ -16087,14 +16135,23 @@ function renderBalanceFinanzas() {
 }
 
 async function cambiarModoBalance(modo) {
+  if(!puedeVerBalance()) { toast('El balance solo está disponible para médicos administrativos','error'); return; }
   if(!_exigeClinica()) return;
   if((currentClinica?.balance_modo || 'porcentaje') === modo) return;
-  const {error} = await sb.from('clinicas').update({balance_modo:modo}).eq('id', currentClinicaId);
+  let {error} = await sb.rpc('cambiar_modo_balance_clinica',{p_clinica_id:currentClinicaId,p_modo:modo});
+  if(error && _faltaFuncion(error,'cambiar_modo_balance_clinica')) {
+    ({error} = await sb.from('clinicas').update({balance_modo:modo}).eq('id', currentClinicaId));
+  }
   if(error && _faltaColumna(error,'balance_modo')) {
     toast('Falta ejecutar migracion_balance_manual.sql en Supabase para poder cambiar de modo.','error');
     return;
   }
-  if(error) { toast('Error: '+error.message,'error'); return; }
+  if(error) {
+    toast(currentUser?.key==='medico_admin'
+      ? 'Ejecuta nuevamente migracion_balance_manual.sql para habilitar esta configuración al médico administrativo.'
+      : 'Error: '+error.message,'error');
+    return;
+  }
   // Lo ya cobrado no se recalcula: cada línea guarda con qué criterio se repartió.
   currentClinica.balance_modo = modo;
   renderBalanceFinanzas();
@@ -16125,6 +16182,7 @@ function _previewReparto(input) {
 }
 
 async function guardarRepartoServicios() {
+  if(!puedeVerBalance()) { toast('El balance solo está disponible para médicos administrativos','error'); return; }
   if(!_exigeClinica()) return;
   const valores = [], vacios = [];
   for(const t of TIPOS_SERVICIO_FACTURA) {
@@ -16171,6 +16229,7 @@ async function guardarRepartoServicios() {
 }
 
 function imprimirBalanceReparto() {
+  if(!puedeVerBalance()) { toast('El balance solo está disponible para médicos administrativos','error'); return; }
   const cfg = getClinicaConfig();
   const {from,to} = getFinDateRange();
   const periodo = _etiquetaPeriodoFin();
@@ -16220,43 +16279,62 @@ async function anularFactura(id) {
   await loadAll(); renderFacturasList(); setLoading(false);
 }
 
-// Solo las anuladas. Una pagada sostiene un ingreso en finanzas y una pendiente
-// todavía se puede cobrar: borrar cualquiera de las dos descuadra las cuentas.
 async function eliminarFactura(id) {
   if(!_exigeClinica()) return;
   const f = (C.fact||[]).find(x=>x.id===id);
   if(!f) return;
-  if(f.estado !== 'anulada') { toast('Solo se pueden eliminar facturas anuladas','error'); return; }
 
   const ok = await customConfirm({
-    icon:'🗑️', title:'Eliminar factura anulada',
-    msg:`Se borrará la factura <strong>${escAttr(f.numero||'#'+id)}</strong> de ${escAttr(f.pacienteNombre||'Consumidor Final')} y sus líneas.`
-      + `<br><br><small style="color:var(--text-light)">Está anulada, así que no afecta a ingresos ni al balance. Desaparece del historial y no se puede deshacer.</small>`,
-    okText:'Eliminar', cancelText:'Cancelar'
+    icon:'🗑️', title:'Borrar factura definitivamente',
+    msg:`Se borrará la factura <strong>${escAttr(f.numero||'#'+id)}</strong> de ${escAttr(f.pacienteNombre||'Consumidor Final')}.`
+      + `<br><br><small style="color:var(--text-light)">También se quitarán sus líneas, el ingreso y los movimientos de inventario relacionados. Ya no aparecerá en facturas ni en el balance. El número no se volverá a utilizar. Esta acción no se puede deshacer.</small>`,
+    okText:'Sí, borrar todo', cancelText:'Cancelar', danger:true
   });
   if(!ok) return;
 
   setLoading(true);
-  // Las líneas primero: la factura es su padre y la clave foránea lo exige.
-  const {error:errItems} = await sb.from('factura_items').delete().eq('factura_id', id);
-  if(errItems) { setLoading(false); toast('Error al borrar las líneas: '+errItems.message,'error'); return; }
-  const {error} = await sb.from('facturas').delete().eq('id', id).eq('clinica_id', currentClinicaId);
+  // La RPC hace toda la limpieza en una sola transacción. Mientras la migración
+  // se aplica, se conserva una ruta compatible para instalaciones anteriores.
+  let {error} = await sb.rpc('eliminar_factura_completa',{p_factura_id:id});
+  if(error && _faltaFuncion(error,'eliminar_factura_completa')) error = await _eliminarFacturaCompat(f);
   setLoading(false);
   if(error) { toast('Error al eliminar: '+error.message,'error'); return; }
   toast('Factura eliminada');
   await loadAll(); renderFinanzas();
 }
 
+async function _eliminarFacturaCompat(f) {
+  const motivo = `factura:${f.numero||f.id}`;
+  const {data:movs,error:movErr} = await sb.from('inventario_movimientos')
+    .select('id,inventario_id,tipo,cantidad').eq('clinica_id',currentClinicaId).eq('motivo',motivo);
+  if(movErr) return movErr;
+
+  // Reponer lo que salió al cobrar antes de retirar el movimiento.
+  for(const mov of (movs||[])) {
+    if(mov.tipo !== 'salida') continue;
+    const prod = (C.inv||[]).find(p=>p.id===mov.inventario_id);
+    if(!prod) continue;
+    const {error} = await sb.from('inventario').update({stock_actual:prod.stock+Number(mov.cantidad||0)})
+      .eq('id',mov.inventario_id).eq('clinica_id',currentClinicaId);
+    if(error) return error;
+  }
+  let r = await sb.from('inventario_movimientos').delete().eq('clinica_id',currentClinicaId).eq('motivo',motivo);
+  if(r.error) return r.error;
+  if(f.numero) {
+    r = await sb.from('finanzas').delete().eq('clinica_id',currentClinicaId).eq('categoria','factura').eq('referencia',f.numero);
+    if(r.error) return r.error;
+  }
+  r = await sb.from('factura_items').delete().eq('factura_id',f.id);
+  if(r.error) return r.error;
+  r = await sb.from('facturas').delete().eq('id',f.id).eq('clinica_id',currentClinicaId);
+  return r.error || null;
+}
+
 function verFacturaPDF(id) {
   const fact = (C.fact||[]).find(f=>f.id===id);
   if(!fact) return;
   const items = (C.factItems||[]).filter(i=>i.facturaId===id);
-  const cl = currentClinica;
   const body = `
-    <div style="text-align:center;margin-bottom:24px;padding-bottom:20px;border-bottom:2px solid #e2e8f0">
-      <h1 style="font-size:22px;font-weight:800;color:#0f172a;margin-bottom:4px">${cl?.nombre||'Clínica'}</h1>
-      <p style="color:#64748b;font-size:12px">${cl?.direccion||''} ${cl?.telefono?'· Tel: '+cl.telefono:''}</p>
-    </div>
     <div style="display:flex;justify-content:space-between;margin-bottom:20px;padding:14px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0">
       <div>
         <p style="font-size:18px;font-weight:800;color:#0f172a">FACTURA</p>
@@ -16827,6 +16905,7 @@ function imprimirTicketVentaFarma(v, existingWin) {
   const cn  = currentClinica?.nombre || 'Farmacia';
   const dir = currentClinica?.direccion || '';
   const tel = currentClinica?.telefono || '';
+  const logo = getClinicaConfig().logoUrl;
   const metLabel = { efectivo: 'Efectivo', tarjeta: 'Tarjeta', transferencia: 'Transferencia' }[v.metodoPago] || v.metodoPago;
   const metIcon  = { efectivo: '💵', tarjeta: '💳', transferencia: '🏦' }[v.metodoPago] || '';
 
@@ -16852,7 +16931,7 @@ function imprimirTicketVentaFarma(v, existingWin) {
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Inter',Arial,sans-serif;color:#0F172A;background:#fff;font-size:13px}
 .tk{max-width:560px;margin:0 auto;padding:24px}
-.ch{text-align:center;padding-bottom:14px;border-bottom:2px dashed #CBD5E1;margin-bottom:14px}
+.ch{text-align:center;padding-bottom:14px;border-bottom:2px dashed #CBD5E1;margin-bottom:14px}.tk-logo{display:block;width:68px;height:68px;object-fit:contain;margin:0 auto 6px}
 .cn{font-size:20px;font-weight:800}.cs{font-size:11px;color:#64748B;margin-top:2px}
 .ti{font-size:12px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.8px;margin-top:8px}
 .nr{display:flex;justify-content:space-between;align-items:center;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:10px;padding:10px 14px;margin-bottom:14px}
@@ -16873,7 +16952,7 @@ td{padding:6px 8px;border-bottom:1px solid #F8FAFC}
 @media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
 </style></head><body><div class="tk">
   <div class="ch">
-    <div style="font-size:28px;margin-bottom:4px">💊</div>
+    ${logo?`<img class="tk-logo" src="${escAttr(logo)}" alt="Logo">`:'<div style="font-size:28px;margin-bottom:4px">💊</div>'}
     <div class="cn">${cn}</div>
     ${dir ? `<div class="cs">${dir}</div>` : ''}
     ${tel ? `<div class="cs">Tel: ${tel}</div>` : ''}
