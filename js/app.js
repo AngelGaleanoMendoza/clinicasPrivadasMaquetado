@@ -9852,26 +9852,22 @@ function renderAgendasRight() {
   el.innerHTML = `
     <!-- Header del doctor -->
     <div class="card" style="margin-bottom:14px">
-      <div style="display:flex;align-items:center;gap:14px">
-        <div style="font-size:42px;width:58px;height:58px;display:flex;align-items:center;justify-content:center;background:var(--bg);border-radius:14px;border:1.5px solid var(--border);flex-shrink:0">${prof.icono||'👤'}</div>
-        <div style="flex:1">
-          <div style="font-size:18px;font-weight:800;color:var(--text)">${prof.nombre}</div>
-          <div style="font-size:12px;color:var(--text-light);margin-top:2px">${rolLabel2(prof.rol)}${prof.email?' · '+prof.email:''}</div>
-        </div>
-        <div style="display:flex;gap:10px">
-          <div style="text-align:center;background:var(--bg);border-radius:10px;padding:10px 14px;border:1px solid var(--border)">
-            <div style="font-size:20px;font-weight:800;color:var(--primary)">${atendidosHoy}</div>
-            <div style="font-size:10px;color:var(--text-light);font-weight:600;text-transform:uppercase;margin-top:2px">Hoy</div>
-          </div>
-          <div style="text-align:center;background:var(--bg);border-radius:10px;padding:10px 14px;border:1px solid var(--border)">
-            <div style="font-size:20px;font-weight:800;color:var(--warning)">${pendientesTotales}</div>
-            <div style="font-size:10px;color:var(--text-light);font-weight:600;text-transform:uppercase;margin-top:2px">Pendientes</div>
-          </div>
-          <div style="text-align:center;background:var(--bg);border-radius:10px;padding:10px 14px;border:1px solid var(--border)">
-            <div style="font-size:20px;font-weight:800;color:var(--text)">${citasDoc.length}</div>
-            <div style="font-size:10px;color:var(--text-light);font-weight:600;text-transform:uppercase;margin-top:2px">Total</div>
+      <div class="agenda-doc-head">
+        <div class="agenda-doc-id">
+          <div class="agenda-doc-avatar">${prof.icono||'👤'}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:18px;font-weight:800;color:var(--text)">${prof.nombre}</div>
+            <div style="font-size:12px;color:var(--text-light);margin-top:2px">${rolLabel2(prof.rol)}${prof.email?' · '+prof.email:''}</div>
           </div>
         </div>
+        <div class="agenda-doc-stats">
+          <div class="agenda-doc-stat"><b style="color:var(--primary)">${atendidosHoy}</b><span>Hoy</span></div>
+          <div class="agenda-doc-stat"><b style="color:var(--warning)">${pendientesTotales}</b><span>Pendientes</span></div>
+          <div class="agenda-doc-stat"><b style="color:var(--text)">${citasDoc.length}</b><span>Total</span></div>
+        </div>
+        ${puedeVaciarAgenda()
+          ? `<button class="btn btn-danger btn-sm agenda-doc-vaciar" onclick="vaciarAgendaDoctor('${prof.id}')" title="Cancelar las citas pendientes de ${escAttr(prof.nombre)}">🗑️ Vaciar agenda</button>`
+          : ''}
       </div>
     </div>
 
@@ -9969,6 +9965,62 @@ function nuevaCitaParaDoctor(profId) {
   if(fechaEl._flatpickr) fechaEl._flatpickr.setDate(safeDate, false);
   // Las horas ocupadas se marcan y deshabilitan solas al recalcular
   onCitaHorarioChange();
+}
+
+// Vaciar una agenda afecta a las citas de otro profesional y a los pacientes ya
+// citados, así que no basta con tener acceso al módulo: queda en manos de quien
+// administra la clínica.
+function puedeVaciarAgenda() {
+  return isSuperAdmin() || currentUser?.key === 'medico_admin';
+}
+
+async function vaciarAgendaDoctor(profId) {
+  if(!puedeVaciarAgenda()) {
+    toast('Solo un médico administrativo o el Super Admin puede vaciar una agenda','error');
+    return;
+  }
+  if(!_exigeClinica()) return;
+  const prof = C.prof.find(p => p.id == profId);
+  if(!prof) return;
+
+  // Solo las citas que siguen en pie. Las ya atendidas son historial clínico:
+  // vaciar la agenda libera lo que está por venir, no reescribe lo que pasó.
+  const porCancelar = C.c.filter(c => c.medicoId == profId && _citaAbierta(c));
+  const n = porCancelar.length;
+  if(!n) { toast(`${prof.nombre} no tiene citas pendientes`,'info'); return; }
+
+  const ok = await customConfirm({
+    icon: '🗑️',
+    title: 'Vaciar agenda',
+    msg: `Se cancelarán <strong>${n} cita${n!==1?'s':''}</strong> de <strong>${escAttr(prof.nombre)}</strong> y esos horarios quedarán libres.`
+       + `<br><br><small style="color:var(--text-light)">Las citas atendidas no se tocan. Las canceladas se conservan en el historial con el motivo, pero hay que volver a agendarlas una por una.</small>`,
+    okText: `Sí, cancelar ${n}`,
+    cancelText: 'Cancelar'
+  });
+  if(!ok) return;
+
+  setLoading(true);
+  // El filtro por clínica no sobra aunque RLS ya aísle: aquí se escribe en lote
+  // y currentClinicaId es la clínica que el Super Admin tiene elegida.
+  const aplicar = payload => sb.from('citas').update(payload)
+    .eq('medico_id', profId)
+    .eq('clinica_id', currentClinicaId)
+    .in('estado', ['pendiente','confirmada']);
+
+  const motivo = `Agenda vaciada por ${currentUser?.nombre || 'un administrador'}`;
+  let { error } = await aplicar({ estado:'cancelada', motivo_cancelacion: motivo });
+  if(error && _faltaColumna(error, 'motivo_cancelacion')) {
+    ({ error } = await aplicar({ estado:'cancelada' }));
+    if(!error) toast('Agenda vaciada, pero falta la columna motivo_cancelacion en Supabase','warning');
+  }
+  setLoading(false);
+  if(error) { toast('Error al vaciar la agenda: ' + error.message, 'error'); return; }
+
+  await loadAll();
+  renderAgendasDoctors();
+  renderAgendasRight();
+  updateBadges();
+  toast(`Agenda de ${prof.nombre} vaciada — ${n} cita${n!==1?'s':''} cancelada${n!==1?'s':''}`,'success');
 }
 
 // ════════════════════ INVENTARIO ════════════════════
