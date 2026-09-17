@@ -16342,6 +16342,7 @@ function verFacturaPDF(id) {
   const fact = (C.fact||[]).find(f=>f.id===id);
   if(!fact) return;
   const items = (C.factItems||[]).filter(i=>i.facturaId===id);
+  const numeroImpreso = fact.numero ? String(fact.numero).replace(/^FACT-/i,'') : `#${id}`;
   const tipoDocumento = currentClinica?.tipo_documento_factura === 'comprobante_pago'
     ? 'COMPROBANTE DE PAGO' : 'FACTURA';
   const etiquetaDestinatario = tipoDocumento === 'COMPROBANTE DE PAGO' ? 'Recibido de:' : 'Facturar a:';
@@ -16349,7 +16350,7 @@ function verFacturaPDF(id) {
     <div style="display:flex;justify-content:space-between;margin-bottom:20px;padding:14px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0">
       <div>
         <p style="font-size:18px;font-weight:800;color:#0f172a">${tipoDocumento}</p>
-        <p style="color:#64748b;font-size:13px">N°: <strong>${fact.numero||'—'}</strong></p>
+        <p style="color:#64748b;font-size:13px">N°: <strong>${escAttr(numeroImpreso)}</strong></p>
         <p style="color:#64748b;font-size:13px">Fecha: ${formatFecha(fact.fecha)}</p>
         <p style="color:#64748b;font-size:13px">Estado: <strong style="color:${fact.estado==='pagada'?'#16a34a':'#b45309'}">${fact.estado.toUpperCase()}</strong></p>
       </div>
@@ -16390,7 +16391,7 @@ function verFacturaPDF(id) {
     <div style="text-align:center;margin-top:28px;color:#94a3b8;font-size:11px">
       Lumea Med — Sistema de Gestión Clínica | lumeamed.net
     </div>`;
-  pdfAbrir(`${tipoDocumento} ${fact.numero||'#'+id}`, body, {orientation:'portrait'});
+  pdfAbrir(`${tipoDocumento} ${numeroImpreso}`, body, {orientation:'portrait'});
 }
 
 // ═══════════════════════════════════════════════
