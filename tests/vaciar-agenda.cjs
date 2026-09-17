@@ -18,7 +18,7 @@ function extraer(name) {
   if(abiertas===0 && primeraLinea.includes('{')) return primeraLinea;   // función de una línea
   return source.slice(start,source.indexOf('\n}',start)+2);
 }
-const code=['_profActivo','puedeVaciarAgenda','puedeDarDeBajaProfesional',
+const code=['_tieneAgenda','puedeVaciarAgenda','puedeGestionarAgendaProfesional',
   'vaciarAgendaDoctor','renderAgendasRight'].map(extraer).join('\n');
 
 // Entorno mínimo alrededor de las funciones reales.

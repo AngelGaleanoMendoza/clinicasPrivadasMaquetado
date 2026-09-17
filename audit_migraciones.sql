@@ -84,11 +84,12 @@ WITH requisitos(orden, migracion, clase, objeto) AS (VALUES
   (11, 'balance_reparto',            'columna',     'factura_items.porcentaje_clinica'),
   (11, 'balance_reparto',            'politica',    'reparto_servicios_clinica'),
 
-  -- 12. Baja de un profesional que deja la clínica
-  (12, 'baja_profesional',           'columna',     'profiles.activo'),
-  (12, 'baja_profesional',           'columna',     'profiles.baja_fecha'),
-  (12, 'baja_profesional',           'columna',     'profiles.baja_motivo'),
-  (12, 'baja_profesional',           'indice',      'profiles_clinica_activo_idx')
+  -- 12. Quién lleva agenda
+  (12, 'agenda_profesional',         'columna',     'profiles.con_agenda'),
+  (12, 'agenda_profesional',         'indice',      'profiles_clinica_agenda_idx'),
+  -- Sustituye a migracion_baja_profesional.sql: si `activo` sigue ahí, esa
+  -- versión quedó a medias y puede dejar gente sin poder entrar.
+  (12, 'agenda_profesional',         'sin_columna', 'profiles.activo')
 
 ),
 
@@ -140,6 +141,17 @@ evaluado AS (
       WHEN 'politica' THEN EXISTS (
         SELECT 1 FROM pg_policies p
         WHERE p.schemaname = 'public' AND p.policyname = r.objeto
+      )
+
+      -- La migracion elimina la columna: esta aplicada si YA NO existe.
+      WHEN 'sin_columna' THEN NOT EXISTS (
+        SELECT 1 FROM pg_attribute a
+        JOIN pg_class c ON c.oid = a.attrelid
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public'
+          AND c.relname = split_part(r.objeto, '.', 1)
+          AND a.attname = split_part(r.objeto, '.', 2)
+          AND a.attnum > 0 AND NOT a.attisdropped
       )
 
       -- La migracion consiste en quitar la FK: esta aplicada si YA NO existe.

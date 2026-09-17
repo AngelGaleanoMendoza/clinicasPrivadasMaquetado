@@ -259,7 +259,7 @@ const PROFILE_COLS_BASE = ['id','nombre','rol','email','icono','clinica_id','per
 // Opcionales: se fueron agregando con el tiempo y pueden no existir todavía en
 // una base que no haya corrido los scripts. Si falta alguna, se pide sin ella:
 // una columna ausente NO puede dejar a nadie fuera del sistema.
-const PROFILE_COLS_OPC = ['especialidad','firma_url','recetario_url','recetario_config','bloqueado','intentos_fallidos','horario','ultimo_acceso','activo','baja_fecha','baja_motivo'];
+const PROFILE_COLS_OPC = ['especialidad','firma_url','recetario_url','recetario_config','bloqueado','intentos_fallidos','horario','ultimo_acceso','con_agenda'];
 let _profileColsOK = null;   // se recuerda la lista válida tras el primer intento
 
 function _profileCols() {
@@ -646,25 +646,13 @@ async function _verificarLogin() {
   document.getElementById('loading-overlay').classList.add('boot');
   setLoading(true);
 
-  // ── PASO 0: verificar si la cuenta está bloqueada o dada de baja
-  //    (el Super Admin nunca se bloquea) ──
+  // ── PASO 0: verificar si la cuenta está bloqueada (el Super Admin nunca se bloquea) ──
+  // Quitarle la agenda a alguien NO le quita el acceso: sigue entrando y
+  // trabajando con normalidad, solo deja de tener citas a su nombre.
   const esSuperAdminEmail = email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
-  // `activo` puede no existir todavía: se reintenta sin ella para no perder
-  // de paso la comprobación de bloqueo, que sí es vieja.
-  const _pre = cols => _conLimite(
-    sb.from('profiles').select(cols).eq('email', email.toLowerCase()).maybeSingle(),
+  const { data: profilePre } = await _conLimite(
+    sb.from('profiles').select('id,bloqueado,intentos_fallidos').eq('email', email.toLowerCase()).maybeSingle(),
     15000, 'La consulta de tu perfil');
-  let rPre = await _pre('id,bloqueado,intentos_fallidos,activo');
-  if(rPre.error && _faltaColumna(rPre.error, 'activo')) rPre = await _pre('id,bloqueado,intentos_fallidos');
-  const profilePre = rPre.data;
-  if(profilePre?.activo === false && !esSuperAdminEmail) {
-    setLoading(false);
-    shakeLogin();
-    errEl.innerHTML = '👋 Esta cuenta está <strong>dada de baja</strong> y ya no tiene acceso.<br><small>Si sigues trabajando en la clínica, pide al Super Admin que te reactive.</small>';
-    errEl.style.display = 'block';
-    document.getElementById('login-password').value = '';
-    return;
-  }
   if(profilePre?.bloqueado && !esSuperAdminEmail) {
     setLoading(false);
     shakeLogin();
@@ -1162,11 +1150,13 @@ function estadoTag(e) {
   return `<span class="tag ${m[e]||'tag-gray'}">${ESTADO_CITA_LABEL[e]||e}</span>`;
 }
 
-// Un profesional dado de baja dejó la clínica: no se le asignan citas nuevas ni
-// puede entrar, pero sigue en C.prof para que su nombre no desaparezca de las
-// citas que atendió. Por eso se filtra al elegir, nunca al buscar por id.
-// Si la columna todavía no existe en Supabase, todos cuentan como activos.
-function _profActivo(p) { return p?.activo !== false; }
+// Quién lleva agenda. Recepción o administración pueden trabajar sin tener
+// citas a su nombre: se les quita la agenda y dejan de aparecer en el módulo y
+// en los selectores de médico, pero entran y trabajan igual que siempre.
+// Sigue en C.prof para que su nombre no desaparezca de las citas que ya atendió:
+// por eso se filtra al elegir, nunca al buscar por id.
+// Si la columna todavía no existe en Supabase, todos llevan agenda.
+function _tieneAgenda(p) { return p?.con_agenda !== false; }
 
 // ════════════════════ CITAS: ESTADO Y SUJETO ════════════════════
 // Una cita "muerta" no ocupa hueco ni cuenta en los totales. Tener la lista en un
@@ -1859,7 +1849,7 @@ function renderDashboardSA() {
   const ingresosH     = C.fin.filter(f=>f.fecha===h&&f.tipo==='ingreso').reduce((s,f)=>s+Number(f.monto||0),0);
   const egresosH      = C.fin.filter(f=>f.fecha===h&&f.tipo==='egreso').reduce((s,f)=>s+Number(f.monto||0),0);
   const sinStock      = C.inv.filter(p=>p.stock<=0).length;
-  const medicos       = C.prof.filter(p=>_profActivo(p)&&['medico','medico_admin','admin','recepcion','enfermeria','optometrista','oftalmologo','dermatologo'].includes(p.rol));
+  const medicos       = C.prof.filter(p=>_tieneAgenda(p)&&['medico','medico_admin','admin','recepcion','enfermeria','optometrista','oftalmologo','dermatologo'].includes(p.rol));
 
   const view = document.getElementById('view-dashboard');
   // El grid de accesos rápidos vive dentro de #view-dashboard, así que este
@@ -2090,7 +2080,7 @@ function renderDashboardPorUsuario() {
   const el = document.getElementById('dash-por-usuario');
   if(!el) return;
   if(currentUser?.key === 'medico') { el.style.display='none'; return; }
-  const medicos = C.prof.filter(p => _profActivo(p) && ['medico','medico_admin','admin','enfermeria','recepcion','optometrista','oftalmologo','dermatologo'].includes(p.rol));
+  const medicos = C.prof.filter(p => _tieneAgenda(p) && ['medico','medico_admin','admin','enfermeria','recepcion','optometrista','oftalmologo','dermatologo'].includes(p.rol));
   if(!medicos.length) { el.style.display='none'; return; }
   el.style.display='';
   const citasHoy = C.c.filter(c => c.fecha === h);
@@ -3212,15 +3202,15 @@ function setMascotaSelect(mid) {
 }
 
 function fillMedicoSelect(selId, selectedId) {
-  const medicos = C.prof.filter(p => _profActivo(p) && ['medico','medico_admin','dr','dra','admin','optometrista','oftalmologo','dermatologo'].includes(p.rol));
+  const medicos = C.prof.filter(p => _tieneAgenda(p) && ['medico','medico_admin','dr','dra','admin','optometrista','oftalmologo','dermatologo'].includes(p.rol));
   const sel = document.getElementById(selId);
-  // Al editar una cita vieja su médico puede estar dado de baja: sin esta opción
-  // el select no encontraría el valor y lo guardaría como "Sin asignar".
+  // Al editar una cita vieja su médico puede haber dejado de llevar agenda: sin
+  // esta opción el select no encontraría el valor y lo guardaría como "Sin asignar".
   const baja = selectedId && !medicos.some(m => m.id == selectedId)
     ? C.prof.find(p => p.id == selectedId) : null;
   sel.innerHTML = '<option value="">Sin asignar</option>' +
     medicos.map(m=>`<option value="${m.id}">${m.icono||'👨‍⚕️'} ${m.nombre}</option>`).join('') +
-    (baja ? `<option value="${baja.id}">${baja.icono||'👨‍⚕️'} ${baja.nombre} (dado de baja)</option>` : '');
+    (baja ? `<option value="${baja.id}">${baja.icono||'👨‍⚕️'} ${baja.nombre} (sin agenda)</option>` : '');
   if (selectedId) sel.value = selectedId;
   else if (['medico','medico_admin','admin','optometrista','oftalmologo','dermatologo'].includes(currentUser?.key)) sel.value = currentUser.id;
 }
@@ -3766,7 +3756,7 @@ const ROLES_PRESCRIPTORES = ['medico','medico_admin','dr','dra','admin','odontol
 function _llenarPrescriptorMed(receta) {
   const sel = document.getElementById('m-prescriptor');
   if(!sel) return;
-  const profesionales = C.prof.filter(p => _profActivo(p) && ROLES_PRESCRIPTORES.includes(p.rol));
+  const profesionales = C.prof.filter(p => _tieneAgenda(p) && ROLES_PRESCRIPTORES.includes(p.rol));
   // El perfil en sesión puede no estar en C.prof durante una carga parcial.
   if(currentUser && ROLES_PRESCRIPTORES.includes(currentUser.key) && !profesionales.some(p => String(p.id) === String(currentUser.id))) {
     profesionales.unshift({id:currentUser.id,nombre:currentUser.name,rol:currentUser.key,especialidad:currentUser.especialidad,firma_url:currentUser.firmaUrl});
@@ -4501,7 +4491,7 @@ let _archivoPlantillaNota = null;
 
 function _profesionalesParaNota() {
   const roles = ['medico','medico_admin','dr','dra','odontologo','optometrista','oftalmologo','dermatologo'];
-  const lista = C.prof.filter(p => _profActivo(p) && roles.includes(p.rol));
+  const lista = C.prof.filter(p => _tieneAgenda(p) && roles.includes(p.rol));
   if(currentUser && roles.includes(currentUser.key) && !lista.some(p => String(p.id)===String(currentUser.id))) {
     lista.unshift({id:currentUser.id,nombre:currentUser.name,rol:currentUser.key,especialidad:currentUser.especialidad,firma_url:currentUser.firmaUrl});
   }
@@ -9830,7 +9820,7 @@ function renderAgendas() {
   if(selAgendasDoc) renderAgendasRight();
 }
 
-let verBajasAgendas = false;
+let verSinAgenda = false;
 
 function renderAgendasDoctors() {
   const el = document.getElementById('agendas-doctors-list');
@@ -9839,35 +9829,35 @@ function renderAgendasDoctors() {
     el.innerHTML = `<div class="empty-state" style="padding:20px"><div class="empty-icon" style="font-size:28px">👥</div><p style="font-size:12px">No hay personal registrado.<br>Agrega desde el panel Admin.</p></div>`;
     return;
   }
-  // Quien dejó la clínica no estorba la lista del día a día. Solo puede
-  // destaparlos quien además puede reactivarlos.
-  const bajas  = C.prof.filter(p => !_profActivo(p));
-  const gestiona = puedeDarDeBajaProfesional();
-  const staff  = C.prof.filter(p => _profActivo(p) || (gestiona && verBajasAgendas));
+  // Quien no lleva agenda no estorba la lista del día a día. Solo puede
+  // destaparlos quien además puede devolvérsela.
+  const bajas  = C.prof.filter(p => !_tieneAgenda(p));
+  const gestiona = puedeGestionarAgendaProfesional();
+  const staff  = C.prof.filter(p => _tieneAgenda(p) || (gestiona && verSinAgenda));
   const today  = hoy();
 
   const tarjetas = staff.map(p => {
-    const baja = !_profActivo(p);
+    const baja = !_tieneAgenda(p);
     const citasHoy = C.c.filter(c=>c.medicoId==p.id&&c.fecha===today&&_citaActiva(c)).length;
     const isSelected = selAgendasDoc == p.id;
     return `<div class="doc-card${isSelected?' selected':''}${baja?' baja':''}" onclick="selectDoctorAgenda('${p.id}')">
       <div class="doc-emoji">${p.icono||'👤'}</div>
       <div style="flex:1;min-width:0">
         <div class="doc-name">${p.nombre}</div>
-        <div class="doc-role-lbl">${baja?'Dado de baja':rolLabel2(p.rol)}</div>
+        <div class="doc-role-lbl">${rolLabel2(p.rol)}${baja?' · sin agenda':''}</div>
       </div>
       ${baja
-        ? `<span class="tag tag-gray" style="font-size:10px;flex-shrink:0">Baja</span>`
+        ? `<span class="tag tag-gray" style="font-size:10px;flex-shrink:0">Sin agenda</span>`
         : (citasHoy>0?`<span style="background:var(--primary);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px">${citasHoy}</span>`:'')}
     </div>`;
   }).join('');
 
   const sinActivos = !staff.length
-    ? `<div class="empty-state" style="padding:18px 12px"><p style="font-size:12px">Todo el personal está dado de baja.</p></div>`
+    ? `<div class="empty-state" style="padding:18px 12px"><p style="font-size:12px">Nadie lleva agenda en esta clínica.</p></div>`
     : '';
   const pie = gestiona && bajas.length
-    ? `<button class="agendas-bajas-toggle" onclick="verBajasAgendas=!verBajasAgendas;renderAgendasDoctors()">
-        ${verBajasAgendas?'Ocultar':'Ver'} ${bajas.length} dado${bajas.length!==1?'s':''} de baja</button>`
+    ? `<button class="agendas-bajas-toggle" onclick="verSinAgenda=!verSinAgenda;renderAgendasDoctors()">
+        ${verSinAgenda?'Ocultar':'Ver'} ${bajas.length} sin agenda</button>`
     : '';
   el.innerHTML = tarjetas + sinActivos + pie;
 }
@@ -9902,7 +9892,7 @@ function renderAgendasRight() {
           <div style="flex:1;min-width:0">
             <div style="font-size:18px;font-weight:800;color:var(--text)">${prof.nombre}</div>
             <div style="font-size:12px;color:var(--text-light);margin-top:2px">${rolLabel2(prof.rol)}${prof.email?' · '+prof.email:''}</div>
-            ${!_profActivo(prof) ? `<div class="agenda-doc-baja-nota">👋 Dado de baja${prof.baja_fecha?' el '+formatFecha(String(prof.baja_fecha).slice(0,10)):''}${prof.baja_motivo?' · '+escAttr(prof.baja_motivo):''}</div>` : ''}
+            ${!_tieneAgenda(prof) ? `<div class="agenda-doc-baja-nota">🗓️ No lleva agenda · su cuenta funciona con normalidad</div>` : ''}
           </div>
         </div>
         <div class="agenda-doc-stats">
@@ -9910,15 +9900,15 @@ function renderAgendasRight() {
           <div class="agenda-doc-stat"><b style="color:var(--warning)">${pendientesTotales}</b><span>Pendientes</span></div>
           <div class="agenda-doc-stat"><b style="color:var(--text)">${citasDoc.length}</b><span>Total</span></div>
         </div>
-        ${_profActivo(prof) ? `
+        ${_tieneAgenda(prof) ? `
           ${puedeVaciarAgenda()
             ? `<button class="btn btn-danger btn-sm agenda-doc-vaciar" onclick="vaciarAgendaDoctor('${prof.id}')" title="Cancelar las citas pendientes de ${escAttr(prof.nombre)}">🗑️ Vaciar agenda</button>`
             : ''}
-          ${puedeDarDeBajaProfesional()
-            ? `<button class="btn btn-secondary btn-sm agenda-doc-baja" onclick="darDeBajaProfesional('${prof.id}')" title="${escAttr(prof.nombre)} dejó la clínica">👋 Dar de baja</button>`
+          ${puedeGestionarAgendaProfesional()
+            ? `<button class="btn btn-secondary btn-sm agenda-doc-baja" onclick="quitarAgendaProfesional('${prof.id}')" title="${escAttr(prof.nombre)} no atiende citas; su cuenta no cambia">🗓️ Quitar agenda</button>`
             : ''}`
-        : `${puedeDarDeBajaProfesional()
-            ? `<button class="btn btn-primary btn-sm agenda-doc-baja" onclick="reactivarProfesional('${prof.id}')">♻️ Reactivar</button>`
+        : `${puedeGestionarAgendaProfesional()
+            ? `<button class="btn btn-primary btn-sm agenda-doc-baja" onclick="devolverAgendaProfesional('${prof.id}')">🗓️ Devolver agenda</button>`
             : ''}`}
       </div>
     </div>
@@ -9935,7 +9925,7 @@ function renderAgendasRight() {
       <div class="card">
         <div class="card-header" style="margin-bottom:14px">
           <h3>📋 ${formatFecha(selAgendasDate)}</h3>
-          ${_profActivo(prof) && (isSuperAdmin() || currentUser?.key !== 'medico' || currentUser?.id == prof.id)
+          ${_tieneAgenda(prof) && (isSuperAdmin() || currentUser?.key !== 'medico' || currentUser?.id == prof.id)
             ? `<button class="btn btn-primary btn-sm" onclick="nuevaCitaParaDoctor('${prof.id}')">+ Nueva Cita</button>`
             : ''}
         </div>
@@ -10075,96 +10065,83 @@ async function vaciarAgendaDoctor(profId) {
   toast(`Agenda de ${prof.nombre} vaciada — ${n} cita${n!==1?'s':''} cancelada${n!==1?'s':''}`,'success');
 }
 
-// Dar de baja toca el acceso de una persona y la deja fuera de toda la clínica,
-// no solo de su agenda: se reserva al Super Admin.
-function puedeDarDeBajaProfesional() { return isSuperAdmin(); }
+// Quitar la agenda cambia cómo se organiza el trabajo de toda la clínica:
+// se reserva al Super Admin. No toca la cuenta ni el acceso.
+function puedeGestionarAgendaProfesional() { return isSuperAdmin(); }
 
-// Escribe la baja y avisa si la migración todavía no se ha ejecutado, en vez de
-// dejar creer que el profesional quedó fuera cuando sigue entrando.
-async function _guardarEstadoProfesional(id, payload, faltaMsg) {
-  const { error } = await sb.from('profiles').update(payload).eq('id', id);
-  if(error && (_faltaColumna(error,'activo') || _faltaColumna(error,'baja_fecha') || _faltaColumna(error,'baja_motivo'))) {
-    toast(faltaMsg,'error');
+// Avisa si la migración todavía no se ha ejecutado, en vez de dejar creer que
+// la agenda se quitó cuando el profesional sigue apareciendo.
+async function _guardarAgendaProfesional(id, con_agenda) {
+  const { error } = await sb.from('profiles').update({ con_agenda }).eq('id', id);
+  if(error && _faltaColumna(error,'con_agenda')) {
+    toast('Falta ejecutar migracion_agenda_profesional.sql en Supabase: sin la columna «con_agenda» no se puede guardar.','error');
     return false;
   }
   if(error) { toast('Error: ' + error.message, 'error'); return false; }
   return true;
 }
 
-async function darDeBajaProfesional(profId) {
-  if(!puedeDarDeBajaProfesional()) { toast('Solo el Super Admin puede dar de baja a un profesional','error'); return; }
+async function quitarAgendaProfesional(profId) {
+  if(!puedeGestionarAgendaProfesional()) { toast('Solo el Super Admin puede quitar una agenda','error'); return; }
   if(!_exigeClinica()) return;
   const prof = C.prof.find(p => p.id == profId);
   if(!prof) return;
-  if(String(prof.id) === String(currentUser?.id)) {
-    toast('No puedes darte de baja a ti mismo: quedarías fuera del sistema','error');
-    return;
-  }
 
-  // Las citas que tenía siguen en pie a propósito: alguien debe reasignarlas o
-  // avisar a esos pacientes, y cancelarlas aquí en silencio los dejaría plantados.
+  // Las citas que tuviera siguen en pie a propósito: alguien debe reasignarlas
+  // o avisar a esos pacientes, y cancelarlas en silencio los dejaría plantados.
   const pendientes = C.c.filter(c => c.medicoId == profId && _citaAbierta(c)).length;
   const aviso = pendientes
-    ? `<div style="background:var(--warning-light,rgba(245,158,11,.12));border-left:3px solid var(--warning);padding:9px 12px;border-radius:0 8px 8px 0;margin-top:12px;font-size:12px;text-align:left">
+    ? `<div style="background:rgba(245,158,11,.12);border-left:3px solid var(--warning);padding:9px 12px;border-radius:0 8px 8px 0;margin-top:12px;font-size:12px;text-align:left">
          Le quedan <strong>${pendientes} cita${pendientes!==1?'s':''}</strong> sin atender. No se cancelan solas: reasígnalas o usa <strong>Vaciar agenda</strong> antes.
        </div>`
     : '';
 
   const ok = await customConfirm({
-    icon: '👋',
-    title: 'Dar de baja',
-    msg: `<strong>${escAttr(prof.nombre)}</strong> dejará de aparecer en las agendas y no podrá iniciar sesión.`
-       + `<br><br><small style="color:var(--text-light)">Su nombre se conserva en las citas que atendió, en sus notas y en sus recetas. Puedes reactivarlo cuando quieras.</small>`
-       + `<div style="margin-top:12px;text-align:left">
-            <input id="_baja-motivo" type="text" placeholder="Motivo (opcional): renuncia, fin de contrato…" maxlength="120"
-              style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;background:var(--card);color:var(--text);box-sizing:border-box">
-          </div>`
+    icon: '🗓️',
+    title: 'Quitar la agenda',
+    msg: `<strong>${escAttr(prof.nombre)}</strong> dejará de tener agenda: no aparecerá en este módulo ni en la lista de médicos al crear una cita.`
+       + `<br><br><small style="color:var(--text-light)">Su cuenta no cambia: entra y trabaja igual que siempre. Su nombre se conserva en las citas que ya atendió. Puedes devolvérsela cuando quieras.</small>`
        + aviso,
-    okText: '👋 Dar de baja',
+    okText: '🗓️ Quitar agenda',
     cancelText: 'Cancelar'
   });
   if(!ok) return;
 
-  const motivo = document.getElementById('_baja-motivo')?.value?.trim() || null;
   setLoading(true);
-  const hecho = await _guardarEstadoProfesional(prof.id,
-    { activo:false, baja_fecha:new Date().toISOString(), baja_motivo:motivo },
-    'Falta ejecutar migracion_baja_profesional.sql en Supabase: sin la columna «activo» nadie puede darse de baja.');
+  const hecho = await _guardarAgendaProfesional(prof.id, false);
   setLoading(false);
   if(!hecho) return;
 
   await loadAll();
   renderAgendasDoctors();
   renderAgendasRight();
-  toast(`${prof.nombre} dado de baja`,'success');
+  toast(`${prof.nombre} ya no lleva agenda`,'success');
 }
 
-async function reactivarProfesional(profId) {
-  if(!puedeDarDeBajaProfesional()) { toast('Solo el Super Admin puede reactivar a un profesional','error'); return; }
+async function devolverAgendaProfesional(profId) {
+  if(!puedeGestionarAgendaProfesional()) { toast('Solo el Super Admin puede devolver una agenda','error'); return; }
   if(!_exigeClinica()) return;
   const prof = C.prof.find(p => p.id == profId);
   if(!prof) return;
 
   const ok = await customConfirm({
-    icon: '♻️',
-    title: 'Reactivar profesional',
-    msg: `<strong>${escAttr(prof.nombre)}</strong> volverá a aparecer en las agendas, se le podrán asignar citas y podrá iniciar sesión otra vez.`,
-    okText: '♻️ Reactivar',
+    icon: '🗓️',
+    title: 'Devolver la agenda',
+    msg: `<strong>${escAttr(prof.nombre)}</strong> volverá a aparecer en las agendas y se le podrán asignar citas otra vez.`,
+    okText: '🗓️ Devolver agenda',
     danger: false
   });
   if(!ok) return;
 
   setLoading(true);
-  const hecho = await _guardarEstadoProfesional(prof.id,
-    { activo:true, baja_fecha:null, baja_motivo:null },
-    'Falta ejecutar migracion_baja_profesional.sql en Supabase.');
+  const hecho = await _guardarAgendaProfesional(prof.id, true);
   setLoading(false);
   if(!hecho) return;
 
   await loadAll();
   renderAgendasDoctors();
   renderAgendasRight();
-  toast(`${prof.nombre} reactivado`,'success');
+  toast(`${prof.nombre} vuelve a llevar agenda`,'success');
 }
 
 // ════════════════════ INVENTARIO ════════════════════
@@ -18063,11 +18040,11 @@ function renderVistaDia() {
   const citasDia = C.c.filter(c => c.fecha === fecha && _citaActiva(c));
 
   // Profesionales con citas ese día; si hay pocos, se muestran todos.
-  // Quien tiene citas ese día entra aunque esté dado de baja: si no, sus citas
+  // Quien tiene citas ese día entra aunque ya no lleve agenda: si no, sus citas
   // se quedarían sin columna donde pintarse y desaparecerían de la vista.
   const medicos = C.prof.filter(p => ['medico','medico_admin','dr','dra','admin','odontologo','optometrista','oftalmologo','dermatologo'].includes(p.rol));
   let columnas = medicos.filter(p => citasDia.some(c => c.medicoId == p.id));
-  if(columnas.length === 0) columnas = medicos.filter(_profActivo).slice(0, 4);
+  if(columnas.length === 0) columnas = medicos.filter(_tieneAgenda).slice(0, 4);
   if(columnas.length === 0) columnas = [{ id:null, nombre:'Sin asignar' }];
   const sinAsignar = citasDia.filter(c => !c.medicoId);
   const cols = columnas.map(p => ({ medicoId:p.id, titulo:p.nombre, sub:null, hoy:false }));
@@ -18122,11 +18099,11 @@ function renderVistaSemana() {
   const el = document.getElementById('cal-semana');
   if(!el) return;
   const dias = _diasSemana(selCalDate);
-  // Un profesional dado de baja sigue en el selector si tiene citas esa semana:
-  // así se pueden repasar semanas anteriores a su salida.
+  // Quien ya no lleva agenda sigue en el selector si tiene citas esa semana:
+  // así se pueden repasar semanas anteriores.
   const conCitas = new Set(C.c.filter(c => dias.includes(c.fecha)).map(c => String(c.medicoId)));
   const medicos = C.prof.filter(p => ['medico','medico_admin','dr','dra','admin','odontologo','optometrista','oftalmologo','dermatologo'].includes(p.rol)
-    && (_profActivo(p) || conCitas.has(String(p.id))));
+    && (_tieneAgenda(p) || conCitas.has(String(p.id))));
   const mid = _semanaMedicoId || '';
   const citasSemana = C.c.filter(c => dias.includes(c.fecha) && _citaActiva(c)
     && (mid ? c.medicoId == mid : true));
