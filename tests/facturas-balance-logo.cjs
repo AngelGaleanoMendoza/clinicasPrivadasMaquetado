@@ -14,8 +14,12 @@ assert.match(app, /sb\.rpc\('eliminar_factura_completa',\{p_factura_id:id\}\)/);
 assert.match(app, /factura_id:id/);
 assert.match(app, /cfg = \{\.\.\.getClinicaConfig\(\), \.\.\.cfg\}/);
 assert.match(app, /logoUrl:d\.logoUrl\|\|cfg\.logoUrl/);
-assert.match(app, /tipo_documento_factura === 'comprobante_pago'[\s\S]*'COMPROBANTE DE PAGO' : 'FACTURA'/);
-assert.match(app, /tipoDocumento === 'COMPROBANTE DE PAGO' \? 'Recibido de:' : 'Facturar a:'/);
+// El nombre del documento salió a _docFactura(), que además de la impresión
+// alimenta las etiquetas de la interfaz.
+assert.match(app, /tipo_documento_factura === 'comprobante_pago'[\s\S]*impreso:'COMPROBANTE DE PAGO'[\s\S]*destinatario:'Recibido de:'/);
+assert.match(app, /impreso:'FACTURA',\s+destinatario:'Facturar a:'/);
+assert.match(app, /const tipoDocumento = _docFactura\(\)\.impreso/);
+assert.match(app, /const etiquetaDestinatario = _docFactura\(\)\.destinatario/);
 assert.match(app, /const numeroImpreso = fact\.numero \? String\(fact\.numero\)\.replace\(\/\^FACT-\/i,''\)/);
 assert.match(app, /pdfAbrir\(`\$\{tipoDocumento\} \$\{numeroImpreso\}/);
 assert.match(html, /id="fact-numero"[^>]+readonly/);

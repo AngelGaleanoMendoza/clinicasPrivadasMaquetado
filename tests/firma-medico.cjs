@@ -12,7 +12,11 @@ const code=functions.map(name=>{
   return source.slice(start,source.indexOf('\n}',start)+2);
 }).join('\n');
 (async()=>{
-  const browser=await chromium.launch({channel:'msedge',headless:true});
+  // PLAYWRIGHT_CHROMIUM permite un Chromium propio donde no hay Edge, igual
+  // que en el resto de las pruebas.
+  const browser=await (process.env.PLAYWRIGHT_CHROMIUM
+    ? chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM,headless:true})
+    : chromium.launch({channel:'msedge',headless:true}));
   try {
     const page=await browser.newPage();
     await page.setContent('<html><body></body></html>');

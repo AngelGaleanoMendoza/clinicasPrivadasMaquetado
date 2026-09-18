@@ -282,6 +282,29 @@ body.dark .balance-aviso{background:rgba(245,158,11,.1);border-color:rgba(245,15
 .balance-tabla td.tipo{font-weight:600;white-space:nowrap}
 .balance-tabla tfoot td{font-weight:800;border-top:2px solid var(--border);padding:12px 14px}
 .balance-clinica{color:var(--success);font-weight:700}
+/* El pago a profesionales se enseña pero no suma: se atenúa para que nadie lo
+   lea como parte del balance. */
+.balance-informativo{opacity:.72;border-style:dashed}
+.balance-desglose{margin-top:14px;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px 16px}
+.balance-desglose>div{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:7px 0;font-size:13px;color:var(--text-light);border-bottom:1px solid var(--border)}
+.balance-desglose>div:last-child{border-bottom:none}
+.balance-desglose strong{font-weight:700;color:var(--text);white-space:nowrap}
+.balance-desglose .total{font-size:15px;font-weight:800;color:var(--text);padding-top:10px}
+
+/* CATEGORÍAS DE FINANZAS */
+.cats-fin-bloque{margin-top:14px}
+.cats-fin-titulo{font-size:12px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px}
+.cats-fin-lista{display:flex;flex-wrap:wrap;gap:7px}
+.cats-fin-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:20px;font-size:12.5px;font-weight:600;border:1px solid var(--border);background:var(--bg);color:var(--text)}
+.cats-fin-chip.fija{color:var(--text-light)}
+.cats-fin-chip.propia{border-color:var(--primary);background:var(--primary-light);color:var(--primary)}
+.cats-fin-chip button{background:none;border:none;color:inherit;cursor:pointer;font-size:13px;line-height:1;padding:0 0 0 2px;opacity:.65}
+.cats-fin-chip button:hover{opacity:1}
+.cats-fin-add{display:flex;gap:8px;margin-top:10px}
+.cats-fin-add input{flex:1;min-width:0;padding:9px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;background:var(--card);color:var(--text);font-family:inherit}
+.cats-fin-add input:focus{outline:none;border-color:var(--primary)}
+@media(max-width:480px){.cats-fin-add{flex-direction:column}.cats-fin-add .btn{width:100%;justify-content:center}}
+
 .balance-modos{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .balance-modo{display:flex;align-items:flex-start;gap:11px;padding:13px 14px;border:1.5px solid var(--border);border-radius:12px;
   background:var(--bg);cursor:pointer;text-align:left;font-family:inherit;color:var(--text);transition:all .18s}

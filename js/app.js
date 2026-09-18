@@ -8408,6 +8408,12 @@ function _limpiarFormConfig() {
 function cargarConfigClinica(id) {
   const cl = configClinicas.find(c => c.id === id);
   if(!cl) return;
+  // Cada clínica tiene las suyas: la copia de trabajo se rehace al cambiar.
+  _catsFinEdit = {
+    ingreso: (cl.categorias_finanzas?.ingreso || []).filter(c=>c?.id&&c?.label).map(c=>({...c})),
+    egreso:  (cl.categorias_finanzas?.egreso  || []).filter(c=>c?.id&&c?.label).map(c=>({...c}))
+  };
+  renderConfigCategorias();
   // La config vieja en localStorage solo se usa para la clínica del usuario en sesión.
   const cfg = _configDeClinica(cl, id === currentClinicaId ? _configLocal(id) : {});
   document.getElementById('config-logo-url').value = cfg.logoUrl || '';
@@ -15074,6 +15080,135 @@ let _factItemCounter = 0;
 
 const fmtC = n => 'C$ ' + Number(n||0).toLocaleString('es-NI',{minimumFractionDigits:2,maximumFractionDigits:2});
 
+// Categorías de toda clínica. Las de inventario (medicamento, insumo, equipo) y
+// `general` disparan el panel de compra con descuento de stock, y `factura` la
+// escribe el cobro: por eso son fijas y no se pueden borrar desde la
+// configuración. Cada clínica añade las suyas encima.
+const CATEGORIAS_FIN_FIJAS = ['medicamento','insumo','equipo','general','factura'];
+const CATEGORIAS_FIN_DEFECTO = {
+  ingreso: [
+    {id:'consulta',      label:'Consulta',      icon:'👨‍⚕️'},
+    {id:'procedimiento', label:'Procedimiento', icon:'🔬'},
+    {id:'medicamento',   label:'Medicamento',   icon:'💊'},
+    {id:'insumo',        label:'Insumo',        icon:'🧹'},
+    {id:'equipo',        label:'Equipo',        icon:'🔧'},
+    {id:'general',       label:'General',       icon:'📦'},
+  ],
+  egreso: [
+    {id:'nomina',      label:'Nómina',             icon:'👥'},
+    {id:'alquiler',    label:'Alquiler',           icon:'🏢'},
+    {id:'servicios',   label:'Servicios públicos', icon:'⚡'},
+    {id:'impuestos',   label:'Impuestos',          icon:'🏛️'},
+    {id:'abarrotes',   label:'Abarrotes',          icon:'🛒'},
+    {id:'desechos',    label:'Desechos clínicos',  icon:'☣️'},
+    {id:'consumibles', label:'Consumibles',        icon:'🧴'},
+    {id:'medicamento', label:'Medicamento',        icon:'💊'},
+    {id:'insumo',      label:'Insumo',             icon:'🧹'},
+    {id:'equipo',      label:'Equipo',             icon:'🔧'},
+    {id:'factura',     label:'Pago de factura',    icon:'🧾'},
+    {id:'general',     label:'General',            icon:'📦'},
+  ]
+};
+
+// Las propias de la clínica, guardadas en clinicas.categorias_finanzas. Si la
+// columna no existe todavía, se trabaja solo con las de fábrica.
+function _categoriasPropias(tipo) {
+  const c = currentClinica?.categorias_finanzas;
+  const lista = c && Array.isArray(c[tipo]) ? c[tipo] : [];
+  return lista.filter(x => x && x.id && x.label);
+}
+
+function _categoriasFin(tipo) {
+  const propias = _categoriasPropias(tipo);
+  const base = CATEGORIAS_FIN_DEFECTO[tipo] || [];
+  // Una propia con el mismo id que una de fábrica la sustituye, para poder
+  // renombrar "Nómina" sin perder los registros ya guardados con ese id.
+  const ids = new Set(propias.map(x=>x.id));
+  return base.filter(x=>!ids.has(x.id)).concat(propias);
+}
+
+// El nombre se busca en los dos tipos: un registro viejo puede tener una
+// categoría que ya no se ofrezca, y aun así debe mostrarse con su nombre.
+function _etiquetaCategoria(id) {
+  const todas = [..._categoriasFin('ingreso'), ..._categoriasFin('egreso')];
+  const c = todas.find(x=>x.id===id);
+  return c ? `${c.icon||'🏷️'} ${c.label}` : (id||'general');
+}
+
+// ── Configuración de categorías ──
+let _catsFinEdit = null;   // copia de trabajo; solo guarda las propias
+
+function renderConfigCategorias() {
+  if(!document.getElementById('config-cats-ingreso')) return;
+  // La copia la prepara cargarConfigClinica con la clínica que se está
+  // editando; aquí se arranca vacío para no enseñar las de otra clínica.
+  if(!_catsFinEdit) _catsFinEdit = { ingreso: [], egreso: [] };
+  for(const tipo of ['ingreso','egreso']) {
+    const el = document.getElementById('config-cats-'+tipo);
+    if(!el) continue;
+    const propias = _catsFinEdit[tipo];
+    const ids = new Set(propias.map(c=>c.id));
+    const fabrica = (CATEGORIAS_FIN_DEFECTO[tipo]||[]).filter(c=>!ids.has(c.id));
+    el.innerHTML = `
+      <div class="cats-fin-titulo">${tipo==='ingreso'?'💰 Ingresos':'📤 Gastos'}</div>
+      <div class="cats-fin-lista">
+        ${fabrica.map(c=>`<span class="cats-fin-chip fija" title="De fábrica">${c.icon||'🏷️'} ${escAttr(c.label)}</span>`).join('')}
+        ${propias.map(c=>`<span class="cats-fin-chip propia">${c.icon||'🏷️'} ${escAttr(c.label)}
+          <button type="button" onclick="quitarCategoriaFin('${tipo}','${escAttr(c.id)}')" title="Quitar" aria-label="Quitar ${escAttr(c.label)}">✕</button></span>`).join('')}
+      </div>
+      <div class="cats-fin-add">
+        <input type="text" id="cat-nueva-${tipo}" maxlength="30" placeholder="Añadir categoría de ${tipo==='ingreso'?'ingreso':'gasto'}…"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();agregarCategoriaFin('${tipo}')}">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="agregarCategoriaFin('${tipo}')">+ Añadir</button>
+      </div>`;
+  }
+}
+
+// El id se deriva del nombre y no cambia aunque luego se renombre: es lo que
+// queda escrito en cada registro de finanzas.
+function _idCategoria(label) {
+  return String(label||'').normalize('NFD').replace(/\p{M}/gu,'').toLowerCase()
+    .replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,30);
+}
+
+function agregarCategoriaFin(tipo) {
+  const input = document.getElementById('cat-nueva-'+tipo);
+  const label = (input?.value||'').trim();
+  if(!label) { input?.focus(); return; }
+  const id = _idCategoria(label);
+  if(!id) { toast('Escribe un nombre con letras o números','error'); return; }
+  const yaExiste = _categoriasFin(tipo).some(c=>c.id===id);
+  if(yaExiste) { toast(`«${label}» ya está en la lista`,'warning'); input.value=''; return; }
+  _catsFinEdit[tipo].push({id, label, icon:'🏷️'});
+  input.value = '';
+  renderConfigCategorias();
+  document.getElementById('cat-nueva-'+tipo)?.focus();
+}
+
+function quitarCategoriaFin(tipo, id) {
+  if(CATEGORIAS_FIN_FIJAS.includes(id)) { toast('Esta categoría la usa el sistema y no se puede quitar','error'); return; }
+  _catsFinEdit[tipo] = _catsFinEdit[tipo].filter(c=>c.id!==id);
+  renderConfigCategorias();
+}
+
+async function guardarCategoriasFin() {
+  const clinicaId = configClinicaId || currentClinicaId;
+  if(!clinicaId) { toast('Elige primero la clínica que quieres configurar','error'); return; }
+  setLoading(true);
+  const payload = { categorias_finanzas: _catsFinEdit };
+  const {error} = await sb.from('clinicas').update(payload).eq('id', clinicaId);
+  setLoading(false);
+  if(error && _faltaColumna(error,'categorias_finanzas')) {
+    toast('Falta ejecutar migracion_categorias_finanzas.sql en Supabase.','error');
+    return;
+  }
+  if(error) { toast('Error al guardar: '+error.message,'error'); return; }
+  // Los registros ya guardados conservan su categoría aunque se quite de la
+  // lista: _etiquetaCategoria busca en las dos y cae al id si no la encuentra.
+  if(currentClinica && String(currentClinica.id)===String(clinicaId)) currentClinica.categorias_finanzas = _catsFinEdit;
+  toast('Categorías guardadas','success');
+}
+
 function getFinDateRange() {
   const h = new Date();
   let from, to = h.toISOString().split('T')[0];
@@ -15102,6 +15237,7 @@ function setFinTipo(tipo, el) {
 }
 
 function renderFinanzas() {
+  _aplicarNombreDocumento();
   if(finTab === 'balance' && !puedeVerBalance()) finTab = 'resumen';
   const tabBalance = document.getElementById('tab-fin-balance');
   if(tabBalance) tabBalance.style.display = puedeVerBalance() ? '' : 'none';
@@ -15114,7 +15250,7 @@ function switchFinTab(tab) {
     tab = 'resumen';
   }
   finTab = tab;
-  ['resumen','transacciones','facturas','balance'].forEach(t => {
+  ['resumen','ingresos','gastos','transacciones','facturas','balance'].forEach(t => {
     const p = document.getElementById('fin-panel-'+t);
     const b = document.getElementById('tab-fin-'+t);
     if(p) p.style.display = t===tab ? 'block' : 'none';
@@ -15123,9 +15259,43 @@ function switchFinTab(tab) {
   const btnPdf = document.getElementById('btn-pdf-resumen-fin');
   if(btnPdf) btnPdf.style.display = tab === 'resumen' ? '' : 'none';
   if(tab==='resumen') renderResumenFinanzas();
+  else if(tab==='ingresos') renderIngresosFinanzas();
+  else if(tab==='gastos') renderGastosFinanzas();
   else if(tab==='transacciones') renderTransacciones();
   else if(tab==='facturas') renderFacturasList();
   else if(tab==='balance') renderBalanceFinanzas();
+}
+
+// Resumen propio de cada pestaña: cuánto entró o salió y por qué concepto, que
+// es lo que se mira antes de la lista.
+function _statsPorCategoria(tipo, contenedor) {
+  const {from,to} = getFinDateRange();
+  const data = (C.fin||[]).filter(f=>f.fecha>=from && f.fecha<=to && f.tipo===tipo);
+  const el = document.getElementById(contenedor);
+  if(!el) return;
+  const total = data.reduce((s,f)=>s+f.monto,0);
+  const porCat = new Map();
+  for(const f of data) porCat.set(f.categoria||'general', (porCat.get(f.categoria||'general')||0) + f.monto);
+  const top = [...porCat.entries()].sort((a,b)=>b[1]-a[1]).slice(0,2);
+  const esIng = tipo==='ingreso';
+  el.innerHTML = `
+    <div class="stat-card"><div class="stat-icon ${esIng?'si-green':'si-red'}">${esIng?'💰':'📤'}</div>
+      <div class="stat-info"><h3 style="color:var(--${esIng?'success':'danger'});font-size:20px">${fmtC(total)}</h3><p>${esIng?'Ingresos':'Gastos'} del período</p></div></div>
+    <div class="stat-card"><div class="stat-icon si-blue">🔢</div>
+      <div class="stat-info"><h3 style="font-size:20px">${data.length}</h3><p>Registro${data.length!==1?'s':''}</p></div></div>
+    ${top.map(([cat,monto])=>`
+    <div class="stat-card"><div class="stat-icon si-orange">🏷️</div>
+      <div class="stat-info"><h3 style="font-size:20px">${fmtC(monto)}</h3><p>${escAttr(_etiquetaCategoria(cat))}</p></div></div>`).join('')}`;
+}
+
+function renderIngresosFinanzas() {
+  _statsPorCategoria('ingreso','fin-ingresos-stats');
+  renderTransacciones('fin-ingresos-list','ingreso');
+}
+
+function renderGastosFinanzas() {
+  _statsPorCategoria('egreso','fin-gastos-stats');
+  renderTransacciones('fin-gastos-list','egreso');
 }
 
 function renderResumenFinanzas() {
@@ -15141,12 +15311,10 @@ function renderResumenFinanzas() {
   if(statsEl) statsEl.innerHTML = `
     <div class="stat-card"><div class="stat-icon si-green">💰</div>
       <div class="stat-info"><h3 style="color:var(--success);font-size:20px">${fmtC(ingresos)}</h3><p>Ingresos del período</p></div></div>
-    <div class="stat-card"><div class="stat-icon si-red">📤</div>
-      <div class="stat-info"><h3 style="color:var(--danger);font-size:20px">${fmtC(egresos)}</h3><p>Gastos del período</p></div></div>
     <div class="stat-card"><div class="stat-icon ${utilidad>=0?'si-blue':'si-red'}">📊</div>
       <div class="stat-info"><h3 style="color:${utilidad>=0?'var(--primary)':'var(--danger)'};font-size:20px">${fmtC(utilidad)}</h3><p>Utilidad neta</p></div></div>
     <div class="stat-card"><div class="stat-icon si-orange">🧾</div>
-      <div class="stat-info"><h3 style="font-size:20px">${fEmit}</h3><p>Facturas (${fPag} pagadas)</p></div></div>`;
+      <div class="stat-info"><h3 style="font-size:20px">${fEmit}</h3><p>${_docFactura().plural} (${fPag} pagadas)</p></div></div>`;
   const recent = [...finData].sort((a,b)=>b.fecha.localeCompare(a.fecha)).slice(0,8);
   const ultEl = document.getElementById('fin-ultimas');
   if(ultEl) {
@@ -15165,7 +15333,7 @@ function renderResumenFinanzas() {
   const factRecent = [...factData].sort((a,b)=>b.fecha.localeCompare(a.fecha)).slice(0,5);
   const fResEl = document.getElementById('fin-fact-resumen');
   if(fResEl) {
-    if(!factRecent.length) { fResEl.innerHTML='<div class="empty-state" style="padding:32px"><div class="empty-icon">🧾</div><p>No hay facturas en este período</p></div>'; }
+    if(!factRecent.length) { fResEl.innerHTML=`<div class="empty-state" style="padding:32px"><div class="empty-icon">🧾</div><p>No hay ${_docFactura().plural.toLowerCase()} en este período</p></div>`; }
     else {
       const estadoTag = e => ({pagada:'tag-green',pendiente:'tag-orange',cancelada:'tag-red',anulada:'tag-gray'})[e]||'tag-gray';
       fResEl.innerHTML=`<div class="table-wrap"><table>
@@ -15219,7 +15387,7 @@ function imprimirResumenFinanzas() {
       <div class="kpi green"><div class="kpi-val">${fmtC(totalIng)}</div><div class="kpi-lbl">Total Ingresos</div></div>
       <div class="kpi red"><div class="kpi-val">${fmtC(totalEgr)}</div><div class="kpi-lbl">Total Gastos</div></div>
       <div class="kpi ${utilidad>=0?'blue':'red'}"><div class="kpi-val">${fmtC(utilidad)}</div><div class="kpi-lbl">Utilidad Neta</div></div>
-      <div class="kpi orange"><div class="kpi-val">${factData.length}</div><div class="kpi-lbl">Facturas (${fPag} pagadas)</div></div>
+      <div class="kpi orange"><div class="kpi-val">${factData.length}</div><div class="kpi-lbl">${_docFactura().plural} (${fPag} pagadas)</div></div>
     </div>
 
     <div style="display:flex;gap:20px;margin-bottom:20px">
@@ -15273,20 +15441,36 @@ function imprimirResumenFinanzas() {
   pdfAbrir('Resumen Financiero — ' + periodoLabel, body, cfg);
 }
 
-function renderTransacciones() {
+// Las pestañas Ingresos y Gastos son esta misma lista con el tipo fijado, así
+// que una mejora en la fila se ve en las tres sin repetir el maquetado.
+function renderTransacciones(contenedor='fin-trans-list', tipoFijo=null) {
   const {from,to} = getFinDateRange();
+  const tipo = tipoFijo ?? finTipoFiltro;
   let data = (C.fin||[]).filter(f=>f.fecha>=from && f.fecha<=to);
-  if(finTipoFiltro) data = data.filter(f=>f.tipo===finTipoFiltro);
+  if(tipo) data = data.filter(f=>f.tipo===tipo);
   data.sort((a,b)=>b.fecha.localeCompare(a.fecha));
-  const el = document.getElementById('fin-trans-list');
+  const el = document.getElementById(contenedor);
   if(!el) return;
-  if(!data.length) { el.innerHTML='<div class="empty-state" style="padding:40px"><div class="empty-icon">📋</div><p>No hay transacciones en este período</p></div>'; return; }
+  if(!data.length) {
+    const vacio = tipo==='ingreso' ? 'No hay ingresos en este período'
+                : tipo==='egreso'  ? 'No hay gastos en este período'
+                : 'No hay transacciones en este período';
+    el.innerHTML=`<div class="empty-state" style="padding:40px"><div class="empty-icon">📋</div><p>${vacio}</p></div>`;
+    return;
+  }
   const MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
   const totalIng = data.filter(x=>x.tipo==='ingreso').reduce((s,x)=>s+x.monto,0);
   const totalEgr = data.filter(x=>x.tipo==='egreso').reduce((s,x)=>s+x.monto,0);
+  const etiqueta = tipo==='ingreso' ? `${data.length} ingreso${data.length!==1?'s':''}`
+                 : tipo==='egreso'  ? `${data.length} gasto${data.length!==1?'s':''}`
+                 : `${data.length} transaccion${data.length!==1?'es':''}`;
+  // Con un tipo fijado solo hay un total que enseñar; el otro sería siempre cero.
+  const totales = tipo==='ingreso' ? `<span style="color:var(--success)">+${fmtC(totalIng)}</span>`
+                : tipo==='egreso'  ? `<span style="color:var(--danger)">−${fmtC(totalEgr)}</span>`
+                : `<span style="color:var(--success)">+${fmtC(totalIng)}</span>&nbsp;·&nbsp;<span style="color:var(--danger)">−${fmtC(totalEgr)}</span>`;
   el.innerHTML = `<div class="fin-list-header">
-    <span class="fin-list-header-lbl">${data.length} transaccion${data.length!==1?'es':''}</span>
-    <span class="fin-list-header-val"><span style="color:var(--success)">+${fmtC(totalIng)}</span>&nbsp;·&nbsp;<span style="color:var(--danger)">−${fmtC(totalEgr)}</span></span>
+    <span class="fin-list-header-lbl">${etiqueta}</span>
+    <span class="fin-list-header-val">${totales}</span>
   </div>
   <div class="fin-list">`+data.map(f=>{
     const esI=f.tipo==='ingreso';
@@ -15328,7 +15512,7 @@ function renderFacturasList() {
   const estadoTag = e => ({pagada:'tag-green',pendiente:'tag-orange',cancelada:'tag-red',anulada:'tag-gray'})[e]||'tag-gray';
   const el = document.getElementById('fin-fact-list');
   if(!el) return;
-  if(!data.length) { el.innerHTML='<div class="empty-state" style="padding:40px"><div class="empty-icon">🧾</div><p>No hay facturas en este período.<br>Usa <strong>+ Nueva Factura</strong> para comenzar.</p></div>'; return; }
+  if(!data.length) { el.innerHTML=`<div class="empty-state" style="padding:40px"><div class="empty-icon">🧾</div><p>No hay ${_docFactura().plural.toLowerCase()} en este período.<br>Usa <strong>+ Nuev${_docFactura().gen} ${_docFactura().sing}</strong> para comenzar.</p></div>`; return; }
   const MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
   const totalFact = data.reduce((s,f)=>s+f.total,0);
   const pagadas = data.filter(f=>f.estado==='pagada').length;
@@ -15377,15 +15561,12 @@ function openModalTransaccion(tipo='ingreso') {
   document.getElementById('trans-fecha').value = hoy();
   document.getElementById('trans-metodo').value = 'efectivo';
   document.getElementById('trans-referencia').value = '';
-  // Filtrar categorías según tipo
+  // Las categorías salen de la configuración de la clínica, no del HTML.
   const catSel = document.getElementById('trans-categoria');
   if(catSel) {
-    const ingrCats = ['consulta','procedimiento','medicamento','insumo','equipo','general'];
-    const egrCats  = ['nomina','alquiler','servicios','factura','medicamento','insumo','equipo','general'];
-    const allowed  = tipo === 'ingreso' ? ingrCats : egrCats;
-    Array.from(catSel.options).forEach(o => { o.hidden = !allowed.includes(o.value); });
-    const first = Array.from(catSel.options).find(o => !o.hidden);
-    if(first) catSel.value = first.value;
+    const cats = _categoriasFin(tipo);
+    catSel.innerHTML = cats.map(c=>`<option value="${escAttr(c.id)}">${c.icon||'🏷️'} ${escAttr(c.label)}</option>`).join('');
+    if(cats.length) catSel.value = cats[0].id;
   }
   _transInvSeleccion = [];
   const wrap = document.getElementById('trans-compra-inv-wrap');
@@ -15845,7 +16026,7 @@ async function guardarFactura() {
     }
     if(itemsErr) toast('Factura creada pero error al guardar ítems: '+itemsErr.message, 'warning');
   }
-  toast('Factura generada 🧾');
+  toast(`${_docFactura().sing} generad${_docFactura().gen} 🧾`);
   _unlockSubmit('factura', btn);
   closeModal('modal-factura');
   await loadAll(); renderFinanzas(); setLoading(false);
@@ -15941,6 +16122,33 @@ function _porcentajeClinica(tipo) {
 // y no sale de ninguna regla: quien cobra lo escribe al facturar.
 function _balanceManual() { return currentClinica?.balance_modo === 'manual'; }
 
+// Cada clínica decide cómo se llama su documento de cobro. Solo cambia el
+// nombre que se lee y se imprime: el consecutivo y el flujo son los mismos.
+function _docFactura() {
+  return currentClinica?.tipo_documento_factura === 'comprobante_pago'
+    // `gen` es la vocal del género, para que salga "Nuevo comprobante" y no
+    // "Nueva comprobante" al componer los textos.
+    ? {sing:'Comprobante de pago', plural:'Comprobantes de pago', gen:'o', impreso:'COMPROBANTE DE PAGO', destinatario:'Recibido de:'}
+    : {sing:'Factura',             plural:'Facturas',             gen:'a', impreso:'FACTURA',             destinatario:'Facturar a:'};
+}
+
+// Los textos fijos del HTML se reescriben al entrar en Finanzas, que es cuando
+// ya se sabe de qué clínica se trata.
+function _aplicarNombreDocumento() {
+  const d = _docFactura();
+  const textos = {
+    plural:        '🧾 ' + d.plural,
+    titulo:        '🧾 ' + d.plural,
+    ultimas:       `🧾 Últim${d.gen==='a'?'as':'os'} ${d.plural.toLowerCase()}`,
+    nuevo:         `+ Nuev${d.gen} ${d.sing}`,
+    'nuevo-modal': `🧾 Nuev${d.gen} ${d.sing}`,
+  };
+  document.querySelectorAll('[data-doc]').forEach(el => {
+    const t = textos[el.dataset.doc];
+    if(t) el.textContent = t;
+  });
+}
+
 const _fmtPct = n => (Math.round(n*100)/100).toLocaleString('es-NI',{maximumFractionDigits:2}) + ' %';
 
 // Al cobrar, las líneas emitidas antes de configurar el reparto reciben el
@@ -16013,6 +16221,31 @@ function _pctGrupoBalance(g) {
   return { texto:'≈ '+_fmtPct(g.conPct ? g.clinica/g.conPct*100 : 0), mixto:true };
 }
 
+// Balance de la clínica: lo que realmente le queda, menos lo que gasta.
+//
+// El pago de una factura se registra en finanzas por el TOTAL cobrado, que
+// incluye la parte del profesional. Sumar esos ingresos al reparto contaría el
+// mismo dinero dos veces, así que de finanzas solo entran los ingresos que no
+// vienen de una factura: los que alguien registró a mano.
+function _balanceClinica(from, to, resumen) {
+  const fin = (C.fin||[]).filter(f=>f.fecha>=from && f.fecha<=to);
+  const otrosIngresos = fin
+    .filter(f=>f.tipo==='ingreso' && f.categoria!=='factura')
+    .reduce((s,f)=>s+f.monto,0);
+  const gastos = fin.filter(f=>f.tipo==='egreso').reduce((s,f)=>s+f.monto,0);
+  const ingresos = resumen.clinica + otrosIngresos;
+  return {
+    deServicios: resumen.clinica,
+    otrosIngresos,
+    ingresos,
+    gastos,
+    balance: Math.round((ingresos - gastos)*100)/100,
+    // Informativo: lo que corresponde a los profesionales no es dinero de la
+    // clínica, así que no entra en ninguna de las sumas de arriba.
+    profesionales: resumen.profesionales,
+  };
+}
+
 function _etiquetaPeriodoFin() {
   const {to} = getFinDateRange();
   return {
@@ -16067,24 +16300,34 @@ function renderBalanceFinanzas() {
       <td class="num balance-clinica" data-label="Queda a la clínica">${fmtC(r.clinica)}</td>
       <td class="num" data-label="Profesionales">${fmtC(r.profesionales)}</td>
     </tr></tfoot></table></div>`
-    : '<div class="empty-state" style="padding:28px"><div class="empty-icon">⚖️</div><p>No hay facturas pagadas en este período</p></div>';
+    : `<div class="empty-state" style="padding:28px"><div class="empty-icon">⚖️</div><p>No hay ${_docFactura().plural.toLowerCase()} pagadas en este período</p></div>`;
+
+  const b = _balanceClinica(from, to, r);
+  const doc = _docFactura();
 
   const balance = `<div class="card" style="margin-bottom:18px">
     <div class="card-header doc-header">
-      <h3>⚖️ Balance de servicios cobrados</h3>
+      <h3>⚖️ Balance de la clínica</h3>
       <div class="doc-acciones">
         <button class="btn btn-secondary btn-sm" onclick="imprimirBalanceReparto()">🖨️ Imprimir</button>
         <button class="btn btn-primary btn-sm" onclick="descargarDocumento(imprimirBalanceReparto)">⬇️ Descargar PDF</button>
       </div>
     </div>
-    <p class="balance-nota">Facturas pagadas del período (${escAttr(_etiquetaPeriodoFin())}). De cada servicio, la parte de la clínica ${manual?'es la que se escribió al cobrar':'sale del porcentaje de su tipo'}; el resto corresponde al profesional.</p>
+    <p class="balance-nota">Período: ${escAttr(_etiquetaPeriodoFin())}. Lo que queda a la clínica de lo cobrado, más los ingresos registrados a mano, menos sus gastos. Lo que corresponde a los profesionales no entra en ninguna suma.</p>
     ${avisos}
     <div class="stats-grid balance-kpis">
-      <div class="stat-card"><div class="stat-icon si-blue">💵</div><div class="stat-info"><h3>${fmtC(r.total)}</h3><p>Total cobrado</p></div></div>
-      <div class="stat-card"><div class="stat-icon si-green">🏥</div><div class="stat-info"><h3 style="color:var(--success)">${fmtC(r.clinica)}</h3><p>Queda a la clínica</p></div></div>
-      <div class="stat-card"><div class="stat-icon si-orange">👨‍⚕️</div><div class="stat-info"><h3>${fmtC(r.profesionales)}</h3><p>Parte de los profesionales</p></div></div>
-      <div class="stat-card"><div class="stat-icon si-cyan">🧾</div><div class="stat-info"><h3>${r.cantidad.toLocaleString('es-NI')}</h3><p>Servicios en ${r.facturas} factura(s)</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-green">🏥</div><div class="stat-info"><h3 style="color:var(--success)">${fmtC(b.ingresos)}</h3><p>Ingresos de la clínica</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-red">📤</div><div class="stat-info"><h3 style="color:var(--danger)">${fmtC(b.gastos)}</h3><p>Gastos del período</p></div></div>
+      <div class="stat-card"><div class="stat-icon ${b.balance>=0?'si-blue':'si-red'}"><span>⚖️</span></div><div class="stat-info"><h3 style="color:${b.balance>=0?'var(--primary)':'var(--danger)'}">${fmtC(b.balance)}</h3><p>Balance</p></div></div>
+      <div class="stat-card balance-informativo"><div class="stat-icon si-orange">👨‍⚕️</div><div class="stat-info"><h3>${fmtC(b.profesionales)}</h3><p>Pago a profesionales · informativo</p></div></div>
     </div>
+    <div class="balance-desglose">
+      <div><span>De ${doc.plural.toLowerCase()} cobrad${doc.gen==='a'?'as':'os'}</span><strong>${fmtC(b.deServicios)}</strong></div>
+      <div><span>Otros ingresos registrados</span><strong>${fmtC(b.otrosIngresos)}</strong></div>
+      <div><span>Gastos</span><strong style="color:var(--danger)">−${fmtC(b.gastos)}</strong></div>
+      <div class="total"><span>Balance</span><strong style="color:${b.balance>=0?'var(--success)':'var(--danger)'}">${fmtC(b.balance)}</strong></div>
+    </div>
+    <p class="balance-nota" style="margin-top:14px">De cada servicio, la parte de la clínica ${manual?'es la que se escribió al cobrar':'sale del porcentaje de su tipo'}; el resto corresponde al profesional.</p>
     ${tabla}
   </div>`;
 
@@ -16243,19 +16486,30 @@ function imprimirBalanceReparto() {
   const periodo = _etiquetaPeriodoFin();
   const lineas = _lineasBalance(from, to);
   const r = _resumenBalance(lineas);
+  const b = _balanceClinica(from, to, r);
+  const doc = _docFactura();
   const num = 'text-align:right;white-space:nowrap';
   // Importes en una línea: a 28px, como en los demás reportes, "C$" y la cifra se separaban.
   const kpiVal = 'font-size:18px;white-space:nowrap';
   const body = `
-    <div style="font-size:22px;font-weight:900;color:#0F172A;margin-bottom:4px">Balance de servicios cobrados</div>
-    <div style="font-size:13px;color:#64748B;font-weight:600;margin-bottom:20px">Período: ${escAttr(periodo)} · Facturas pagadas · Generado: ${new Date().toLocaleString('es-ES')}</div>
+    <div style="font-size:22px;font-weight:900;color:#0F172A;margin-bottom:4px">Balance de la clínica</div>
+    <div style="font-size:13px;color:#64748B;font-weight:600;margin-bottom:20px">Período: ${escAttr(periodo)} · Generado: ${new Date().toLocaleString('es-ES')}</div>
 
     <div class="kpi-grid">
-      <div class="kpi blue"><div class="kpi-val" style="${kpiVal}">${fmtC(r.total)}</div><div class="kpi-lbl">Total cobrado</div></div>
-      <div class="kpi green"><div class="kpi-val" style="${kpiVal};color:#15803D">${fmtC(r.clinica)}</div><div class="kpi-lbl">Queda a la clínica</div></div>
-      <div class="kpi orange"><div class="kpi-val" style="${kpiVal}">${fmtC(r.profesionales)}</div><div class="kpi-lbl">Profesionales</div></div>
-      <div class="kpi blue"><div class="kpi-val" style="${kpiVal}">${r.cantidad.toLocaleString('es-NI')}</div><div class="kpi-lbl">Servicios · ${r.facturas} factura(s)</div></div>
+      <div class="kpi green"><div class="kpi-val" style="${kpiVal};color:#15803D">${fmtC(b.ingresos)}</div><div class="kpi-lbl">Ingresos de la clínica</div></div>
+      <div class="kpi red"><div class="kpi-val" style="${kpiVal};color:#B91C1C">${fmtC(b.gastos)}</div><div class="kpi-lbl">Gastos</div></div>
+      <div class="kpi blue"><div class="kpi-val" style="${kpiVal}">${fmtC(b.balance)}</div><div class="kpi-lbl">Balance</div></div>
+      <div class="kpi orange"><div class="kpi-val" style="${kpiVal}">${fmtC(b.profesionales)}</div><div class="kpi-lbl">Profesionales · informativo</div></div>
     </div>
+
+    <div class="section-title">🧮 Cómo sale el balance</div>
+    <table style="margin-bottom:12px"><tbody>
+      <tr><td>De ${escAttr(doc.plural.toLowerCase())} cobrad${doc.gen==='a'?'as':'os'}</td><td style="${num}">${fmtC(b.deServicios)}</td></tr>
+      <tr><td>Otros ingresos registrados</td><td style="${num}">${fmtC(b.otrosIngresos)}</td></tr>
+      <tr><td>Gastos</td><td style="${num};color:#B91C1C">−${fmtC(b.gastos)}</td></tr>
+      <tr style="font-weight:800;background:#F1F5F9"><td>Balance</td><td style="${num}">${fmtC(b.balance)}</td></tr>
+    </tbody></table>
+    <p style="font-size:11px;color:#64748B;margin:0 0 6px">El pago a los profesionales (${fmtC(b.profesionales)}) es informativo: no es dinero de la clínica y no entra en ninguna suma.</p>
 
     <div class="section-title">⚖️ Balance por tipo de servicio</div>
     ${r.grupos.length ? `<table style="margin-bottom:12px"><thead><tr><th>Tipo</th><th style="${num}">Cantidad</th><th style="${num}">Total cobrado</th><th style="${num}">% clínica</th><th style="${num}">Queda a la clínica</th><th style="${num}">Profesionales</th></tr></thead>
@@ -16343,9 +16597,8 @@ function verFacturaPDF(id) {
   if(!fact) return;
   const items = (C.factItems||[]).filter(i=>i.facturaId===id);
   const numeroImpreso = fact.numero ? String(fact.numero).replace(/^FACT-/i,'') : `#${id}`;
-  const tipoDocumento = currentClinica?.tipo_documento_factura === 'comprobante_pago'
-    ? 'COMPROBANTE DE PAGO' : 'FACTURA';
-  const etiquetaDestinatario = tipoDocumento === 'COMPROBANTE DE PAGO' ? 'Recibido de:' : 'Facturar a:';
+  const tipoDocumento = _docFactura().impreso;
+  const etiquetaDestinatario = _docFactura().destinatario;
   const body = `
     <div style="display:flex;justify-content:space-between;margin-bottom:20px;padding:14px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0">
       <div>

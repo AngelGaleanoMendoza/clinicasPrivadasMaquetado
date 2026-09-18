@@ -22,7 +22,7 @@
 <!-- Lectura local de machotes. El archivo se procesa en el navegador antes de
      guardarlo; Mammoth extrae DOCX y PDF.js se carga al elegir un PDF. -->
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js" defer></script>
-<link rel="stylesheet" href="css/styles.css?v=20260917d">
+<link rel="stylesheet" href="css/styles.css?v=20260918a">
 </head>
 <body>
 <script>
@@ -560,6 +560,15 @@
             </div>
           </div>
           <div class="card">
+            <div class="card-header"><h3>🏷️ Categorías de finanzas</h3></div>
+            <p class="text-light" style="font-size:12px;margin-bottom:4px">Las que aparecen al registrar un ingreso o un gasto. Las de fábrica no se pueden quitar: el sistema las usa para descontar inventario y para el cobro de facturas.</p>
+            <div id="config-cats-ingreso" class="cats-fin-bloque"></div>
+            <div id="config-cats-egreso" class="cats-fin-bloque"></div>
+            <div style="margin-top:16px">
+              <button class="btn btn-primary" onclick="guardarCategoriasFin()">💾 Guardar categorías</button>
+            </div>
+          </div>
+          <div class="card">
             <div class="card-header"><h3>👁️ Vista Previa Nota de Consulta</h3></div>
             <div id="config-preview" style="border:1px solid var(--border);border-radius:10px;padding:18px;background:var(--bg)">
               <p class="text-light" style="text-align:center;padding:20px">Llena los datos y guarda para ver la vista previa en las notas de consulta.</p>
@@ -901,8 +910,10 @@
           </div>
           <div class="tabs" style="margin-bottom:0">
             <button class="tab active" id="tab-fin-resumen"       onclick="switchFinTab('resumen')">📊 Resumen</button>
+            <button class="tab"        id="tab-fin-ingresos"      onclick="switchFinTab('ingresos')">💰 Ingresos</button>
+            <button class="tab"        id="tab-fin-gastos"        onclick="switchFinTab('gastos')">📤 Gastos</button>
             <button class="tab"        id="tab-fin-transacciones" onclick="switchFinTab('transacciones')">🔄 Transacciones</button>
-            <button class="tab"        id="tab-fin-facturas"      onclick="switchFinTab('facturas')">🧾 Facturas</button>
+            <button class="tab"        id="tab-fin-facturas"      onclick="switchFinTab('facturas')" data-doc="plural">🧾 Facturas</button>
             <button class="tab"        id="tab-fin-balance"       onclick="switchFinTab('balance')">⚖️ Balance</button>
           </div>
         </div>
@@ -922,11 +933,35 @@
             </div>
             <div class="card">
               <div class="card-header">
-                <h3>🧾 Últimas facturas</h3>
-                <button class="btn btn-primary btn-sm" onclick="openModalFactura()">+ Nueva Factura</button>
+                <h3 data-doc="ultimas">🧾 Últimas facturas</h3>
+                <button class="btn btn-primary btn-sm" onclick="openModalFactura()" data-doc="nuevo">+ Nueva Factura</button>
               </div>
               <div id="fin-fact-resumen"></div>
             </div>
+          </div>
+        </div>
+
+        <!-- Panel Ingresos: las mismas transacciones, filtradas -->
+        <div id="fin-panel-ingresos" style="display:none">
+          <div class="stats-grid" id="fin-ingresos-stats" style="margin-bottom:18px"></div>
+          <div class="card">
+            <div class="card-header">
+              <h3>💰 Ingresos</h3>
+              <button class="btn btn-primary btn-sm" onclick="openModalTransaccion('ingreso')">+ Nuevo Ingreso</button>
+            </div>
+            <div id="fin-ingresos-list"></div>
+          </div>
+        </div>
+
+        <!-- Panel Gastos -->
+        <div id="fin-panel-gastos" style="display:none">
+          <div class="stats-grid" id="fin-gastos-stats" style="margin-bottom:18px"></div>
+          <div class="card">
+            <div class="card-header">
+              <h3>📤 Gastos</h3>
+              <button class="btn btn-primary btn-sm" onclick="openModalTransaccion('egreso')">+ Nuevo Gasto</button>
+            </div>
+            <div id="fin-gastos-list"></div>
           </div>
         </div>
 
@@ -949,8 +984,8 @@
         <div id="fin-panel-facturas" style="display:none">
           <div class="card">
             <div class="card-header">
-              <h3>🧾 Facturas Electrónicas</h3>
-              <button class="btn btn-primary btn-sm" onclick="openModalFactura()">+ Nueva Factura</button>
+              <h3 data-doc="titulo">🧾 Facturas Electrónicas</h3>
+              <button class="btn btn-primary btn-sm" onclick="openModalFactura()" data-doc="nuevo">+ Nueva Factura</button>
             </div>
             <div class="search-bar" style="margin-bottom:14px">
               <div class="search-bar-input">
@@ -1242,18 +1277,8 @@
       </div>
       <div class="form-group">
         <label>Categoría</label>
-        <select id="trans-categoria" onchange="toggleTransCompraInv()">
-          <option value="consulta">👨‍⚕️ Consulta</option>
-          <option value="procedimiento">🔬 Procedimiento</option>
-          <option value="medicamento">💊 Medicamento</option>
-          <option value="insumo">🧹 Insumo</option>
-          <option value="equipo">🔧 Equipo</option>
-          <option value="nomina">👥 Nómina</option>
-          <option value="alquiler">🏢 Alquiler</option>
-          <option value="servicios">⚡ Servicios públicos</option>
-          <option value="factura">🧾 Pago de factura</option>
-          <option value="general">📦 General</option>
-        </select>
+        <!-- Se llena desde la configuración de la clínica en openModalTransaccion() -->
+        <select id="trans-categoria" onchange="toggleTransCompraInv()"></select>
       </div>
       <!-- Panel inventario (ingreso o egreso + medicamento/insumo/equipo) -->
       <div id="trans-compra-inv-wrap" class="form-group full" style="display:none">
@@ -1341,7 +1366,7 @@
 <!-- MODAL FACTURA ELECTRÓNICA -->
 <div class="modal-overlay" id="modal-factura">
   <div class="modal modal-xl">
-    <h2>🧾 Nueva Factura Electrónica</h2>
+    <h2 data-doc="nuevo-modal">🧾 Nueva Factura Electrónica</h2>
     <input type="hidden" id="fact-cita-id">
     <div class="form-grid" style="margin-bottom:18px">
       <div class="form-group">
@@ -2781,7 +2806,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260917d" defer></script>
+<script src="js/app.js?v=20260918a" defer></script>
 </body>
 </html>
 
