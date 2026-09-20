@@ -8552,12 +8552,15 @@ async function guardarConfigClinica() {
     institucion:   document.getElementById('config-institucion')?.value.trim() || null,
     tipo_documento_factura: document.getElementById('config-tipo-doc-factura')?.value === 'comprobante_pago' ? 'comprobante_pago' : 'factura',
     logo_url:      document.getElementById('config-logo-url').value.trim() || null,
-    firma_url
+    firma_url,
+    // Las categorías se guardan con el resto de la pantalla: tenerlas en un
+    // botón aparte hacía que "Guardar Configuración" las descartara al recargar.
+    categorias_finanzas: _catsFinEdit || {ingreso:[], egreso:[]}
   };
 
   // Las columnas nuevas pueden no existir todavía en Supabase: se reintenta sin
   // ellas para no perder el resto del formulario, avisando qué quedó fuera.
-  const OPCIONALES = ['firma_url','email','institucion','padecimientos','tipo_documento_factura'];
+  const OPCIONALES = ['firma_url','email','institucion','padecimientos','tipo_documento_factura','categorias_finanzas'];
   let { error } = await sb.from('clinicas').update(payload).eq('id', configClinicaId);
   const faltantes = [];
   while(error && OPCIONALES.some(col => (col in payload) && _faltaColumna(error, col))) {
@@ -15177,6 +15180,13 @@ function agregarCategoriaFin(tipo) {
   if(!label) { input?.focus(); return; }
   const id = _idCategoria(label);
   if(!id) { toast('Escribe un nombre con letras o números','error'); return; }
+  // Los ids reservados se rechazan aunque no estén en las de fábrica de ESTE
+  // tipo: una categoría de ingreso llamada "Factura" tomaría el id que el cobro
+  // usa para marcar sus propios apuntes y el balance dejaría de reconocerlos.
+  if(CATEGORIAS_FIN_FIJAS.includes(id)) {
+    toast(`«${label}» usa un nombre reservado por el sistema. Elige otro.`,'error');
+    return;
+  }
   const yaExiste = _categoriasFin(tipo).some(c=>c.id===id);
   if(yaExiste) { toast(`«${label}» ya está en la lista`,'warning'); input.value=''; return; }
   _catsFinEdit[tipo].push({id, label, icon:'🏷️'});
@@ -15191,23 +15201,6 @@ function quitarCategoriaFin(tipo, id) {
   renderConfigCategorias();
 }
 
-async function guardarCategoriasFin() {
-  const clinicaId = configClinicaId || currentClinicaId;
-  if(!clinicaId) { toast('Elige primero la clínica que quieres configurar','error'); return; }
-  setLoading(true);
-  const payload = { categorias_finanzas: _catsFinEdit };
-  const {error} = await sb.from('clinicas').update(payload).eq('id', clinicaId);
-  setLoading(false);
-  if(error && _faltaColumna(error,'categorias_finanzas')) {
-    toast('Falta ejecutar migracion_categorias_finanzas.sql en Supabase.','error');
-    return;
-  }
-  if(error) { toast('Error al guardar: '+error.message,'error'); return; }
-  // Los registros ya guardados conservan su categoría aunque se quite de la
-  // lista: _etiquetaCategoria busca en las dos y cae al id si no la encuentra.
-  if(currentClinica && String(currentClinica.id)===String(clinicaId)) currentClinica.categorias_finanzas = _catsFinEdit;
-  toast('Categorías guardadas','success');
-}
 
 function getFinDateRange() {
   const h = new Date();
@@ -15223,7 +15216,11 @@ function setFinPeriodo(p, el) {
   finPeriodo = p;
   document.querySelectorAll('#fin-periodo-chips .chip').forEach(c=>c.classList.remove('active'));
   if(el) el.classList.add('active');
+  // Los chips de período viven en la cabecera común, encima de las pestañas:
+  // se pueden pulsar desde cualquiera y todas deben recalcularse.
   if(finTab==='resumen') renderResumenFinanzas();
+  else if(finTab==='ingresos') renderIngresosFinanzas();
+  else if(finTab==='gastos') renderGastosFinanzas();
   else if(finTab==='transacciones') renderTransacciones();
   else if(finTab==='facturas') renderFacturasList();
   else if(finTab==='balance') renderBalanceFinanzas();

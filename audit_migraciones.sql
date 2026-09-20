@@ -109,7 +109,15 @@ WITH requisitos(orden, migracion, clase, objeto) AS (VALUES
 
   -- 15. Título de la impresión de facturas, configurable por clínica
   (15, 'tipo_documento_factura',     'columna',     'clinicas.tipo_documento_factura'),
-  (15, 'tipo_documento_factura',     'restriccion', 'clinicas_tipo_documento_factura_check')
+  (15, 'tipo_documento_factura',     'restriccion', 'clinicas_tipo_documento_factura_check'),
+
+  -- 16. Categorías de finanzas propias de cada clínica
+  (16, 'categorias_finanzas',        'columna',     'clinicas.categorias_finanzas'),
+
+  -- 17. Procedimientos clínicos por servicio. Se listaba en el repositorio pero
+  --     el audit nunca lo comprobaba: una base sin él pasaba por estar al día.
+  (17, 'procedimientos_clinicos',    'tabla',       'procedimientos_clinicos'),
+  (17, 'procedimientos_clinicos',    'columna',     'procedimientos_clinicos.profesional_id')
 
 ),
 
