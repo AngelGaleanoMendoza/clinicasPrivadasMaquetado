@@ -17,7 +17,8 @@ function extraer(name) {
   if(abiertas===0 && primeraLinea.includes('{')) return primeraLinea;
   return source.slice(start,source.indexOf('\n}',start)+2);
 }
-const code=['_tipoServicio','_porcentajeClinica','_balanceManual','_lineasBalance',
+const code=['_tipoServicio','_porcentajeClinica','_balanceManual',
+  '_facturaDeIngreso','_indiceFacturasPorNumero','_facturasDelBalance','_lineasBalance',
   '_resumenBalance','_pctGrupoBalance','calcFacturaTotals','renderFacturaItemsUI',
   'eliminarFactura'].map(extraer).join('\n');
 
@@ -57,8 +58,8 @@ const preambulo=`
 
   let currentClinicaId=7, currentClinica={id:7,balance_modo:'porcentaje'};
   window.__modo=m=>{currentClinica.balance_modo=m;};
-  const C={fact:[],factItems:[],reparto:[]};
-  window.__datos=(fact,items,reparto)=>{C.fact=fact;C.factItems=items;C.reparto=reparto||[];};
+  const C={fact:[],factItems:[],reparto:[],fin:[]};
+  window.__datos=(fact,items,reparto)=>{C.fact=fact;C.factItems=items;C.reparto=reparto||[];C.fin=[];};
   window.__limpiar=()=>{window.__sb.length=0;window.__toasts.length=0;};
   let facturaItems=[];
   window.__items=xs=>{facturaItems=xs;};
@@ -118,7 +119,7 @@ const FACT=[{id:1,fecha:'2026-09-10',estado:'pagada',numero:'F-1',pacienteNombre
     assert.equal(cero.clinica,0,'Escribir 0 debe dejar 0 a la clínica, no caer al 50 %');
     assert.equal(cero.manual,true);
 
-    // ── Línea sin nada: no se reparte y se avisa ──
+    // ── Línea sin reparto: se queda en la clínica, pero avisada ──
     const sinNada=await page.evaluate(({fact})=>{
       window.__datos(fact,[{id:1,facturaId:1,tipo:'consulta',cantidad:1,precioUnitario:500,
         subtotal:500,porcentajeClinica:null,montoClinica:null}],[]);
@@ -126,9 +127,11 @@ const FACT=[{id:1,fecha:'2026-09-10',estado:'pagada',numero:'F-1',pacienteNombre
       const r=_resumenBalance(lineas);
       return {clinica:lineas[0].clinica,sinPct:r.sinPct,total:r.total,clinicaTotal:r.clinica};
     },{fact:FACT});
-    assert.equal(sinNada.clinica,null);
-    assert.equal(sinNada.sinPct,500,'Lo no repartido se contabiliza aparte');
-    assert.equal(sinNada.clinicaTotal,0);
+    // Sin reparto acordado el dinero se queda en la clínica —lo cobró ella y
+    // nadie ha reclamado una parte— pero se contabiliza aparte para avisarlo.
+    assert.equal(sinNada.clinica,500,'Antes valía null y el dinero desaparecía del balance');
+    assert.equal(sinNada.sinPct,500,'Se sigue señalando como no repartido');
+    assert.equal(sinNada.clinicaTotal,500);
 
     // ── Grupo mezclado: escrito a mano + porcentaje ──
     const mezcla=await page.evaluate(({fact})=>{

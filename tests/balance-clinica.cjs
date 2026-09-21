@@ -32,9 +32,11 @@ function extraerConst(name) {
   return source.slice(start,source.indexOf('\n};',start)+3);
 }
 
-const code=[extraerConst('CATEGORIAS_FIN_FIJAS'),extraerConst('CATEGORIAS_FIN_DEFECTO'),
+const code=[extraerConst('CATEGORIA_PAGO_PROFESIONAL'),extraerConst('CATEGORIAS_FIN_FIJAS'),
+  extraerConst('CATEGORIAS_FIN_DEFECTO'),
   ...['_categoriasPropias','_categoriasFin','_etiquetaCategoria','_idCategoria',
-      '_docFactura','_aplicarNombreDocumento','_balanceClinica','renderTransacciones'].map(extraer)].join('\n');
+      '_docFactura','_aplicarNombreDocumento','_facturaDeIngreso','_indiceFacturasPorNumero',
+      '_porcentajeClinica','_repartoFactura','_balanceClinica','renderTransacciones'].map(extraer)].join('\n');
 
 const preambulo=`
   const escAttr=s=>String(s||'').replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;');
@@ -44,9 +46,16 @@ const preambulo=`
   let finTipoFiltro='';
   let currentClinica={id:7};
   window.__clinica=c=>{currentClinica=c;};
-  const C={fin:[]};
+  const C={fin:[],fact:[],factItems:[],reparto:[]};
   window.__fin=xs=>{C.fin=xs;};
+  window.__fact=(f,i,r)=>{C.fact=f||[];C.factItems=i||[];C.reparto=r||[];};
   const getFinDateRange=()=>({from:'2026-09-01',to:'2026-09-30'});
+  window.FACT_40=()=>{
+    C.fact=[{id:1,numero:'F-1',fecha:'2026-08-28',estado:'pagada',total:1000}];
+    C.factItems=[{id:1,facturaId:1,tipo:'consulta',cantidad:1,precioUnitario:1000,subtotal:1000,
+      porcentajeClinica:40,montoClinica:null}];
+    C.reparto=[];
+  };
 
   ${code}
   Object.assign(window,{_categoriasFin,_etiquetaCategoria,_idCategoria,_docFactura,
@@ -69,31 +78,98 @@ const lanzar=()=>process.env.PLAYWRIGHT_CHROMIUM
     </body></html>`);
     await page.addScriptTag({content:preambulo});
 
-    // ── El cobro de una factura NO se cuenta dos veces ──
+    // FACT_40(): factura de C$1000 al 40 % — C$400 clínica, C$600 profesional.
+    // ── El cobro no se cuenta dos veces: solo entra la parte de la clínica ──
     const sinDoble=await page.evaluate(()=>{
-      // La clínica cobró 1000 y le quedaron 400. El cobro dejó además un ingreso
-      // de 1000 en finanzas con categoría 'factura', que NO debe sumarse.
+      FACT_40();
       window.__fin([
-        {fecha:'2026-09-10',tipo:'ingreso',categoria:'factura',monto:1000},
+        {fecha:'2026-09-10',tipo:'ingreso',categoria:'factura',facturaId:1,monto:1000},
         {fecha:'2026-09-11',tipo:'egreso', categoria:'alquiler',monto:300}
       ]);
-      return _balanceClinica('2026-09-01','2026-09-30',{clinica:400,profesionales:600});
+      return _balanceClinica('2026-09-01','2026-09-30');
     });
-    assert.equal(sinDoble.otrosIngresos,0,'El ingreso de la factura no puede volver a sumar');
-    assert.equal(sinDoble.ingresos,400,'Solo entra lo que quedó a la clínica');
-    assert.equal(sinDoble.gastos,300);
+    assert.equal(sinDoble.deServicios,400,'De los C$1000 cobrados solo son suyos C$400');
+    assert.equal(sinDoble.otrosIngresos,0,'El cobro no puede volver a sumar como ingreso suelto');
+    assert.equal(sinDoble.ingresos,400);
     assert.equal(sinDoble.balance,100,'400 − 300');
-    assert.equal(sinDoble.profesionales,600,'Se informa, pero no está en ingresos ni en balance');
+    assert.equal(sinDoble.profesionales,600,'Se informa, pero fuera de toda suma');
 
-    // ── Los ingresos registrados a mano sí suman ──
-    const conOtros=await page.evaluate(()=>{
+    // ── El dinero cuenta el día que ENTRA, no el día de emisión ──
+    // La factura es del 28-ago; se cobró el 3-sep. Antes septiembre salía a cero
+    // y agosto subía retroactivamente el día del cobro.
+    const caja=await page.evaluate(()=>{
+      FACT_40();
       window.__fin([
-        {fecha:'2026-09-10',tipo:'ingreso',categoria:'factura',monto:1000},
+        {fecha:'2026-09-03',tipo:'ingreso',categoria:'factura',facturaId:1,monto:1000},
+        {fecha:'2026-09-11',tipo:'egreso', categoria:'alquiler',monto:300}
+      ]);
+      const sep=_balanceClinica('2026-09-01','2026-09-30');
+      const ago=_balanceClinica('2026-08-01','2026-08-31');
+      return {sep,ago};
+    });
+    assert.equal(caja.sep.deServicios,400,'El cobro es de septiembre, que es cuando entró');
+    assert.equal(caja.sep.balance,100,'400 − 300');
+    assert.equal(caja.ago.deServicios,0,'Agosto no debe llevarse un dinero que aún no había entrado');
+    assert.equal(caja.ago.balance,0);
+
+    // ── El pago al profesional NO se resta: ese dinero nunca fue de la clínica ──
+    const pagoProf=await page.evaluate(()=>{
+      FACT_40();
+      window.__fin([
+        {fecha:'2026-09-03',tipo:'ingreso',categoria:'factura',facturaId:1,monto:1000},
+        {fecha:'2026-09-05',tipo:'egreso', categoria:'pago_profesional',monto:600},
+        {fecha:'2026-09-11',tipo:'egreso', categoria:'alquiler',monto:100}
+      ]);
+      return _balanceClinica('2026-09-01','2026-09-30');
+    });
+    assert.equal(pagoProf.gastos,100,'Solo el alquiler es gasto propio');
+    assert.equal(pagoProf.pagoProfesional,600,'Lo entregado al médico se informa aparte');
+    assert.equal(pagoProf.balance,300,'400 − 100. Antes salía −300 al restarlo dos veces');
+
+    // ── Lo cobrado sin reparto acordado se queda en la clínica, y se avisa ──
+    const sinRep=await page.evaluate(()=>{
+      window.__fact(
+        [{id:2,numero:'F-2',fecha:'2026-09-05',estado:'pagada',total:20000}],
+        [{id:9,facturaId:2,tipo:'producto',cantidad:1,precioUnitario:20000,subtotal:20000,
+          porcentajeClinica:null,montoClinica:null}],
+        []);
+      window.__fin([
+        {fecha:'2026-09-05',tipo:'ingreso',categoria:'factura',facturaId:2,monto:20000},
+        {fecha:'2026-09-08',tipo:'egreso', categoria:'medicamento',monto:15000}
+      ]);
+      return _balanceClinica('2026-09-01','2026-09-30');
+    });
+    assert.equal(sinRep.deServicios,20000,'Antes valía 0 y el balance salía absurdamente negativo');
+    assert.equal(sinRep.sinReparto,20000,'Se marca para poder avisarlo en pantalla');
+    assert.equal(sinRep.balance,5000,'20000 − 15000');
+
+    // ── Un cobro parcial reparte en la misma proporción ──
+    const abono=await page.evaluate(()=>{
+      FACT_40();
+      window.__fin([{fecha:'2026-09-10',tipo:'ingreso',categoria:'factura',facturaId:1,monto:500}]);
+      return _balanceClinica('2026-09-01','2026-09-30');
+    });
+    assert.equal(abono.deServicios,200,'Medio cobro, media parte: 40 % de 500');
+    assert.equal(abono.profesionales,300);
+
+    // ── Cobro viejo sin factura_id: se reconoce por el número de referencia ──
+    const legado=await page.evaluate(()=>{
+      FACT_40();
+      window.__fin([{fecha:'2026-09-10',tipo:'ingreso',categoria:'factura',referencia:'F-1',monto:1000}]);
+      return _balanceClinica('2026-09-01','2026-09-30');
+    });
+    assert.equal(legado.deServicios,400,'Sin factura_id debe encontrarla por el número');
+
+    // ── Los ingresos registrados a mano sí suman enteros ──
+    const conOtros=await page.evaluate(()=>{
+      FACT_40();
+      window.__fin([
+        {fecha:'2026-09-10',tipo:'ingreso',categoria:'factura',facturaId:1,monto:1000},
         {fecha:'2026-09-12',tipo:'ingreso',categoria:'general',monto:250},
         {fecha:'2026-09-13',tipo:'ingreso',categoria:'consulta',monto:150},
         {fecha:'2026-09-11',tipo:'egreso', categoria:'nomina',monto:500}
       ]);
-      return _balanceClinica('2026-09-01','2026-09-30',{clinica:400,profesionales:600});
+      return _balanceClinica('2026-09-01','2026-09-30');
     });
     assert.equal(conOtros.otrosIngresos,400,'250 + 150');
     assert.equal(conOtros.ingresos,800,'400 de servicios + 400 sueltos');
@@ -101,19 +177,24 @@ const lanzar=()=>process.env.PLAYWRIGHT_CHROMIUM
 
     // ── Fuera del período no entra nada ──
     const fuera=await page.evaluate(()=>{
+      window.__fact([],[],[]);
       window.__fin([
         {fecha:'2026-08-31',tipo:'ingreso',categoria:'general',monto:999},
         {fecha:'2026-10-01',tipo:'egreso', categoria:'general',monto:999}
       ]);
-      return _balanceClinica('2026-09-01','2026-09-30',{clinica:0,profesionales:0});
+      return _balanceClinica('2026-09-01','2026-09-30');
     });
     assert.equal(fuera.ingresos,0);
     assert.equal(fuera.gastos,0);
 
     // ── Balance negativo cuando se gasta de más ──
     const negativo=await page.evaluate(()=>{
-      window.__fin([{fecha:'2026-09-11',tipo:'egreso',categoria:'nomina',monto:900}]);
-      return _balanceClinica('2026-09-01','2026-09-30',{clinica:400,profesionales:600});
+      FACT_40();
+      window.__fin([
+        {fecha:'2026-09-10',tipo:'ingreso',categoria:'factura',facturaId:1,monto:1000},
+        {fecha:'2026-09-11',tipo:'egreso',categoria:'nomina',monto:900}
+      ]);
+      return _balanceClinica('2026-09-01','2026-09-30');
     });
     assert.equal(negativo.balance,-500,'Debe poder dar negativo, no cortarse en cero');
 
@@ -145,6 +226,14 @@ const lanzar=()=>process.env.PLAYWRIGHT_CHROMIUM
       return {conocida:_etiquetaCategoria('nomina'), desconocida:_etiquetaCategoria('lo_que_sea')};
     });
     assert.match(etiquetas.conocida,/Nómina/);
+    // 'factura' solo existe como categoría de gasto: un cobro no puede salir
+    // rotulado como si fuera el pago a un proveedor.
+    const rotulo=await page.evaluate(()=>({
+      ingreso:_etiquetaCategoria('factura','ingreso'),
+      egreso:_etiquetaCategoria('factura','egreso')
+    }));
+    assert.match(rotulo.ingreso,/Cobro de/);
+    assert.match(rotulo.egreso,/Pago de factura/);
     assert.equal(etiquetas.desconocida,'lo_que_sea','Sin nombre, se enseña el id en vez de perderlo');
 
     // ── El id se deriva del nombre y aguanta tildes y espacios ──
@@ -205,6 +294,6 @@ const lanzar=()=>process.env.PLAYWRIGHT_CHROMIUM
     assert.match(vacios.ing,/No hay ingresos/);
     assert.match(vacios.egr,/No hay gastos/);
 
-    console.log('OK: sin doble conteo, otros ingresos, período, negativo, categorías, documento y pestañas.');
+    console.log('OK: caja y no emisión, sin doble conteo, pago al profesional fuera, sin reparto, abono, legado, categorías, documento y pestañas.');
   } finally {await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
