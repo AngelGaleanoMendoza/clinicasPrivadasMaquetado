@@ -15106,7 +15106,6 @@ const CATEGORIAS_FIN_DEFECTO = {
     {id:'general',       label:'General',       icon:'📦'},
   ],
   egreso: [
-    {id:CATEGORIA_PAGO_PROFESIONAL, label:'Pago a profesionales', icon:'👨‍⚕️'},
     {id:'nomina',      label:'Nómina',             icon:'👥'},
     {id:'alquiler',    label:'Alquiler',           icon:'🏢'},
     {id:'servicios',   label:'Servicios públicos', icon:'⚡'},
@@ -15119,6 +15118,9 @@ const CATEGORIAS_FIN_DEFECTO = {
     {id:'equipo',      label:'Equipo',             icon:'🔧'},
     {id:'factura',     label:'Pago de factura',    icon:'🧾'},
     {id:'general',     label:'General',            icon:'📦'},
+    // Al final a propósito: el modal preselecciona la primera, y esta es la
+    // única que no cuenta como gasto de la clínica.
+    {id:CATEGORIA_PAGO_PROFESIONAL, label:'Pago a profesionales', icon:'👨‍⚕️'},
   ]
 };
 
@@ -15313,19 +15315,24 @@ function renderResumenFinanzas() {
   const {from,to} = getFinDateRange();
   const finData  = (C.fin||[]).filter(f=>f.fecha>=from && f.fecha<=to);
   const factData = (C.fact||[]).filter(f=>f.fecha>=from && f.fecha<=to);
-  // Las mismas cifras que la pestaña Balance. Antes el Resumen sumaba TODO lo
-  // cobrado, incluida la parte del profesional, y daba un resultado distinto
-  // para el mismo período: dos números presentados como el de la clínica.
-  const b        = _balanceClinica(from, to);
-  const utilidad = b.balance;
+  // Quien puede ver el Balance ve aquí sus mismas cifras: antes el Resumen
+  // sumaba TODO lo cobrado —incluida la parte del profesional— y daba otro
+  // número para el mismo período. Quien no puede verlo ve la caja en bruto,
+  // con una etiqueta que dice justamente eso, para no filtrar el reparto.
+  const verBal   = puedeVerBalance();
+  const b        = verBal ? _balanceClinica(from, to) : null;
+  const brutoIng = finData.filter(f=>f.tipo==='ingreso').reduce((s2,f)=>s2+f.monto,0);
+  const brutoEgr = finData.filter(f=>f.tipo==='egreso').reduce((s2,f)=>s2+f.monto,0);
+  const valIng   = verBal ? b.ingresos : brutoIng;
+  const utilidad = verBal ? b.balance  : brutoIng - brutoEgr;
   const fEmit    = factData.length;
   const fPag     = factData.filter(f=>f.estado==='pagada').length;
   const statsEl  = document.getElementById('fin-stats');
   if(statsEl) statsEl.innerHTML = `
     <div class="stat-card"><div class="stat-icon si-green">💰</div>
-      <div class="stat-info"><h3 style="color:var(--success);font-size:20px">${fmtC(b.ingresos)}</h3><p>Ingresos de la clínica</p></div></div>
+      <div class="stat-info"><h3 style="color:var(--success);font-size:20px">${fmtC(valIng)}</h3><p>${verBal?'Ingresos de la clínica':'Entradas del período'}</p></div></div>
     <div class="stat-card"><div class="stat-icon ${utilidad>=0?'si-blue':'si-red'}">📊</div>
-      <div class="stat-info"><h3 style="color:${utilidad>=0?'var(--primary)':'var(--danger)'};font-size:20px">${fmtC(utilidad)}</h3><p>Balance del período</p></div></div>
+      <div class="stat-info"><h3 style="color:${utilidad>=0?'var(--primary)':'var(--danger)'};font-size:20px">${fmtC(utilidad)}</h3><p>${verBal?'Balance de la clínica':'Caja del período'}</p></div></div>
     <div class="stat-card"><div class="stat-icon si-orange">🧾</div>
       <div class="stat-info"><h3 style="font-size:20px">${fEmit}</h3><p>${_docFactura().plural} (${fPag} pagadas)</p></div></div>`;
   const recent = [...finData].sort((a,b)=>b.fecha.localeCompare(a.fecha)).slice(0,8);
@@ -15372,10 +15379,13 @@ function imprimirResumenFinanzas() {
   const egresos   = finData.filter(f => f.tipo === 'egreso');
   const totalIng  = ingresos.reduce((s,f) => s + f.monto, 0);
   const totalEgr  = egresos.reduce((s,f) => s + f.monto, 0);
-  // Mismo criterio que la pantalla: de lo cobrado solo cuenta la parte de la
-  // clínica, y el pago al profesional no es un gasto suyo.
-  const bal       = _balanceClinica(from, to);
-  const utilidad  = bal.balance;
+  // Mismo criterio que la pantalla, y los tres KPI deben restarse entre sí:
+  // con acceso al balance son las cifras de la clínica; sin él, la caja bruta.
+  const verBal    = puedeVerBalance();
+  const bal       = verBal ? _balanceClinica(from, to) : null;
+  const kpiIng    = verBal ? bal.ingresos : totalIng;
+  const kpiEgr    = verBal ? bal.gastos   : totalEgr;
+  const utilidad  = verBal ? bal.balance  : totalIng - totalEgr;
   const fPag      = factData.filter(f => f.estado === 'pagada').length;
 
   // Agrupar ingresos y egresos por categoría
@@ -15400,9 +15410,9 @@ function imprimirResumenFinanzas() {
     <div style="font-size:13px;color:#64748B;font-weight:600;margin-bottom:20px">Período: ${periodoLabel} · Generado: ${new Date().toLocaleString('es-ES')}</div>
 
     <div class="kpi-grid">
-      <div class="kpi green"><div class="kpi-val">${fmtC(totalIng)}</div><div class="kpi-lbl">Total Ingresos</div></div>
-      <div class="kpi red"><div class="kpi-val">${fmtC(totalEgr)}</div><div class="kpi-lbl">Total Gastos</div></div>
-      <div class="kpi ${utilidad>=0?'blue':'red'}"><div class="kpi-val">${fmtC(utilidad)}</div><div class="kpi-lbl">Balance de la clínica</div></div>
+      <div class="kpi green"><div class="kpi-val">${fmtC(kpiIng)}</div><div class="kpi-lbl">${verBal?'Ingresos de la clínica':'Entradas'}</div></div>
+      <div class="kpi red"><div class="kpi-val">${fmtC(kpiEgr)}</div><div class="kpi-lbl">${verBal?'Gastos de la clínica':'Salidas'}</div></div>
+      <div class="kpi ${utilidad>=0?'blue':'red'}"><div class="kpi-val">${fmtC(utilidad)}</div><div class="kpi-lbl">${verBal?'Balance de la clínica':'Caja del período'}</div></div>
       <div class="kpi orange"><div class="kpi-val">${factData.length}</div><div class="kpi-lbl">${_docFactura().plural} (${fPag} pagadas)</div></div>
     </div>
 
@@ -16197,18 +16207,55 @@ function _facturaDeIngreso(f, porNumero) {
   return porNumero.get(String(f.referencia || '')) ?? null;
 }
 
+// Un número repetido no identifica nada: si dos facturas lo comparten, el
+// respaldo por referencia se desactiva para ese número en vez de adivinar.
 function _indiceFacturasPorNumero() {
-  return new Map((C.fact||[]).map(f => [String(f.numero||''), f.id]));
+  const veces = new Map(), idx = new Map();
+  for(const f of (C.fact||[])) {
+    const n = String(f.numero||'');
+    if(!n) continue;
+    veces.set(n, (veces.get(n)||0) + 1);
+    idx.set(n, f.id);
+  }
+  for(const [n,c] of veces) if(c > 1) idx.delete(n);
+  return idx;
+}
+
+// Un cobro deja rastro por factura_id o, en los apuntes viejos, por el número
+// en `referencia`. Se recogen los dos para poder saber qué facturas YA tienen
+// su cobro registrado, incluidas aquellas cuyo número está duplicado y no se
+// puede resolver: contarlas por su fecha las sumaría otra vez.
+function _facturasConRastroDeCobro() {
+  const ids = new Set(), numeros = new Set();
+  for(const x of (C.fin||[])) {
+    if(x.tipo !== 'ingreso') continue;
+    if(x.facturaId != null) ids.add(x.facturaId);
+    if(x.categoria === 'factura' && x.referencia) numeros.add(String(x.referencia));
+  }
+  return { ids, numeros };
+}
+
+function _tieneRastroDeCobro(f, rastro) {
+  return rastro.ids.has(f.id) || rastro.numeros.has(String(f.numero||''));
+}
+
+// Una factura anulada o cancelada dejó de ser un cobro válido aunque su apunte
+// siga en finanzas: el documento se invalidó.
+const _FACT_ANULADA = ['anulada','cancelada'];
+function _facturaVale(id) {
+  const f = (C.fact||[]).find(x => x.id === id);
+  return !f || !_FACT_ANULADA.includes(f.estado);
 }
 
 // Facturas cuyo cobro cae dentro del período, con lo efectivamente cobrado.
 function _facturasDelBalance(from, to) {
   const porNumero = _indiceFacturasPorNumero();
+  const rastro = _facturasConRastroDeCobro();
   const cobradas = new Map();
   for(const f of (C.fin||[])) {
     if(f.tipo !== 'ingreso' || f.fecha < from || f.fecha > to) continue;
     const id = _facturaDeIngreso(f, porNumero);
-    if(id == null) continue;
+    if(id == null || !_facturaVale(id)) continue;
     cobradas.set(id, (cobradas.get(id)||0) + f.monto);
   }
   // Facturas marcadas como pagadas antes de que el cobro dejara rastro en
@@ -16216,11 +16263,21 @@ function _facturasDelBalance(from, to) {
   for(const f of (C.fact||[])) {
     if(f.estado !== 'pagada' || cobradas.has(f.id)) continue;
     if(f.fecha < from || f.fecha > to) continue;
-    const tieneRastro = (C.fin||[]).some(x => x.tipo==='ingreso' && _facturaDeIngreso(x, porNumero) === f.id);
-    if(tieneRastro) continue;   // su cobro existe, pero cae en otro período
-    cobradas.set(f.id, f.total);
+    if(_tieneRastroDeCobro(f, rastro)) continue;   // su cobro existe, en este período o en otro
+    // Una factura sin total guardado se sitúa por lo que suman sus líneas.
+    const t = Number(f.total);
+    cobradas.set(f.id, Number.isFinite(t) && t > 0 ? t : _repartoFactura(f.id).total);
   }
   return cobradas;
+}
+
+// Porcentaje que aplica a una línea. El de la línea es el acordado y manda.
+// El respaldo por tipo solo vale en modo porcentaje: en modo manual la cifra la
+// escribe quien cobra, y caer al porcentaje de una configuración anterior
+// repartiría a espaldas de quien facturó.
+function _pctDeLinea(i) {
+  if(i.porcentajeClinica != null) return i.porcentajeClinica;
+  return _balanceManual() ? null : _porcentajeClinica(i.tipo);
 }
 
 // Reparto de UNA factura a partir de sus líneas. Una línea sin reparto acordado
@@ -16233,7 +16290,7 @@ function _repartoFactura(facturaId) {
     const t = i.subtotal || (i.cantidad*i.precioUnitario) || 0;
     total += t;
     const manual = Number.isFinite(i.montoClinica) ? i.montoClinica : null;
-    const pct = manual!=null ? null : (i.porcentajeClinica ?? _porcentajeClinica(i.tipo));
+    const pct = manual!=null ? null : _pctDeLinea(i);
     if(manual != null)   { clinica += manual;             profesional += Math.max(0, t - manual); }
     else if(pct != null) { const c = Math.round(t*pct)/100; clinica += c; profesional += t - c; }
     else                 { clinica += t;                  sinReparto  += t; }
@@ -16241,17 +16298,35 @@ function _repartoFactura(facturaId) {
   return { clinica, profesional, sinReparto, total, lineas: items.length };
 }
 
+// Base del prorrateo: el total del documento, que puede llevar impuesto además
+// de las líneas. Lo cobrado puede ser menos (un abono).
+function _baseFactura(factura, totalLineas) {
+  const t = Number(factura?.total);
+  return Number.isFinite(t) && t > 0 ? t : totalLineas;
+}
+
+function _factorCobro(facturaId, montoCobrado) {
+  const factura = (C.fact||[]).find(x => x.id === facturaId);
+  const base = _baseFactura(factura, _repartoFactura(facturaId).total);
+  return base > 0 ? montoCobrado / base : 1;
+}
+
 function _lineasBalance(from, to) {
   const cobradas = _facturasDelBalance(from, to);
   const pagadas = new Map((C.fact||[])
     .filter(f => cobradas.has(f.id)).map(f=>[f.id,f]));
+  // Cada línea se escala por la parte que realmente se cobró en el período: si
+  // no, la tabla enseñaría la factura entera y contradiría a las tarjetas.
+  const factores = new Map();
+  for(const [id, monto] of cobradas) factores.set(id, _factorCobro(id, monto));
   return (C.factItems||[]).filter(i=>pagadas.has(i.facturaId)).map(i=>{
     const factura = pagadas.get(i.facturaId);
-    const total = i.subtotal || (i.cantidad*i.precioUnitario) || 0;
+    const fac = factores.get(i.facturaId) ?? 1;
+    const total = (i.subtotal || (i.cantidad*i.precioUnitario) || 0) * fac;
     // Lo escrito a mano manda: se acordó para ese servicio concreto y ninguna
     // regla posterior debe recalcularlo. Cambiar de modo no altera lo cobrado.
     const manual = Number.isFinite(i.montoClinica) ? i.montoClinica : null;
-    const pct = manual!=null ? null : (i.porcentajeClinica ?? _porcentajeClinica(i.tipo));
+    const pct = manual!=null ? null : _pctDeLinea(i);
     return {
       factura, item:i, tipo:i.tipo, total, pct, manual: manual!=null,
       // Sin porcentaje fijado en la línea se usa el vigente; se marca para que
@@ -16288,7 +16363,7 @@ function _resumenBalance(lineas) {
   const suma = k => grupos.reduce((s,g)=>s+g[k], 0);
   const clinica = Math.round(suma('clinica')*100)/100;
   return {
-    grupos, clinica,
+    grupos, clinica, clinicaRep: Math.round(suma('clinicaRep')*100)/100,
     total: suma('total'), cantidad: suma('cantidad'), sinPct: suma('sinPct'), estimados: suma('estimados'),
     // Solo de las líneas con reparto: las que no lo tienen son enteras de la clínica.
     profesionales: Math.round((suma('conPct') - suma('clinicaRep'))*100)/100,
@@ -16318,20 +16393,29 @@ function _pctGrupoBalance(g) {
 function _balanceClinica(from, to) {
   const fin = (C.fin||[]).filter(f=>f.fecha>=from && f.fecha<=to);
   const porNumero = _indiceFacturasPorNumero();
+  const rastro = _facturasConRastroDeCobro();
 
   let deServicios=0, otrosIngresos=0, profesionales=0, sinReparto=0;
-  let cobrosSinDetalle=0, gastos=0, pagoProfesional=0;
+  let cobrosSinDetalle=0, gastos=0, pagoProfesional=0, noRepartible=0, anulados=0;
   const contadas = new Set();
 
   // Un cobro puede no coincidir con el total facturado (un abono, un ajuste):
   // se reparte en la misma proporción que tienen sus líneas.
   const repartir = (facturaId, monto) => {
     const r = _repartoFactura(facturaId);
-    if(!r.lineas) { deServicios += monto; cobrosSinDetalle += monto; return; }
-    const factor = r.total > 0 ? monto / r.total : 1;
+    const factura = (C.fact||[]).find(x => x.id === facturaId);
+    const base = _baseFactura(factura, r.total);
+    if(!r.lineas || base <= 0) { deServicios += monto; cobrosSinDetalle += monto; return; }
+    const factor = monto / base;
     deServicios   += r.clinica     * factor;
     profesionales += r.profesional * factor;
     sinReparto    += r.sinReparto  * factor;
+    // Impuesto u otros conceptos del documento que no son de ninguna de las dos
+    // partes. Es dinero que la clínica cobró, pero no se reparte con nadie.
+    // También recoge el caso de líneas que suman cero: sin esto el cobro entero
+    // desaparecía del balance.
+    const resto = monto - r.total * factor;
+    if(resto > 0.005) { deServicios += resto; noRepartible += resto; }
   };
 
   for(const f of fin) {
@@ -16347,6 +16431,8 @@ function _balanceClinica(from, to) {
       else otrosIngresos += f.monto;
       continue;
     }
+    // El documento se invalidó: su cobro deja de contar como venta del período.
+    if(!_facturaVale(id)) { anulados += f.monto; continue; }
     contadas.add(id);
     repartir(id, f.monto);
   }
@@ -16355,8 +16441,9 @@ function _balanceClinica(from, to) {
   for(const f of (C.fact||[])) {
     if(f.estado !== 'pagada' || contadas.has(f.id)) continue;
     if(f.fecha < from || f.fecha > to) continue;
-    if((C.fin||[]).some(x => x.tipo==='ingreso' && _facturaDeIngreso(x, porNumero) === f.id)) continue;
-    repartir(f.id, f.total);
+    if(_tieneRastroDeCobro(f, rastro)) continue;
+    const t = Number(f.total);
+    repartir(f.id, Number.isFinite(t) && t > 0 ? t : _repartoFactura(f.id).total);
   }
 
   const r2 = n => Math.round(n*100)/100;
@@ -16375,6 +16462,8 @@ function _balanceClinica(from, to) {
     // y cobros cuya factura ya no está para repartirla.
     sinReparto: r2(sinReparto),
     cobrosSinDetalle: r2(cobrosSinDetalle),
+    noRepartible: r2(noRepartible),
+    anulados: r2(anulados),
   };
 }
 
@@ -16410,6 +16499,8 @@ function renderBalanceFinanzas() {
       : manual ? `⚠️ <strong>${fmtC(bAv.sinReparto)}</strong> se cobraron sin escribir cuánto quedaba a la clínica. Se cuentan como suyos; escribe el reparto si parte era del profesional.`
       : `⚠️ Sin porcentaje configurado: <strong>${escAttr(nombresSinPct.join(', '))}</strong>. Esos ${fmtC(bAv.sinReparto)} se cuentan enteros para la clínica hasta que lo configures.`,
     bAv.cobrosSinDetalle ? `ℹ️ ${fmtC(bAv.cobrosSinDetalle)} de cobros cuyo detalle ya no está: se cuentan enteros para la clínica.` : '',
+    bAv.noRepartible ? `ℹ️ ${fmtC(bAv.noRepartible)} cobrados por encima del detalle de las líneas (impuesto u otros conceptos): cuentan para la clínica y no se reparten.` : '',
+    bAv.anulados ? `ℹ️ ${fmtC(bAv.anulados)} corresponden a ${_docFactura().plural.toLowerCase()} anuladas: su cobro no cuenta como venta del período.` : '',
     _datosTruncados() ? '⚠️ El período tiene más movimientos de los que se cargan de una vez: elige un período más corto para que el balance sea exacto.' : '',
     r.estimados ? `ℹ️ ${r.estimados} línea(s) se facturaron antes de configurar el reparto y usan el porcentaje actual (marcadas con *).` : '',
   ].filter(Boolean).map(t=>`<div class="balance-aviso">${t}</div>`).join('');
@@ -16423,15 +16514,15 @@ function renderBalanceFinanzas() {
         <td class="num" data-label="Cantidad">${g.cantidad.toLocaleString('es-NI')}</td>
         <td class="num" data-label="Total cobrado">${fmtC(g.total)}</td>
         <td class="num" data-label="${manual?'Reparto':'% clínica'}">${p?`<span${p.mixto?' title="Porcentajes distintos en el período: se muestra el efectivo"':''}>${p.texto}</span>`:`<span class="tag tag-orange" style="font-size:10px">${manual?'Sin escribir':'Sin %'}</span>`}${g.sinPct>0&&p?' <span class="tag tag-orange" style="font-size:10px">parcial</span>':''}</td>
-        <td class="num balance-clinica" data-label="Queda a la clínica">${p?fmtC(g.clinica):'—'}</td>
-        <td class="num" data-label="Profesionales">${p?fmtC(g.conPct-g.clinica):'—'}</td>
+        <td class="num balance-clinica" data-label="Queda a la clínica">${fmtC(g.clinica)}</td>
+        <td class="num" data-label="Profesionales">${fmtC(g.conPct-g.clinicaRep)}</td>
       </tr>`;
     }).join('')}</tbody>
     <tfoot><tr>
       <td class="tipo">Total</td>
       <td class="num" data-label="Cantidad">${r.cantidad.toLocaleString('es-NI')}</td>
       <td class="num" data-label="Total cobrado">${fmtC(r.total)}</td>
-      <td class="num" data-label="% clínica">${r.total-r.sinPct>0?_fmtPct(r.clinica/(r.total-r.sinPct)*100):'—'}</td>
+      <td class="num" data-label="% clínica">${r.total-r.sinPct>0?_fmtPct(r.clinicaRep/(r.total-r.sinPct)*100):'—'}</td>
       <td class="num balance-clinica" data-label="Queda a la clínica">${fmtC(r.clinica)}</td>
       <td class="num" data-label="Profesionales">${fmtC(r.profesionales)}</td>
     </tr></tfoot></table></div>`
@@ -16452,7 +16543,7 @@ function renderBalanceFinanzas() {
     ${avisos}
     <div class="stats-grid balance-kpis">
       <div class="stat-card"><div class="stat-icon si-green">🏥</div><div class="stat-info"><h3 style="color:var(--success)">${fmtC(b.ingresos)}</h3><p>Ingresos de la clínica</p></div></div>
-      <div class="stat-card"><div class="stat-icon si-red">📤</div><div class="stat-info"><h3 style="color:var(--danger)">${fmtC(b.gastos)}</h3><p>Gastos del período</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-red">📤</div><div class="stat-info"><h3 style="color:var(--danger)">${fmtC(b.gastos)}</h3><p>Gastos de la clínica</p></div></div>
       <div class="stat-card"><div class="stat-icon ${b.balance>=0?'si-blue':'si-red'}"><span>⚖️</span></div><div class="stat-info"><h3 style="color:${b.balance>=0?'var(--primary)':'var(--danger)'}">${fmtC(b.balance)}</h3><p>Balance</p></div></div>
       <div class="stat-card balance-informativo"><div class="stat-icon si-orange">👨‍⚕️</div><div class="stat-info"><h3>${fmtC(b.profesionales)}</h3><p>Corresponde a profesionales · informativo</p></div></div>
     </div>
@@ -16655,18 +16746,18 @@ function imprimirBalanceReparto() {
     ${r.grupos.length ? `<table style="margin-bottom:12px"><thead><tr><th>Tipo</th><th style="${num}">Cantidad</th><th style="${num}">Total cobrado</th><th style="${num}">% clínica</th><th style="${num}">Queda a la clínica</th><th style="${num}">Profesionales</th></tr></thead>
     <tbody>${r.grupos.map(g=>{
       const t = _tipoServicio(g.tipo), p = _pctGrupoBalance(g);
-      return `<tr><td>${t.icon} ${escAttr(t.label)}</td><td style="${num}">${g.cantidad.toLocaleString('es-NI')}</td><td style="${num}">${fmtC(g.total)}</td><td style="${num}">${p?p.texto:'Sin %'}</td><td style="${num};font-weight:700;color:#15803D">${p?fmtC(g.clinica):'—'}</td><td style="${num}">${p?fmtC(g.conPct-g.clinica):'—'}</td></tr>`;
+      return `<tr><td>${t.icon} ${escAttr(t.label)}</td><td style="${num}">${g.cantidad.toLocaleString('es-NI')}</td><td style="${num}">${fmtC(g.total)}</td><td style="${num}">${p?p.texto:'Sin reparto'}</td><td style="${num};font-weight:700;color:#15803D">${fmtC(g.clinica)}</td><td style="${num}">${fmtC(g.conPct-g.clinicaRep)}</td></tr>`;
     }).join('')}
-    <tr style="font-weight:800;background:#F1F5F9"><td>Total</td><td style="${num}">${r.cantidad.toLocaleString('es-NI')}</td><td style="${num}">${fmtC(r.total)}</td><td style="${num}">${r.total-r.sinPct>0?_fmtPct(r.clinica/(r.total-r.sinPct)*100):'—'}</td><td style="${num};color:#15803D">${fmtC(r.clinica)}</td><td style="${num}">${fmtC(r.profesionales)}</td></tr>
+    <tr style="font-weight:800;background:#F1F5F9"><td>Total</td><td style="${num}">${r.cantidad.toLocaleString('es-NI')}</td><td style="${num}">${fmtC(r.total)}</td><td style="${num}">${r.total-r.sinPct>0?_fmtPct(r.clinicaRep/(r.total-r.sinPct)*100):'—'}</td><td style="${num};color:#15803D">${fmtC(r.clinica)}</td><td style="${num}">${fmtC(r.profesionales)}</td></tr>
     </tbody></table>` : '<p style="color:#94A3B8;text-align:center;padding:16px">Sin facturas pagadas en este período</p>'}
-    ${r.sinPct>0?`<p style="font-size:11px;color:#B45309;margin:0 0 6px">Sin porcentaje configurado: ${fmtC(r.sinPct)} no se incluyen en la parte de la clínica ni de los profesionales.</p>`:''}
+    ${r.sinPct>0?`<p style="font-size:11px;color:#B45309;margin:0 0 6px">Sin reparto acordado: ${fmtC(r.sinPct)} se cuentan enteros para la clínica. Configura el porcentaje o escribe la ganancia si parte era del profesional.</p>`:''}
     ${r.estimados?`<p style="font-size:11px;color:#64748B;margin:0 0 6px">* Línea facturada antes de configurar el reparto: se usa el porcentaje actual.</p>`:''}
 
     ${lineas.length ? `<div class="section-title" style="margin-top:18px">📋 Detalle de servicios cobrados</div>
     <table><thead><tr><th>Fecha</th><th>Factura</th><th>Paciente</th><th>Servicio</th><th style="${num}">Cobrado</th><th style="${num}">% clínica</th><th style="${num}">Clínica</th></tr></thead>
     <tbody>${lineas.map(l=>{
       const t = _tipoServicio(l.tipo);
-      return `<tr><td style="white-space:nowrap">${formatFecha(l.factura.fecha)}</td><td style="white-space:nowrap"><code style="font-size:10px">${escAttr(l.factura.numero||'#'+l.factura.id)}</code></td><td style="white-space:nowrap">${escAttr(l.factura.pacienteNombre||'—')}</td><td>${t.icon} ${escAttr(l.item.descripcion||t.label)}${l.item.cantidad>1?` ×${l.item.cantidad.toLocaleString('es-NI')}`:''}</td><td style="${num}">${fmtC(l.total)}</td><td style="${num}">${l.pct==null?'Sin %':_fmtPct(l.pct)+(l.estimado?'*':'')}</td><td style="${num};font-weight:700;color:#15803D">${l.pct==null?'—':fmtC(l.clinica)}</td></tr>`;
+      return `<tr><td style="white-space:nowrap">${formatFecha(l.factura.fecha)}</td><td style="white-space:nowrap"><code style="font-size:10px">${escAttr(l.factura.numero||'#'+l.factura.id)}</code></td><td style="white-space:nowrap">${escAttr(l.factura.pacienteNombre||'—')}</td><td>${t.icon} ${escAttr(l.item.descripcion||t.label)}${l.item.cantidad>1?` ×${l.item.cantidad.toLocaleString('es-NI')}`:''}</td><td style="${num}">${fmtC(l.total)}</td><td style="${num}">${l.manual?'a mano':l.sinReparto?'sin reparto':_fmtPct(l.pct)+(l.estimado?'*':'')}</td><td style="${num};font-weight:700;color:#15803D">${fmtC(l.clinica)}</td></tr>`;
     }).join('')}</tbody></table>` : ''}`;
 
   return pdfAbrir('Balance de servicios — ' + periodo, body, cfg);

@@ -18,7 +18,8 @@ function extraer(name) {
   return source.slice(start,source.indexOf('\n}',start)+2);
 }
 const code=['_tipoServicio','_porcentajeClinica','_balanceManual',
-  '_facturaDeIngreso','_indiceFacturasPorNumero','_facturasDelBalance','_lineasBalance',
+  '_facturaDeIngreso','_indiceFacturasPorNumero',
+  '_facturasConRastroDeCobro','_tieneRastroDeCobro','_facturaVale','_pctDeLinea','_baseFactura','_repartoFactura','_factorCobro','_facturasDelBalance','_lineasBalance',
   '_resumenBalance','_pctGrupoBalance','calcFacturaTotals','renderFacturaItemsUI',
   'eliminarFactura'].map(extraer).join('\n');
 
@@ -35,6 +36,7 @@ const preambulo=`
   const renderFinanzas=()=>{};
   const customConfirm=async()=>confirmar;
   const _exigeClinica=()=>!!currentClinicaId;
+  const _FACT_ANULADA=['anulada','cancelada'];
   const TIPOS_SERVICIO_FACTURA=[
     {id:'consulta',label:'Consulta',icon:'C'},{id:'procedimiento',label:'Procedimiento',icon:'P'},
     {id:'examen',label:'Examen',icon:'E'},{id:'servicio',label:'Servicio',icon:'S'},
@@ -65,7 +67,7 @@ const preambulo=`
   window.__items=xs=>{facturaItems=xs;};
 
   ${code}
-  Object.assign(window,{_lineasBalance,_resumenBalance,_pctGrupoBalance,_balanceManual,
+  Object.assign(window,{_lineasBalance,_resumenBalance,_pctGrupoBalance,_balanceManual,_repartoFactura,
     calcFacturaTotals,renderFacturaItemsUI,eliminarFactura});
 `;
 
@@ -73,7 +75,7 @@ const lanzar=()=>process.env.PLAYWRIGHT_CHROMIUM
   ? chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM,headless:true})
   : chromium.launch({channel:'msedge',headless:true});
 
-const FACT=[{id:1,fecha:'2026-09-10',estado:'pagada',numero:'F-1',pacienteNombre:'Ana'}];
+const FACT=[{id:1,fecha:'2026-09-10',estado:'pagada',numero:'F-1',pacienteNombre:'Ana',total:1000}];
 
 (async()=>{
   const browser=await lanzar();
@@ -151,6 +153,25 @@ const FACT=[{id:1,fecha:'2026-09-10',estado:'pagada',numero:'F-1',pacienteNombre
     assert.equal(mezcla.profesionales,1100,'2400 - 1300');
     assert.equal(mezcla.pctConsulta.mixto,true,'Mezclar a mano y % da un efectivo');
     assert.equal(mezcla.pctExamen.texto,'a mano','Todo a mano se etiqueta como tal');
+
+    // ── La columna Profesionales de un grupo mixto ──
+    // clinica incluye las líneas sin reparto; conPct no. Restarlas entre sí
+    // daba cifras negativas en la fila mientras el pie decía otra cosa.
+    const mixto=await page.evaluate(({fact})=>{
+      window.__datos(fact,[
+        {id:1,facturaId:1,tipo:'consulta',cantidad:1,precioUnitario:400,subtotal:400,porcentajeClinica:40,montoClinica:null},
+        {id:2,facturaId:1,tipo:'consulta',cantidad:1,precioUnitario:600,subtotal:600,porcentajeClinica:null,montoClinica:null}
+      ],[]);
+      const r=_resumenBalance(_lineasBalance('2026-09-01','2026-09-30'));
+      const g=r.grupos.find(x=>x.tipo==='consulta');
+      return {clinica:g.clinica,clinicaRep:g.clinicaRep,conPct:g.conPct,sinPct:g.sinPct,
+              filaProf:g.conPct-g.clinicaRep, pieProf:r.profesionales, clinicaRepTotal:r.clinicaRep};
+    },{fact:FACT});
+    assert.equal(mixto.clinica,760,'160 del 40 % + 600 sin reparto');
+    assert.equal(mixto.clinicaRep,160,'Solo lo repartido cuenta para el porcentaje');
+    assert.equal(mixto.filaProf,240,'Antes la fila daba 400−760 = −360');
+    assert.equal(mixto.pieProf,240,'La fila y el pie deben coincidir');
+    assert.equal(mixto.clinicaRepTotal,160);
 
     // ── El modo solo decide la interfaz, no recalcula lo cobrado ──
     const cambioModo=await page.evaluate(({fact})=>{
