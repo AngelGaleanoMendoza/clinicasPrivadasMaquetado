@@ -154,6 +154,9 @@ CREATE INDEX IF NOT EXISTS idx_accesos_bloqueados_clinica
 -- Datos de acceso del personal: solo los ve el Super Admin. Se escriben
 -- únicamente desde mi_acceso_red(), nunca directamente.
 ALTER TABLE public.accesos_bloqueados ENABLE ROW LEVEL SECURITY;
+-- Solo lectura desde la app, y RLS la limita al Super Admin. No se concede
+-- escritura: los intentos los anota mi_acceso_red() con sus propios permisos.
+GRANT SELECT ON public.accesos_bloqueados TO authenticated;
 DROP POLICY IF EXISTS "accesos_bloqueados_superadmin" ON public.accesos_bloqueados;
 CREATE POLICY "accesos_bloqueados_superadmin" ON public.accesos_bloqueados
   FOR ALL USING (public.is_superadmin()) WITH CHECK (public.is_superadmin());

@@ -22,7 +22,7 @@
 <!-- Lectura local de machotes. El archivo se procesa en el navegador antes de
      guardarlo; Mammoth extrae DOCX y PDF.js se carga al elegir un PDF. -->
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js" defer></script>
-<link rel="stylesheet" href="css/styles.css?v=20260921a">
+<link rel="stylesheet" href="css/styles.css?v=20260927a">
 </head>
 <body>
 <script>
@@ -565,6 +565,17 @@
             <div id="config-cats-ingreso" class="cats-fin-bloque"></div>
             <div id="config-cats-egreso" class="cats-fin-bloque"></div>
             <p class="text-light" style="font-size:12px;margin-top:14px">Se guardan con el botón <strong>💾 Guardar Configuración</strong> de arriba.</p>
+          </div>
+          <div class="card" id="config-red-card" hidden>
+            <div class="card-header"><h3>🌐 Red de la clínica</h3></div>
+            <p class="text-light" style="font-size:12px;margin-bottom:10px">Si registras una o más IPs, el personal de esta clínica solo podrá usar el sistema desde esa red, salvo los usuarios que tengan marcado <strong>🌐 Puede usar el sistema fuera de la clínica</strong>. Vacío = sin restricción.</p>
+            <div class="form-group">
+              <label>IPs permitidas <span style="font-size:11px;color:var(--text-light);font-weight:400">— una por línea</span></label>
+              <textarea id="config-ips" rows="3" placeholder="186.1.2.3" style="font-family:monospace;font-size:13px"></textarea>
+            </div>
+            <div id="config-red-actual" class="red-actual"></div>
+            <div id="config-red-bloqueos"></div>
+            <p class="text-light" style="font-size:12px;margin-top:12px">Se guardan con el botón <strong>💾 Guardar Configuración</strong> de arriba.</p>
           </div>
           <div class="card">
             <div class="card-header"><h3>👁️ Vista Previa Nota de Consulta</h3></div>
@@ -2825,7 +2836,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260921a" defer></script>
+<script src="js/app.js?v=20260927a" defer></script>
 </body>
 </html>
 

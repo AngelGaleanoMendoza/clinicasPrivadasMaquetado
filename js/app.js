@@ -8463,10 +8463,75 @@ function _limpiarFormConfig() {
 }
 
 // Carga en el formulario los datos que la clínica ya tiene guardados en Supabase.
+// ── Red de la clínica (solo Super Admin) ──
+const _RE_IPV4 = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
+const _RE_IPV6 = /^[0-9a-f:]+$/i;
+function _leerIps(texto) {
+  const ips = [], invalidas = [];
+  for(const t of String(texto||'').split(/[\s,;]+/).map(x=>x.trim()).filter(Boolean)) {
+    const ok = _RE_IPV4.test(t) || (t.includes(':') && _RE_IPV6.test(t));
+    if(!ok) invalidas.push(t);
+    else if(!ips.includes(t.toLowerCase())) ips.push(t.toLowerCase());
+  }
+  return { ips, invalidas };
+}
+
+function agregarIpRed(ip) {
+  const ta = document.getElementById('config-ips');
+  if(!ta || !ip) return;
+  const { ips } = _leerIps(ta.value);
+  if(ips.includes(ip.toLowerCase())) { toast('Esa IP ya está en la lista','info'); return; }
+  ta.value = [...ips, ip].join('\n');
+  toast('IP añadida. Pulsa 💾 Guardar Configuración para aplicarla.','success');
+}
+
+async function renderRedClinica(cl) {
+  const card = document.getElementById('config-red-card');
+  if(!card) return;
+  card.hidden = !isSuperAdmin();
+  if(card.hidden) return;
+  const ta = document.getElementById('config-ips');
+  if(ta) ta.value = (cl?.ips_permitidas || []).join('\n');
+
+  // La IP que ve la base ahora mismo. Sirve para dar de alta la red estando en
+  // el local y para comprobar que la detección funciona antes de restringir.
+  const actual = document.getElementById('config-red-actual');
+  const acceso = await _consultarAccesoRed();
+  if(actual) {
+    if(!acceso) actual.innerHTML = `<div class="balance-aviso">🛠️ Falta ejecutar <strong>migracion_acceso_red.sql</strong> en Supabase. Hasta entonces la restricción no se aplica.</div>`;
+    else if(!acceso.ip) actual.innerHTML = `<div class="balance-aviso">⚠️ La base no está recibiendo la IP de las conexiones: la restricción <strong>no se aplicaría</strong>. No registres IPs hasta resolverlo.</div>`;
+    else actual.innerHTML = `<span>IP desde la que estás ahora: <code>${escAttr(acceso.ip)}</code></span>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="agregarIpRed('${escAttr(acceso.ip)}')">+ Añadir esta red</button>`;
+  }
+
+  // Quién intentó entrar desde fuera: cuando el proveedor cambia la IP de la
+  // clínica, aquí aparece la nueva y se autoriza con un clic.
+  const cont = document.getElementById('config-red-bloqueos');
+  if(!cont || !cl?.id) return;
+  const desde = new Date(); desde.setDate(desde.getDate() - 30);
+  const { data, error } = await sb.from('accesos_bloqueados').select('*')
+    .eq('clinica_id', cl.id).gte('creado_en', desde.toISOString())
+    .order('creado_en', { ascending:false }).limit(50);
+  if(error || !data?.length) { cont.innerHTML = ''; return; }
+  const porIp = new Map();
+  for(const b of data) {
+    const g = porIp.get(b.ip) || { ip:b.ip, nombres:new Set(), ultima:b.creado_en, veces:0 };
+    g.nombres.add(b.nombre || b.email || '—'); g.veces++;
+    porIp.set(b.ip, g);
+  }
+  cont.innerHTML = `<div class="red-bloqueos-titulo">🚫 Intentos desde fuera · últimos 30 días</div>` +
+    [...porIp.values()].map(g => `<div class="red-bloqueo">
+      <div><code>${escAttr(g.ip||'IP desconocida')}</code>
+        <small>${escAttr([...g.nombres].join(', '))} · ${g.veces} vez${g.veces!==1?'es':''} · último ${formatFecha(String(g.ultima).slice(0,10))}</small></div>
+      ${g.ip ? `<button type="button" class="btn btn-secondary btn-sm" onclick="agregarIpRed('${escAttr(g.ip)}')">Permitir esta IP</button>` : ''}
+    </div>`).join('');
+}
+
 function cargarConfigClinica(id) {
   const cl = configClinicas.find(c => c.id === id);
   if(!cl) return;
   // Cada clínica tiene las suyas: la copia de trabajo se rehace al cambiar.
+  renderRedClinica(cl);
   _catsFinEdit = {
     ingreso: (cl.categorias_finanzas?.ingreso || []).filter(c=>c?.id&&c?.label).map(c=>({...c})),
     egreso:  (cl.categorias_finanzas?.egreso  || []).filter(c=>c?.id&&c?.label).map(c=>({...c}))
@@ -8589,6 +8654,9 @@ async function guardarConfigClinica() {
   if(!configClinicaId) { toast('Elige primero la clínica que quieres configurar', 'error'); return; }
   const nombre = document.getElementById('config-nombre-clinica').value.trim();
   if(!nombre) { toast('El nombre de la clínica es obligatorio', 'error'); return; }
+  // Una IP mal escrita dejaría fuera a todo el personal: se revisa antes de guardar.
+  const red = isSuperAdmin() ? _leerIps(document.getElementById('config-ips')?.value) : null;
+  if(red?.invalidas.length) { toast('No es una IP válida: ' + red.invalidas.join(', '), 'error'); return; }
 
   setLoading(true);
   let firma_url = _configFirmaQuitar ? null : _configFirmaUrl;
@@ -8615,10 +8683,11 @@ async function guardarConfigClinica() {
     // botón aparte hacía que "Guardar Configuración" las descartara al recargar.
     categorias_finanzas: _catsFinEdit || {ingreso:[], egreso:[]}
   };
+  if(red) payload.ips_permitidas = red.ips;
 
   // Las columnas nuevas pueden no existir todavía en Supabase: se reintenta sin
   // ellas para no perder el resto del formulario, avisando qué quedó fuera.
-  const OPCIONALES = ['firma_url','email','institucion','padecimientos','tipo_documento_factura','categorias_finanzas'];
+  const OPCIONALES = ['firma_url','email','institucion','padecimientos','tipo_documento_factura','categorias_finanzas','ips_permitidas'];
   let { error } = await sb.from('clinicas').update(payload).eq('id', configClinicaId);
   const faltantes = [];
   while(error && OPCIONALES.some(col => (col in payload) && _faltaColumna(error, col))) {

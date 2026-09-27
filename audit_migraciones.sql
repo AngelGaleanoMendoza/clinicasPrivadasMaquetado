@@ -117,7 +117,16 @@ WITH requisitos(orden, migracion, clase, objeto) AS (VALUES
   -- 17. Procedimientos clínicos por servicio. Se listaba en el repositorio pero
   --     el audit nunca lo comprobaba: una base sin él pasaba por estar al día.
   (17, 'procedimientos_clinicos',    'tabla',       'procedimientos_clinicos'),
-  (17, 'procedimientos_clinicos',    'columna',     'procedimientos_clinicos.profesional_id')
+  (17, 'procedimientos_clinicos',    'columna',     'procedimientos_clinicos.profesional_id'),
+
+  -- 18. Uso solo desde la red de la clínica
+  (18, 'acceso_red',                 'columna',     'clinicas.ips_permitidas'),
+  (18, 'acceso_red',                 'columna',     'profiles.acceso_remoto'),
+  (18, 'acceso_red',                 'tabla',       'accesos_bloqueados'),
+  (18, 'acceso_red',                 'politica',    'accesos_bloqueados_superadmin'),
+  (18, 'acceso_red',                 'disparador',  'profiles_proteger_acceso_remoto'),
+  (18, 'acceso_red',                 'funcion',     'ip_cliente'),
+  (18, 'acceso_red',                 'funcion',     'mi_acceso_red')
 
 ),
 
