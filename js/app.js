@@ -259,7 +259,7 @@ const PROFILE_COLS_BASE = ['id','nombre','rol','email','icono','clinica_id','per
 // Opcionales: se fueron agregando con el tiempo y pueden no existir todavía en
 // una base que no haya corrido los scripts. Si falta alguna, se pide sin ella:
 // una columna ausente NO puede dejar a nadie fuera del sistema.
-const PROFILE_COLS_OPC = ['especialidad','firma_url','recetario_url','recetario_config','bloqueado','intentos_fallidos','horario','ultimo_acceso','con_agenda'];
+const PROFILE_COLS_OPC = ['especialidad','firma_url','recetario_url','recetario_config','bloqueado','intentos_fallidos','horario','ultimo_acceso','con_agenda','acceso_remoto'];
 let _profileColsOK = null;   // se recuerda la lista válida tras el primer intento
 
 function _profileCols() {
@@ -1025,6 +1025,48 @@ function limpiarPendientesSesion() {
   renderPendientesSesion();
 }
 
+// ── Acceso solo desde la red de la clínica ──
+// La decisión la toma la base (mi_acceso_red), que es la que ve la IP real y la
+// que además deja de entregar datos fuera de la red. Aquí solo se enseña.
+// Si la función no existe todavía (migración sin correr) o falla, no se bloquea:
+// dejar a una clínica sin sus expedientes por un fallo sería peor.
+async function _consultarAccesoRed() {
+  try {
+    const { data, error } = await _conLimite(sb.rpc('mi_acceso_red'), 10000, 'La comprobación de red');
+    return error ? null : data;
+  } catch(e) { return null; }
+}
+
+function _mostrarSinPermisosRed(acceso) {
+  const ip = document.getElementById('sin-permisos-red-ip');
+  if(ip) ip.textContent = acceso?.ip ? 'Red detectada: ' + acceso.ip : '';
+  openModalOverlay('modal-sin-permisos-red');
+}
+
+// Quien entra en la clínica y se lleva el teléfono fuera ya no recibe datos
+// (lo corta la base); al volver a la pestaña se le cierra la sesión y se le
+// explica por qué, en vez de dejarle mirando pantallas vacías.
+let _comprobandoRed = false;
+document.addEventListener('visibilitychange', async () => {
+  if(document.visibilityState !== 'visible' || !currentUser || isSuperAdmin() || _comprobandoRed) return;
+  _comprobandoRed = true;
+  try {
+    const acceso = await _consultarAccesoRed();
+    if(acceso && acceso.permitido === false) await _expulsarPorRed(acceso);
+  } finally { _comprobandoRed = false; }
+});
+
+async function _expulsarPorRed(acceso) {
+  detenerInactividad();
+  guardarBorradoresSesion();
+  await sb.auth.signOut();
+  currentUser = null; currentClinicaId = null;
+  _vaciarCache();
+  document.getElementById('app').classList.remove('visible');
+  document.getElementById('login-screen').style.display = 'flex';
+  _mostrarSinPermisosRed(acceso);
+}
+
 async function entrarConPerfil(profile) {
   // La interfaz no debe abrirse con el perfil legacy si falta el JWT. Sin este
   // token todas las escrituras protegidas por RLS fallan aunque el perfil sea válido.
@@ -1059,6 +1101,18 @@ async function entrarConPerfil(profile) {
     // [] o lista = configurados por el administrador → se respetan tal cual.
     permisos: Array.isArray(profile.permisos) ? profile.permisos : null
   };
+  // Fuera de la red de la clínica y sin acceso remoto: no se carga el panel.
+  if(!isSuperAdmin()) {
+    const acceso = await _consultarAccesoRed();
+    if(acceso && acceso.permitido === false) {
+      await sb.auth.signOut();
+      currentUser = null; currentClinicaId = null;
+      setLoading(false);
+      _mostrarSinPermisosRed(acceso);
+      return false;
+    }
+  }
+
   // Resetear bloqueo en login exitoso (fire-and-forget)
   if(profile.id) sb.from('profiles').update({ intentos_fallidos: 0, bloqueado: false }).eq('id', profile.id);
 
@@ -14496,7 +14550,30 @@ function openModalUsuario() {
   _syncEspecialidadUsuario();
   _resetFirmaUsuario(null);
   _resetRecetarioUsuario(null, null);
+  _pintarAccesoRemoto(false);
   document.getElementById('modal-usuario').classList.add('open');
+}
+
+// Solo el Super Admin ve y cambia el acceso desde fuera; la base lo impide a
+// cualquier otro aunque manipule la pantalla.
+function _pintarAccesoRemoto(valor) {
+  const wrap = document.getElementById('u-acceso-remoto-wrap');
+  const chk  = document.getElementById('u-acceso-remoto');
+  if(wrap) wrap.hidden = !isSuperAdmin();
+  if(chk)  chk.checked = !!valor;
+}
+
+// Se guarda aparte del resto de la ficha: si la columna no existe todavía, o
+// falla, no se pierde lo demás que se editó.
+async function _guardarAccesoRemoto(id, valorAnterior) {
+  if(!isSuperAdmin() || !id) return '';
+  const valor = !!document.getElementById('u-acceso-remoto')?.checked;
+  if(valor === !!valorAnterior) return '';
+  const { error } = await sb.from('profiles').update({ acceso_remoto: valor }).eq('id', id);
+  if(error && _faltaColumna(error, 'acceso_remoto'))
+    return ' Falta ejecutar migracion_acceso_red.sql: el acceso desde fuera no se guardó.';
+  if(error) return ' No se pudo guardar el acceso desde fuera: ' + error.message;
+  return '';
 }
 
 function openModalUsuarioEditById(id) {
@@ -14525,6 +14602,7 @@ function openModalUsuarioEditById(id) {
   _syncEspecialidadUsuario();
   _resetFirmaUsuario(u.firma_url || null);
   _resetRecetarioUsuario(u.recetario_url || null, u.recetario_config || null);
+  _pintarAccesoRemoto(u.acceso_remoto);
   document.getElementById('modal-usuario').classList.add('open');
 }
 
@@ -14599,7 +14677,10 @@ async function guardarUsuario() {
     }
     const profCache=C.prof.find(x=>String(x.id)===String(editingUsuarioId));
     if(profCache) Object.assign(profCache,{nombre,rol,especialidad,firma_url,recetario_url:null,recetario_config});
-    toast('Usuario actualizado.'+avisoPass, avisoPass.includes('NO se cambió') ? 'warning' : 'success');
+    const anterior = adminUsuarios.find(x=>x.id===editingUsuarioId)?.acceso_remoto;
+    const avisoRed = await _guardarAccesoRemoto(editingUsuarioId, anterior);
+    const hayAviso = avisoPass.includes('NO se cambió') || !!avisoRed;
+    toast('Usuario actualizado.'+avisoPass+avisoRed, hayAviso ? 'warning' : 'success');
   } else {
     // Sin correo no hay forma de iniciar sesión: todo el login se articula por él.
     if(!email){ toast('El correo es obligatorio: sin él la persona no podrá entrar','error'); setLoading(false); return; }
@@ -14633,6 +14714,8 @@ async function guardarUsuario() {
       if(!error) _avisarFaltaColumnaEspecialidad();
     }
     if(error){ toast('Error al crear: '+error.message,'error'); setLoading(false); return; }
+    const avisoRedNuevo = await _guardarAccesoRemoto(newId, false);
+    if(avisoRedNuevo) toast(avisoRedNuevo.trim(),'warning');
     if(faltaConfirmar) toast(`Usuario creado, pero ${emailNorm} debe confirmar su correo antes de poder entrar. Para evitarlo, desactiva "Confirm email" en Supabase → Authentication → Settings.`,'warning');
     else toast('Usuario creado exitosamente','success');
   }

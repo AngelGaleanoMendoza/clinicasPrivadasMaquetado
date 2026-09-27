@@ -1841,6 +1841,13 @@
       <div class="form-group"><label>Clínica asignada</label>
         <select id="u-clinica"><option value="">Sin clínica</option></select>
       </div>
+      <div class="form-group full" id="u-acceso-remoto-wrap" hidden>
+        <label class="u-remoto-check">
+          <input type="checkbox" id="u-acceso-remoto">
+          <span><strong>🌐 Puede usar el sistema fuera de la clínica</strong>
+            <small>Sin esta casilla, solo entra desde la red registrada de su clínica. Si la clínica no tiene red registrada, no cambia nada.</small></span>
+        </label>
+      </div>
       <div class="form-group full"><label>Contraseña <span id="u-pass-req">*</span></label>
         <input type="password" id="u-password" placeholder="Contraseña de acceso" autocomplete="new-password">
         <span id="u-pass-hint" style="font-size:11px;color:var(--text-light);margin-top:2px;display:none">Dejar vacío para no cambiar</span>
@@ -2761,6 +2768,20 @@
     <div class="mc-actions">
       <button class="btn btn-secondary" id="mc-cancel" onclick="_confirmCancel()">Cancelar</button>
       <button class="btn btn-danger"    id="mc-ok"     onclick="_confirmOk()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL USUARIO SIN PERMISOS (fuera de la red de la clínica) -->
+<div class="modal-overlay" id="modal-sin-permisos-red">
+  <div class="modal mc-box">
+    <div class="mc-icon-red">🔒</div>
+    <h2>Usuario sin permisos</h2>
+    <p class="mc-msg">Tu usuario solo puede usar el sistema desde la red de la clínica.<br>
+      Conéctate al Wi-Fi del local o pide al administrador que te habilite el acceso desde fuera.</p>
+    <p class="mc-red-ip" id="sin-permisos-red-ip"></p>
+    <div class="mc-actions">
+      <button class="btn btn-primary" onclick="closeModal('modal-sin-permisos-red')">Entendido</button>
     </div>
   </div>
 </div>

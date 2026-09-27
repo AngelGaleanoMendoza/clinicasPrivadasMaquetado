@@ -504,6 +504,9 @@ ALTER TABLE public.clinicas     ADD COLUMN IF NOT EXISTS horario JSONB;
 -- ============================================================
 
 -- 8.1 — Los helpers reconocen al usuario por id O por email del token
+-- ATENCIÓN: migracion_acceso_red.sql redefine get_my_clinica_id() para añadir
+-- la restricción por red de la clínica. Si ejecutas este archivo después, esa
+-- restricción se desactiva en silencio: vuelve a ejecutar migracion_acceso_red.sql.
 CREATE OR REPLACE FUNCTION public.get_my_clinica_id()
 RETURNS bigint
 LANGUAGE sql
@@ -1017,3 +1020,19 @@ DROP POLICY IF EXISTS "reparto_servicios_clinica" ON public.reparto_servicios;
 CREATE POLICY "reparto_servicios_clinica" ON public.reparto_servicios
   USING (is_superadmin() OR clinica_id = get_my_clinica_id())
   WITH CHECK (is_superadmin() OR clinica_id = get_my_clinica_id());
+
+
+-- ============================================================
+-- Acceso solo desde la red de la clínica (migracion_acceso_red.sql)
+-- Intentos de entrada desde fuera: datos de acceso del personal, solo para el
+-- Super Admin. Se protege aquí también por si la tabla ya existe.
+-- ============================================================
+DO $$
+BEGIN
+  IF to_regclass('public.accesos_bloqueados') IS NOT NULL THEN
+    EXECUTE 'ALTER TABLE public.accesos_bloqueados ENABLE ROW LEVEL SECURITY';
+    EXECUTE 'DROP POLICY IF EXISTS "accesos_bloqueados_superadmin" ON public.accesos_bloqueados';
+    EXECUTE 'CREATE POLICY "accesos_bloqueados_superadmin" ON public.accesos_bloqueados
+               FOR ALL USING (public.is_superadmin()) WITH CHECK (public.is_superadmin())';
+  END IF;
+END $$;
