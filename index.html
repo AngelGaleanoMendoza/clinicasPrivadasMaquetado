@@ -22,7 +22,7 @@
 <!-- Lectura local de machotes. El archivo se procesa en el navegador antes de
      guardarlo; Mammoth extrae DOCX y PDF.js se carga al elegir un PDF. -->
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js" defer></script>
-<link rel="stylesheet" href="css/styles.css?v=20260927a">
+<link rel="stylesheet" href="css/styles.css?v=20261030a">
 </head>
 <body>
 <script>
@@ -793,6 +793,7 @@
             <button class="tab active" id="tab-est-dia"    onclick="switchEstTab('dia')">📅 Diario</button>
             <button class="tab"        id="tab-est-semana" onclick="switchEstTab('semana')">📆 Semanal</button>
             <button class="tab"        id="tab-est-mes"    onclick="switchEstTab('mes')">🗓️ Mensual</button>
+            <button class="tab"        id="tab-est-medicos" onclick="switchEstTab('medicos')" hidden>🩺 Por médico</button>
           </div>
         </div>
 
@@ -821,6 +822,12 @@
             <input type="month" id="est-mes-fecha" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;outline:none;color:var(--text);background:var(--card)" onchange="renderEstMes()">
           </div>
           <div id="est-mes-stats"></div>
+        </div>
+
+        <!-- POR MÉDICO: productividad por firma (Super Admin y médico administrativo) -->
+        <div id="est-panel-medicos" style="display:none">
+          <div class="pm-controles" id="pm-controles"></div>
+          <div id="pm-contenido"></div>
         </div>
       </div>
 
@@ -2836,7 +2843,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20260927a" defer></script>
+<script src="js/app.js?v=20261030a" defer></script>
 </body>
 </html>
 

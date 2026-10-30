@@ -1396,6 +1396,27 @@ body.dark .inv-item-alerta{background:rgba(245,158,11,.08)!important}
 .prod-connections{max-height:380px;overflow-y:auto;scrollbar-width:thin}.prod-connection-row{display:flex;align-items:center;gap:9px;padding:10px 4px;border-bottom:1px solid var(--border)}.prod-connection-row:last-child{border-bottom:0}
 .prod-connection-avatar{width:32px;height:32px;font-size:14px;flex:none;background:var(--primary-light);color:var(--primary)}.prod-connection-main{display:flex;flex:1;min-width:0;flex-direction:column}.prod-connection-main strong{font-size:12px}.prod-connection-main small{font-size:9.5px;color:var(--text-light);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .prod-connection-date{display:flex;align-items:flex-end;flex-direction:column;gap:4px;text-align:right}.prod-connection-date>strong{font-size:10px;font-weight:600}.prod-connection-date .tag{font-size:8.5px}
+/* PRODUCTIVIDAD MÉDICA POR FIRMA (Estadísticas → Por médico) */
+.pm-controles{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.pm-controles select{min-width:210px;padding:8px 34px 8px 11px;border:1.5px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-family:inherit;font-size:13px;font-weight:600;outline:none}
+.pm-controles select:focus,.pm-rango input:focus{border-color:var(--primary)}
+.pm-rango{display:flex;align-items:center;gap:8px}
+.pm-rango input{padding:7px 10px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit;background:var(--card);color:var(--text);outline:none}
+.pm-rango span{font-size:12px;color:var(--text-light)}
+.pm-kpis{margin-bottom:14px}
+.pm-ranking{margin-top:14px}
+.pm-fila .prod-user-title>strong{font-size:13.5px}
+.pm-fila .prod-user-meta{white-space:normal}
+.pm-variantes{font-size:10.5px;color:var(--text-light);margin-top:6px;font-style:italic;overflow-wrap:anywhere}
+@media(max-width:600px){
+  .pm-controles{align-items:stretch}
+  .pm-controles>*{width:100%}
+  .pm-controles select{min-width:0}
+  .pm-controles .btn{justify-content:center}
+  .pm-rango input{flex:1;min-width:0}
+  /* El puesto es lo que se viene a buscar: aquí no se oculta como en otras listas. */
+  .pm-fila .prod-user-rank{display:grid;width:26px;height:26px;font-size:12px}
+}
 @media(max-width:1024px){.prod-ranking-grid,.prod-secondary-grid{grid-template-columns:1fr}}
 @media(max-width:600px){.prod-controls{width:100%;justify-content:stretch}.prod-controls select{width:100%;min-width:0}.prod-controls .filter-chips{flex:1}.prod-ranking-grid{grid-template-columns:1fr}.prod-user-row{padding:11px 9px}.prod-user-rank{display:none}.prod-user-avatar{width:30px;height:30px}.prod-connection-row{align-items:flex-start}.prod-connection-date>strong{font-size:9px}.prod-clinic-row{padding:11px 9px}.prod-rank{width:24px;height:24px}}
 .icon-select{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:4px}
