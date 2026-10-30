@@ -247,7 +247,9 @@ function _exigeClinica() {
 function _vaciarCache() {
   Object.keys(C).forEach(k => { C[k].length = 0; });
   currentClinica = null;
-  pmDatos = null; pmClinica = '';
+  // La carga del reporte de productividad que siga en curso ya no es de nadie.
+  pmGen++; if(pmAbort) pmAbort.abort();
+  pmDatos = null; pmClinica = ''; pmCargando = false; pmPeriodo = 'mes'; pmDesde = pmHasta = '';
 }
 let procClinLoadError = null;
 
@@ -13331,21 +13333,26 @@ function _pmRango() {
     const ini = new Date(h.getFullYear(), h.getMonth()-1, 1);
     return { from:_pmFecha(ini), to:_pmFecha(new Date(h.getFullYear(), h.getMonth(), 0)), etiqueta:mes(ini) };
   }
-  if(pmPeriodo === 'anio') return { from:h.getFullYear()+'-01-01', to:_pmFecha(h), etiqueta:'Año '+h.getFullYear() };
+  if(pmPeriodo === 'anio') return { from:h.getFullYear()+'-01-01', to:_pmHasta(h), etiqueta:'Año '+h.getFullYear() };
   if(pmPeriodo === 'rango' && pmDesde && pmHasta) {
     const [from, to] = pmDesde <= pmHasta ? [pmDesde, pmHasta] : [pmHasta, pmDesde];
     return { from, to, etiqueta: formatFecha(from) + ' – ' + formatFecha(to) };
   }
-  return { from:_pmFecha(new Date(h.getFullYear(), h.getMonth(), 1)), to:_pmFecha(h), etiqueta:mes(h) };
+  return { from:_pmFecha(new Date(h.getFullYear(), h.getMonth(), 1)), to:_pmHasta(h), etiqueta:mes(h) };
 }
 
-// El mismo código se escribe "21601", "MINSA 21601" o "Cód. 021601".
+// hoy() da la fecha en UTC: en Nicaragua lo firmado después de las 18:00 se
+// guarda con la fecha de mañana. Los períodos abiertos llegan hasta esa fecha
+// para no dejar fuera lo atendido esta noche.
+function _pmHasta(h) { const l = _pmFecha(h), u = hoy(); return u > l ? u : l; }
+
+// El mismo código se escribe "21601", "MINSA 21601", "MINSA21601", "Cód. 021601"
+// o "Idoneidad 21601": lo que identifica es la cifra. Sin cifras no hay código:
+// el campo es obligatorio y quien no lo tiene escribe "N/A", "S/N" o "Sin
+// código"; tomar eso como código fundiría en una persona a todos los que lo usan.
 function _pmCodigo(c) {
-  let s = _normalMedico(c)
-    .replace(/\b(codigo|cod|minsa|registro|reg|profesional|num|nro|no|n)\b\.?/g, ' ')
-    .replace(/[^a-z0-9]/g, '').toUpperCase();
-  if(/^\d+$/.test(s)) s = s.replace(/^0+(?=\d)/, '');
-  return s;
+  const cifras = (String(c || '').match(/\d+/g) || []).join('').replace(/^0+/, '');
+  return cifras;
 }
 
 // "Dr. Juan Pérez", "juan perez" y "Dr Juan  Pérez." son la misma clave.
@@ -13369,8 +13376,9 @@ function _pmActos({ notas = [], recetas = [], procedimientos = [], citas = [] },
     if((r.estado || 'finalizada') !== 'finalizada') continue;
     actos.push({
       tipo: r.tipo === 'examen_visual' ? 'examen_visual' : 'nota',
-      clinica: r.clinica_id, sujeto: _pmSujeto(r), fecha: r.fecha,
-      visita: r.cita_id ? 'cita:' + r.cita_id : 'fecha:' + (r.fecha || ''),
+      // La visita es el día. El examen visual y las notas abiertas desde la
+      // ficha no guardan cita_id: usarla partiría una visita en dos atenciones.
+      clinica: r.clinica_id, sujeto: _pmSujeto(r), fecha: r.fecha, visita: r.fecha || '',
       id: id(r.profesional_id), nombre: String(r.profesional_nombre || '').trim(),
       codigo: _pmCodigo(r.profesional_codigo),
     });
@@ -13406,44 +13414,73 @@ function _pmActos({ notas = [], recetas = [], procedimientos = [], citas = [] },
   return actos;
 }
 
-// Agrupa los actos por médico.
+// Agrupa los actos por médico, en dos fases para que el resultado no dependa
+// del orden en que llegan los datos.
 //
-// El código MINSA y la cuenta son identidad fuerte: un acto que trae los dos
-// (una nota firmada por alguien con usuario) los une. El nombre solo une piezas
-// cuando no junta dos códigos distintos: dos "Juan Pérez" con código diferente
-// son dos personas, y una firma sin código con ese nombre no se le puede
-// atribuir a ninguno (queda aparte, marcada como dudosa).
+// 1. Uniones seguras: código MINSA ↔ cuenta, cuando una nota trae los dos. Ojo:
+//    el formulario de la nota asigna la cuenta por NOMBRE, así que un homónimo
+//    externo hereda la cuenta del médico que tiene usuario. Por eso una cuenta
+//    se une solo al código con el que más firma (si empata, a ninguno) y las
+//    notas con otro código se tratan como de otra persona.
+// 2. Puentes por nombre, decididos sobre la foto de la fase 1: lo que no tiene
+//    código se une a un médico con código solo si su nombre lleva a uno y solo
+//    uno; una firma sin código ni cuenta se une a la cuenta de ese nombre si hay
+//    exactamente una. Dos cuentas no se juntan nunca. Lo que no se puede decidir
+//    queda aparte, marcado como firma dudosa.
 function _pmAgrupar(actos, perfiles) {
-  const padre = new Map(), conCodigo = new Set();
-  const add = x => { if(!padre.has(x)) { padre.set(x, x); if(x.startsWith('c:')) conCodigo.add(x); } };
+  const padre = new Map(), conCodigo = new Set(), conCuenta = new Set();
+  const add = x => {
+    if(padre.has(x)) return;
+    padre.set(x, x);
+    if(x.startsWith('c:')) conCodigo.add(x);
+    if(x.startsWith('i:')) conCuenta.add(x);
+  };
   const find = x => {
     let r = x;
     while(padre.get(r) !== r) r = padre.get(r);
     while(padre.get(x) !== r) { const s = padre.get(x); padre.set(x, r); x = s; }
     return r;
   };
+  // `b` se cuelga de `a`: la raíz resultante es siempre la de `a`.
   const unir = (a, b) => {
     const ra = find(a), rb = find(b);
     if(ra === rb) return;
     padre.set(rb, ra);
     if(conCodigo.has(rb)) conCodigo.add(ra);
+    if(conCuenta.has(rb)) conCuenta.add(ra);
   };
   const vacio = () => ({ nota:0, examen_visual:0, receta:0, procedimiento:0, cita:0 });
   const sinFirma = vacio(), noMedico = vacio();
   const esFirma = a => a.tipo === 'nota' || a.tipo === 'examen_visual';
   const nodo = a => a.codigo ? 'c:' + a.codigo : a.id ? 'i:' + a.id : 'n:' + a._clave;
 
+  // Una cuenta que firma notas es de un médico aunque su rol sea administración
+  // (el médico dueño de la clínica suele tenerlo).
+  const idsFirmantes = new Set(actos.filter(a => esFirma(a) && a.id).map(a => a.id));
   const validos = [];
   for(const a of actos) {
-    // La firma escrita en la nota manda. En lo demás, si quien figura es una
-    // cuenta de recepción o administración, no es un acto médico atribuible.
     const rol = a.rol || (a.id && perfiles.get(a.id)?.rol) || '';
-    if(!esFirma(a) && _PM_ROLES_NO_MEDICOS.includes(rol)) { noMedico[a.tipo]++; continue; }
+    if(!esFirma(a) && _PM_ROLES_NO_MEDICOS.includes(rol) && !idsFirmantes.has(a.id)) { noMedico[a.tipo]++; continue; }
     a._clave = _pmNombre(a.nombre);
     if(!a.codigo && !a.id && !a._clave) { sinFirma[a.tipo]++; continue; }
     validos.push(a);
   }
 
+  // ── Fase 1 ──
+  const vecesCodigo = new Map();
+  for(const a of validos) if(a.codigo && a.id) {
+    const m = vecesCodigo.get(a.id) || new Map();
+    m.set(a.codigo, (m.get(a.codigo) || 0) + 1);
+    vecesCodigo.set(a.id, m);
+  }
+  const codigoDeCuenta = new Map();
+  for(const [id, m] of vecesCodigo) {
+    const orden = [...m.entries()].sort((x, y) => y[1] - x[1]);
+    if(orden.length === 1 || orden[0][1] > orden[1][1]) codigoDeCuenta.set(id, orden[0][0]);
+  }
+  for(const a of validos) {
+    if(a.codigo && a.id && codigoDeCuenta.get(a.id) !== a.codigo) a.id = '';   // cuenta heredada por el nombre
+  }
   for(const a of validos) {
     if(a.codigo) add('c:' + a.codigo);
     if(a.id) add('i:' + a.id);
@@ -13451,22 +13488,42 @@ function _pmAgrupar(actos, perfiles) {
     if(!a.codigo && !a.id) add('n:' + a._clave);
   }
 
-  const porNombre = new Map();
-  const anotar = (clave, n) => {
+  // ── Fase 2 ──
+  const nombresDe = new Map();
+  const anotar = (n, clave) => {
     if(!clave) return;
-    if(!porNombre.has(clave)) porNombre.set(clave, new Set());
-    porNombre.get(clave).add(n);
+    const r = find(n);
+    if(!nombresDe.has(r)) nombresDe.set(r, new Set());
+    nombresDe.get(r).add(clave);
   };
-  for(const a of validos) anotar(a._clave, nodo(a));
-  for(const [pid, p] of perfiles) if(padre.has('i:' + pid)) anotar(_pmNombre(p.nombre), 'i:' + pid);
+  for(const a of validos) anotar(nodo(a), a._clave);
+  for(const [pid, p] of perfiles) if(padre.has('i:' + pid)) anotar('i:' + pid, _pmNombre(p.nombre));
 
-  const ambiguos = new Set();
-  for(const [clave, nodos] of porNombre) {
-    const raices = [...new Set([...nodos].map(find))];
-    if(raices.filter(r => conCodigo.has(r)).length > 1) { ambiguos.add(clave); continue; }
-    for(let k = 1; k < raices.length; k++) unir(raices[0], raices[k]);
+  const codificadosPor = new Map(), cuentasPor = new Map();
+  const meter = (mapa, clave, r) => { if(!mapa.has(clave)) mapa.set(clave, new Set()); mapa.get(clave).add(r); };
+  for(const [r, claves] of nombresDe) for(const c of claves) {
+    if(conCodigo.has(r)) meter(codificadosPor, c, r);
+    else if(conCuenta.has(r)) meter(cuentasPor, c, r);
   }
+  const uniones = [], dudosos = new Set(), ambiguos = new Set();
+  const alcanzables = (claves, mapa) => {
+    const d = new Set();
+    for(const c of claves) for(const r of (mapa.get(c) || [])) d.add(r);
+    return d;
+  };
+  for(const [r, claves] of nombresDe) {
+    if(conCodigo.has(r)) continue;
+    const codigos = alcanzables(claves, codificadosPor);
+    if(codigos.size === 1) { uniones.push([[...codigos][0], r]); continue; }
+    if(conCuenta.has(r)) continue;      // la cuenta ya identifica a la persona
+    if(codigos.size > 1) { dudosos.add(r); claves.forEach(c => ambiguos.add(c)); continue; }
+    const cuentas = alcanzables(claves, cuentasPor);
+    if(cuentas.size === 1) uniones.push([[...cuentas][0], r]);
+    else if(cuentas.size > 1) { dudosos.add(r); claves.forEach(c => ambiguos.add(c)); }
+  }
+  for(const [destino, origen] of uniones) unir(destino, origen);
 
+  // ── Conteo ──
   const grupos = new Map();
   const atencionesTotales = new Set(), pacientesTotales = new Set();
   for(const a of validos) {
@@ -13474,7 +13531,8 @@ function _pmAgrupar(actos, perfiles) {
     let g = grupos.get(raiz);
     if(!g) {
       g = { nombres:new Map(), codigos:new Set(), ids:new Set(), clinicas:new Set(), atenciones:new Set(),
-            pacientes:new Set(), nota:0, examen_visual:0, receta:0, procedimiento:0, cita:0, ultima:'', dudoso:false };
+            pacientes:new Set(), nota:0, examen_visual:0, receta:0, procedimiento:0, cita:0, ultima:'',
+            dudoso:dudosos.has(raiz) };
       grupos.set(raiz, g);
     }
     // El nombre que el médico escribe al firmar pesa más que el de la cuenta.
@@ -13489,18 +13547,18 @@ function _pmAgrupar(actos, perfiles) {
     }
     g[a.tipo]++;
     if(a.fecha && a.fecha > g.ultima) g.ultima = a.fecha;
-    if(!a.codigo && ambiguos.has(a._clave)) g.dudoso = true;
   }
 
   const medicos = [...grupos.values()].map(g => {
-    const escrito = [...g.nombres.entries()].sort((x, y) => y[1] - x[1])[0]?.[0] || '';
-    const perfil = [...g.ids].map(i => perfiles.get(i)).find(Boolean);
+    const escrito = [...g.nombres.entries()]
+      .sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0], 'es'))[0]?.[0] || '';
+    const perfil = [...g.ids].sort().map(i => perfiles.get(i)).find(Boolean);
     const nombre = escrito || perfil?.nombre || 'Sin nombre';
-    const variantes = [...new Map([...g.nombres.keys()]
+    const variantes = [...new Map([...g.nombres.keys()].sort((x, y) => x.localeCompare(y, 'es'))
       .filter(n => _pmNombre(n) !== _pmNombre(nombre)).map(n => [_pmNombre(n), n])).values()];
     return {
-      nombre, variantes, codigos:[...g.codigos], conCuenta:g.ids.size > 0,
-      especialidad:perfil?.especialidad || '', clinicas:[...g.clinicas],
+      nombre, variantes, codigos:[...g.codigos].sort(), conCuenta:g.ids.size > 0,
+      especialidad:perfil?.especialidad || '', clinicas:[...g.clinicas].sort(),
       atenciones:g.atenciones.size, pacientes:g.pacientes.size,
       notas:g.nota, examenes:g.examen_visual, recetas:g.receta,
       procedimientos:g.procedimiento, citas:g.cita, ultima:g.ultima, dudoso:g.dudoso,
@@ -13508,11 +13566,11 @@ function _pmAgrupar(actos, perfiles) {
   }).sort((x, y) =>
     y.atenciones - x.atenciones || y.pacientes - x.pacientes ||
     (y.notas + y.examenes) - (x.notas + x.examenes) || y.recetas - x.recetas ||
-    x.nombre.localeCompare(y.nombre, 'es'));
+    x.nombre.localeCompare(y.nombre, 'es') || x.codigos.join().localeCompare(y.codigos.join()));
 
   const suma = k => medicos.reduce((s, m) => s + m[k], 0);
   return {
-    medicos, sinFirma, noMedico, ambiguos:[...ambiguos],
+    medicos, sinFirma, noMedico, ambiguos:[...ambiguos].sort(),
     totales: {
       // Una visita con dos médicos es una atención para cada uno, pero una sola
       // en el total de la clínica.
@@ -13523,71 +13581,123 @@ function _pmAgrupar(actos, perfiles) {
   };
 }
 
-// Supabase entrega como mucho 1000 filas por consulta: se pagina hasta el final
-// del período. Si falta una columna opcional se reintenta con todas.
-async function _pmConsultar(tabla, columnas, filtrar) {
-  const filas = [];
-  let cols = columnas;
-  for(let pag = 0; pag < 50; pag++) {
-    const desde = pag * 1000;
-    const pedir = c => filtrar(sb.from(tabla).select(c)).order('id', { ascending:true }).range(desde, desde + 999);
-    let { data, error } = await pedir(cols);
-    if(error && cols !== '*' && /column|does not exist|schema cache/i.test(error.message || '')) {
-      cols = '*';
-      ({ data, error } = await pedir(cols));
+// Supabase entrega como mucho un número fijo de filas por consulta (1000 por
+// defecto, y puede ser menos). Se pagina por clave —id mayor que el último
+// leído— y no por posición: si alguien registra algo mientras se lee, la
+// posición se desplaza y se repetirían o saltarían filas. Se sigue hasta una
+// página vacía, sin suponer el tamaño de página.
+//
+// Si falta una columna opcional se quita SOLO esa y se avisa. Reintentar con
+// '*' descargaría el texto clínico completo de cada nota.
+const _PM_PAGINA = 1000, _PM_PAGINAS_MAX = 60;
+async function _pmConsultar(tabla, columnas, filtrar, signal) {
+  const porId = new Map();
+  let cols = columnas.split(',');
+  const faltan = [];
+  let ultimo = null;
+  for(let pag = 0; pag < _PM_PAGINAS_MAX; pag++) {
+    const pedir = () => {
+      let q = filtrar(sb.from(tabla).select(cols.join(',')));
+      if(ultimo != null) q = q.gt('id', ultimo);
+      q = q.order('id', { ascending:true }).limit(_PM_PAGINA);
+      return signal && typeof q.abortSignal === 'function' ? q.abortSignal(signal) : q;
+    };
+    let { data, error } = await pedir();
+    while(error) {
+      const falta = cols.find(c => c !== 'id' && _faltaColumna(error, c));
+      if(!falta) break;
+      cols = cols.filter(c => c !== falta);
+      faltan.push(falta);
+      ({ data, error } = await pedir());
     }
-    if(error) return { filas, error };
-    filas.push(...(data || []));
-    if(!data || data.length < 1000) return { filas };
+    if(error) return { filas:[...porId.values()], error, faltan };
+    if(!data || !data.length) return { filas:[...porId.values()], faltan };
+    for(const r of data) porId.set(r.id, r);
+    ultimo = data[data.length - 1].id;
   }
-  return { filas, truncado:true };
+  return { filas:[...porId.values()], faltan, truncado:true };
 }
 
-async function _pmPerfiles() {
-  if(!isSuperAdmin()) return new Map((C.prof || []).map(p => [String(p.id), p]));
-  const { data } = await _consultaPerfil(cols => sb.from('profiles').select(cols));
-  return new Map((data || []).map(p => [String(p.id), p]));
+// La tabla de procedimientos puede no existir en una base antigua: eso no es un
+// fallo del reporte. Una columna que falta en ella sí lo es, y se avisa.
+const _pmTablaNoExiste = e => e && (e.code === '42P01' || e.code === 'PGRST205' ||
+  /relation .* does not exist|could not find the table/i.test(e.message || ''));
+
+async function _pmPerfiles(clinica, signal) {
+  // Para el médico administrativo bastan los perfiles ya cargados de su
+  // clínica; si todavía no están, se piden.
+  if(!isSuperAdmin() && (C.prof || []).length) return { mapa:new Map(C.prof.map(p => [String(p.id), p])) };
+  const r = await _pmConsultar('profiles', 'id,nombre,rol,especialidad,clinica_id',
+    q => (!isSuperAdmin() && clinica) ? q.eq('clinica_id', clinica) : q, signal);
+  return { mapa:new Map((r.filas || []).map(p => [String(p.id), p])), error:r.error, truncado:r.truncado };
 }
+
+// Cada carga tiene su número. Si mientras tanto se cambia un filtro, se cierra
+// sesión o entra otra persona, el resultado viejo se descarta en vez de pintarse
+// con los filtros nuevos (o, peor, en la sesión de otro usuario).
+let pmGen = 0, pmAbort = null;
 
 async function cargarProductividadMedica() {
-  if(!puedeVerProductividadMedica() || pmCargando) return;
+  if(!puedeVerProductividadMedica()) return;
+  const gen = ++pmGen;
+  if(pmAbort) pmAbort.abort();
+  const control = typeof AbortController === 'function' ? new AbortController() : null;
+  pmAbort = control;
+  const signal = control?.signal;
+  const usuario = currentUser?.id;
+  const vigente = () => gen === pmGen && currentUser?.id === usuario;
+
   const clinica = isSuperAdmin() ? (pmClinica || null) : currentClinicaId;
-  if(!isSuperAdmin() && !clinica) { pmDatos = { error:'Tu cuenta no tiene una clínica asignada.' }; renderProductividadMedica(); return; }
   const rango = _pmRango();
+  if(!isSuperAdmin() && !clinica) {
+    pmDatos = { error:'Tu cuenta no tiene una clínica asignada.', ...rango };
+    pmCargando = false; renderProductividadMedica(); return;
+  }
   pmCargando = true;
   renderProductividadMedica();
+  // Una red que se cae a mitad no debe dejar la pantalla en "Calculando…".
+  const plazo = control ? setTimeout(() => control.abort(), 90000) : null;
+  let datos;
   try {
     const enPeriodo = campo => q => {
       q = q.gte(campo, rango.from).lte(campo, rango.to);
       return clinica ? q.eq('clinica_id', clinica) : q;
     };
     const deClinica = q => clinica ? q.eq('clinica_id', clinica) : q;
-    const [rn, rm, rp, rc, perfiles] = await Promise.all([
-      _pmConsultar('notas', 'id,clinica_id,paciente_id,mascota_id,fecha,tipo,estado,cita_id,profesional_id,profesional_nombre,profesional_codigo', enPeriodo('fecha')),
+    const [rn, rm, rp, rc, rperf] = await Promise.all([
+      _pmConsultar('notas', 'id,clinica_id,paciente_id,mascota_id,fecha,tipo,estado,cita_id,profesional_id,profesional_nombre,profesional_codigo', enPeriodo('fecha'), signal),
       // Las recetas antiguas no tienen fecha de emisión: cuentan por su inicio.
       _pmConsultar('medicaciones', 'id,clinica_id,paciente_id,mascota_id,receta_id,fecha_emision,inicio,prescriptor_id,prescriptor_nombre',
-        q => deClinica(q.or(`and(fecha_emision.gte.${rango.from},fecha_emision.lte.${rango.to}),and(fecha_emision.is.null,inicio.gte.${rango.from},inicio.lte.${rango.to})`))),
-      _pmConsultar('procedimientos_clinicos', 'id,clinica_id,paciente_id,fecha,estado,profesional_id,profesional_nombre,rol_profesional', q => enPeriodo('fecha')(q.eq('estado', 'completado'))),
-      _pmConsultar('citas', 'id,clinica_id,paciente_id,mascota_id,fecha,estado,medico_id', q => enPeriodo('fecha')(q.eq('estado', 'completada'))),
-      _pmPerfiles(),
+        q => deClinica(q.or(`and(fecha_emision.gte.${rango.from},fecha_emision.lte.${rango.to}),and(fecha_emision.is.null,inicio.gte.${rango.from},inicio.lte.${rango.to})`)), signal),
+      _pmConsultar('procedimientos_clinicos', 'id,clinica_id,paciente_id,fecha,estado,profesional_id,profesional_nombre,rol_profesional', q => enPeriodo('fecha')(q.eq('estado', 'completado')), signal),
+      _pmConsultar('citas', 'id,clinica_id,paciente_id,mascota_id,fecha,estado,medico_id', q => enPeriodo('fecha')(q.eq('estado', 'completada')), signal),
+      _pmPerfiles(clinica, signal),
     ]);
+    if(!vigente()) return;
     // Las notas son la firma: sin ellas no hay reporte. Lo demás, si falla, se avisa.
     if(rn.error) throw new Error('No se pudieron leer las notas: ' + rn.error.message);
     const avisos = [];
     if(rm.error) avisos.push('No se pudieron leer las recetas: no se cuentan.');
-    if(rp.error && !/does not exist|schema cache/i.test(rp.error.message || '')) avisos.push('No se pudieron leer los procedimientos: no se cuentan.');
+    if(rp.error && !_pmTablaNoExiste(rp.error)) avisos.push('No se pudieron leer los procedimientos: no se cuentan.');
     if(rc.error) avisos.push('No se pudieron leer las citas: no se cuentan.');
-    if([rn, rm, rp, rc].some(r => r.truncado)) avisos.push('El período tiene demasiados registros para leerlos todos: elige uno más corto.');
-    const datos = _pmAgrupar(_pmActos({
+    if(rperf.error) avisos.push('No se pudieron leer los usuarios: los nombres de cuenta y los roles pueden no ser exactos.');
+    if([rn, rm, rp, rc].some(r => r.truncado) || rperf.truncado) avisos.push('El período tiene demasiados registros para leerlos todos: elige uno más corto.');
+    if(rn.faltan?.includes('profesional_codigo')) avisos.push('Falta la columna del código MINSA en las notas (migracion_codigo_medico_notas.sql): se agrupa solo por nombre.');
+    if(rn.faltan?.includes('estado')) avisos.push('Falta la columna de estado de las notas (migracion_notas_borrador.sql): se cuentan todas como finalizadas.');
+    const calculo = _pmAgrupar(_pmActos({
       notas:rn.filas, recetas:rm.error ? [] : rm.filas,
       procedimientos:rp.error ? [] : rp.filas, citas:rc.error ? [] : rc.filas,
-    }, perfiles), perfiles);
-    pmDatos = { ...datos, ...rango, clinica, avisos };
+    }, rperf.mapa), rperf.mapa);
+    datos = { ...calculo, ...rango, clinica, avisos };
   } catch(e) {
-    pmDatos = { error: e.message || String(e), ...rango };
+    if(!vigente()) return;
+    datos = { error: control?.signal.aborted ? 'La consulta tardó demasiado. Revisa la conexión y pulsa Actualizar.' : (e.message || String(e)), ...rango };
   } finally {
-    pmCargando = false;
+    if(plazo) clearTimeout(plazo);
   }
+  if(!vigente()) return;
+  pmDatos = datos;
+  pmCargando = false;
   renderProductividadMedica();
 }
 
@@ -13642,12 +13752,13 @@ async function renderProductividadMedica() {
   const t = d.totales;
   const vista = d.clinica ? _pmNombreClinica(d.clinica) : 'Todas las clínicas';
   const contar = o => o.nota + o.examen_visual + o.receta + o.procedimiento + o.cita;
-  const detalle = o => [['nota','nota'],['examen_visual','examen visual'],['receta','receta'],['procedimiento','procedimiento'],['cita','cita']]
-    .filter(([k]) => o[k]).map(([k, l]) => `${o[k]} ${l}${o[k] !== 1 ? (l.endsWith('n') || l.endsWith('l') ? 'es' : 's') : ''}`).join(', ');
+  const detalle = o => [['nota','nota','notas'],['examen_visual','examen visual','exámenes visuales'],['receta','receta','recetas'],
+      ['procedimiento','procedimiento','procedimientos'],['cita','cita atendida','citas atendidas']]
+    .filter(([k]) => o[k]).map(([k, uno, varios]) => `${o[k]} ${o[k] === 1 ? uno : varios}`).join(', ');
   const avisos = [
     ...d.avisos.map(a => '⚠️ ' + escAttr(a)),
     contar(d.sinFirma) ? `ℹ️ Sin médico registrado (no entran en el ranking): ${detalle(d.sinFirma)}.` : '',
-    contar(d.noMedico) ? `ℹ️ Registrado por cuentas no médicas —administración, recepción, enfermería— (no entran en el ranking): ${detalle(d.noMedico)}.` : '',
+    contar(d.noMedico) ? `ℹ️ Registrado por cuentas no médicas —administración, recepción, enfermería o farmacia— que no firman notas (no entran en el ranking): ${detalle(d.noMedico)}.` : '',
     d.ambiguos.length ? `⚠️ Hay firmas sin ${escAttr(_pmEtiquetaCodigo())} con un nombre que usan médicos distintos; quedan aparte marcadas como «firma dudosa». Pide que se escriba el código al firmar.` : '',
   ].filter(Boolean).map(a => `<div class="balance-aviso">${a}</div>`).join('');
 
@@ -13690,7 +13801,7 @@ async function renderProductividadMedica() {
         <span class="prod-track"><span style="width:${Math.round(m.atenciones / max * 100)}%"></span></span>
         ${m.variantes.length ? `<div class="pm-variantes">También firmado como: ${m.variantes.map(escAttr).join(' · ')}</div>` : ''}
       </div>
-      <div class="prod-user-score"><strong>${m.atenciones}</strong><span>atenciones</span></div>
+      <div class="prod-user-score"><strong>${m.atenciones}</strong><span>${m.atenciones === 1 ? 'atención' : 'atenciones'}</span></div>
     </div>`).join('');
 
   cont.innerHTML = kpis + nota + avisos + `
@@ -13713,8 +13824,9 @@ async function imprimirProductividadMedica() {
   let cfg = getClinicaConfig();
   if(isSuperAdmin()) {
     const cl = d.clinica ? (adminClinicas || []).find(c => String(c.id) === String(d.clinica)) : null;
-    cfg = cl ? _configDeClinica(cl)
-      : { ...cfg, nombreClinica:'Todas las clínicas', logoUrl:'', telefono:'', email:'', direccion:'', notaPie:'', institucion:'' };
+    // Desde cero: pdfAbrir mezcla la configuración de la clínica de trabajo y
+    // cualquier clave ausente se rellenaría con su registro o su especialidad.
+    cfg = _configDeClinica(cl || { nombre:'Todas las clínicas' });
   }
   const t = d.totales;
   const num = 'text-align:right;white-space:nowrap';
@@ -13730,9 +13842,9 @@ async function imprimirProductividadMedica() {
       <div class="kpi orange"><div class="kpi-val">${t.recetas}</div><div class="kpi-lbl">Recetas emitidas</div></div>
     </div>
     ${top.length ? `<div class="section-title">📊 Atenciones por médico</div>
-    ${top.map(m => `<div class="bar-row"><div class="bar-lbl">${escAttr(m.nombre)}</div><div class="bar-track"><div class="bar-fill" style="width:${Math.round(m.atenciones / max * 100)}%"><span></span></div></div><div class="bar-val">${m.atenciones}</div></div>`).join('')}` : ''}
+    ${top.map(m => `<div class="bar-row"><div class="bar-lbl" style="width:170px;min-width:170px;flex:none">${escAttr(m.nombre)}</div><div class="bar-track"><div class="bar-fill" style="width:${Math.round(m.atenciones / max * 100)}%"><span></span></div></div><div class="bar-val">${m.atenciones}</div></div>`).join('')}` : ''}
     <div class="section-title" style="margin-top:18px">🏆 Ranking</div>
-    ${d.medicos.length ? `<table style="font-size:11px"><thead><tr><th>#</th><th>Médico</th><th>${escAttr(_pmEtiquetaCodigo())}</th><th style="${num}">Atenciones</th><th style="${num}">Pacientes</th><th style="${num}">Notas</th><th style="${num}">Ex. visuales</th><th style="${num}">Recetas</th><th style="${num}">Proced.</th><th style="${num}">Citas</th></tr></thead>
+    ${d.medicos.length ? `<style>.pm-tabla th,.pm-tabla td{padding:6px 7px}</style><table class="pm-tabla" style="font-size:10.5px"><thead><tr><th>#</th><th style="min-width:150px">Médico</th><th>${escAttr(_pmEtiquetaCodigo())}</th><th style="${num}">Atenciones</th><th style="${num}">Pacientes</th><th style="${num}">Notas</th><th style="${num}">Ex. visuales</th><th style="${num}">Recetas</th><th style="${num}">Proced.</th><th style="${num}">Citas</th></tr></thead>
     <tbody>${d.medicos.map((m, i) => `<tr><td>${i + 1}</td><td>${escAttr(m.nombre)}${m.conCuenta ? '' : ' <span class="tag tag-gray">sin cuenta</span>'}${m.dudoso ? ' <span class="tag tag-orange">dudosa</span>'  : ''}</td><td>${escAttr(m.codigos.join(', ') || '—')}</td><td style="${num};font-weight:800">${m.atenciones}</td><td style="${num}">${m.pacientes}</td><td style="${num}">${m.notas}</td><td style="${num}">${m.examenes}</td><td style="${num}">${m.recetas}</td><td style="${num}">${m.procedimientos}</td><td style="${num}">${m.citas}</td></tr>`).join('')}
     <tr style="font-weight:800;background:#F1F5F9"><td></td><td>Total</td><td></td><td style="${num}">${t.atenciones}</td><td style="${num}">${t.pacientes}</td><td style="${num}">${t.notas}</td><td style="${num}">${t.examenes}</td><td style="${num}">${t.recetas}</td><td style="${num}">${t.procedimientos}</td><td style="${num}">${t.citas}</td></tr>
     </tbody></table>` : '<p style="color:#94A3B8;text-align:center;padding:16px">No hay atenciones firmadas en este período</p>'}

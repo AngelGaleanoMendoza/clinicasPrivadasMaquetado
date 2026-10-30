@@ -176,6 +176,96 @@ const N=(o)=>({id:o.id||Math.random(),clinica_id:o.cl||1,paciente_id:o.pac,fecha
     assert.equal(ranking.totales.atenciones,4,'Paciente 2 lo vieron A y B en la misma visita: una atención en el total');
     assert.equal(ranking.totales.pacientes,4);
 
+    // ══ Casos de la revisión adversaria ══
+
+    // Grafías pegadas o con otro prefijo; y rellenos que NO son código
+    const codigos=await page.evaluate(()=>({
+      iguales:['MINSA21601','Cod21601','Idoneidad 21601','Reg. Prof. 21601'].map(_pmCodigo),
+      vacios:['N/A','n/a','S/N','Sin código','no tiene','0','000','x',''].map(_pmCodigo),
+    }));
+    assert.deepEqual([...new Set(codigos.iguales)],['21601'],'Prefijos pegados al número: '+codigos.iguales);
+    assert.deepEqual([...new Set(codigos.vacios)],[''],'Un relleno no es un código: '+codigos.vacios);
+
+    const rellenos=await page.evaluate((N)=>{
+      const n=eval(N);
+      return calcular({notas:[n({pac:1,nom:'Ana Ruiz',cod:'N/A'}),n({pac:2,nom:'Luis Mora',cod:'N/A'}),
+        n({pac:3,nom:'Eva Paz',cod:'S/N'}),n({pac:4,nom:'Raúl Gil',cod:'0'})]}).medicos.length;
+    },N.toString());
+    assert.equal(rellenos,4,'Cuatro médicos que escribieron relleno siguen siendo cuatro');
+
+    // El formulario asigna la cuenta por NOMBRE: un homónimo externo la hereda
+    const prestada=await page.evaluate((N)=>{
+      const n=eval(N);
+      return calcular({
+        notas:[n({pac:1,nom:'Juan Pérez',cod:'111',pid:'u1'}),n({pac:5,nom:'Juan Pérez',cod:'111',pid:'u1'}),
+               n({pac:2,nom:'Juan Pérez',cod:'222',pid:'u1'})],
+        recetas:[{id:1,clinica_id:1,paciente_id:3,receta_id:'R1',fecha_emision:'2026-10-11',prescriptor_id:'u1',prescriptor_nombre:'Juan Pérez'}],
+      },[{id:'u1',nombre:'Juan Pérez',rol:'medico'}]).medicos.map(m=>({cod:m.codigos.join(),at:m.atenciones,rec:m.recetas,cuenta:m.conCuenta}));
+    },N.toString());
+    assert.deepEqual(prestada,[{cod:'111',at:2,rec:1,cuenta:true},{cod:'222',at:1,rec:0,cuenta:false}],
+      'Dos homónimos con código distinto son dos personas aunque el formulario les diera la misma cuenta');
+
+    // Empate: no se sabe de quién es la cuenta → ningún código se la queda
+    const empate=await page.evaluate((N)=>{
+      const n=eval(N);
+      return calcular({notas:[n({pac:1,nom:'Juan Pérez',cod:'111',pid:'u1'}),n({pac:2,nom:'Juan Pérez',cod:'222',pid:'u1'})],
+        recetas:[{id:1,clinica_id:1,paciente_id:3,receta_id:'R1',fecha_emision:'2026-10-11',prescriptor_id:'u1',prescriptor_nombre:'Juan Pérez'}]},
+        [{id:'u1',nombre:'Juan Pérez',rol:'medico'}]).medicos.map(m=>({cod:m.codigos.join(),at:m.atenciones,rec:m.recetas}));
+    },N.toString());
+    assert.equal(empate.length,3,'Dos códigos y la cuenta, sin repartir la receta a ciegas');
+    assert.equal(empate.find(m=>m.rec===1).cod,'','La receta queda con la cuenta, sin código');
+
+    // Nota con cita y examen visual sin cita, el mismo día: una visita
+    const visitaMixta=await page.evaluate((N)=>{
+      const n=eval(N);
+      return calcular({notas:[n({pac:1,nom:'Ana Ruiz',cod:'5',cita:55}),n({pac:1,nom:'Ana Ruiz',cod:'5',tipo:'examen_visual'})]});
+    },N.toString());
+    assert.equal(visitaMixta.medicos[0].atenciones,1,'La misma visita no cuenta dos veces por llevar o no cita_id');
+    assert.equal(visitaMixta.totales.atenciones,1);
+
+    // Médico dueño con rol de administración: sí es médico
+    const dueno=await page.evaluate((N)=>{
+      const n=eval(N);
+      return calcular({
+        notas:[n({pac:1,nom:'Ana Ruiz',cod:'5',pid:'adm'})],
+        recetas:[{id:1,clinica_id:1,paciente_id:2,receta_id:'R1',fecha_emision:'2026-10-11',prescriptor_id:'adm',prescriptor_nombre:'Ana Ruiz'}],
+        citas:[{id:1,clinica_id:1,paciente_id:3,fecha:'2026-10-10',estado:'completada',medico_id:'adm'}],
+      },[{id:'adm',nombre:'Ana Ruiz',rol:'admin'}]);
+    },N.toString());
+    assert.deepEqual([dueno.medicos[0].recetas,dueno.medicos[0].citas,dueno.noMedico.receta],[1,1,0],
+      'Una cuenta de administración que firma notas es de un médico');
+
+    // Dos cuentas con el mismo nombre y sin código: dos personas
+    const cuentas=await page.evaluate(()=>calcular({
+      recetas:[{id:1,clinica_id:1,paciente_id:1,receta_id:'R1',fecha_emision:'2026-10-11',prescriptor_id:'u1',prescriptor_nombre:'María González'}],
+      citas:[{id:1,clinica_id:2,paciente_id:2,fecha:'2026-10-10',estado:'completada',medico_id:'u2'}],
+    },[{id:'u1',nombre:'María González',rol:'medico'},{id:'u2',nombre:'Maria Gonzalez',rol:'medico'}]).medicos.length);
+    assert.equal(cuentas,2,'Dos cuentas no se juntan nunca por el nombre');
+
+    // "Firma dudosa" solo en lo que no tiene código ni cuenta
+    const dudosa=await page.evaluate((N)=>{
+      const n=eval(N);
+      return calcular({notas:[n({pac:1,nom:'Juan Pérez',cod:'111',pid:'u1'}),n({pac:2,nom:'Juan Pérez',cod:'222'})],
+        recetas:[{id:1,clinica_id:1,paciente_id:3,receta_id:'R1',fecha_emision:'2026-10-11',prescriptor_id:'u1',prescriptor_nombre:'Juan Pérez'}]},
+        [{id:'u1',nombre:'Juan Pérez',rol:'medico'}]);
+    },N.toString());
+    assert.equal(dudosa.medicos.filter(m=>m.dudoso).length,0,'Una receta con cuenta no es una firma dudosa');
+    assert.deepEqual(dudosa.ambiguos,[]);
+
+    // El resultado no depende del orden en que llegan los datos
+    const orden=await page.evaluate((N)=>{
+      const n=eval(N);
+      const notas=[n({id:1,pac:1,nom:'Juan Pérez',cod:'111'}),n({id:2,pac:2,nom:'Juan A. Pérez',cod:'222'}),
+                   n({id:3,pac:3,nom:'Carlos Ruiz',cod:''}),n({id:4,pac:4,nom:'Carlos Ruiz',cod:'9'})];
+      const recetas=[{id:1,clinica_id:1,paciente_id:5,receta_id:'R1',fecha_emision:'2026-10-11',prescriptor_id:'x',prescriptor_nombre:'Juan A. Pérez'}];
+      const perfiles=[{id:'x',nombre:'Juan Pérez',rol:'medico'}];
+      const firma=r=>JSON.stringify(r.medicos.map(m=>[m.nombre,m.codigos,m.atenciones,m.recetas,m.dudoso]));
+      const a=firma(calcular({notas:notas.map(x=>({...x})),recetas:recetas.map(x=>({...x}))},perfiles));
+      const b=firma(calcular({notas:notas.slice().reverse().map(x=>({...x})),recetas:recetas.map(x=>({...x}))},perfiles));
+      return [a,b];
+    },N.toString());
+    assert.equal(orden[0],orden[1],'Los mismos datos en otro orden deben dar el mismo ranking');
+
     // ── Varias clínicas: el mismo médico se une y se listan sus clínicas ──
     const multi=await page.evaluate((N)=>{
       const n=eval(N);
