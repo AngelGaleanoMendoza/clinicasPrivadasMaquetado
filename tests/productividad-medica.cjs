@@ -24,8 +24,13 @@ function extraerConst(name) {
   assert(start>=0,'No se encontró '+name);
   return source.slice(start,source.indexOf('\n',start));
 }
+function extraerBloque(inicio,fin) {
+  const start=source.search(new RegExp('^'+inicio,'m'));
+  assert(start>=0,'No se encontró '+inicio);
+  return source.slice(start,source.indexOf(fin,start)+fin.length);
+}
 const code=[extraerConst('_normalMedico'),extraerConst('_claveMedico'),extraerConst('_pmSujeto'),
-  extraerConst('_PM_ROLES_NO_MEDICOS'),
+  extraerConst('_PM_ROLES_NO_MEDICOS'),extraerConst('_PM_PALABRAS_CODIGO'),
   ...['_pmCodigo','_pmNombre','_pmActos','_pmAgrupar','_pmNombreClinica','_pmEtiquetaCodigo',
       'puedeVerProductividadMedica','renderProductividadMedica'].map(extraer)].join('\n');
 
@@ -46,6 +51,43 @@ const preambulo=`
     return _pmAgrupar(_pmActos(datos,perfiles),perfiles);
   };
 `;
+
+// La carga, el impreso y el cierre de sesión, con Supabase simulado: cada
+// consulta espera a que la prueba abra la compuerta.
+const codigoCarga=[extraerBloque('let pmGen','\n'),extraerBloque('const _PM_COLUMNA_AVISO','\n};'),
+  ...['_pmFecha','_pmRango','_pmHasta','_pmInvalidar','_pmReiniciarFiltros','cargarProductividadMedica',
+      'setPmPeriodo','setPmClinica','imprimirProductividadMedica'].map(extraer)].join('\n');
+const preambuloCarga=`
+  let currentUser={id:'u1'}, currentClinicaId=null;
+  const hoy=()=>new Date().toISOString().slice(0,10);
+  const _faltaColumna=(e,c)=>String(e?.message||'').includes(c);
+  const _pmTablaNoExiste=()=>false;
+  let compuerta=null, abrir=()=>{};
+  window.__cerrar=()=>{ compuerta=new Promise(r=>{abrir=r;}); };
+  window.__abrir=()=>{ const a=abrir; compuerta=null; a(); };
+  const consultas=[];
+  async function _pmConsultar(tabla, cols, filtrar) {
+    consultas.push(tabla);
+    if(compuerta) await compuerta;
+    if(tabla!=='notas') return {filas:[]};
+    return {filas:[{id:1,clinica_id:1,paciente_id:1,fecha:hoy(),tipo:'evolucion',estado:'finalizada',profesional_nombre:'Dra. Ana López',profesional_codigo:'5050'}]};
+  }
+  async function _pmPerfiles(){ if(compuerta) await compuerta; return {mapa:new Map()}; }
+  const impresos=[], toasts=[];
+  const pdfAbrir=(t,body,cfg)=>{ impresos.push({t,body,cfg}); };
+  const toast=m=>toasts.push(m);
+  const getClinicaConfig=()=>({});
+  const _configDeClinica=c=>({nombre:c.nombre});
+  ${codigoCarga}
+  window.__estado=()=>({datos:pmDatos&&{clinica:pmDatos.clinica,etiqueta:pmDatos.etiqueta,error:pmDatos.error||'',medicos:(pmDatos.medicos||[]).length},
+    cargando:pmCargando,clinica:pmClinica,periodo:pmPeriodo,impresos:impresos.map(i=>i.t),toasts:toasts.slice(),
+    html:document.getElementById('pm-contenido').innerHTML,controles:document.getElementById('pm-controles').innerHTML});
+  window.__usuario=id=>{ currentUser=id?{id}:null; };
+  window.__periodo=p=>{ pmPeriodo=p; };
+  window.__salir=()=>{ _pmInvalidar(); _pmReiniciarFiltros(); };
+  Object.assign(window,{cargarProductividadMedica,setPmClinica,setPmPeriodo,imprimirProductividadMedica});
+`;
+const esperar=ms=>new Promise(r=>setTimeout(r,ms));
 
 const lanzar=()=>process.env.PLAYWRIGHT_CHROMIUM
   ? chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM,headless:true})
@@ -266,6 +308,72 @@ const N=(o)=>({id:o.id||Math.random(),clinica_id:o.cl||1,paciente_id:o.pac,fecha
     },N.toString());
     assert.equal(orden[0],orden[1],'Los mismos datos en otro orden deben dar el mismo ranking');
 
+    // ══ Segunda revisión ══
+
+    // Los códigos: letras que distinguen registros, años y números sueltos
+    const cod2=await page.evaluate(()=>({
+      psi:_pmCodigo('PSI-123'), odo:_pmCodigo('ODO-123'),
+      anio:_pmCodigo('MINSA 21601 (2015)'), reg:_pmCodigo('Reg 2 - 21601'),
+      barra:_pmCodigo('21601/22'), otra:_pmCodigo('2160/122'),
+    }));
+    assert.notEqual(cod2.psi,cod2.odo,'PSI-123 y ODO-123 son registros distintos');
+    assert.deepEqual([cod2.anio,cod2.reg],['21601','21601'],'El año o un número suelto no forman parte del código');
+    assert.notEqual(cod2.barra,cod2.otra,'21601/22 y 2160/122 no son el mismo código');
+
+    // Dos cuentas sin código y una firma externa con código, los tres con el mismo nombre
+    const tres=await page.evaluate((N)=>{
+      const n=eval(N);
+      return calcular({
+        notas:[n({pac:1,nom:'Juan Pérez',cod:'21601'})],
+        recetas:[{id:1,clinica_id:1,paciente_id:2,receta_id:'R1',fecha_emision:'2026-10-11',prescriptor_id:'uA',prescriptor_nombre:'Juan Pérez'}],
+        citas:[{id:1,clinica_id:1,paciente_id:3,fecha:'2026-10-10',estado:'completada',medico_id:'uB'}],
+      },[{id:'uA',nombre:'Juan Pérez',rol:'medico'},{id:'uB',nombre:'Juan Perez',rol:'medico'}]);
+    },N.toString());
+    assert.equal(tres.medicos.length,3,'Dos cuentas no se juntan a través de un código');
+    assert.equal(tres.medicos.filter(m=>m.revisar).length,2,'Las dos cuentas quedan marcadas para revisar');
+    assert.equal(tres.medicos.find(m=>m.codigos.length).conCuenta,false);
+
+    // Una cuenta que firma con su código y un homónimo con otra cuenta
+    const homCuenta=await page.evaluate((N)=>{
+      const n=eval(N);
+      return calcular({
+        notas:[n({pac:1,nom:'Juan Pérez',cod:'21601',pid:'uC'})],
+        recetas:[{id:1,clinica_id:1,paciente_id:2,receta_id:'R1',fecha_emision:'2026-10-11',prescriptor_id:'uA',prescriptor_nombre:'Juan Pérez'}],
+      },[{id:'uC',nombre:'Juan Pérez',rol:'medico'},{id:'uA',nombre:'Juan Pérez',rol:'medico'}]).medicos
+        .map(m=>({cod:m.codigos.join(),at:m.atenciones,rec:m.recetas,revisar:m.revisar}));
+    },N.toString());
+    assert.deepEqual(homCuenta,[{cod:'21601',at:1,rec:0,revisar:false},{cod:'',at:0,rec:1,revisar:true}],
+      'Un código que ya tiene cuenta no se queda con la de un homónimo');
+
+    // Agrupar no modifica los actos: dos llamadas, mismo resultado
+    const repetible=await page.evaluate((N)=>{
+      const n=eval(N);
+      const perfiles=new Map([['u1',{id:'u1',nombre:'Juan Pérez',rol:'medico'}]]);
+      const actos=_pmActos({notas:[n({id:1,pac:1,nom:'Juan Pérez',cod:'111',pid:'u1'}),n({id:2,pac:5,nom:'Juan Pérez',cod:'111',pid:'u1'}),
+        n({id:3,pac:2,nom:'Juan Pérez',cod:'222',pid:'u1'})]},perfiles);
+      const antes=JSON.stringify(actos);
+      const a=JSON.stringify(_pmAgrupar(actos,perfiles)), b=JSON.stringify(_pmAgrupar(actos,perfiles));
+      return {igual:a===b, intactos:JSON.stringify(actos)===antes};
+    },N.toString());
+    assert.deepEqual(repetible,{igual:true,intactos:true},'Agrupar dos veces los mismos actos da lo mismo y no los toca');
+
+    // La etiqueta y el aviso de «Revisar» se ven
+    const revisarHtml=await page.evaluate((N)=>{
+      const n=eval(N);
+      const r=calcular({
+        notas:[n({pac:1,nom:'Juan Pérez',cod:'21601'})],
+        recetas:[{id:1,clinica_id:1,paciente_id:2,receta_id:'R1',fecha_emision:'2026-10-11',prescriptor_id:'uA',prescriptor_nombre:'Juan Pérez'}],
+        citas:[{id:1,clinica_id:1,paciente_id:3,fecha:'2026-10-10',estado:'completada',medico_id:'uB'}],
+      },[{id:'uA',nombre:'Juan Pérez',rol:'medico'},{id:'uB',nombre:'Juan Perez',rol:'medico'}]);
+      window.__datos({...r,etiqueta:'octubre de 2026',from:'2026-10-01',to:'2026-10-30',clinica:null,avisos:[]});
+      renderProductividadMedica();
+      const html=document.getElementById('pm-contenido').innerHTML;
+      window.__datos(null); renderProductividadMedica();
+      return html;
+    },N.toString());
+    assert.equal((revisarHtml.match(/Revisar: nombre repetido/g)||[]).length,2);
+    assert.match(revisarHtml,/marcadas «Revisar»/);
+
     // ── Varias clínicas: el mismo médico se une y se listan sus clínicas ──
     const multi=await page.evaluate((N)=>{
       const n=eval(N);
@@ -323,6 +431,73 @@ const N=(o)=>({id:o.id||Math.random(),clinica_id:o.cl||1,paciente_id:o.pac,fecha
         window.__datos({...r,etiqueta:'octubre de 2026',from:'2026-10-01',to:'2026-10-30',clinica:null,avisos:[]});
       },N.toString());
     }
-    console.log('OK: grafías, visitas, identidad, puente por nombre, homónimos, exclusiones, examen visual, ranking, multiclínica y layout.');
+
+    // ══ Carga, impreso y cierre de sesión ══
+    const pc=await browser.newPage();
+    const nueva=async()=>{
+      await pc.setContent(`<html><body><div id="pm-controles"></div><div id="pm-contenido"></div></body></html>`);
+      await pc.addScriptTag({content:preambulo});
+      await pc.addScriptTag({content:preambuloCarga});
+    };
+    await nueva();
+
+    // Un cambio de filtro a mitad de carga: gana el último
+    await pc.evaluate(()=>{ __cerrar(); cargarProductividadMedica(); setPmClinica('2'); });
+    let e=await pc.evaluate(()=>__estado());
+    assert.equal(e.cargando,true);
+    assert.match(e.controles,/Actualizar<\/button>/);
+    assert.doesNotMatch(e.controles,/disabled/,'Actualizar sigue disponible durante la carga');
+    await pc.evaluate(()=>__abrir()); await esperar(50);
+    e=await pc.evaluate(()=>__estado());
+    assert.equal(e.cargando,false);
+    assert.equal(String(e.datos.clinica),'2','La carga vieja no pisa la del filtro nuevo');
+    assert.match(e.html,/San Lucas/);
+    assert.match(e.controles,/value="2" selected/,'El selector conserva la clínica elegida');
+
+    // El impreso espera a la carga en curso y sale con los filtros que se ven
+    await pc.evaluate(()=>{ __cerrar(); setPmPeriodo('anio'); window.__imp=imprimirProductividadMedica(); });
+    await esperar(30);
+    e=await pc.evaluate(()=>__estado());
+    assert.deepEqual(e.impresos,[],'No imprime mientras carga');
+    await pc.evaluate(async()=>{ __abrir(); await window.__imp; });
+    e=await pc.evaluate(()=>__estado());
+    assert.equal(e.impresos.length,1);
+    assert.match(e.impresos[0],/Año \d{4}/,'El impreso es del período elegido');
+
+    // Si el período cambió sin recargar, el impreso recarga antes de imprimir
+    await pc.evaluate(async()=>{ __periodo('mes'); await imprimirProductividadMedica(); });
+    e=await pc.evaluate(()=>__estado());
+    assert.equal(e.impresos.length,2);
+    assert.doesNotMatch(e.impresos[1],/Año \d{4}/,'No imprime los datos del período anterior');
+    assert.equal(e.datos.etiqueta,e.impresos[1].replace('Productividad médica — ',''));
+
+    // Cerrar sesión con una carga en curso: no queda nada pintado ni se pinta después
+    await pc.evaluate(()=>{ __cerrar(); cargarProductividadMedica(); __salir(); __usuario(null); __abrir(); });
+    await esperar(50);
+    e=await pc.evaluate(()=>__estado());
+    assert.deepEqual([e.datos,e.cargando,e.html,e.controles,e.clinica,e.periodo],[null,false,'','','','mes'],
+      'Tras cerrar sesión el ranking no queda en el HTML ni vuelve a pintarse');
+
+    // Otra persona entra mientras termina una carga: se descarta y no queda «Calculando…»
+    await pc.evaluate(()=>{ __usuario('u1'); __cerrar(); cargarProductividadMedica(); __usuario('u2'); __abrir(); });
+    await esperar(50);
+    e=await pc.evaluate(()=>__estado());
+    assert.deepEqual([e.datos,e.cargando,e.html],[null,false,''],'Lo calculado para otra sesión no se pinta');
+
+    // Una consulta que nunca responde termina en error, no en datos parciales
+    await nueva();
+    await pc.evaluate(()=>{
+      const st=window.setTimeout;
+      window.setTimeout=(f,ms,...a)=>st(f,ms===90000?30:ms,...a);
+      __cerrar(); cargarProductividadMedica();
+    });
+    await esperar(150);
+    e=await pc.evaluate(()=>__estado());
+    assert.equal(e.cargando,false);
+    assert.match(e.datos.error,/tardó demasiado/);
+    assert.match(e.html,/tardó demasiado/);
+    await pc.close();
+
+    console.log('OK: grafías, visitas, identidad, puente por nombre, homónimos, exclusiones, examen visual, ranking, multiclínica, layout, carga, impreso y cierre de sesión.');
   } finally { await browser.close(); }
 })().catch(e=>{console.error(e);process.exitCode=1;});

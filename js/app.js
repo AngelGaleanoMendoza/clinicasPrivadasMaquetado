@@ -248,8 +248,7 @@ function _vaciarCache() {
   Object.keys(C).forEach(k => { C[k].length = 0; });
   currentClinica = null;
   // La carga del reporte de productividad que siga en curso ya no es de nadie.
-  pmGen++; if(pmAbort) pmAbort.abort();
-  pmDatos = null; pmClinica = ''; pmCargando = false; pmPeriodo = 'mes'; pmDesde = pmHasta = '';
+  _pmInvalidar();
 }
 let procClinLoadError = null;
 
@@ -911,6 +910,7 @@ function guardarBorradoresSesion() {
 async function autoLogout() {
   detenerInactividad();
   const guardados = guardarBorradoresSesion();
+  _pmInvalidar(); _pmReiniciarFiltros();
   await sb.auth.signOut();
   currentUser = null; currentClinicaId = null;
   _vaciarCache();
@@ -1062,6 +1062,7 @@ document.addEventListener('visibilitychange', async () => {
 async function _expulsarPorRed(acceso) {
   detenerInactividad();
   guardarBorradoresSesion();
+  _pmInvalidar(); _pmReiniciarFiltros();
   await sb.auth.signOut();
   currentUser = null; currentClinicaId = null;
   _vaciarCache();
@@ -1156,6 +1157,9 @@ async function doLogout() {
   const ok = await customConfirm({icon:'👋',title:'¿Cerrar sesión?',msg:`Vas a salir de la sesión de <strong>${currentUser?.nombre||'usuario'}</strong>`,okText:'Cerrar sesión',cancelText:'Quedarse',danger:false});
   if(!ok) return;
   detenerInactividad();
+  // Antes de signOut: mientras espera, una carga del reporte podría terminar y
+  // pintarse en la sesión que se está cerrando.
+  _pmInvalidar(); _pmReiniciarFiltros();
   await sb.auth.signOut();
   currentUser = null; currentClinicaId = null;
   _vaciarCache();
@@ -13346,13 +13350,25 @@ function _pmRango() {
 // para no dejar fuera lo atendido esta noche.
 function _pmHasta(h) { const l = _pmFecha(h), u = hoy(); return u > l ? u : l; }
 
-// El mismo código se escribe "21601", "MINSA 21601", "MINSA21601", "Cód. 021601"
-// o "Idoneidad 21601": lo que identifica es la cifra. Sin cifras no hay código:
-// el campo es obligatorio y quien no lo tiene escribe "N/A", "S/N" o "Sin
-// código"; tomar eso como código fundiría en una persona a todos los que lo usan.
+// El mismo código se escribe "21601", "MINSA 21601", "MINSA21601", "Cód. 021601",
+// "Idoneidad 21601" o "MINSA 21601 (2015)". Se quitan las palabras genéricas,
+// se conservan las letras que distinguen registros ("PSI-123" no es "ODO-123") y
+// de las cifras se toma la tanda más larga: un año o un número de más no deben
+// partir a la misma persona ni juntar a dos.
+//
+// Sin cifras no hay código: el campo es obligatorio y quien no lo tiene escribe
+// "N/A", "S/N" o "Sin código"; tomarlo como código fundiría a todos los que lo usan.
+const _PM_PALABRAS_CODIGO = /\b(codigo|cod|minsa|registro|reg|profesional|prof|idoneidad|idon|numero|num|nro|no|n|doctora|doctor|dra|dr)\b\.?/g;
 function _pmCodigo(c) {
-  const cifras = (String(c || '').match(/\d+/g) || []).join('').replace(/^0+/, '');
-  return cifras;
+  const t = _normalMedico(c).replace(/([a-z])(\d)/g, '$1 $2').replace(/(\d)([a-z])/g, '$1 $2');
+  const tandas = (t.match(/\d+/g) || []).map(x => x.replace(/^0+/, '')).filter(Boolean);
+  if(!tandas.length) return '';
+  const largo = Math.max(...tandas.map(x => x.length));
+  const largas = [...new Set(tandas.filter(x => x.length === largo))];
+  const letras = t.replace(/\d+/g, ' ').replace(_PM_PALABRAS_CODIGO, ' ').replace(/[^a-z]/g, '').toUpperCase();
+  // Dos tandas igual de largas y distintas ("1234/5678"): se conservan las dos
+  // para no confundir ese código con otro que solo comparta una.
+  return letras + largas.sort().join('-');
 }
 
 // "Dr. Juan Pérez", "juan perez" y "Dr Juan  Pérez." son la misma clave.
@@ -13461,9 +13477,9 @@ function _pmAgrupar(actos, perfiles) {
   for(const a of actos) {
     const rol = a.rol || (a.id && perfiles.get(a.id)?.rol) || '';
     if(!esFirma(a) && _PM_ROLES_NO_MEDICOS.includes(rol) && !idsFirmantes.has(a.id)) { noMedico[a.tipo]++; continue; }
-    a._clave = _pmNombre(a.nombre);
-    if(!a.codigo && !a.id && !a._clave) { sinFirma[a.tipo]++; continue; }
-    validos.push(a);
+    const _clave = _pmNombre(a.nombre);
+    if(!a.codigo && !a.id && !_clave) { sinFirma[a.tipo]++; continue; }
+    validos.push({ ...a, _clave });   // copia: la fase 1 puede quitarle la cuenta
   }
 
   // ── Fase 1 ──
@@ -13505,21 +13521,40 @@ function _pmAgrupar(actos, perfiles) {
     if(conCodigo.has(r)) meter(codificadosPor, c, r);
     else if(conCuenta.has(r)) meter(cuentasPor, c, r);
   }
-  const uniones = [], dudosos = new Set(), ambiguos = new Set();
   const alcanzables = (claves, mapa) => {
     const d = new Set();
     for(const c of claves) for(const r of (mapa.get(c) || [])) d.add(r);
     return d;
   };
+  // Cada cuenta sin código, ¿a qué códigos llega por su nombre? Un código que ya
+  // tiene cuenta (fase 1) o al que llegan dos cuentas no puede quedarse con otra:
+  // serían dos personas en una fila.
+  const cuentasQueLlegan = new Map();
   for(const [r, claves] of nombresDe) {
-    if(conCodigo.has(r)) continue;
+    if(conCodigo.has(r) || !conCuenta.has(r)) continue;
+    for(const c of alcanzables(claves, codificadosPor)) meter(cuentasQueLlegan, c, r);
+  }
+  const libre = c => !conCuenta.has(c) && (cuentasQueLlegan.get(c)?.size || 0) <= 1;
+
+  const dudosos = new Set(), revisar = new Set(), ambiguos = new Set();
+  // 2a. Cuentas sin código. La cuenta ya identifica a la persona: solo se une a
+  //     un código si es el único al que llega y ninguna otra cuenta lo reclama.
+  const unionesCuentas = [];
+  for(const [r, claves] of nombresDe) {
+    if(conCodigo.has(r) || !conCuenta.has(r)) continue;
     const codigos = alcanzables(claves, codificadosPor);
-    if(codigos.size === 1) { uniones.push([[...codigos][0], r]); continue; }
-    if(conCuenta.has(r)) continue;      // la cuenta ya identifica a la persona
-    if(codigos.size > 1) { dudosos.add(r); claves.forEach(c => ambiguos.add(c)); continue; }
-    const cuentas = alcanzables(claves, cuentasPor);
-    if(cuentas.size === 1) uniones.push([[...cuentas][0], r]);
-    else if(cuentas.size > 1) { dudosos.add(r); claves.forEach(c => ambiguos.add(c)); }
+    if(codigos.size === 1 && libre([...codigos][0])) unionesCuentas.push([[...codigos][0], r]);
+    else if(codigos.size >= 1) revisar.add(r);
+  }
+  for(const [destino, origen] of unionesCuentas) unir(destino, origen);
+  // 2b. Firmas sin código ni cuenta, sobre el resultado de 2a: se unen si su
+  //     nombre lleva a un solo médico, contando los que tienen código y las cuentas.
+  const uniones = [];
+  for(const [r, claves] of nombresDe) {
+    if(conCodigo.has(r) || conCuenta.has(r)) continue;
+    const candidatos = new Set([...alcanzables(claves, codificadosPor), ...alcanzables(claves, cuentasPor)].map(find));
+    if(candidatos.size === 1) uniones.push([[...candidatos][0], r]);
+    else if(candidatos.size > 1) { dudosos.add(r); claves.forEach(c => ambiguos.add(c)); }
   }
   for(const [destino, origen] of uniones) unir(destino, origen);
 
@@ -13532,7 +13567,7 @@ function _pmAgrupar(actos, perfiles) {
     if(!g) {
       g = { nombres:new Map(), codigos:new Set(), ids:new Set(), clinicas:new Set(), atenciones:new Set(),
             pacientes:new Set(), nota:0, examen_visual:0, receta:0, procedimiento:0, cita:0, ultima:'',
-            dudoso:dudosos.has(raiz) };
+            dudoso:dudosos.has(raiz), revisar:revisar.has(raiz) };
       grupos.set(raiz, g);
     }
     // El nombre que el médico escribe al firmar pesa más que el de la cuenta.
@@ -13562,11 +13597,13 @@ function _pmAgrupar(actos, perfiles) {
       atenciones:g.atenciones.size, pacientes:g.pacientes.size,
       notas:g.nota, examenes:g.examen_visual, recetas:g.receta,
       procedimientos:g.procedimiento, citas:g.cita, ultima:g.ultima, dudoso:g.dudoso,
+      revisar:g.revisar, _ids:[...g.ids].sort().join(','),
     };
   }).sort((x, y) =>
     y.atenciones - x.atenciones || y.pacientes - x.pacientes ||
     (y.notas + y.examenes) - (x.notas + x.examenes) || y.recetas - x.recetas ||
-    x.nombre.localeCompare(y.nombre, 'es') || x.codigos.join().localeCompare(y.codigos.join()));
+    x.nombre.localeCompare(y.nombre, 'es') || x.codigos.join().localeCompare(y.codigos.join()) ||
+    x._ids.localeCompare(y._ids) || x.especialidad.localeCompare(y.especialidad, 'es'));
 
   const suma = k => medicos.reduce((s, m) => s + m[k], 0);
   return {
@@ -13635,7 +13672,36 @@ async function _pmPerfiles(clinica, signal) {
 // Cada carga tiene su número. Si mientras tanto se cambia un filtro, se cierra
 // sesión o entra otra persona, el resultado viejo se descarta en vez de pintarse
 // con los filtros nuevos (o, peor, en la sesión de otro usuario).
-let pmGen = 0, pmAbort = null;
+let pmGen = 0, pmAbort = null, pmPromesa = null;
+
+// Anula la carga en curso y lo pintado: lo que se calculó para una sesión o una
+// clínica de trabajo no puede quedar a la vista de la siguiente, ni en el HTML.
+function _pmInvalidar() {
+  pmGen++;
+  if(pmAbort) pmAbort.abort();
+  pmAbort = null; pmPromesa = null;
+  pmDatos = null; pmCargando = false;
+  ['pm-contenido','pm-controles'].forEach(id => { const el = document.getElementById(id); if(el) el.innerHTML = ''; });
+}
+// Los filtros son de la persona: se reinician al cerrar sesión, no al cambiar
+// de clínica de trabajo.
+function _pmReiniciarFiltros() { pmClinica = ''; pmPeriodo = 'mes'; pmDesde = pmHasta = ''; }
+
+const _PM_COLUMNA_AVISO = {
+  'notas.profesional_nombre':'el nombre del médico en las notas: no se puede atribuir ninguna firma (migracion_profesional_plantillas_notas.sql)',
+  'notas.profesional_id':'la cuenta del médico en las notas (migracion_profesional_plantillas_notas.sql)',
+  'notas.profesional_codigo':'el código del médico en las notas: se agrupa solo por nombre (migracion_codigo_medico_notas.sql)',
+  'notas.estado':'el estado de las notas: se cuentan todas como finalizadas (migracion_notas_borrador.sql)',
+  'notas.cita_id':'',
+  'notas.mascota_id':'',
+  'medicaciones.fecha_emision':'la fecha de emisión de las recetas: se cuentan por su fecha de inicio (migracion_recetas_por_medico.sql)',
+  'medicaciones.receta_id':'el número de receta: cada medicamento se cuenta como una receta (migracion_recetas_por_medico.sql)',
+  'medicaciones.prescriptor_id':'el médico que firma la receta: no se pueden atribuir (migracion_recetas_por_medico.sql)',
+  'medicaciones.prescriptor_nombre':'',
+  'medicaciones.mascota_id':'',
+  'citas.mascota_id':'',
+  'procedimientos_clinicos.rol_profesional':'el rol de quien registra los procedimientos',
+};
 
 async function cargarProductividadMedica() {
   if(!puedeVerProductividadMedica()) return;
@@ -13650,54 +13716,84 @@ async function cargarProductividadMedica() {
   const clinica = isSuperAdmin() ? (pmClinica || null) : currentClinicaId;
   const rango = _pmRango();
   if(!isSuperAdmin() && !clinica) {
-    pmDatos = { error:'Tu cuenta no tiene una clínica asignada.', ...rango };
+    pmDatos = { error:'Tu cuenta no tiene una clínica asignada.', ...rango, clinica };
     pmCargando = false; renderProductividadMedica(); return;
   }
   pmCargando = true;
   renderProductividadMedica();
-  // Una red que se cae a mitad no debe dejar la pantalla en "Calculando…".
-  const plazo = control ? setTimeout(() => control.abort(), 90000) : null;
-  let datos;
-  try {
-    const enPeriodo = campo => q => {
-      q = q.gte(campo, rango.from).lte(campo, rango.to);
-      return clinica ? q.eq('clinica_id', clinica) : q;
-    };
-    const deClinica = q => clinica ? q.eq('clinica_id', clinica) : q;
-    const [rn, rm, rp, rc, rperf] = await Promise.all([
-      _pmConsultar('notas', 'id,clinica_id,paciente_id,mascota_id,fecha,tipo,estado,cita_id,profesional_id,profesional_nombre,profesional_codigo', enPeriodo('fecha'), signal),
-      // Las recetas antiguas no tienen fecha de emisión: cuentan por su inicio.
-      _pmConsultar('medicaciones', 'id,clinica_id,paciente_id,mascota_id,receta_id,fecha_emision,inicio,prescriptor_id,prescriptor_nombre',
-        q => deClinica(q.or(`and(fecha_emision.gte.${rango.from},fecha_emision.lte.${rango.to}),and(fecha_emision.is.null,inicio.gte.${rango.from},inicio.lte.${rango.to})`)), signal),
-      _pmConsultar('procedimientos_clinicos', 'id,clinica_id,paciente_id,fecha,estado,profesional_id,profesional_nombre,rol_profesional', q => enPeriodo('fecha')(q.eq('estado', 'completado')), signal),
-      _pmConsultar('citas', 'id,clinica_id,paciente_id,mascota_id,fecha,estado,medico_id', q => enPeriodo('fecha')(q.eq('estado', 'completada')), signal),
-      _pmPerfiles(clinica, signal),
-    ]);
-    if(!vigente()) return;
-    // Las notas son la firma: sin ellas no hay reporte. Lo demás, si falla, se avisa.
-    if(rn.error) throw new Error('No se pudieron leer las notas: ' + rn.error.message);
-    const avisos = [];
-    if(rm.error) avisos.push('No se pudieron leer las recetas: no se cuentan.');
-    if(rp.error && !_pmTablaNoExiste(rp.error)) avisos.push('No se pudieron leer los procedimientos: no se cuentan.');
-    if(rc.error) avisos.push('No se pudieron leer las citas: no se cuentan.');
-    if(rperf.error) avisos.push('No se pudieron leer los usuarios: los nombres de cuenta y los roles pueden no ser exactos.');
-    if([rn, rm, rp, rc].some(r => r.truncado) || rperf.truncado) avisos.push('El período tiene demasiados registros para leerlos todos: elige uno más corto.');
-    if(rn.faltan?.includes('profesional_codigo')) avisos.push('Falta la columna del código MINSA en las notas (migracion_codigo_medico_notas.sql): se agrupa solo por nombre.');
-    if(rn.faltan?.includes('estado')) avisos.push('Falta la columna de estado de las notas (migracion_notas_borrador.sql): se cuentan todas como finalizadas.');
-    const calculo = _pmAgrupar(_pmActos({
-      notas:rn.filas, recetas:rm.error ? [] : rm.filas,
-      procedimientos:rp.error ? [] : rp.filas, citas:rc.error ? [] : rc.filas,
-    }, rperf.mapa), rperf.mapa);
-    datos = { ...calculo, ...rango, clinica, avisos };
-  } catch(e) {
-    if(!vigente()) return;
-    datos = { error: control?.signal.aborted ? 'La consulta tardó demasiado. Revisa la conexión y pulsa Actualizar.' : (e.message || String(e)), ...rango };
-  } finally {
-    if(plazo) clearTimeout(plazo);
+
+  const trabajo = (async () => {
+    // El plazo no depende de la red: si fetch nunca llega a llamarse (un
+    // refresco de sesión colgado), la carga termina igual en vez de dejar la
+    // pantalla en "Calculando…" para siempre.
+    let plazo;
+    const vencido = new Promise((_, rechazar) => {
+      plazo = setTimeout(() => { control?.abort(); rechazar(new Error('plazo')); }, 90000);
+    });
+    try {
+      const enPeriodo = campo => q => {
+        q = q.gte(campo, rango.from).lte(campo, rango.to);
+        return clinica ? q.eq('clinica_id', clinica) : q;
+      };
+      const deClinica = q => clinica ? q.eq('clinica_id', clinica) : q;
+      const recetas = async () => {
+        const cols = 'id,clinica_id,paciente_id,mascota_id,receta_id,fecha_emision,inicio,prescriptor_id,prescriptor_nombre';
+        // Las recetas antiguas no tienen fecha de emisión: cuentan por su inicio.
+        const r = await _pmConsultar('medicaciones', cols,
+          q => deClinica(q.or(`and(fecha_emision.gte.${rango.from},fecha_emision.lte.${rango.to}),and(fecha_emision.is.null,inicio.gte.${rango.from},inicio.lte.${rango.to})`)), signal);
+        // Sin la columna, el filtro también falla: se cuenta solo por inicio.
+        if(r.error && _faltaColumna(r.error, 'fecha_emision')) {
+          const r2 = await _pmConsultar('medicaciones', cols.replace(',fecha_emision', ''), enPeriodo('inicio'), signal);
+          return { ...r2, faltan:[...(r2.faltan || []), 'fecha_emision'] };
+        }
+        return r;
+      };
+      if(isSuperAdmin()) await Promise.race([_clinicasDisponiblesSA(), vencido]);
+      const [rn, rm, rp, rc, rperf] = await Promise.race([Promise.all([
+        _pmConsultar('notas', 'id,clinica_id,paciente_id,mascota_id,fecha,tipo,estado,cita_id,profesional_id,profesional_nombre,profesional_codigo', enPeriodo('fecha'), signal),
+        recetas(),
+        _pmConsultar('procedimientos_clinicos', 'id,clinica_id,paciente_id,fecha,estado,profesional_id,profesional_nombre,rol_profesional', q => enPeriodo('fecha')(q.eq('estado', 'completado')), signal),
+        _pmConsultar('citas', 'id,clinica_id,paciente_id,mascota_id,fecha,estado,medico_id', q => enPeriodo('fecha')(q.eq('estado', 'completada')), signal),
+        _pmPerfiles(clinica, signal),
+      ]), vencido]);
+      // Un corte a mitad deja tablas incompletas: no se pinta como si fuera válido.
+      if(control?.signal.aborted) throw new Error('plazo');
+      if(rn.error) throw new Error('No se pudieron leer las notas: ' + rn.error.message);
+      // Sin los usuarios no se sabe quién es médico: el ranking metería a
+      // recepción o farmacia. Mejor no dar una cifra que darla mal.
+      if(rperf.error) throw new Error('No se pudieron leer los usuarios: ' + rperf.error.message);
+      const avisos = [];
+      if(rm.error) avisos.push('No se pudieron leer las recetas: no se cuentan.');
+      if(rp.error && !_pmTablaNoExiste(rp.error)) avisos.push('No se pudieron leer los procedimientos: no se cuentan.');
+      if(rc.error) avisos.push('No se pudieron leer las citas: no se cuentan.');
+      if([rn, rm, rp, rc].some(r => r.truncado) || rperf.truncado) avisos.push('El período tiene demasiados registros para leerlos todos: elige uno más corto.');
+      for(const [tabla, r] of [['notas', rn], ['medicaciones', rm], ['procedimientos_clinicos', rp], ['citas', rc]]) {
+        for(const col of (r.faltan || [])) {
+          const texto = _PM_COLUMNA_AVISO[tabla + '.' + col];
+          if(texto !== '') avisos.push('Falta ' + (texto || `la columna ${col} en ${tabla}`) + '.');
+        }
+      }
+      const calculo = _pmAgrupar(_pmActos({
+        notas:rn.filas, recetas:rm.error ? [] : rm.filas,
+        procedimientos:rp.error ? [] : rp.filas, citas:rc.error ? [] : rc.filas,
+      }, rperf.mapa), rperf.mapa);
+      return { ...calculo, ...rango, clinica, avisos };
+    } catch(e) {
+      return { error: e.message === 'plazo' ? 'La consulta tardó demasiado. Revisa la conexión y pulsa Actualizar.' : (e.message || String(e)), ...rango, clinica };
+    } finally {
+      clearTimeout(plazo);
+    }
+  })();
+  pmPromesa = trabajo;
+  const datos = await trabajo;
+  if(!vigente()) {
+    // Misma carga pero otra persona en sesión: nada de lo calculado le sirve.
+    if(gen === pmGen) _pmInvalidar();
+    return;
   }
-  if(!vigente()) return;
   pmDatos = datos;
   pmCargando = false;
+  pmPromesa = null;
   renderProductividadMedica();
 }
 
@@ -13723,13 +13819,16 @@ function _pmNombreClinica(id) {
 
 function _pmEtiquetaCodigo() { return typeof _etiquetaCodigoMedico === 'function' ? _etiquetaCodigoMedico() : 'Código MINSA'; }
 
-async function renderProductividadMedica() {
+// Síncrona a propósito: si esperara la lista de clínicas, un pintado viejo
+// podría terminar después de uno nuevo y dejar en pantalla el estado anterior.
+// La carga ya pide la lista antes de pintar los resultados.
+function renderProductividadMedica() {
   const ctrl = document.getElementById('pm-controles');
   const cont = document.getElementById('pm-contenido');
   if(!ctrl || !cont) return;
   if(!puedeVerProductividadMedica()) { cont.innerHTML = ''; ctrl.innerHTML = ''; return; }
 
-  const clinicas = isSuperAdmin() ? await _clinicasDisponiblesSA() : [];
+  const clinicas = isSuperAdmin() ? (adminClinicas || []) : [];
   const chips = [['mes','Este mes'],['mes_anterior','Mes anterior'],['anio','Este año'],['rango','Rango']]
     .map(([id, l]) => `<span class="chip${pmPeriodo === id ? ' active' : ''}" onclick="setPmPeriodo('${id}')">${l}</span>`).join('');
   ctrl.innerHTML = `
@@ -13742,7 +13841,7 @@ async function renderProductividadMedica() {
       <option value="">🌐 Todas las clínicas</option>
       ${clinicas.map(c => `<option value="${escAttr(String(c.id))}"${String(pmClinica) === String(c.id) ? ' selected' : ''}>${escAttr(c.nombre)}</option>`).join('')}
     </select>` : ''}
-    <button class="btn btn-secondary btn-sm" onclick="cargarProductividadMedica()"${pmCargando ? ' disabled' : ''}>🔄 Actualizar</button>`;
+    <button class="btn btn-secondary btn-sm" onclick="cargarProductividadMedica()">🔄 Actualizar</button>`;
 
   if(pmCargando) { cont.innerHTML = `<div class="empty-state" style="padding:40px"><div class="empty-icon">⏳</div><p>Calculando la productividad…</p></div>`; return; }
   const d = pmDatos;
@@ -13760,6 +13859,7 @@ async function renderProductividadMedica() {
     contar(d.sinFirma) ? `ℹ️ Sin médico registrado (no entran en el ranking): ${detalle(d.sinFirma)}.` : '',
     contar(d.noMedico) ? `ℹ️ Registrado por cuentas no médicas —administración, recepción, enfermería o farmacia— que no firman notas (no entran en el ranking): ${detalle(d.noMedico)}.` : '',
     d.ambiguos.length ? `⚠️ Hay firmas sin ${escAttr(_pmEtiquetaCodigo())} con un nombre que usan médicos distintos; quedan aparte marcadas como «firma dudosa». Pide que se escriba el código al firmar.` : '',
+    d.medicos.some(m => m.revisar) ? `⚠️ Hay cuentas sin ${escAttr(_pmEtiquetaCodigo())} con el mismo nombre que otro médico; quedan en filas separadas marcadas «Revisar». Si son la misma persona, pide que firme sus notas con su código.` : '',
   ].filter(Boolean).map(a => `<div class="balance-aviso">${a}</div>`).join('');
 
   const kpis = `<div class="stats-grid pm-kpis">
@@ -13788,6 +13888,7 @@ async function renderProductividadMedica() {
           ${m.conCuenta ? '' : '<span class="tag tag-gray">Sin cuenta</span>'}
           ${m.codigos.length > 1 ? '<span class="tag tag-orange" title="Firmó con más de un código: revisa si es la misma persona">Varios códigos</span>' : ''}
           ${m.dudoso ? '<span class="tag tag-orange" title="Firma sin código con un nombre que usan médicos distintos">Firma dudosa</span>' : ''}
+          ${m.revisar ? `<span class="tag tag-orange" title="Cuenta sin ${escAttr(_pmEtiquetaCodigo())} cuyo nombre coincide con el de otro médico: no se juntaron por si son personas distintas">Revisar: nombre repetido</span>` : ''}
         </div>
         <div class="prod-user-meta">${[m.especialidad, !d.clinica && m.clinicas.length ? m.clinicas.map(_pmNombreClinica).join(', ') : '', m.ultima ? 'última ' + formatFecha(m.ultima) : ''].filter(Boolean).map(escAttr).join(' · ')}</div>
         <div class="prod-user-actions">
@@ -13815,9 +13916,18 @@ async function renderProductividadMedica() {
 
 async function imprimirProductividadMedica() {
   if(!puedeVerProductividadMedica()) { toast('Este reporte es solo para el Super Admin y el médico administrativo', 'error'); return; }
-  if(!pmDatos || pmDatos.error) await cargarProductividadMedica();
+  // Con una carga en curso se espera a que termine: lo que hay en pmDatos es
+  // del filtro anterior. Si entretanto empieza otra, se espera también.
+  for(let previa = null; pmCargando && pmPromesa && pmPromesa !== previa;) { previa = pmPromesa; await previa; }
+  // El impreso enseña los filtros que se ven, no los de la última carga.
+  const corresponde = d => {
+    const r = _pmRango();
+    const clinica = isSuperAdmin() ? (pmClinica || null) : currentClinicaId;
+    return !!d && !d.error && d.from === r.from && d.to === r.to && String(d.clinica ?? '') === String(clinica ?? '');
+  };
+  if(!corresponde(pmDatos)) await cargarProductividadMedica();
   const d = pmDatos;
-  if(!d || d.error) { toast('No hay datos para imprimir', 'warning'); return; }
+  if(!corresponde(d)) { toast(d?.error || 'No hay datos para imprimir', 'warning'); return; }
 
   // El membrete es el de la clínica del reporte, no el de la clínica en la que
   // esté trabajando el Super Admin.
@@ -13845,7 +13955,7 @@ async function imprimirProductividadMedica() {
     ${top.map(m => `<div class="bar-row"><div class="bar-lbl" style="width:170px;min-width:170px;flex:none">${escAttr(m.nombre)}</div><div class="bar-track"><div class="bar-fill" style="width:${Math.round(m.atenciones / max * 100)}%"><span></span></div></div><div class="bar-val">${m.atenciones}</div></div>`).join('')}` : ''}
     <div class="section-title" style="margin-top:18px">🏆 Ranking</div>
     ${d.medicos.length ? `<style>.pm-tabla th,.pm-tabla td{padding:6px 7px}</style><table class="pm-tabla" style="font-size:10.5px"><thead><tr><th>#</th><th style="min-width:150px">Médico</th><th>${escAttr(_pmEtiquetaCodigo())}</th><th style="${num}">Atenciones</th><th style="${num}">Pacientes</th><th style="${num}">Notas</th><th style="${num}">Ex. visuales</th><th style="${num}">Recetas</th><th style="${num}">Proced.</th><th style="${num}">Citas</th></tr></thead>
-    <tbody>${d.medicos.map((m, i) => `<tr><td>${i + 1}</td><td>${escAttr(m.nombre)}${m.conCuenta ? '' : ' <span class="tag tag-gray">sin cuenta</span>'}${m.dudoso ? ' <span class="tag tag-orange">dudosa</span>'  : ''}</td><td>${escAttr(m.codigos.join(', ') || '—')}</td><td style="${num};font-weight:800">${m.atenciones}</td><td style="${num}">${m.pacientes}</td><td style="${num}">${m.notas}</td><td style="${num}">${m.examenes}</td><td style="${num}">${m.recetas}</td><td style="${num}">${m.procedimientos}</td><td style="${num}">${m.citas}</td></tr>`).join('')}
+    <tbody>${d.medicos.map((m, i) => `<tr><td>${i + 1}</td><td>${escAttr(m.nombre)}${m.conCuenta ? '' : ' <span class="tag tag-gray">sin cuenta</span>'}${m.dudoso ? ' <span class="tag tag-orange">dudosa</span>' : ''}${m.revisar ? ' <span class="tag tag-orange">revisar</span>' : ''}</td><td>${escAttr(m.codigos.join(', ') || '—')}</td><td style="${num};font-weight:800">${m.atenciones}</td><td style="${num}">${m.pacientes}</td><td style="${num}">${m.notas}</td><td style="${num}">${m.examenes}</td><td style="${num}">${m.recetas}</td><td style="${num}">${m.procedimientos}</td><td style="${num}">${m.citas}</td></tr>`).join('')}
     <tr style="font-weight:800;background:#F1F5F9"><td></td><td>Total</td><td></td><td style="${num}">${t.atenciones}</td><td style="${num}">${t.pacientes}</td><td style="${num}">${t.notas}</td><td style="${num}">${t.examenes}</td><td style="${num}">${t.recetas}</td><td style="${num}">${t.procedimientos}</td><td style="${num}">${t.citas}</td></tr>
     </tbody></table>` : '<p style="color:#94A3B8;text-align:center;padding:16px">No hay atenciones firmadas en este período</p>'}
     <p style="font-size:11px;color:#64748B;margin:10px 0 4px">Atención = un paciente en una visita con nota finalizada y firmada; una visita con varias notas cuenta una vez. Se agrupa por ${escAttr(_pmEtiquetaCodigo())} y, sin código, por nombre. En el total, una visita atendida por dos médicos cuenta una sola vez.</p>
