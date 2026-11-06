@@ -22,7 +22,7 @@
 <!-- Lectura local de machotes. El archivo se procesa en el navegador antes de
      guardarlo; Mammoth extrae DOCX y PDF.js se carga al elegir un PDF. -->
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js" defer></script>
-<link rel="stylesheet" href="css/styles.css?v=20261030c">
+<link rel="stylesheet" href="css/styles.css?v=20261106a">
 </head>
 <body>
 <script>
@@ -90,6 +90,7 @@
       <p id="login-error" style="color:#f87171;font-size:12px;text-align:center;margin:-4px 0 0;display:none;font-family:'Outfit',sans-serif">Email o contraseña incorrectos</p>
       <button class="btn-login" onclick="verificarLogin()">Iniciar sesión</button>
       <button type="button" onclick="solicitarRecuperacionPassword()" style="align-self:center;background:none;border:none;color:rgba(255,255,255,.62);font:500 12px 'Outfit',sans-serif;cursor:pointer;padding:2px 8px;text-decoration:underline;text-underline-offset:3px">¿Olvidaste tu contraseña?</button>
+      <button type="button" class="login-lumi" onclick="abrirLumi('login')"><span aria-hidden="true">✦</span> ¿No puedes entrar? Lumi te ayuda</button>
     </div>
     <div class="lm-footer">Solo personal autorizado de Lumea Med</div>
   </div>
@@ -161,6 +162,7 @@
         <input type="text" id="global-search" placeholder="Buscar paciente..." oninput="globalSearch(this.value)">
       </div>
       <div class="topbar-date" id="topbar-date"></div>
+      <button class="lumi-btn" id="lumi-btn" type="button" onclick="abrirLumi()" title="Lumi: ayuda si algo falla o te atascas" aria-label="Abrir la ayuda de Lumi"><span class="lumi-btn-ico" aria-hidden="true">✦</span><span class="lumi-btn-txt">Ayuda</span><span class="lumi-btn-punto" aria-hidden="true"></span></button>
       <div class="theme-toggle-wrap">
         <span id="theme-icon">☀️</span>
         <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Cambiar modo"></button>
@@ -225,7 +227,7 @@
               <div class="card-header" id="agendas-encabezado" style="margin-bottom:14px">
                 <h3>👨‍⚕️ Personal</h3>
                 <div class="guia-header-actions">
-                  <button class="btn btn-secondary btn-sm" onclick="iniciarGuiaModulo('agendas',true)" title="Ver la guía de este módulo">❔ Ver guía</button>
+                  <button class="btn btn-secondary btn-sm" onclick="abrirLumi('agendas')" title="Lumi: ayuda si te atascas en este módulo">✦ Ayuda</button>
                   <button class="btn btn-secondary btn-sm" onclick="navigate('configuracion')" title="Agregar médico">+ Agregar</button>
                 </div>
               </div>
@@ -248,7 +250,7 @@
           <div class="card-header" id="pacientes-encabezado">
             <h3>👥 Registro de Pacientes</h3>
             <div class="guia-header-actions">
-              <button class="btn btn-secondary btn-sm" onclick="iniciarGuiaModulo('pacientes',true)" title="Ver la guía de este módulo">❔ Ver guía</button>
+              <button class="btn btn-secondary btn-sm" onclick="abrirLumi('pacientes')" title="Lumi: ayuda si te atascas en este módulo">✦ Ayuda</button>
               <button class="btn btn-primary" id="btn-nuevo-paciente" onclick="openModalPaciente()">+ Nuevo Paciente</button>
             </div>
           </div>
@@ -334,7 +336,7 @@
           <div class="card-header" id="citas-encabezado">
             <h3>📅 Nueva cita para</h3>
             <div class="guia-header-actions">
-              <button class="btn btn-secondary btn-sm" onclick="iniciarGuiaModulo('citas',true)" title="Ver la guía de este módulo">❔ Ver guía</button>
+              <button class="btn btn-secondary btn-sm" onclick="abrirLumi('citas')" title="Lumi: ayuda si te atascas en este módulo">✦ Ayuda</button>
               <button class="btn btn-primary btn-sm" id="btn-nueva-cita" style="white-space:nowrap" onclick="openModalCita()">+ Nueva Cita</button>
             </div>
           </div>
@@ -417,7 +419,7 @@
           <div class="card-header" id="medicaciones-encabezado">
             <h3>💊 Medicaciones</h3>
             <div class="guia-header-actions">
-              <button class="btn btn-secondary btn-sm" onclick="iniciarGuiaModulo('medicaciones',true)" title="Ver la guía de este módulo">❔ Ver guía</button>
+              <button class="btn btn-secondary btn-sm" onclick="abrirLumi('medicaciones')" title="Lumi: ayuda si te atascas en este módulo">✦ Ayuda</button>
               <button class="btn btn-primary" id="btn-nueva-medicacion" onclick="openModalMedicacion()">+ Nueva Medicación</button>
             </div>
           </div>
@@ -432,7 +434,7 @@
           <div class="card-header" id="notas-encabezado">
             <h3>📝 Notas Clínicas</h3>
             <div class="guia-header-actions">
-              <button class="btn btn-secondary btn-sm" onclick="iniciarGuiaModulo('notas',true)" title="Ver la guía de este módulo">❔ Ver guía</button>
+              <button class="btn btn-secondary btn-sm" onclick="abrirLumi('notas')" title="Lumi: ayuda si te atascas en este módulo">✦ Ayuda</button>
               <button class="btn btn-primary" id="btn-nueva-nota" onclick="openModalNota()">+ Nueva Nota</button>
             </div>
           </div>
@@ -476,7 +478,7 @@
           <div class="card-header" id="expedientes-encabezado">
             <h3>📋 Expedientes Clínicos</h3>
             <div class="guia-header-actions">
-              <button class="btn btn-secondary btn-sm" onclick="iniciarGuiaModulo('expedientes',true)" title="Ver la guía de este módulo">❔ Ver guía</button>
+              <button class="btn btn-secondary btn-sm" onclick="abrirLumi('expedientes')" title="Lumi: ayuda si te atascas en este módulo">✦ Ayuda</button>
               <input type="text" id="exp-search" placeholder="Buscar por nombre, apellido o N° expediente..."
                 oninput="filtrarExpedientes(this.value)"
                 style="padding:8px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;background:var(--bg);color:var(--text);outline:none;min-width:260px">
@@ -2843,7 +2845,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20261030c" defer></script>
+<script src="js/app.js?v=20261106a" defer></script>
 </body>
 </html>
 
