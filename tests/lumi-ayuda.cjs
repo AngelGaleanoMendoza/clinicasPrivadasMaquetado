@@ -40,12 +40,15 @@ const preambulo=`
   const navigate=async v=>{currentView=v;window.__acciones.push('navigate:'+v);};
   const switchAdminTab=t=>window.__acciones.push('tab:'+t);
   const toggleSidebar=()=>window.__acciones.push('sidebar');
-  const doLogout=()=>window.__acciones.push('logout');
+  const doLogout=(c)=>window.__acciones.push('logout:'+(c===true));
+  let respuestaConfirm=true;
+  const customConfirm=async o=>{window.__acciones.push('confirm:'+o.title);return respuestaConfirm;};
+  const guardarBorradoresSesion=()=>window.__acciones.push('borradores');
   ${extraer('escAttr')}
   ${extraer('toast')}
   ${lumi}
-  window.__set=o=>{ if('sa' in o) superAdmin=o.sa; if('user' in o) currentUser=o.user; if('view' in o) currentView=o.view; if('clinica' in o) currentClinicaId=o.clinica; };
-  Object.assign(window,{_lumiBuscarAyuda,_lumiBuscarTexto,_lumiRegistrar,_lumiOlvidar,abrirLumi,cerrarLumi,toast,
+  window.__set=o=>{ if('confirm' in o) respuestaConfirm=o.confirm; if('sa' in o) superAdmin=o.sa; if('user' in o) currentUser=o.user; if('view' in o) currentView=o.view; if('clinica' in o) currentClinicaId=o.clinica; };
+  Object.assign(window,{_lumiBuscarAyuda,_lumiBuscarTexto,_lumiRegistrar,_lumiOlvidar,_lumiAlEntrar,_lumiDato,_lumiAccion,abrirLumi,cerrarLumi,toast,
     LUMI_AYUDAS,LUMI_PROBLEMAS,LUMI_NO_RECONOCIDO,_lumiErroresLista:()=>_lumiErrores,_lumiFrecuentes});
 `;
 const pagina=`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body>
@@ -118,6 +121,14 @@ const CASOS=[
   ['Le quedan 3 cita(s) sin atender. No se cancelan solas: reasígnalas o usa Vaciar agenda antes.','agenda-pendientes'],
   ['Paciente no encontrado','registro-no-encontrado'],
   ['Ingresa tu email y contraseña','campos-obligatorios'],
+  ['La contraseña coincide con el perfil antiguo, pero no con Supabase Auth.','login-perfil-antiguo'],
+  ['Stock disponible: 3','stock-insuficiente'],
+  ['No se pueden agendar citas en fechas pasadas','cita-pasada'],
+  ['No se pudo importar: El archivo pertenece a Clínica Norte. Selecciónala antes de importar.','respaldo'],
+  ['«Consulta» ya está en la lista','ya-en-lista'],
+  ['No se pudo cambiar la contraseña: Tu sesión no es válida','sesion-vencida'],
+  ['Sin clínica','sin-clinica-usuario'],
+  ['No es una IP válida','red-ip'],
   ["Error inesperado en la página: Cannot read properties of undefined (reading 'id')",'error-inesperado'],
   ['Cita guardada correctamente',null],
 ];
@@ -235,8 +246,71 @@ const CASOS=[
     assert.equal(soloSA.recepcion,false);
     assert(soloSA.frecuentes.includes('factura-error'),'Finanzas lista sus problemas propios');
 
+    // ── Revisión: casos que antes salían mal ──
+    const revision=await page.evaluate(async()=>{
+      _lumiOlvidar(); cerrarLumi();
+      const r={};
+      // Super Admin sin clínica: elegir clínica, no «pide que te la asignen»
+      __set({sa:true}); r.saSinClinica=_lumiBuscarAyuda('Sin clínica asignada')?.id; __set({sa:false});
+      // Una validación sin ayuda no se anota ni enciende el punto
+      toast('El carrito está vacío','error');
+      r.validacion={n:_lumiErroresLista().length,punto:document.getElementById('lumi-btn').classList.contains('lumi-alerta')};
+      // Un fallo de la página que menciona 'jwt' no es una sesión vencida
+      r.inesperado=_lumiRegistrar("Error inesperado en la página: Cannot read properties of undefined (reading 'jwt')",'inesperado')?.ayuda.id;
+      r.inesperadoRed=_lumiRegistrar('Error inesperado en la página: TypeError: Failed to fetch','inesperado')?.ayuda.id;
+      r.columna=_lumiDato('column citas.duracion_min does not exist');
+      // Al cerrar sesión no queda ni el aviso ni el panel con el mensaje
+      toast('Ya existe un paciente con esa identificación: Juan Pérez Gómez','error');
+      abrirLumi(); cerrarLumi(); _lumiOlvidar();
+      r.trasSalir={avisos:document.querySelectorAll('#toasts .toast').length,panel:document.getElementById('lumi-cuerpo').textContent.trim()};
+      // Recargar con un formulario abierto pregunta antes
+      const modal=document.createElement('div'); modal.className='modal-overlay open'; document.body.appendChild(modal);
+      __set({confirm:false}); window.__acciones.length=0;
+      await _lumiAccion('recargar'); r.recargar=window.__acciones.slice();
+      // Cerrar sesión con formulario abierto guarda los borradores y no pregunta dos veces
+      __set({confirm:true}); window.__acciones.length=0;
+      _lumiAccion('salir'); await new Promise(x=>setTimeout(x,20)); r.salir=window.__acciones.slice();
+      modal.remove();
+      // Foco atrapado: el resto de la página queda inerte y vuelve al cerrar
+      abrirLumi();
+      r.inerte=document.querySelector('.main').inert;
+      cerrarLumi();
+      r.inerteDespues=document.querySelector('.main').inert;
+      r.focoVuelve=document.activeElement?.id;
+      // Escape no llega a otros oyentes cuando Lumi está abierto
+      let otro=0; const oyente=e=>{if(e.key==='Escape') otro++;}; document.addEventListener('keydown',oyente);
+      abrirLumi(); document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',cancelable:true}));
+      r.escape={cerrado:document.getElementById('lumi').hidden,otro};
+      document.removeEventListener('keydown',oyente);
+      // Lo anotado en el acceso o por otro usuario se descarta al entrar
+      _lumiOlvidar(); __set({user:null}); _lumiRegistrar('Email o contraseña incorrectos. Te quedan 2 intentos.','error');
+      __set({user:{id:'u9',name:'Otra'}}); _lumiRegistrar('JWT expired','error');
+      __set({user:{id:'u1',name:'Ana'}}); _lumiAlEntrar();
+      r.alEntrar={n:_lumiErroresLista().length,punto:document.getElementById('lumi-btn').classList.contains('lumi-alerta')};
+      // El aviso verde de «¿Olvidaste tu contraseña?» no es un error
+      __set({user:null}); const el=document.getElementById('login-error');
+      el.style.color='#6EE7B7'; el.textContent='Escríbele al administrador a soporte indicando tu correo.'; el.style.display='block';
+      await new Promise(x=>setTimeout(x,20));
+      r.verde=_lumiErroresLista().length;
+      el.style.display='none'; el.style.color='#f87171'; __set({user:{id:'u1',name:'Ana'}});
+      return r;
+    });
+    assert.equal(revision.saSinClinica,'sin-clinica-sa');
+    assert.deepEqual(revision.validacion,{n:0,punto:false},'«El carrito está vacío» no es un atasco');
+    assert.equal(revision.inesperado,'error-inesperado');
+    assert.equal(revision.inesperadoRed,'sin-conexion');
+    assert.match(revision.columna,/duracion_min/);
+    assert.deepEqual(revision.trasSalir,{avisos:0,panel:''},'Al salir no queda el nombre del paciente en pantalla');
+    assert.deepEqual(revision.recargar,['confirm:¿Recargar la página?'],'Con un formulario abierto, recargar pregunta y respeta el «Volver»');
+    assert.deepEqual(revision.salir,['confirm:¿Cerrar sesión?','borradores','logout:true']);
+    assert.deepEqual([revision.inerte,revision.inerteDespues,revision.focoVuelve],[true,false,'lumi-btn']);
+    assert.deepEqual(revision.escape,{cerrado:true,otro:0});
+    assert.deepEqual(revision.alEntrar,{n:0,punto:false});
+    assert.equal(revision.verde,0);
+
     // ── Escape cierra; el historial vive en la pestaña y se borra al salir ──
     const vida=await page.evaluate(()=>{
+      abrirLumi(); _lumiRegistrar('JWT expired','error');
       document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));
       const cerrado=document.getElementById('lumi').hidden;
       const guardado=JSON.parse(sessionStorage.getItem('lm_lumi_errores')||'[]').length;
@@ -324,6 +398,24 @@ const CASOS=[
       await p.close();
     };
     for(const [w,d] of [[1280,false],[430,false],[390,true],[360,false]]) await prueba(w,d);
+
+    // La barra superior real, con menú lateral y fecha, no se desborda en tableta
+    const real=await browser.newPage();
+    await real.route('**/*',r=>{const u=r.request().url();
+      if(u.startsWith('http://app.test/css/')) return r.fulfill({contentType:'text/css',body:css});
+      if(u==='http://app.test/') return r.fulfill({contentType:'text/html; charset=utf-8',body:html});
+      return r.abort();});
+    await real.goto('http://app.test/');
+    for(const w of [769,820,900,1024,1100,1280]) {
+      await real.setViewportSize({width:w,height:800});
+      const m=await real.evaluate(()=>{
+        document.getElementById('app').classList.add('visible');
+        const tb=document.querySelector('.topbar'), b=document.getElementById('lumi-btn'), t=document.getElementById('theme-toggle');
+        return {desborde:tb.scrollWidth-tb.clientWidth,btn:b.getBoundingClientRect().right,tema:t.getBoundingClientRect().right,ancho:innerWidth};
+      });
+      assert(m.desborde<=0&&m.tema<=m.ancho,`La barra cabe en ${w}px: ${JSON.stringify(m)}`);
+    }
+    await real.close();
 
     console.log('OK: reconocimiento, aviso con solución, panel por rol, archivo pendiente, texto seguro, búsqueda, historial, acceso, fallos silenciosos, sin recorrido automático y layout.');
   } finally { await browser.close(); }

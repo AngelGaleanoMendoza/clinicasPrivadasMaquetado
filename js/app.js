@@ -802,6 +802,7 @@ function _inacReset() {
 }
 
 function _inacAviso() {
+  if(_lumi.abierta) cerrarLumi();
   const overlay = document.getElementById('modal-inactividad');
   const countEl = document.getElementById('inactividad-count');
   if(!overlay) { autoLogout(); return; }
@@ -1123,6 +1124,7 @@ async function entrarConPerfil(profile) {
 
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').classList.add('visible');
+  _lumiAlEntrar();
   document.getElementById('sf-name').textContent = currentUser.name;
   document.getElementById('sf-role').textContent = currentUser.role;
   document.getElementById('sf-avatar').textContent = currentUser.avatar;
@@ -1154,8 +1156,8 @@ async function entrarConPerfil(profile) {
 
 async function checkSession() {}
 
-async function doLogout() {
-  const ok = await customConfirm({icon:'👋',title:'¿Cerrar sesión?',msg:`Vas a salir de la sesión de <strong>${currentUser?.nombre||'usuario'}</strong>`,okText:'Cerrar sesión',cancelText:'Quedarse',danger:false});
+async function doLogout(confirmado = false) {
+  const ok = confirmado === true || await customConfirm({icon:'👋',title:'¿Cerrar sesión?',msg:`Vas a salir de la sesión de <strong>${currentUser?.nombre||'usuario'}</strong>`,okText:'Cerrar sesión',cancelText:'Quedarse',danger:false});
   if(!ok) return;
   detenerInactividad();
   // Antes de signOut: mientras espera, una carga del reporte podría terminar y
@@ -1288,9 +1290,9 @@ function toast(msg, type='success') {
   // nunca puede romper un aviso: si falla, el aviso sale como siempre.
   let lumi = null;
   if(type === 'error' || type === 'warning') { try { lumi = _lumiRegistrar(msg, type); } catch(e) {} }
-  const ayuda = lumi?.ayuda && lumi.ayuda.aviso !== false;
+  const ayuda = lumi?.ayuda && lumi.ayuda.aviso !== false && !_lumi.abierta;
   const dura = ayuda ? 9000 : 3800;
-  const boton = ayuda ? `<button class="t-lumi" type="button" onclick="this.closest('.toast').remove();abrirLumi(null,${lumi.registro.n})">✦ Lumi: cómo resolverlo</button>` : '';
+  const boton = ayuda ? `<button class="t-lumi" type="button" onclick="this.closest('.toast').remove();abrirLumi(null,${lumi.registro.n})"><span aria-hidden="true">✦</span> Lumi: cómo resolverlo</button>` : '';
   t.innerHTML = `<span class="t-icon">${icons[type]||'ℹ️'}</span><span class="t-msg">${msg}${boton}</span><button class="t-close" onclick="this.closest('.toast').remove()">✕</button><div class="t-bar"${ayuda ? ` style="animation-duration:${dura}ms"` : ''}></div>`;
   c.appendChild(t);
   setTimeout(() => t.remove(), dura);
@@ -1663,7 +1665,7 @@ const LUMI_AYUDAS = [
     patrones:[/cuenta (esta|ha sido) bloqueada/],
     claves:'bloqueada bloqueo intentos no puedo entrar acceso',
     causa:'Tras 3 contraseñas incorrectas seguidas la cuenta se bloquea para protegerla. Aunque ahora escribas la clave correcta, no entra hasta que la desbloqueen.',
-    pasos:['No sigas intentando: no se desbloquea sola.','Avisa al Super Admin con el correo con el que entras.','Cuando te confirme el desbloqueo, vuelve a entrar. Si no recuerdas la clave, pídele una nueva.'],
+    pasos:['No sigas intentando: no se desbloquea sola.','Avisa al Super Admin y dile el correo con el que entras.','Cuando te confirme el desbloqueo, vuelve a entrar. Si no recuerdas la clave, pídele una nueva.'],
     admin:['Ve a 👑 Administración › 👥 Usuarios.','En la tarjeta del usuario pulsa «🔓 Desbloquear».','Si no recuerda la clave, pulsa «🔑 Contraseña» y asígnale una nueva.'],
     acciones:['usuarios','copiar'],
   },
@@ -1676,9 +1678,9 @@ const LUMI_AYUDAS = [
     admin:['Si no recuerda su clave: 👑 Administración › 👥 Usuarios › «🔑 Contraseña».'],
   },
   {
-    id:'login-olvido', titulo:'Olvidé mi contraseña', donde:['login'], aviso:false,
+    id:'login-olvido', titulo:'Olvidaste tu contraseña', donde:['login'], aviso:false,
     patrones:[/ingresa primero un correo/, /escribele al administrador/],
-    claves:'olvide olvidé contraseña recuperar clave nueva no recuerdo',
+    claves:'olvide contrasena recuperar clave nueva no recuerdo',
     causa:'El sistema no envía correos automáticos: la contraseña nueva la asigna el Super Admin.',
     pasos:['Escribe tu correo en «Correo electrónico».','Pulsa «¿Olvidaste tu contraseña?»: se abre un correo ya redactado para el Super Admin.','Si no se abre (pasa en teléfonos), escríbele tú con el correo de tu cuenta.','Entra con la contraseña nueva que te indique.'],
     admin:['👑 Administración › 👥 Usuarios › «🔑 Contraseña» en la tarjeta del usuario.'],
@@ -1687,18 +1689,27 @@ const LUMI_AYUDAS = [
     id:'login-confirmar', titulo:'Falta confirmar el correo', donde:['login'],
     patrones:[/confirmar su correo/, /email not confirmed/, /confirm email/],
     claves:'confirmar correo verificar email cuenta nueva',
-    causa:'Supabase pide que la persona confirme su correo antes de entrar la primera vez.',
+    causa:'El sistema pide confirmar el correo antes de entrar la primera vez.',
     pasos:['Busca en tu correo (también en Spam) el mensaje de confirmación y ábrelo.','Vuelve a la pantalla de acceso e inicia sesión.','Si no llegó, avisa al Super Admin.'],
-    admin:['En Supabase › Authentication › Settings › Email desactiva «Confirm email».'],
+    admin:['En Supabase › Authentication › Settings › Email desactiva «Confirm email» para las cuentas nuevas.','Para quien ya quedó pendiente, ejecuta el BLOQUE 2 de recuperacion_auth.sql en el SQL Editor.'],
   },
   {
     id:'login-perfil', titulo:'La contraseña es correcta pero el perfil no carga', donde:['login'],
-    patrones:[/no se pudo cargar tu perfil/, /no se pudo vincular con su perfil/, /perfil antiguo/, /no se pudo completar el inicio de sesion/],
+    patrones:[/no se pudo cargar tu perfil/, /no se pudo vincular con su perfil/, /no se pudo completar el inicio de sesion/],
     claves:'perfil no carga no entra acceso',
     causa:'Tu usuario existe, pero su ficha no se pudo leer o enlazar. Es un ajuste de la base de datos, no de tu clave.',
     pasos:['Vuelve a intentarlo una vez.','Si se repite, copia el detalle con el botón de abajo y envíaselo al Super Admin.'],
-    admin:['Con el «Id de Auth» del mensaje, ejecuta recuperacion_auth.sql (bloques 1 y 5) en Supabase › SQL Editor.','Si en su lugar ejecutas rls_setup.sql completo, ejecuta después migracion_acceso_red.sql.'],
+    admin:['En Supabase › SQL Editor ejecuta los bloques 1 y 5 de recuperacion_auth.sql.','Después ejecuta siempre migracion_acceso_red.sql: el bloque 1 deshace la restricción por red de la clínica.'],
     acciones:['copiar'],
+  },
+  {
+    id:'login-perfil-antiguo', titulo:'Tu contraseña anterior ya no sirve', donde:['login'],
+    patrones:[/perfil antiguo/],
+    claves:'contrasena antigua anterior no sirve acceso',
+    causa:'Tu cuenta pasó al sistema de acceso actual con otra contraseña, así que la de antes ya no entra.',
+    pasos:['Pide al Super Admin una contraseña nueva, o usa «¿Olvidaste tu contraseña?».','Entra con la contraseña nueva.'],
+    admin:['👑 Administración › 👥 Usuarios › «🔑 Contraseña» y asígnale una nueva.'],
+    acciones:['usuarios'],
   },
   {
     id:'login-servicio', titulo:'El servicio de inicio de sesión no responde', donde:['login'],
@@ -1727,17 +1738,18 @@ const LUMI_AYUDAS = [
   },
   {
     id:'sesion-vencida', titulo:'Tu sesión venció', donde:['*'],
-    patrones:[/\bjwt\b/, /token (has )?expired/, /invalid refresh token/, /refresh token not found/, /auth session missing/, /sesion de supabase vencio/, /sesion no esta activa/, /no existe una sesion valida/, /sesion anterior no pudo restaurarse/, /sesion del super admin no es valida/],
+    patrones:[/\bjwt\b/, /token (has )?expired/, /invalid refresh token/, /refresh token not found/, /auth session missing/, /sesion de supabase vencio/, /sesion no esta activa/, /no existe una sesion valida/, /sesion anterior no pudo restaurarse/, /sesion (del super admin )?no es valida/],
     claves:'sesion expiro vencida se cerro token no guarda',
-    causa:'La sesión dejó de ser válida para el servidor (pasó mucho tiempo o se abrió en otro equipo), así que rechaza lo que intentes guardar.',
+    causa:'La sesión de tu usuario se cerró en otro equipo o pestaña (también cuando se cierra por inactividad), o pasó demasiado tiempo. El servidor rechaza lo que intentes guardar.',
     pasos:['Si tienes un formulario abierto, copia lo que escribiste para no perderlo.','Pulsa «⏻ Cerrar sesión» y vuelve a entrar.','Repite lo que estabas haciendo.'],
+    pasosAcceso:['Vuelve a entrar con tu correo y tu contraseña.'],
     acciones:['salir'],
   },
   {
     id:'inactividad', titulo:'Se cerró la sesión por inactividad', donde:['login','dashboard'], aviso:false,
     patrones:[/sesion por expirar/, /sesion cerrada por inactividad/, /pendientes de finalizacion/],
     claves:'inactividad se cerro sesion perdi lo que escribia borrador pendiente recuperar',
-    causa:'Tras unos 15 minutos sin usar el sistema, la sesión se cierra para proteger los datos. Los formularios abiertos se guardan como pendientes.',
+    causa:'Tras unos 15 minutos sin usar el sistema, la sesión se cierra para proteger los datos. Solo en este equipo se guardan como pendientes las citas, recetas, notas y el alta de paciente que estaban abiertas; lo demás se pierde, así que guarda antes de dejar el equipo.',
     pasos:['Vuelve a entrar.','En el Dashboard busca el panel «Pendientes de finalización».','Pulsa «♻️ Recuperar» en lo que estabas haciendo y termínalo.','Cuando veas el aviso «Sesión por expirar», pulsa «✋ Seguir aquí» para no perder la sesión.'],
     acciones:['pendientes'],
   },
@@ -1747,16 +1759,16 @@ const LUMI_AYUDAS = [
     id:'sin-clinica-sa', titulo:'No hay clínica elegida', donde:['*'], soloSuperAdmin:true,
     patrones:[/elige (primero )?una clinica/, /sin clinica seleccionada/, /vista global/],
     claves:'pantalla vacia no aparecen datos clinica elegir trabajando',
-    causa:'Como Super Admin no perteneces a ninguna clínica: hasta que eliges una, las pantallas salen vacías y no se puede guardar nada.',
+    causa:'Como Super Admin no perteneces a ninguna clínica: hasta que elijas una, las pantallas salen vacías y no se puede guardar nada.',
     pasos:['Abre el menú lateral y busca «🏥 Trabajando en».','Elige la clínica en la que vas a trabajar.','Vuelve a abrir la pantalla que necesitabas.'],
     acciones:['clinica'],
   },
   {
     id:'sin-clinica-usuario', titulo:'Tu usuario no tiene clínica asignada',
-    patrones:[/no tienes? (una )?clinica asignada/, /sin clinica asignada/],
+    patrones:[/no tienes? (una )?clinica asignada/, /sin clinica asignada/, /^sin clinica\b/],
     claves:'clinica asignada no guarda usuario sin clinica',
     causa:'Tu usuario se creó sin clínica, así que el sistema no sabe dónde guardar lo que registras.',
-    pasos:['Avisa al Super Admin con el correo con el que entras.','Cuando lo corrija, cierra sesión y vuelve a entrar.'],
+    pasos:['Avisa al Super Admin y dile el correo con el que entras.','Cuando lo corrija, cierra sesión y vuelve a entrar.'],
     admin:['👑 Administración › 👥 Usuarios › «✏️ Editar», elige la «Clínica asignada» y guarda.'],
     acciones:['usuarios','copiar'],
   },
@@ -1766,8 +1778,8 @@ const LUMI_AYUDAS = [
     id:'archivo-formato', titulo:'El archivo es muy grande o de otro tipo', donde:['examenes-digitalizados','procedimientos','configuracion','notas'],
     patrones:[/solo se admiten/, /debe ser (una imagen|png|pdf|jpg)/, /supera (los |el maximo de )?\d+ ?mb/, /payload too large/, /exceeded the maximum allowed size/, /object too large/, /mime type/],
     claves:'archivo grande pesado foto pdf imagen subir formato tamano adjuntar',
-    causa:'Cada archivo tiene un límite: exámenes en PDF, JPG o PNG de hasta 10 MB; firmas PNG, JPG o WEBP de hasta 2 MB; logo de hasta 3 MB; foto de mascota de hasta 5 MB; machotes de hasta 8 MB.',
-    pasos:['Si es una foto del teléfono, envíala en menor calidad o tómale una captura de pantalla.','Si es un PDF pesado, escanéalo de nuevo a menor resolución o guarda las páginas como imágenes JPG.','En iPhone las fotos HEIC no sirven: en Ajustes › Cámara › Formatos elige «Más compatible».','Vuelve a seleccionar el archivo.'],
+    causa:'Cada archivo tiene un límite: exámenes en PDF, JPG o PNG de hasta 10 MB; adjuntos de procedimiento de hasta 10 MB; firmas PNG, JPG o WEBP de hasta 2 MB; logo del recetario de hasta 3 MB; foto de mascota de hasta 5 MB; machotes de hasta 8 MB.',
+    pasos:['Si es una foto, reduce su tamaño o tómale una captura de pantalla y sube esa.','Si es un PDF pesado, comprímelo o escanéalo de nuevo a menor resolución. Si lo pasas a imágenes, crea un examen por página.','En iPhone las fotos HEIC no sirven: en Ajustes › Cámara › Formatos elige «Más compatible».','Vuelve a seleccionar el archivo.'],
   },
 
   // ── Base de datos ──
@@ -1775,18 +1787,18 @@ const LUMI_AYUDAS = [
     id:'falta-migracion', titulo:'Falta actualizar la base de datos', donde:['*'],
     patrones:[/falta(n)? ejecutar/, /\.sql\b/, /ejecuta este sql/, /script de veterinaria/, /falta(n)? (crear )?(la |las |el )?(tabla|columna)/, /faltan columnas/, /falta aplicar la migracion/, /could not find the .*column/, /column .* does not exist/, /relation .* does not exist/, /schema cache/, /\bpgrst20\d\b/, /\b42703\b/, /\b42p01\b/, /could not find the function/, /function .* does not exist/],
     claves:'migracion base de datos actualizar sql columna tabla falta supabase',
-    causa:'El sistema se actualizó, pero la base de datos de Supabase todavía no tiene esa parte. Lo demás funciona; solo esa función queda incompleta.',
-    pasos:['Lee el mensaje: si dice que se guardó, ya está guardado; solo faltó el dato nuevo.','Avisa al Super Admin y dile el archivo que aparece aquí.','Mientras tanto puedes seguir usando el resto del sistema.'],
-    admin:['Abre Supabase › SQL Editor, pega el contenido del archivo indicado y pulsa «Run».','Ejecuta audit_migraciones.sql para confirmar que no quede nada pendiente.','Recarga la página.'],
+    causa:'El sistema se actualizó, pero su base de datos todavía no tiene esa parte. Lo demás funciona; solo esa función queda incompleta.',
+    pasos:['Lee el mensaje: si dice que se guardó, ya está guardado; solo faltó el dato nuevo.','Avisa al Super Admin y dile el archivo o la columna que aparece aquí.','Mientras tanto puedes seguir usando el resto del sistema.'],
+    admin:['Abre Supabase › SQL Editor, pega el contenido del archivo indicado y pulsa «Run».','Si solo aparece una columna, ejecuta audit_migraciones.sql: indica qué migración falta.','Recarga la página.'],
     acciones:['copiar','recargar'],
   },
   {
     id:'permiso-servidor', titulo:'El servidor no deja guardar o ver este dato', donde:['*'],
     patrones:[/row.level security/, /\b42501\b/, /permission denied/, /politica rls/, /no reconoce esta sesion/],
     claves:'rls permiso denegado servidor no deja guardar rechazado',
-    causa:'La base de datos rechazó la operación porque no reconoce tu sesión para esta clínica. Suele pasar con una sesión vieja, al cambiar de clínica o si una regla de seguridad quedó desactualizada.',
-    pasos:['Cierra sesión, vuelve a entrar y repite la acción.','Si sigue fallando, copia el detalle y envíaselo al Super Admin.'],
-    admin:['Revisa que en «🏥 Trabajando en» esté la clínica correcta.','En Supabase › SQL Editor ejecuta rls_setup.sql completo y después migracion_acceso_red.sql (rls_setup deshace ese ajuste).','Ejecuta audit_migraciones.sql para confirmar que no falte nada.'],
+    causa:'La base de datos rechazó la operación porque no reconoce tu sesión para esta clínica. Suele pasar con una sesión vieja, si estás fuera de la red de la clínica o si una regla de seguridad quedó desactualizada.',
+    pasos:['Si tu clínica limita el sistema a su Wi-Fi, comprueba que sigues conectado a él.','Cierra sesión, vuelve a entrar y repite la acción.','Si sigue fallando, copia el detalle y envíaselo al Super Admin.'],
+    admin:['En Supabase › SQL Editor ejecuta el BLOQUE 1 de recuperacion_auth.sql (se puede repetir sin daño) y después migracion_acceso_red.sql.','Ejecuta audit_migraciones.sql para confirmar que no falte nada.','No ejecutes rls_setup.sql entero en una base que ya funciona: falla porque sus políticas ya existen.'],
     acciones:['salir','copiar'],
   },
   {
@@ -1795,16 +1807,22 @@ const LUMI_AYUDAS = [
     claves:'permiso no me deja acceso rol bloqueado no puedo',
     causa:'Cada usuario ve y hace solo lo que su rol y sus permisos permiten. Algunas acciones son solo del Super Admin o del médico administrativo.',
     pasos:['Si crees que deberías poder hacerlo, pide al Super Admin que revise tus permisos.','Mientras tanto, pide a un compañero con ese permiso que lo haga.'],
-    admin:['👑 Administración › 👥 Usuarios › «✏️ Editar»: revisa el rol y los «Módulos accesibles».','Una lista de módulos vacía significa «sin permisos», no «los del rol».'],
+    admin:['Si el aviso habla de un módulo, ve a 👑 Administración › 👥 Usuarios › «✏️ Editar» y márcalo en «Módulos accesibles». Una lista vacía significa «sin permisos».','Si dice «solo el personal médico», «solo el Super Admin» o «solo puedes editar tus citas», depende del rol: cámbialo en el mismo formulario solo si corresponde.'],
     acciones:['usuarios'],
   },
   {
     id:'duplicado', titulo:'Ese dato ya existe', donde:['pacientes','finanzas','admin'],
-    patrones:[/ya existe/, /duplicate key/, /\b23505\b/, /already (exists|registered)/, /ya esta en la lista/],
+    patrones:[/ya existe/, /duplicate key/, /\b23505\b/, /already (exists|registered)/],
     claves:'duplicado repetido ya existe mismo numero identificacion correo',
     causa:'Ya hay un registro con ese mismo dato único (identificación, correo, número).',
-    pasos:['Búscalo con el buscador de la pantalla: probablemente ya está registrado.','Si es el mismo, ábrelo y edítalo en vez de crear otro.','Si es una factura o comprobante, recarga la página y vuelve a intentarlo para que tome un número nuevo.'],
-    acciones:['recargar'],
+    pasos:['Cierra el formulario y búscalo con el buscador de la pantalla: probablemente ya está registrado.','Si es el mismo, ábrelo y edítalo en vez de crear otro.','Si es una factura o comprobante, vuelve a intentarlo: tomará un número nuevo.'],
+  },
+  {
+    id:'ya-en-lista', titulo:'Ya está en la lista', aviso:false,
+    patrones:[/ya esta en la lista/],
+    claves:'repetido lista categoria ip',
+    causa:'Ese valor ya está agregado.',
+    pasos:['No hace falta añadirlo otra vez: búscalo en la lista.'],
   },
   {
     id:'dato-ligado', titulo:'Ese registro está ligado a otros',
@@ -1837,28 +1855,28 @@ const LUMI_AYUDAS = [
     patrones:[/bloqueo la ventana/, /ventana emergente/, /popup/],
     claves:'imprimir no imprime impresion ventana emergente bloqueada pdf',
     causa:'Para imprimir, el sistema abre una ventana nueva y el navegador la tomó por publicidad.',
-    pasos:['Usa «⬇️ Descargar PDF», que no necesita ventanas nuevas.','O permite las ventanas emergentes de este sitio: en Chrome, toca el icono de la barra de direcciones y elige «Permitir siempre».','En el teléfono: ajustes del navegador › Configuración de sitios › Ventanas emergentes › Permitir.','Vuelve a pulsar «🖨️ Imprimir».'],
+    pasos:['Usa el botón ⬇️ (Descargar), junto al de 🖨️: no necesita ventanas nuevas.','O permite las ventanas emergentes de este sitio: en Chrome, toca el icono de la barra de direcciones y elige «Permitir siempre».','En el teléfono: ajustes del navegador › Configuración de sitios › Ventanas emergentes › Permitir.','Vuelve a pulsar 🖨️.'],
   },
   {
     id:'nota-finalizar', titulo:'La nota debe finalizarse antes de imprimirla', donde:['notas'],
     patrones:[/finaliza la nota antes/],
     claves:'imprimir nota borrador finalizar',
     causa:'Las notas en borrador no se imprimen para no entregar documentos incompletos.',
-    pasos:['Abre la nota y revisa que esté completa.','Pulsa «✅ Finalizar nota».','Después pulsa «🖨️ Imprimir» o «⬇️ Descargar PDF».'],
+    pasos:['Abre la nota y revisa que esté completa.','Pulsa «✅ Finalizar nota».','Después pulsa 🖨️ (Imprimir) o ⬇️ (Descargar).'],
   },
   {
     id:'pdf-fallo', titulo:'El PDF no se generó', donde:['*'],
     patrones:[/no se pudo generar el pdf/, /ya se esta preparando otro pdf/, /herramientas de pdf/],
     claves:'pdf descargar no descarga documento',
     causa:'El PDF se arma en tu navegador: a veces tarda o necesita descargar sus herramientas.',
-    pasos:['Si dice que ya se prepara otro, espera unos segundos.','Vuelve a intentarlo con buena conexión.','Alternativa: pulsa «🖨️ Imprimir» y en el destino elige «Guardar como PDF».'],
+    pasos:['Si dice que ya se prepara otro, espera unos segundos.','Vuelve a intentarlo con buena conexión.','Alternativa: pulsa 🖨️ (Imprimir) y en el destino elige «Guardar como PDF».'],
   },
   {
     id:'machote-word', titulo:'No se pudo leer el documento de Word', donde:['notas'],
     patrones:[/lector de (docx|word)/, /no se pudo abrir el machote/, /libreria descargada/],
     claves:'machote word docx plantilla documento',
     causa:'Para leer un machote de Word el sistema descarga un lector desde internet.',
-    pasos:['Revisa tu conexión y vuelve a intentarlo.','Usa un archivo .docx (no un .doc antiguo ni un PDF).','Si el Word tiene formatos raros, guárdalo de nuevo desde Word como .docx.'],
+    pasos:['Revisa tu conexión y vuelve a intentarlo.','Usa un archivo .docx: un .doc antiguo no se puede leer.','Si el Word no se puede leer, súbelo como PDF o TXT: se importa solo el texto.'],
   },
 
   // ── Conexión ──
@@ -1875,7 +1893,7 @@ const LUMI_AYUDAS = [
     patrones:[/failed to fetch/, /fetch failed/, /networkerror/, /network request failed/, /load failed/, /sin internet/, /no hay respuesta del servidor/, /error conectando con la base de datos/, /revisa (tu|la) conexion/, /err_(internet|network)/],
     claves:'internet conexion wifi no carga lento servidor caido red',
     causa:'Tu equipo perdió internet o el servidor no responde. Mientras dure, lo que guardes puede no llegar.',
-    pasos:['Abre otra página para comprobar si tienes internet.','Cambia de Wi-Fi a datos móviles, o al revés.','Si tienes un formulario abierto, copia lo que escribiste antes de recargar.','Recarga la página.','Si otras páginas cargan y esta no, avisa al Super Admin.'],
+    pasos:['Abre otra página para comprobar si tienes internet.','Si tu clínica limita el sistema a su Wi-Fi, no te pases a datos móviles: reconéctate al Wi-Fi del local. Si no, prueba con datos.','Si tienes un formulario abierto, copia lo que escribiste antes de recargar.','Recarga la página.','Si otras páginas cargan y esta no, avisa al Super Admin.'],
     admin:['En el panel de Supabase revisa que el proyecto no esté pausado ni caído.'],
     acciones:['recargar','copiar'],
   },
@@ -1886,21 +1904,21 @@ const LUMI_AYUDAS = [
     patrones:[/horario ocupado/, /emergencia agendada/],
     claves:'cita horario ocupado choque misma hora',
     causa:'El médico ya tiene otra cita a esa hora.',
-    pasos:['Elige otra hora libre.','Si es intencional (una emergencia), puedes agendarla igual.','Revisa la agenda del médico en «Agendas».'],
+    pasos:['Elige otra hora libre.','Si es intencional (una emergencia), puedes agendarla igual.','Si tienes acceso a «Agendas», revisa ahí los horarios libres del médico.'],
   },
   {
     id:'agenda-pendientes', titulo:'La agenda todavía tiene citas', donde:['agendas'],
     patrones:[/le quedan \d+ cita/],
     claves:'quitar agenda medico citas pendientes',
-    causa:'No se quita la agenda de alguien que aún tiene citas sin atender, para que ningún paciente se quede sin médico.',
-    pasos:['Reasigna esas citas a otro médico desde «Citas».','O usa «Vaciar agenda» para cancelarlas: quedan como canceladas, no se borran.','Después vuelve a quitar la agenda.'],
+    causa:'El sistema te deja quitar la agenda, pero esas citas seguirán a nombre de ese médico y nadie las atenderá.',
+    pasos:['Antes de confirmar, reasigna esas citas a otro médico desde «Citas».','O pide a un médico administrativo o al Super Admin que use «🗑️ Vaciar agenda»: las citas quedan canceladas, no se borran.','Después quita la agenda.'],
   },
   {
     id:'stock-insuficiente', titulo:'No hay stock suficiente', donde:['inventario','farmacia'],
-    patrones:[/stock insuficiente/, /no hay suficiente stock/, /sin stock disponible/],
+    patrones:[/stock insuficiente/, /no hay suficiente stock/, /sin stock disponible/, /^stock disponible:/],
     claves:'stock inventario producto agotado salida venta',
     causa:'La cantidad que quieres sacar o vender es mayor a la que el sistema tiene registrada.',
-    pasos:['Revisa la cantidad escrita.','Si el producto sí está en la clínica, registra su compra con «📥 Entrada» en Inventario.','Si el conteo está mal, corrígelo en el producto antes de la salida.'],
+    pasos:['Revisa la cantidad escrita.','Si el producto sí está en la clínica, registra su compra con «📥 Entrada» en Inventario.','Si el conteo está mal, ajústalo con «📥 Entrada» o «📤 Salida» indicando el motivo: el stock no se edita en la ficha del producto.','Para eso hace falta el permiso de Inventario; si no lo tienes, pídeselo a quien lo tenga.'],
   },
   {
     id:'inventario-vencidos', titulo:'Hay productos vencidos o por vencer', donde:['inventario','farmacia'], aviso:false,
@@ -1914,8 +1932,8 @@ const LUMI_AYUDAS = [
     patrones:[/error al generar factura/, /factura creada,? pero/, /no se pudo registrar el pago/, /error al guardar transaccion/, /transaccion guardada pero/],
     claves:'factura comprobante pago cobro no se guardo finanzas',
     causa:'Una parte se guardó y otra no, o el servidor rechazó la operación.',
-    pasos:['Antes de repetir, revisa la lista de Finanzas: puede que el comprobante sí se haya creado y así evitas duplicarlo.','Si se creó incompleto, ábrelo y revisa sus líneas y su estado.','Si no aparece, recarga y vuelve a intentarlo.','Si se repite, copia el detalle para el Super Admin.'],
-    acciones:['recargar','copiar'],
+    pasos:['Antes de repetir, revisa la lista de Finanzas: puede que el comprobante sí se haya creado y así evitas duplicarlo.','Si quedó sin líneas o incompleto, anúlalo (❌) o bórralo (🗑️) y créalo de nuevo: los comprobantes no se editan.','Si no aparece, vuelve a crearlo.','Si se repite, copia el detalle para el Super Admin.'],
+    acciones:['copiar'],
   },
   {
     id:'registro-no-encontrado', titulo:'No se encontró el registro',
@@ -1924,6 +1942,28 @@ const LUMI_AYUDAS = [
     causa:'El registro que intentas abrir ya no está en la lista que tienes cargada: otra persona pudo borrarlo o cambiarlo, o la pantalla quedó desactualizada.',
     pasos:['Recarga la página.','Vuelve a abrirlo desde la lista o búscalo con el buscador.','Si no aparece, pregunta si alguien lo eliminó.'],
     acciones:['recargar'],
+  },
+  {
+    id:'cita-pasada', titulo:'No deja agendar en una fecha u hora pasada', donde:['citas'],
+    patrones:[/no se pueden agendar citas en fechas pasadas/, /no se puede agendar en un horario ya pasado/],
+    claves:'cita fecha pasada hora agendar no deja',
+    causa:'La fecha o la hora elegida ya pasó según el reloj del sistema.',
+    pasos:['Revisa la fecha y la hora de la cita.','Revisa que la fecha y la hora de tu teléfono o computadora estén bien.','Si la cita ya ocurrió y hay que registrarla, avisa a quien lleve la agenda.'],
+  },
+  {
+    id:'respaldo', titulo:'El respaldo no se restauró completo', donde:['exportar'],
+    patrones:[/no se pudo importar/, /restauracion quedo parcial/],
+    claves:'respaldo backup importar restaurar',
+    causa:'El archivo es de otra clínica, de otra versión del sistema, o alguna parte no se pudo guardar.',
+    pasos:['Lee el motivo del mensaje.','Si dice que pertenece a otra clínica, elige esa clínica antes de importar.','Si es de otra versión, recarga la página para tener la última y vuelve a intentarlo.','Si quedó parcial, copia el detalle para el Super Admin antes de repetir.'],
+    acciones:['copiar'],
+  },
+  {
+    id:'red-ip', titulo:'La red de la clínica no se puede registrar', donde:['configuracion'], soloSuperAdmin:true,
+    patrones:[/no esta recibiendo la ip/, /no es una ip valida/],
+    claves:'ip red wifi clinica registrar',
+    causa:'La IP escrita no tiene un formato válido, o la base no recibe la IP de las conexiones y la restricción no se aplicaría.',
+    pasos:['Escribe la IP como cuatro números separados por puntos (por ejemplo 190.143.10.25).','Si dice que la base no recibe la IP, no registres IPs: revisa migracion_acceso_red.sql y la configuración del proyecto antes.'],
   },
   {
     id:'campos-obligatorios', titulo:'Falta un dato en el formulario', aviso:false,
@@ -1947,22 +1987,22 @@ const LUMI_PROBLEMAS = [
   {
     id:'pantalla-vacia', titulo:'La pantalla sale vacía o no aparecen los datos', donde:['*'],
     claves:'vacio vacia no aparece no salen datos lista en blanco desaparecio no encuentro paciente',
-    causa:'Casi siempre es un filtro o una búsqueda activa, un período distinto, la clínica equivocada o la conexión.',
-    pasos:['Borra lo escrito en el buscador de la pantalla y vuelve a «Todos» en los filtros.','Revisa el período o la fecha elegida.','Si eres Super Admin, revisa la clínica en «🏥 Trabajando en».','Recarga la página.'],
+    causa:'Casi siempre es un filtro o una búsqueda activa, un período distinto, la clínica equivocada, estar fuera de la red de la clínica o la conexión.',
+    pasos:['Borra lo escrito en el buscador de la pantalla y vuelve a «Todos» en los filtros.','Revisa el período o la fecha elegida.','Si tu clínica limita el sistema a su Wi-Fi, comprueba que sigues conectado a él.','Si eres Super Admin, revisa la clínica en «🏥 Trabajando en».','Recarga la página.'],
     acciones:['clinica','recargar'],
   },
   {
-    id:'boton-no-responde', titulo:'Pulso un botón y no pasa nada', donde:['*'],
+    id:'boton-no-responde', titulo:'Un botón no hace nada', donde:['*'],
     claves:'boton no responde no hace nada trabado pegado congelado no guarda atascado',
     causa:'El sistema suele estar esperando algo: un campo obligatorio vacío, la respuesta del servidor o un aviso que quedó fuera de la vista.',
     pasos:['Si el botón dice «⏳ Procesando...», espera unos segundos y no lo vuelvas a pulsar.','Desplázate por el formulario: puede haber un campo marcado o un aviso arriba.','Revisa que no haya otra ventana abierta encima y ciérrala con ✕.','Si sigue igual, copia lo escrito y recarga la página.'],
     acciones:['recargar','copiar'],
   },
   {
-    id:'no-encuentro-modulo', titulo:'No encuentro un módulo en el menú', donde:['dashboard'],
+    id:'no-encuentro-modulo', titulo:'Falta un módulo en el menú', donde:['dashboard'],
     claves:'menu modulo no aparece falta opcion donde esta pantalla',
     causa:'El menú muestra solo los módulos que tu usuario tiene permitidos, y en el teléfono está escondido.',
-    pasos:['En el teléfono, abre el menú con «☰» arriba a la izquierda o usa los accesos del Dashboard.','Si el módulo no está, tu usuario no lo tiene permitido: pídeselo al Super Admin.'],
+    pasos:['En el teléfono, abre el menú con «☰» arriba a la izquierda o usa los accesos del Dashboard.','Si el módulo no está, tu usuario no lo tiene permitido: pídeselo al Super Admin. Configuración y Administración son solo del Super Admin.'],
     admin:['👑 Administración › 👥 Usuarios › «✏️ Editar» › «Módulos accesibles».'],
     acciones:['usuarios'],
   },
@@ -1980,8 +2020,8 @@ const LUMI_FRECUENTES = ['pantalla-vacia','boton-no-responde','sesion-vencida','
 const LUMI_VACIAS = new Set(['que','los','las','una','uno','unos','del','con','por','para','pero','como','esta','este','esto','puedo','puede','hay','tengo','algo','cuando','donde','porque','sale','dice','error','mensaje','muy','mas','ya','se','me','mi','el','la','de','en','y','a','al','lo']);
 
 const LUMI_ACCIONES = {
-  recargar:   { texto:() => '🔄 Recargar la página', hacer:() => location.reload() },
-  salir:      { texto:() => '⏻ Cerrar sesión', hacer:() => { cerrarLumi(); doLogout(); }, cuando:() => !!currentUser },
+  recargar:   { texto:() => '🔄 Recargar la página', hacer:() => _lumiRecargar() },
+  salir:      { texto:() => '⏻ Cerrar sesión', hacer:() => _lumiSalir(), cuando:() => !!currentUser },
   clinica:    { texto:() => '🏥 Elegir clínica', hacer:() => _lumiIrAClinica(), cuando:() => !!currentUser && isSuperAdmin() },
   usuarios:   { texto:() => '👥 Abrir Usuarios', hacer:() => _lumiIr('admin', () => switchAdminTab('usuarios')), cuando:() => !!currentUser && isSuperAdmin() },
   pendientes: { texto:() => '♻️ Ver pendientes', hacer:() => _lumiIr('dashboard'), cuando:() => !!currentUser },
@@ -2009,7 +2049,11 @@ function _lumiTexto(html) {
 function _lumiBuscarAyuda(texto) {
   const t = _lumiNormal(texto);
   if(!t) return null;
-  return LUMI_AYUDAS.find(a => (a.patrones || []).some(p => p.test(t))) || null;
+  const a = LUMI_AYUDAS.find(a => (a.patrones || []).some(p => p.test(t))) || null;
+  // Los avisos de «sin clínica» salen igual para todos; al Super Admin le
+  // falta elegir una, no que se la asignen.
+  if(a?.id === 'sin-clinica-usuario' && currentUser && isSuperAdmin()) return _lumiAyuda('sin-clinica-sa');
+  return a;
 }
 
 function _lumiAyuda(id) {
@@ -2044,10 +2088,22 @@ function _lumiOlvidar() {
   try { sessionStorage.removeItem(_LUMI_CLAVE); } catch(e) {}
   _lumiMarcar(false);
   if(_lumi.abierta) cerrarLumi();
+  document.querySelectorAll('#toasts .toast').forEach(t => t.remove());
+  document.getElementById('lumi-cuerpo')?.replaceChildren();
+}
+
+// Al entrar: lo anotado en la pantalla de acceso ya se resolvió, y lo de otro
+// usuario en esta pestaña no es de quien entra.
+function _lumiAlEntrar() {
+  const quien = currentUser?.id || null;
+  _lumiErrores = _lumiErrores.filter(r => r.vista !== 'login' && r.usuario && r.usuario === quien);
+  _lumiGuardarHistorial();
+  _lumiMarcar(false);
 }
 
 function _lumiMarcar(hay) {
   document.querySelectorAll('.lumi-btn, .login-lumi').forEach(b => b.classList.toggle('lumi-alerta', !!hay));
+  document.getElementById('lumi-btn')?.setAttribute('aria-label', hay ? 'Abrir la ayuda de Lumi: hay un error reciente' : 'Abrir la ayuda de Lumi');
 }
 
 // Anota lo que falló y devuelve la ayuda que le corresponde. Las advertencias
@@ -2056,8 +2112,13 @@ function _lumiRegistrar(mensaje, tipo = 'error') {
   const texto = _lumiTexto(mensaje).slice(0, 400);
   if(!texto) return null;
   let ayuda = _lumiBuscarAyuda(texto);
+  // Un fallo dentro de la página se trata como tal: sus textos («reading
+  // 'jwt'», «Storage quota») engañarían a los patrones. Solo la red es red.
+  if(tipo === 'inesperado') ayuda = ayuda?.id === 'sin-conexion' ? ayuda : _lumiAyuda('error-inesperado');
   if(tipo === 'warning' && (!ayuda || ayuda.aviso === false)) return null;
   if(!ayuda && _lumiPareceFallo(texto)) ayuda = LUMI_NO_RECONOCIDO;
+  // Una validación («Elige la mascota») no es un atasco: no se anota.
+  if(!ayuda) return null;
   const ahora = Date.now();
   const vista = _lumiVista();
   const ultimo = _lumiErrores[_lumiErrores.length - 1];
@@ -2067,12 +2128,12 @@ function _lumiRegistrar(mensaje, tipo = 'error') {
     registro.veces = (registro.veces || 1) + 1;
     registro.t = ahora;
   } else {
-    registro = { n:++_lumiSecuencia, t:ahora, texto, tipo, vista, pantalla:_lumiNombreVista(vista), ayuda:ayuda?.id || null, veces:1 };
+    registro = { n:++_lumiSecuencia, t:ahora, texto, tipo, vista, pantalla:_lumiNombreVista(vista), ayuda:ayuda.id, veces:1, usuario:currentUser?.id || null };
     _lumiErrores.push(registro);
     if(_lumiErrores.length > 12) _lumiErrores.splice(0, _lumiErrores.length - 12);
   }
   _lumiGuardarHistorial();
-  _lumiMarcar(true);
+  if(ayuda.aviso !== false) _lumiMarcar(true);
   return { ayuda, registro };
 }
 
@@ -2095,8 +2156,8 @@ function _lumiDato(texto) {
   const t = String(texto || '');
   const archivo = t.match(/\b(?:migracion_[a-z0-9_]+|rls_setup|recuperacion_auth|audit_migraciones)\.sql\b/i)?.[0];
   if(archivo) return `<p class="lumi-dato">Archivo pendiente: <code>${escAttr(archivo)}</code></p>`;
-  if(/script de veterinaria/i.test(t)) return '<p class="lumi-dato">Pendiente: <code>script de veterinaria</code></p>';
-  const columna = t.match(/the '([a-z0-9_]+)' column/i)?.[1] || t.match(/column "?([a-z0-9_]+)"? (?:of relation .* )?does not exist/i)?.[1]
+  if(/script de veterinaria/i.test(t)) return '<p class="lumi-dato">Archivo pendiente: <code>rls_setup.sql</code>, pasos 6 y 7 (veterinaria)</p>';
+  const columna = t.match(/the '([a-z0-9_]+)' column/i)?.[1] || t.match(/column "?(?:[a-z0-9_]+\.)?([a-z0-9_]+)"? (?:of relation .* )?does not exist/i)?.[1]
     || t.match(/columna[s]? «?"?([a-z0-9_]{3,})/i)?.[1];
   return columna ? `<p class="lumi-dato">Dato que falta: <code>${escAttr(columna)}</code></p>` : '';
 }
@@ -2110,7 +2171,7 @@ function _lumiBloque(a, reg = null, conTitulo = true) {
     <p class="lumi-causa">${a.causa}</p>
     ${reg ? _lumiDato(reg.texto) : ''}
     <div class="lumi-sub">Qué hacer</div>
-    ${lista(a.pasos)}
+    ${lista(!currentUser && a.pasosAcceso ? a.pasosAcceso : a.pasos)}
     ${sa && a.admin?.length ? `<div class="lumi-admin"><div class="lumi-sub">Como Super Admin</div>${lista(a.admin)}</div>` : ''}
     ${acciones.length ? `<div class="lumi-acciones">${acciones.map(k => `<button type="button" class="btn btn-secondary btn-sm" onclick="_lumiAccion('${k}',${reg ? reg.n : 'null'})">${LUMI_ACCIONES[k].texto()}</button>`).join('')}</div>` : ''}
   </div>`;
@@ -2179,23 +2240,23 @@ function _lumiPintar() {
     partes.push(`<section class="lumi-caso lumi-caso-aviso"><div class="lumi-etiqueta">Ahora mismo</div>${_lumiBloque(_lumiAyuda('sin-clinica-sa'))}</section>`);
   }
   if(reg) {
-    const ayuda = _lumiAyuda(reg.ayuda) || LUMI_NO_RECONOCIDO;
+    const ayuda = _lumiAyuda(reg.ayuda);
     partes.push(`<section class="lumi-caso">
       <div class="lumi-etiqueta">Lo último que pasó · ${_lumiHace(reg.t)} · ${escAttr(reg.pantalla)}</div>
       <blockquote class="lumi-mensaje">${escAttr(reg.texto)}</blockquote>
       ${reg.veces > 1 ? `<div class="lumi-repite">Se repitió ${reg.veces} veces</div>` : ''}
-      ${_lumiBloque(ayuda, reg)}
+      ${ayuda ? _lumiBloque(ayuda, reg) : ''}
     </section>`);
   } else if(!partes.length) {
     partes.push('<p class="lumi-intro">No veo ningún error reciente. Si algo no te deja avanzar, búscalo aquí abajo o revisa los problemas frecuentes.</p>');
   }
   partes.push(`<div class="lumi-buscar">
     <label for="lumi-q" class="lumi-sub">¿En qué te atascaste?</label>
-    <input id="lumi-q" type="search" autocomplete="off" enterkeyhint="search" placeholder="Ej.: no guarda, no imprime, no puedo entrar" oninput="_lumiFiltrar(this.value)">
+    <input id="lumi-q" type="search" autocomplete="off" enterkeyhint="search" placeholder="Ej.: no guarda, no imprime, no puedo entrar" oninput="_lumiFiltrar(this.value)" onfocus="_lumiEnfocarBusqueda(this)">
   </div>
   <div class="lumi-sub lumi-lista-titulo" id="lumi-lista-titulo"></div>
   <div class="lumi-lista" id="lumi-resultados"></div>`);
-  const otros = _lumiErrores.filter(r => r !== reg).slice(-5).reverse();
+  const otros = _lumiErrores.filter(r => r !== reg && Date.now() - r.t < 2 * 3600000).slice(-5).reverse();
   if(otros.length) {
     partes.push(`<details class="lumi-historial"><summary>Otros errores de esta sesión (${otros.length})</summary><ul>${otros.map(r =>
       `<li><button type="button" onclick="abrirLumi(null,${r.n})"><span>${_lumiHace(r.t)} · ${escAttr(r.pantalla)}</span>${escAttr(r.texto.length > 90 ? r.texto.slice(0, 90) + '…' : r.texto)}</button></li>`).join('')}</ul></details>`);
@@ -2237,7 +2298,12 @@ function abrirLumi(modulo = null, n = null) {
   _lumiPintar();
   root.hidden = false;
   document.body.classList.add('lumi-abierta');
+  // Lo de detrás queda inerte: el foco y el lector de pantalla no salen del panel.
+  [...document.body.children].forEach(el => {
+    if(el.id !== 'lumi' && el.id !== 'toasts' && !el.inert) { el.inert = true; el.dataset.lumiInerte = '1'; }
+  });
   _lumiMarcar(false);
+  _lumiVigilarTeclado(true);
   const hoja = root.querySelector('.lumi-hoja');
   hoja.scrollTop = 0;
   root.querySelector('.lumi-cuerpo').scrollTop = 0;
@@ -2248,9 +2314,55 @@ function cerrarLumi() {
   const root = document.getElementById('lumi');
   if(root) root.hidden = true;
   document.body.classList.remove('lumi-abierta');
-  const foco = _lumi.foco;
+  document.querySelectorAll('[data-lumi-inerte]').forEach(el => { el.inert = false; delete el.dataset.lumiInerte; });
+  _lumiVigilarTeclado(false);
+  let foco = _lumi.foco;
   _lumi = { abierta:false, modulo:null, registro:null, foco:null };
-  if(foco?.isConnected) foco.focus({ preventScroll:true });
+  // Si se abrió desde un aviso, ese botón ya no existe: el foco vuelve a Lumi.
+  if(!foco?.isConnected || foco === document.body) foco = currentUser ? document.getElementById('lumi-btn') : document.querySelector('.login-lumi');
+  foco?.focus?.({ preventScroll:true });
+}
+
+// En el teléfono el teclado tapa la parte baja de la hoja, justo donde salen
+// los resultados de la búsqueda: la hoja sube lo que mide el teclado.
+let _lumiTecladoFn = null;
+function _lumiVigilarTeclado(on) {
+  const vv = window.visualViewport;
+  const root = document.getElementById('lumi');
+  if(!vv || !root) return;
+  if(_lumiTecladoFn) { vv.removeEventListener('resize', _lumiTecladoFn); vv.removeEventListener('scroll', _lumiTecladoFn); _lumiTecladoFn = null; }
+  root.style.removeProperty('--lumi-teclado');
+  if(!on) return;
+  _lumiTecladoFn = () => root.style.setProperty('--lumi-teclado', Math.max(0, Math.round(innerHeight - vv.height - vv.offsetTop)) + 'px');
+  vv.addEventListener('resize', _lumiTecladoFn);
+  vv.addEventListener('scroll', _lumiTecladoFn);
+  _lumiTecladoFn();
+}
+function _lumiEnfocarBusqueda(input) {
+  if(window.innerWidth > 600) return;
+  setTimeout(() => input.closest('.lumi-buscar')?.scrollIntoView({ block:'start' }), 250);
+}
+
+// Con un formulario abierto, recargar o salir lo pierde: se pregunta antes y,
+// al salir, lo que el sistema sabe guardar queda como pendiente.
+function _lumiHayFormulario() { return !!document.querySelector('.modal-overlay.open'); }
+async function _lumiRecargar() {
+  if(_lumiHayFormulario()) {
+    cerrarLumi();
+    const ok = await customConfirm({ icon:'🔄', title:'¿Recargar la página?', msg:'Perderás lo que no hayas guardado en el formulario abierto. Si quieres conservarlo, cópialo antes.', okText:'Recargar', cancelText:'Volver', danger:false });
+    if(!ok) return;
+  }
+  location.reload();
+}
+async function _lumiSalir() {
+  cerrarLumi();
+  const abierto = _lumiHayFormulario();
+  const ok = await customConfirm({ icon:'👋', title:'¿Cerrar sesión?',
+    msg: abierto ? 'Las citas, recetas, notas y altas de paciente abiertas quedarán como pendientes en este equipo; lo demás se perderá. Al volver a entrar, recupéralas en el Dashboard.' : 'Vuelve a entrar y repite lo que estabas haciendo.',
+    okText:'Cerrar sesión', cancelText:'Quedarse', danger:false });
+  if(!ok) return;
+  if(abierto) { try { guardarBorradoresSesion(); } catch(e) {} }
+  doLogout(true);
 }
 
 function _lumiAccion(k, n = null) {
@@ -2324,7 +2436,8 @@ function _lumiVigilarAcceso() {
   el.dataset.lumi = '1';
   let anterior = '';
   new MutationObserver(() => {
-    const texto = el.style.display !== 'none' ? el.textContent.trim() : '';
+    const informativo = /110,\s*231,\s*183|6ee7b7/i.test(el.style.color);   // aviso verde, no un error
+    const texto = el.style.display !== 'none' && !informativo ? el.textContent.trim() : '';
     if(texto && texto !== anterior) { try { _lumiRegistrar(texto, 'error'); } catch(e) {} }
     anterior = texto;
   }).observe(el, { childList:true, characterData:true, subtree:true, attributes:true, attributeFilter:['style'] });
@@ -2346,7 +2459,12 @@ window.addEventListener('unhandledrejection', e => {
 });
 window.addEventListener('offline', () => toast('Sin internet: lo que guardes ahora puede no llegar al servidor.', 'warning'));
 window.addEventListener('online', () => toast('Conexión recuperada.', 'success'));
-document.addEventListener('keydown', e => { if(e.key === 'Escape' && _lumi.abierta) cerrarLumi(); });
+document.addEventListener('keydown', e => {
+  if(e.key !== 'Escape' || !_lumi.abierta) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();   // se registra antes que los de la nota a pantalla completa
+  cerrarLumi();
+});
 if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _lumiVigilarAcceso);
 else _lumiVigilarAcceso();
 
@@ -10635,6 +10753,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Sin sesión — mostrar login
   if(lo) lo.classList.remove('show');
+  _lumiOlvidar();
   if(_errorRestaurarSesion) {
     const err = document.getElementById('login-error');
     if(err) {
@@ -16101,7 +16220,7 @@ async function guardarUsuario() {
       } else {
         // Se guardan igual los demás cambios: perder el resto de la edición por
         // esto sería peor que avisar.
-        avisoPass = ' La contraseña NO se cambió: usa el botón 🔑 Contraseña de la lista, que le envía un enlace.';
+        avisoPass = ' La contraseña NO se cambió: usa el botón 🔑 Contraseña de la lista.';
       }
     }
     let {error} = await sb.from('profiles').update(upd).eq('id',editingUsuarioId);
