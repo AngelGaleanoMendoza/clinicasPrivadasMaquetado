@@ -1192,7 +1192,10 @@ function shakeLogin() {
 }
 
 // ════════════════════ UTILS ════════════════════
-function hoy() { return new Date().toISOString().split('T')[0]; }
+// Fecha del calendario de la clínica (hora local del equipo), no la de UTC:
+// con toISOString, en Nicaragua a partir de las 18:00 ya era «mañana».
+function fechaLocal(d = new Date()) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+function hoy() { return fechaLocal(); }
 function escAttr(s) { return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function formatFecha(f) {
   if(!f) return '—';
@@ -2650,7 +2653,7 @@ function renderCalendar(containerId, interactive) {
 function calNav(dir,c,inter){
   const d=new Date(selCalDate+'T12:00:00');
   if(dir===0) selCalDate=hoy();
-  else d.setMonth(d.getMonth()+dir), selCalDate=d.toISOString().split('T')[0];
+  else d.setMonth(d.getMonth()+dir), selCalDate=fechaLocal(d);
   renderCalendar(c,inter);
   if(inter) renderCalDayCitas(selCalDate);
 }
@@ -10942,7 +10945,7 @@ function renderAgendaCalendar(containerId, citaCount, profId) {
 function agendaCalNav(dir, profId) {
   const d=new Date(selAgendasDate+'T12:00:00');
   if(dir===0) selAgendasDate=hoy();
-  else d.setMonth(d.getMonth()+dir), selAgendasDate=d.toISOString().split('T')[0];
+  else d.setMonth(d.getMonth()+dir), selAgendasDate=fechaLocal(d);
   renderAgendasRight();
 }
 
@@ -11293,7 +11296,7 @@ function renderReportesInv(){
   } else if(repInvTab==='semana'){
     const lunes=new Date(now); lunes.setDate(now.getDate()-(now.getDay()||7)+1); lunes.setHours(0,0,0,0);
     const dom=new Date(lunes); dom.setDate(lunes.getDate()+6);
-    const s=d=>d.toISOString().split('T')[0];
+    const s=d=>fechaLocal(d);
     movsFiltro=C.mov.filter(m=>m.fecha>=s(lunes)&&m.fecha<=s(dom));
     titulo=`Reporte Semanal — ${formatFecha(s(lunes))} al ${formatFecha(s(dom))}`;
   } else if(repInvTab==='mes'){
@@ -14082,7 +14085,7 @@ function renderEstSemana() {
   const val = document.getElementById('est-semana-fecha').value;
   if (!val) return;
   const [yr, wk] = val.split('-W').map(Number);
-  const simple = d => d.toISOString().split('T')[0];
+  const simple = d => fechaLocal(d);
   const lunes = new Date(yr, 0, 1 + (wk-1)*7);
   lunes.setDate(lunes.getDate() - (lunes.getDay()||7) + 1);
   const dias = Array.from({length:7}, (_,i)=>{ const d=new Date(lunes); d.setDate(d.getDate()+i); return simple(d); });
@@ -14171,10 +14174,8 @@ function _pmRango() {
   return { from:_pmFecha(new Date(h.getFullYear(), h.getMonth(), 1)), to:_pmHasta(h), etiqueta:mes(h) };
 }
 
-// hoy() da la fecha en UTC: en Nicaragua lo firmado después de las 18:00 se
-// guarda con la fecha de mañana. Los períodos abiertos llegan hasta esa fecha
-// para no dejar fuera lo atendido esta noche.
-function _pmHasta(h) { const l = _pmFecha(h), u = hoy(); return u > l ? u : l; }
+// Los períodos abiertos llegan hasta hoy, en fecha local.
+function _pmHasta(h) { return _pmFecha(h); }
 
 // El mismo código se escribe "21601", "MINSA 21601", "MINSA21601", "Cód. 021601",
 // "Idoneidad 21601" o "MINSA 21601 (2015)". Se quitan las palabras genéricas,
@@ -14942,7 +14943,7 @@ async function loadAdminData() {
   const haceSieteDias = new Date();
   haceSieteDias.setDate(haceSieteDias.getDate()-6);
   const inicioMes = hoy().slice(0,7)+'-01';
-  const desdeActividad = [inicioMes,haceSieteDias.toISOString().split('T')[0]].sort()[0];
+  const desdeActividad = [inicioMes,fechaLocal(haceSieteDias)].sort()[0];
   const [rc, ru, ra, rl] = await Promise.all([
     sb.from('clinicas').select('*').order('id'),
     _consultaPerfil(cols => sb.from('profiles').select(cols).order('nombre')),
@@ -15109,7 +15110,7 @@ function prodFechaRango() {
   if(prodPeriodo === 'hoy') return [h, h];
   if(prodPeriodo === 'semana') {
     const lunes = new Date(now); lunes.setDate(now.getDate()-(now.getDay()||7)+1); lunes.setHours(0,0,0,0);
-    return [lunes.toISOString().split('T')[0], h];
+    return [fechaLocal(lunes), h];
   }
   return [h.slice(0,7)+'-01', h];
 }
@@ -15298,7 +15299,7 @@ function renderTimeline(actividad) {
   const el = document.getElementById('prod-timeline'); if(!el) return;
   const diasNom = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
   const dias = Array.from({length:7},(_,i)=>{
-    const d = new Date(); d.setDate(d.getDate()-6+i); return d.toISOString().split('T')[0];
+    const d = new Date(); d.setDate(d.getDate()-6+i); return fechaLocal(d);
   });
   const porDia = dias.map(f=>({
     f, nom:diasNom[new Date(f+'T12:00:00').getDay()],
@@ -15762,7 +15763,7 @@ function renderDetallePanel(tab) {
   if(tab === 'actividad') {
     const diasNom = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
     const dias = Array.from({length:7},(_,i)=>{
-      const d = new Date(); d.setDate(d.getDate()-6+i); return d.toISOString().split('T')[0];
+      const d = new Date(); d.setDate(d.getDate()-6+i); return fechaLocal(d);
     });
     const acts = adminActividad.filter(a=>String(a.clinica_id)===String(id) && a.fecha>=dias[0]);
     const logins    = acts.filter(a=>a.accion==='login').length;
@@ -16421,7 +16422,7 @@ function imprimirReporteEstadisticas() {
     const lunes=new Date(yr,0,1+(wk-1)*7);
     lunes.setDate(lunes.getDate()-(lunes.getDay()||7)+1);
     const dom=new Date(lunes); dom.setDate(lunes.getDate()+6);
-    const s=d=>d.toISOString().split('T')[0];
+    const s=d=>fechaLocal(d);
     const dias=Array.from({length:7},(_,i)=>{const d=new Date(lunes);d.setDate(d.getDate()+i);return s(d);});
     titulo='Estadísticas Semanales'; periodo=`${formatFecha(s(lunes))} al ${formatFecha(s(dom))}`;
     citas=C.c.filter(c=>dias.includes(c.fecha));
@@ -16873,9 +16874,9 @@ function quitarCategoriaFin(tipo, id) {
 
 function getFinDateRange() {
   const h = new Date();
-  let from, to = h.toISOString().split('T')[0];
+  let from, to = fechaLocal(h);
   if(finPeriodo==='hoy') { from = to; }
-  else if(finPeriodo==='semana') { const d=new Date(h); d.setDate(h.getDate()-6); from=d.toISOString().split('T')[0]; }
+  else if(finPeriodo==='semana') { const d=new Date(h); d.setDate(h.getDate()-6); from=fechaLocal(d); }
   else if(finPeriodo==='mes') { from=h.getFullYear()+'-'+String(h.getMonth()+1).padStart(2,'0')+'-01'; }
   else { from=h.getFullYear()+'-01-01'; }
   return {from,to};
@@ -19291,7 +19292,7 @@ function getFarmaPeriodoFiltro() {
   if(farmaEstPeriodo === 'semana') {
     const lunes = new Date(now); lunes.setDate(now.getDate() - ((now.getDay()||7) - 1));
     const dom   = new Date(lunes); dom.setDate(lunes.getDate() + 6);
-    const s = d => d.toISOString().split('T')[0];
+    const s = d => fechaLocal(d);
     return { label: formatFecha(s(lunes)) + ' al ' + formatFecha(s(dom)), fn: x => x.fecha >= s(lunes) && x.fecha <= s(dom) };
   }
   if(farmaEstPeriodo === 'anio') {
@@ -20396,7 +20397,7 @@ function renderVistaDia() {
 
 function navDia(dir) {
   if(dir === 0) selCalDate = hoy();
-  else { const d = new Date(selCalDate+'T12:00:00'); d.setDate(d.getDate()+dir); selCalDate = d.toISOString().split('T')[0]; }
+  else { const d = new Date(selCalDate+'T12:00:00'); d.setDate(d.getDate()+dir); selCalDate = fechaLocal(d); }
   renderVistaDia();
 }
 
@@ -20407,13 +20408,13 @@ function _lunesDe(fecha) {
   const d = new Date(fecha+'T12:00:00');
   const dow = d.getDay();
   d.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1));   // semana de lunes a domingo
-  return d.toISOString().split('T')[0];
+  return fechaLocal(d);
 }
 function _diasSemana(fecha) {
   const lunes = new Date(_lunesDe(fecha)+'T12:00:00');
   return Array.from({length:7}, (_,i) => {
     const d = new Date(lunes); d.setDate(d.getDate()+i);
-    return d.toISOString().split('T')[0];
+    return fechaLocal(d);
   });
 }
 
@@ -20497,7 +20498,7 @@ function _semanaListaHTML(dias, citas) {
 
 function navSemana(dir) {
   if(dir === 0) selCalDate = hoy();
-  else { const d = new Date(selCalDate+'T12:00:00'); d.setDate(d.getDate() + dir*7); selCalDate = d.toISOString().split('T')[0]; }
+  else { const d = new Date(selCalDate+'T12:00:00'); d.setDate(d.getDate() + dir*7); selCalDate = fechaLocal(d); }
   renderVistaSemana();
 }
 
@@ -20705,7 +20706,7 @@ function _estadoProximaDosis(fecha) {
   const h = hoy();
   if(fecha < h) return 'vencida';
   const limite = new Date(); limite.setDate(limite.getDate() + 30);
-  return fecha <= limite.toISOString().split('T')[0] ? 'proxima' : 'ok';
+  return fecha <= fechaLocal(limite) ? 'proxima' : 'ok';
 }
 const _diasHasta = f => Math.round((new Date(f+'T12:00:00') - new Date(hoy()+'T12:00:00')) / 86400000);
 
@@ -20759,7 +20760,7 @@ function setProximaDosis(dias) {
   const base = document.getElementById('vac-fecha').value || hoy();
   const d = new Date(base + 'T12:00:00');
   d.setDate(d.getDate() + dias);
-  document.getElementById('vac-proxima').value = d.toISOString().split('T')[0];
+  document.getElementById('vac-proxima').value = fechaLocal(d);
 }
 
 async function guardarVacuna() {
@@ -20836,7 +20837,7 @@ function setProximaDesp(dias) {
   const base = document.getElementById('desp-fecha').value || hoy();
   const d = new Date(base + 'T12:00:00');
   d.setDate(d.getDate() + dias);
-  document.getElementById('desp-proxima').value = d.toISOString().split('T')[0];
+  document.getElementById('desp-proxima').value = fechaLocal(d);
 }
 
 async function guardarDesp() {
