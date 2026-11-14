@@ -1039,14 +1039,15 @@ END $$;
 
 
 -- ============================================================
--- Compras a proveedores (migracion_compras_proveedores.sql)
--- Cada clínica o empresa ve solo sus proveedores y sus compras. Se protege
--- aquí también por si las tablas ya existen.
+-- Compras a proveedores (migracion_compras_proveedores.sql) y contabilidad
+-- (migracion_contabilidad.sql). Cada clínica o empresa ve solo lo suyo. Se
+-- protege aquí también por si las tablas ya existen.
 -- ============================================================
 DO $$
 DECLARE t TEXT;
 BEGIN
-  FOREACH t IN ARRAY ARRAY['proveedores','compras','compra_items','compra_pagos'] LOOP
+  FOREACH t IN ARRAY ARRAY['proveedores','compras','compra_items','compra_pagos',
+                           'clientes_comerciales','inventario_lotes','ventas','venta_items','venta_cobros'] LOOP
     IF to_regclass('public.' || t) IS NOT NULL THEN
       EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
       EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', t || '_clinica', t);

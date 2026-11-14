@@ -52,11 +52,13 @@ const preambulo=`
         const data=q.single?{id:++__id,...(Array.isArray(q.datos)?{}:q.datos)}:null;
         return Promise.resolve({data,error:null}).then(ok,ko);}};
     return b;}};
-  const C={inv:[],prov:[],comp:[],mov:[],fin:[]};
+  const C={inv:[],prov:[],comp:[],mov:[],fin:[],lotes:[],ventas:[],cliCom:[]};
   ${bloque('const fromProv','const fromMov')}
   ${bloque('let _comprasDisponibles','// ════════════════════ CATÁLOGO INVENTARIO')}
   ${extraer('_pctMargen')}
   ${extraer('_margenProducto')}
+  // Los lotes de la empresa médica se prueban en contabilidad.cjs.
+  const esEmpresaMedica=()=>false; _contabilidadDisponible=false;
   window.__estado=(o)=>{ Object.assign(C,o.C||{}); if('confirmar' in o) __confirmar=o.confirmar; if('disponibles' in o) _comprasDisponibles=o.disponibles; if('periodo' in o) comprasPeriodo=o.periodo; };
   Object.assign(window,{C,_costoPromedio,_pctMargen,abrirNuevaCompra,agregarLineaCompra,cambiarLineaCompra,guardarCompra,anularCompra,verCompra,
     renderCompras,renderProveedores,guardarProveedor,abrirProveedor,_margenProducto,_lineas:()=>_lineasCompra,_ajustarCondicionCompra,_ajustarIvaCompra,

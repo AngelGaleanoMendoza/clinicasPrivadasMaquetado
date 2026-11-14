@@ -2307,3 +2307,141 @@ body.dark .compra-saldo td{color:#FCD34D}
   .prov-item-acciones{width:100%;justify-content:flex-end}
   .compras-filtros select{width:100%}
 }
+
+/* ════════════ Contabilidad (empresa médica) ════════════ */
+/* Lote en las líneas de compra y venta: una columna más. */
+.compra-linea.con-lote{grid-template-columns:minmax(0,2fr) minmax(110px,1fr) minmax(76px,.7fr) minmax(96px,.9fr) minmax(84px,.8fr) auto}
+.compra-linea-margen:empty{display:none}
+.venta-numero{font-size:13px;font-weight:700;color:var(--text-light);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:2px 8px;vertical-align:middle;margin-left:6px}
+.venta-ganancia{font-size:12.5px!important;color:var(--text-light)}
+.venta-ganancia strong{color:#15803D}
+body.dark .venta-ganancia strong{color:#6EE7B7}
+.venta-ganancia-det{font-size:12.5px;margin-top:10px}
+.lotes-kardex{margin-bottom:14px}
+.lote-agotado td{color:var(--text-light);text-decoration:line-through}
+.stat-card-link{cursor:pointer}
+.stat-card-link:hover{border-color:var(--primary)}
+
+.cont-periodo-fila{margin-bottom:12px}
+.cont-periodo-fila[hidden]{display:none}
+.cont-ayuda{font-size:12.5px;margin:-4px 0 12px}
+.cont-nota{font-size:12px;line-height:1.5;margin-top:14px}
+.cont-kpis{margin-bottom:18px}
+/* Importes: un tamaño que cabe sin partir «C$» del número. */
+.cont-kpis .stat-info h3,#ventas-resumen .stat-info h3{font-size:clamp(17px,1.6vw,22px);white-space:nowrap;letter-spacing:-.3px}
+.cont-kpis .stat-info,#ventas-resumen .stat-info{min-width:0}
+
+/* Gráfica de ventas: una sola escala, líneas de 2px y marcadores de 8px. */
+.cont-grafica-card{margin-bottom:18px}
+.cont-grafica-nota{font-size:12px}
+.cg-leyenda{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;color:var(--text);margin:0 0 6px}
+.cg-leyenda span{display:inline-flex;align-items:center;gap:6px}
+.cg-sw{display:inline-block;width:14px;height:3px;border-radius:2px;flex-shrink:0}
+.cg-sw-ventas{background:#2563EB}
+.cg-sw-utilidad{background:#0D9488}
+body.dark .cg-sw-ventas{background:#3B82F6}
+.cont-grafica-wrap{position:relative;width:100%;min-height:220px;touch-action:pan-y}
+.cg-svg{display:block;max-width:100%;overflow:visible}
+.cg-grid line{stroke:var(--border);stroke-width:1}
+.cg-grid line.cg-cero{stroke:var(--text-light);stroke-opacity:.45}
+.cg-eje text{fill:var(--text-light);font-size:11px;font-family:inherit}
+.cg-linea{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.cg-linea.cg-ventas{stroke:#2563EB}
+.cg-linea.cg-utilidad{stroke:#0D9488}
+.cg-punto{stroke:var(--card);stroke-width:2}
+.cg-punto.cg-ventas{fill:#2563EB}
+.cg-punto.cg-utilidad{fill:#0D9488}
+.cg-punto.cg-activo{r:6}
+body.dark .cg-linea.cg-ventas{stroke:#3B82F6}
+body.dark .cg-punto.cg-ventas{fill:#3B82F6}
+.cg-etiqueta{fill:var(--text);font-size:12px;font-weight:700;font-family:inherit}
+.cg-cruz{stroke:var(--text-light);stroke-width:1;stroke-dasharray:3 3}
+.cg-zona{fill:transparent;cursor:crosshair}
+.cg-tooltip{position:absolute;z-index:2;pointer-events:none;min-width:170px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:10px;box-shadow:0 6px 18px rgba(15,23,42,.14);padding:8px 10px;font-size:12px;line-height:1.55}
+.cg-tooltip[hidden]{display:none}
+.cg-tooltip strong{display:block;margin-bottom:2px}
+.cg-tooltip div{display:flex;align-items:center;gap:6px}
+.cg-tooltip b{margin-left:auto;padding-left:10px}
+.cg-tip-sub{color:var(--text-light)}
+.cg-tabla{margin-top:10px;font-size:13px}
+.cg-tabla summary{cursor:pointer;color:var(--primary);font-weight:600;padding:4px 0}
+
+.cont-top-fila{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px}
+.cont-top-fila:last-child{border-bottom:0}
+.cont-top-fila>div{min-width:0}
+.cont-top-fila strong{overflow-wrap:anywhere}
+.cont-top-fila span{display:block;font-size:12px;color:var(--text-light)}
+.cont-top-fila>strong{white-space:nowrap}
+
+/* Cuentas por cobrar */
+.cxc-tramos{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:16px}
+.cxc-tramo{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:10px 12px}
+.cxc-tramo span{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--text-light);margin-bottom:3px}
+.cxc-tramo strong{font-size:15px;white-space:nowrap}
+.cxc-total{background:var(--primary-light);border-color:transparent}
+.cxc-tramo-vencido strong{color:#B91C1C}
+body.dark .cxc-tramo-vencido strong{color:#FCA5A5}
+.cxc-cliente{border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden;background:var(--card)}
+.cxc-cliente-cab{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;background:var(--bg)}
+.cxc-cliente-cab>div:first-child{min-width:0}
+.cxc-cliente-cab strong{overflow-wrap:anywhere}
+.cxc-cliente-cab span{display:block;font-size:12px;color:var(--text-light)}
+.cxc-cliente-acciones{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.cxc-cliente-acciones strong{font-size:15px;white-space:nowrap}
+.cxc-cliente-acciones .btn{margin:0}
+.cxc-venta{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;border-top:1px solid var(--border)}
+.cxc-venta-info{flex:1;min-width:0;cursor:pointer;font-size:13.5px}
+.cxc-venta-det{display:block;font-size:12px;color:var(--text-light);margin-top:2px;overflow-wrap:anywhere}
+.cxc-venta-saldo{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.cxc-venta-saldo strong{white-space:nowrap}
+.cxc-venta-saldo .btn{margin:0}
+
+/* Estado de resultados y balance */
+.er-tabla{border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.er-fila{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:9px 14px;border-top:1px solid var(--border);font-size:13.5px}
+.er-tabla>.er-fila:first-child,.er-tabla>.er-grupo:first-child{border-top:0}
+.er-fila>span{min-width:0;overflow-wrap:anywhere}
+.er-fila small{display:block;font-size:11.5px;color:var(--text-light);font-weight:400}
+.er-fila strong{white-space:nowrap}
+.er-neg{color:#B91C1C}
+body.dark .er-neg{color:#FCA5A5}
+.er-detalle{padding-left:26px}
+.er-subtotal,.er-suma{background:var(--bg);font-weight:700}
+.er-total{background:var(--primary-light);font-weight:800;font-size:15px}
+.er-grupo{padding:8px 14px;border-top:1px solid var(--border);font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light)}
+.bg-columnas{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
+.bg-cuadre{margin-top:12px;font-weight:700;font-size:13.5px;color:#15803D}
+body.dark .bg-cuadre{color:#6EE7B7}
+.bg-cuadre.bg-descuadre{color:#B91C1C}
+
+/* Reportes */
+.cont-reportes{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
+.cont-reporte{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--card)}
+.cont-reporte-icono{font-size:22px;flex-shrink:0}
+.cont-reporte-info{flex:1;min-width:0}
+.cont-reporte-info strong{display:block;font-size:13.5px}
+.cont-reporte-info span{display:block;font-size:12px;color:var(--text-light);margin-top:2px}
+.cont-reporte-info select{width:100%;margin-top:6px;padding:7px 9px;border:1.5px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-family:inherit;font-size:13px}
+.cont-reporte-acciones{display:flex;gap:6px;flex-shrink:0}
+.cont-reporte-acciones .btn{margin:0}
+
+@media(max-width:900px){
+  .compra-linea.con-lote{grid-template-columns:1fr 1fr 1fr}
+  .compra-linea.con-lote>select{grid-column:1/-1}
+  .bg-columnas{grid-template-columns:1fr}
+}
+@media(max-width:600px){
+  .compra-linea.con-lote{grid-template-columns:1fr 1fr}
+  .cont-kpis .stat-info h3,#ventas-resumen .stat-info h3{font-size:16px}
+  .compra-linea.con-lote .compra-campo-lote{grid-column:1/-1}
+  #view-contabilidad .tab{white-space:nowrap;flex-shrink:0;font-size:12px}
+  .cxc-tramos{grid-template-columns:1fr 1fr}
+  .cxc-total{grid-column:1/-1}
+  .cxc-venta{flex-wrap:wrap}
+  .cxc-venta-saldo{width:100%;justify-content:space-between}
+  .cont-reportes{grid-template-columns:1fr}
+  .cont-reporte{flex-wrap:wrap}
+  .cont-reporte-acciones{width:100%;justify-content:flex-end}
+  .er-fila{padding:9px 12px}
+  .er-detalle{padding-left:20px}
+}

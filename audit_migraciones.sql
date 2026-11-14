@@ -141,7 +141,21 @@ WITH requisitos(orden, migracion, clase, objeto) AS (VALUES
   (19, 'compras_proveedores',        'columna',     'compras.condicion'),
   (19, 'compras_proveedores',        'columna',     'compras.vencimiento'),
   (19, 'compras_proveedores',        'columna',     'inventario.costo_unitario'),
-  (19, 'compras_proveedores',        'columna',     'factura_items.costo_unitario')
+  (19, 'compras_proveedores',        'columna',     'factura_items.costo_unitario'),
+
+  -- 20. Contabilidad: clientes, ventas, cobros y lotes (necesita la 19)
+  (20, 'contabilidad',               'tabla',       'clientes_comerciales'),
+  (20, 'contabilidad',               'tabla',       'inventario_lotes'),
+  (20, 'contabilidad',               'tabla',       'ventas'),
+  (20, 'contabilidad',               'tabla',       'venta_items'),
+  (20, 'contabilidad',               'tabla',       'venta_cobros'),
+  (20, 'contabilidad',               'politica',    'clientes_comerciales_clinica'),
+  (20, 'contabilidad',               'politica',    'inventario_lotes_clinica'),
+  (20, 'contabilidad',               'politica',    'ventas_clinica'),
+  (20, 'contabilidad',               'politica',    'venta_items_clinica'),
+  (20, 'contabilidad',               'politica',    'venta_cobros_clinica'),
+  (20, 'contabilidad',               'columna',     'compra_items.lote'),
+  (20, 'contabilidad',               'indice',      'idx_ventas_numero')
 
 ),
 

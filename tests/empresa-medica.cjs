@@ -42,7 +42,9 @@ const preambulo=`
       {id:2,tipo:'egreso',monto:1200,fecha:'2026-11-11',descripcion:'Compra a proveedor de jeringas'},
       {id:3,tipo:'ingreso',monto:900,fecha:'2026-10-30',descripcion:'Venta del mes anterior'}],
     inv:[{id:1,nombre:'Guantes de nitrilo talla M, caja de 100 unidades',stock:3,stockMin:10,unidad:'caja',precio:150},
-         {id:2,nombre:'Jeringas 5 ml',stock:400,stockMin:50,unidad:'unidad',precio:2}]};
+         {id:2,nombre:'Jeringas 5 ml',stock:400,stockMin:50,unidad:'unidad',precio:2}],
+    ventas:[{estado:'registrada',fecha:'2026-11-05',subtotal:1000,total:1150,cobrado:150},{estado:'anulada',fecha:'2026-11-06',subtotal:500,total:500,cobrado:0}]};
+  const _saldoVenta=v=>v.estado==='anulada'?0:v.total-v.cobrado;
   ${permisos}
   ${empresa}
   ${['actualizarIdentidadEstablecimiento','permisosEfectivos','hasPermiso','puedeVerBalance','puedeGestionarProcedimientosClinicos','applyRoleMenu','_syncBuscadorGlobal',
@@ -76,7 +78,7 @@ const abrir=async p=>{
 
     // ── Permisos: en la empresa solo existen sus módulos, también para el Super Admin ──
     const perm=await page.evaluate(()=>{
-      const mods=['inventario','finanzas','estadisticas','exportar','pacientes','citas','farmacia','notas'];
+      const mods=['inventario','finanzas','contabilidad','estadisticas','exportar','pacientes','citas','farmacia','notas'];
       const r={admin:mods.filter(hasPermiso),balance:puedeVerBalance()};
       __set({sa:true,user:{id:'sa',key:'superadmin'}}); r.sa=mods.filter(hasPermiso);
       __set({clinica:{id:3,tipo:'clinica'}}); r.saClinica=mods.filter(hasPermiso).length;
@@ -87,10 +89,10 @@ const abrir=async p=>{
       __set({user:{id:'u1',key:'admin_empresa',permisos:null},clinica:{id:9,nombre:'Distribuidora Demo',tipo:'empresa_medica'}});
       return r;
     });
-    assert.deepEqual(perm.admin,['inventario','finanzas','estadisticas','exportar']);
+    assert.deepEqual(perm.admin,['inventario','finanzas','contabilidad','estadisticas','exportar']);
     assert.equal(perm.balance,true,'El administrador de empresa ve el balance');
-    assert.deepEqual(perm.sa,['inventario','finanzas','estadisticas','exportar'],'Ni el Super Admin ve módulos clínicos dentro de una empresa');
-    assert.equal(perm.saClinica,8,'En una clínica el Super Admin lo ve todo');
+    assert.deepEqual(perm.sa,['inventario','finanzas','contabilidad','estadisticas','exportar'],'Ni el Super Admin ve módulos clínicos dentro de una empresa');
+    assert.equal(perm.saClinica,8,'En una clínica el Super Admin lo ve todo, menos Contabilidad, que es de empresa');
     assert.deepEqual(perm.vacio,[]);
     assert.deepEqual(perm.forzado,['finanzas']);
 
@@ -99,7 +101,7 @@ const abrir=async p=>{
       applyRoleMenu();
       const ver=id=>{const el=document.getElementById(id);return !!el && el.style.display!=='none';};
       const ids=['menu-pacientes','menu-citas','menu-agendas','menu-medicaciones','menu-notas','menu-expedientes','menu-examenes-digitalizados',
-        'menu-farmacia','menu-procedimientos','menu-clinica-section','menu-inventario','menu-finanzas','menu-estadisticas','menu-exportar','menu-admin'];
+        'menu-farmacia','menu-procedimientos','menu-clinica-section','menu-inventario','menu-finanzas','menu-contabilidad','menu-estadisticas','menu-exportar','menu-admin'];
       const r=Object.fromEntries(ids.map(i=>[i,ver(i)]));
       renderNavQuickGrid('dashboard');
       r.rapidos=[...document.querySelectorAll('#nav-quick-grid .nq-label')].map(e=>e.textContent);
@@ -109,8 +111,8 @@ const abrir=async p=>{
     });
     for(const id of ['menu-pacientes','menu-citas','menu-agendas','menu-medicaciones','menu-notas','menu-expedientes','menu-examenes-digitalizados','menu-farmacia','menu-procedimientos','menu-clinica-section','menu-admin'])
       assert.equal(menu[id],false,id+' no debe verse en una empresa médica');
-    for(const id of ['menu-inventario','menu-finanzas','menu-estadisticas','menu-exportar']) assert.equal(menu[id],true,id+' debe verse');
-    assert.deepEqual(menu.rapidos,['Estadísticas','Inventario','Finanzas','Exportar']);
+    for(const id of ['menu-inventario','menu-finanzas','menu-contabilidad','menu-estadisticas','menu-exportar']) assert.equal(menu[id],true,id+' debe verse');
+    assert.deepEqual(menu.rapidos,['Estadísticas','Inventario','Finanzas','Contabilidad','Exportar']);
     assert.equal(menu.buscador,'none','No hay pacientes que buscar');
     assert.equal(menu.identidad,'Empresa médica privada','La barra lateral dice qué es el establecimiento');
 
@@ -130,8 +132,8 @@ const abrir=async p=>{
     });
     assert.deepEqual(roles.empresa.roles,['admin_empresa'],'En una empresa solo se ofrece el rol de empresa');
     assert.equal(roles.empresa.rol,'admin_empresa','Un rol que no aplica se cambia solo');
-    assert.deepEqual(roles.empresa.modulos,['inventario','finanzas','estadisticas','exportar']);
-    assert.deepEqual(roles.empresa.marcados,['inventario','finanzas','estadisticas','exportar'],'El rol trae sus módulos marcados');
+    assert.deepEqual(roles.empresa.modulos,['inventario','finanzas','estadisticas','exportar','contabilidad']);
+    assert.deepEqual(roles.empresa.marcados,['inventario','finanzas','estadisticas','exportar','contabilidad'],'El rol trae sus módulos marcados');
     assert.equal(roles.empresa.ayuda,true);
     assert.deepEqual(roles.clinica,{rolEmpresaOculto:true,rol:'medico',modulos:13,ayuda:false},'En una clínica el rol de empresa no existe');
 
@@ -171,7 +173,7 @@ const abrir=async p=>{
         return {kpis:[...v.querySelectorAll('.stat-card h3')].map(e=>e.textContent),reponer:v.querySelectorAll('.tag-orange').length,
           titulo:v.querySelector('.empresa-encabezado h2').textContent,fuera,scroll:document.documentElement.scrollWidth-innerWidth};
       });
-      assert.deepEqual(d.kpis,['C$ 5000.00','C$ 1200.00','C$ 3800.00','1'],'Solo cuenta el mes en curso');
+      assert.deepEqual(d.kpis,['C$ 5000.00','C$ 1200.00','C$ 3800.00','1','C$ 1000.00','C$ 1000.00'],'Solo cuenta el mes en curso; ventas sin IVA y sin anuladas, y lo que falta cobrar');
       assert.equal(d.reponer,1,'Guantes está por debajo del mínimo');
       assert.equal(d.titulo,'Distribuidora Demo');
       assert.deepEqual(d.fuera,[],`Nada se sale a ${w}px`);
