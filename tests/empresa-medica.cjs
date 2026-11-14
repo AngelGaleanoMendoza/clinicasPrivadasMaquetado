@@ -111,7 +111,7 @@ const abrir=async p=>{
       return r;
     });
     for(const id of ['menu-pacientes','menu-citas','menu-agendas','menu-medicaciones','menu-notas','menu-expedientes','menu-examenes-digitalizados','menu-farmacia','menu-procedimientos','menu-clinica-section','menu-admin'])
-      assert.equal(menu[id],false,id+' no debe verse en una empresa médica');
+      assert.equal(menu[id],false,id+' no debe verse en una empresa privada');
     for(const id of ['menu-inventario','menu-finanzas','menu-contabilidad','menu-estadisticas','menu-exportar']) assert.equal(menu[id],true,id+' debe verse');
     assert.deepEqual(menu.rapidos,['Estadísticas','Inventario','Finanzas','Contabilidad','Exportar']);
     assert.equal(menu.buscador,'none','No hay pacientes que buscar');
@@ -203,19 +203,19 @@ const abrir=async p=>{
         clinicaQuitada:cl.value,ayuda:document.getElementById('u-roles-ayuda').textContent};
     });
     assert.deepEqual(alReves,{visible:true,clinicaDeshabilitada:true,empresaHabilitada:true,clinicaQuitada:'',
-      ayuda:'Elige aquí la empresa médica: el rol de empresa no se puede asignar a una clínica.'});
+      ayuda:'Elige aquí la empresa privada: el rol de empresa no se puede asignar a una clínica.'});
 
     // ── Validación al guardar: el código está en guardarUsuario ──
     const guardar=extraer('guardarUsuario');
-    assert.match(guardar,/En una empresa médica el rol debe ser «Administrador de empresa»/);
-    assert.match(guardar,/es solo para una empresa médica/);
+    assert.match(guardar,/En una empresa privada el rol debe ser «Administrador de empresa»/);
+    assert.match(guardar,/es solo para una empresa privada/);
     // Navegación: las vistas clínicas se cortan antes que los permisos
     const nav=extraer('navigate');
     assert(nav.indexOf('esEmpresaMedica() && VISTAS_CLINICAS.includes(view)')<nav.indexOf("if(view==='citas'"),'La empresa se revisa antes que los permisos');
     assert.match(fs.readFileSync(path.join(root,'migracion_empresa_medica.sql'),'utf8'),/p\.rol IN \('medico_admin', 'admin_empresa'\)/);
 
     // ── Inicio de la empresa: datos del mes y por reponer, en teléfono y escritorio ──
-    for(const w of [360,390,1280]) {
+    for(const w of [360,390,430,1280]) {
       await page.setViewportSize({width:w,height:900});
       const d=await page.evaluate(()=>{
         document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
@@ -224,11 +224,12 @@ const abrir=async p=>{
         const v=document.getElementById('view-dashboard');
         const fuera=[...v.querySelectorAll('*')].filter(e=>{const r=e.getBoundingClientRect();return r.width&&r.right>innerWidth+1;}).map(e=>e.className||e.tagName).slice(0,4);
         return {kpis:[...v.querySelectorAll('.stat-card h3')].map(e=>e.textContent),reponer:v.querySelectorAll('.tag-orange').length,
-          titulo:v.querySelector('.empresa-encabezado h2').textContent,fuera,scroll:document.documentElement.scrollWidth-innerWidth};
+          titulo:v.querySelector('.empresa-encabezado h2').textContent,etiqueta:v.querySelector('.empresa-kicker').textContent,fuera,scroll:document.documentElement.scrollWidth-innerWidth};
       });
       assert.deepEqual(d.kpis,['C$ 5000.00','C$ 1200.00','C$ 3800.00','1','C$ 1000.00','C$ 1000.00'],'Solo cuenta el mes en curso; ventas sin IVA y sin anuladas, y lo que falta cobrar');
       assert.equal(d.reponer,1,'Guantes está por debajo del mínimo');
       assert.equal(d.titulo,'Distribuidora Demo');
+      assert.equal(d.etiqueta,'Empresa privada');
       assert.deepEqual(d.fuera,[],`Nada se sale a ${w}px`);
       const dest=path.join(process.env.TEMP||'/tmp',`empresa-${w}.png`);
       await page.screenshot({path:dest,fullPage:true});

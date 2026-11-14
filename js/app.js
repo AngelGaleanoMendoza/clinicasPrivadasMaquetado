@@ -3173,7 +3173,7 @@ function renderDashboardEmpresa() {
   view.innerHTML = `
     <div class="nav-quick-grid" id="nav-quick-grid"></div>
     <div class="empresa-encabezado">
-      <div><span class="empresa-kicker">Empresa médica</span><h2>${escAttr(currentClinica?.nombre || 'Tu empresa')}</h2></div>
+      <div><span class="empresa-kicker">Empresa privada</span><h2>${escAttr(currentClinica?.nombre || 'Tu empresa')}</h2></div>
       <span class="empresa-mes">${escAttr(nombreMes)}</span>
     </div>
     <div class="stats-grid" style="margin-bottom:18px">
@@ -18257,7 +18257,7 @@ function _ajustarClinicasPorRol() {
   if(ayuda) {
     ayuda.hidden = !deEmpresa;
     ayuda.textContent = deEmpresa
-      ? (adminClinicas.some(c => esEmpresaMedica(c)) ? 'Elige aquí la empresa médica: el rol de empresa no se puede asignar a una clínica.' : 'Primero crea una clínica de tipo «Empresa médica» en la pestaña Clínicas.')
+      ? (adminClinicas.some(c => esEmpresaMedica(c)) ? 'Elige aquí la empresa privada: el rol de empresa no se puede asignar a una clínica.' : 'Primero crea una clínica de tipo «Empresa privada» en la pestaña Clínicas.')
       : '';
   }
 }
@@ -18616,10 +18616,10 @@ async function guardarUsuario() {
   const clinicaElegida = clinica_id ? adminClinicas.find(c => c.id === clinica_id) : null;
   if(rol !== 'superadmin') {
     if(esEmpresaMedica(clinicaElegida) && !ROLES_EMPRESA.includes(rol)) {
-      toast('En una empresa médica el rol debe ser «Administrador de empresa».','error'); return;
+      toast('En una empresa privada el rol debe ser «Administrador de empresa».','error'); return;
     }
     if(ROLES_EMPRESA.includes(rol) && !esEmpresaMedica(clinicaElegida)) {
-      toast('El rol «Administrador de empresa» es solo para una empresa médica: elige esa clínica o cambia el rol.','error'); return;
+      toast('El rol «Administrador de empresa» es solo para una empresa privada: elige esa clínica o cambia el rol.','error'); return;
     }
   }
   setLoading(true);
