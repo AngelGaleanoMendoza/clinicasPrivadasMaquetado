@@ -34,7 +34,22 @@ const PERMISOS_DEFECTO = {
   optometrista: ['pacientes','examenes','citas','agendas','notas','procedimientos'],
   oftalmologo:  ['pacientes','examenes','citas','agendas','medicaciones','notas','atendidos','procedimientos'],
   dermatologo:  ['pacientes','examenes','citas','agendas','medicaciones','notas','atendidos','procedimientos'],
+  // Excepción a la regla de arriba: en una empresa médica (distribuidora)
+  // Inventario y Finanzas son justamente su trabajo.
+  admin_empresa: ['inventario','finanzas','estadisticas','exportar'],
 };
+
+// ════════════════════ EMPRESA MÉDICA ════════════════════
+// Una distribuidora de insumos médicos: no atiende pacientes. Se distingue por
+// el tipo de establecimiento, igual que farmacia o veterinaria, y solo usa los
+// módulos de gestión. El tipo limita a todos sus usuarios; admin_empresa es
+// el rol de su administrador.
+const MODULOS_EMPRESA = ['inventario','finanzas','estadisticas','exportar'];
+const ROLES_EMPRESA = ['admin_empresa'];
+const VISTAS_CLINICAS = ['pacientes','expedientes','paciente-detalle','examenes-digitalizados','citas','agendas',
+  'medicaciones','notas','atendidos','procedimientos','procedimientos-oftalmo','farmacia','clientes','mascotas',
+  'mascota-detalle','hospitalizacion'];
+function esEmpresaMedica(clinica = currentClinica) { return clinica?.tipo === 'empresa_medica'; }
 
 // ════════════════════ PROCEDIMIENTOS OFTALMOLÓGICOS ════════════════════
 // Catálogo separado del plan dental. `tipo` alimenta filtros y reportes, mientras
@@ -1085,7 +1100,7 @@ async function entrarConPerfil(profile) {
     mostrarLoginAuthError('No existe una sesión válida de Supabase Auth.<br><small>Inicia sesión nuevamente o usa <strong>¿Olvidaste tu contraseña?</strong>.</small>');
     return false;
   }
-  const rolLabel = {admin:'Administración',medico:'Médico',medico_admin:'Médico Adm.',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',farmaceutico:'Farmacéutico',odontologo:'Odontólogo',optometrista:'Optometrista',oftalmologo:'Oftalmólogo',dermatologo:'Dermatólogo'}[profile.rol]||profile.rol;
+  const rolLabel = {admin:'Administración',medico:'Médico',medico_admin:'Médico Adm.',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',farmaceutico:'Farmacéutico',odontologo:'Odontólogo',optometrista:'Optometrista',oftalmologo:'Oftalmólogo',dermatologo:'Dermatólogo',admin_empresa:'Admin. Empresa'}[profile.rol]||profile.rol;
   currentClinicaId = profile.clinica_id || null;
   // Obtener email desde todas las fuentes disponibles
   let emailFinal = (profile.email || '').trim().toLowerCase() || authUser.email?.trim().toLowerCase() || null;
@@ -2501,6 +2516,11 @@ async function navigate(view, patientId) {
     toast(`No tienes el permiso "${etiqueta}". Pídeselo al Super Admin desde el panel de Usuarios.`, 'warning');
     navigate('dashboard');
   };
+  // Una empresa médica no tiene vistas clínicas: no es cuestión de permisos.
+  if(esEmpresaMedica() && VISTAS_CLINICAS.includes(view)) {
+    toast('Esta empresa trabaja con Finanzas, Inventario y Reportes; no usa módulos clínicos.','info');
+    navigate('dashboard'); return;
+  }
   // Guards por permiso
   if(view==='finanzas'     && !hasPermiso('finanzas'))     { _sinPermiso('Finanzas'); return; }
   if(view==='inventario'   && !hasPermiso('inventario'))   { _sinPermiso('Inventario'); return; }
@@ -2710,7 +2730,7 @@ function renderNavQuickGrid(cv) {
     { view:'finanzas',     icon:'💰', label:'Finanzas',     show: hasPermiso('finanzas') },
     { view:'exportar',     icon:'📤', label:'Exportar',     show: hasPermiso('exportar') },
     { view:'configuracion',icon:'⚙️', label:'Config.',      show: sa },
-  ].filter(x=>x.show);
+  ].filter(x=>x.show && !(esEmpresaMedica() && VISTAS_CLINICAS.includes(x.view)));
   el.innerHTML = all.map(x =>
     `<div class="nav-quick-item${cv===x.view?' nq-active':''}" onclick="navigate('${x.view}')">
       <span class="nq-icon">${x.icon}</span>
@@ -2720,14 +2740,22 @@ function renderNavQuickGrid(cv) {
 }
 
 // ════════════════════ DASHBOARD ════════════════════
+// Los paneles de Super Admin, Farmacia y Empresa reescriben el dashboard
+// entero. Se guarda el original para devolverlo cuando, en la misma pestaña,
+// entra alguien de una clínica: si no, su dashboard no tendría dónde pintarse.
+let _dashboardOriginal = null;
 function renderDashboard(){
-  renderPendientesSesion();
-  const modoFarmacia = currentUser?.key === 'farmaceutico' || currentClinica?.tipo === 'farmacia';
-  // Los paneles de Super Admin y Farmacia reescriben el dashboard entero, así
-  // que la rejilla de accesos rápidos se pinta DESPUÉS de ellos; si no, la
+  const vista = document.getElementById('view-dashboard');
+  if(vista && _dashboardOriginal === null) _dashboardOriginal = vista.innerHTML;
+  const reescribir = fn => { fn(); if(vista) vista.dataset.reescrito = '1'; renderNavQuickGrid(currentView); };
+  const modoFarmacia = !esEmpresaMedica() && (currentUser?.key === 'farmaceutico' || currentClinica?.tipo === 'farmacia');
+  // La rejilla de accesos rápidos se pinta DESPUÉS de reescribir; si no, la
   // llenábamos para borrarla acto seguido.
-  if(modoFarmacia) { renderDashboardFarmacia(); renderNavQuickGrid(currentView); return; }
-  if(isSuperAdmin()) { renderDashboardSA(); renderNavQuickGrid(currentView); return; }
+  if(esEmpresaMedica() && !isSuperAdmin()) return reescribir(renderDashboardEmpresa);
+  renderPendientesSesion();
+  if(modoFarmacia) return reescribir(renderDashboardFarmacia);
+  if(isSuperAdmin()) return reescribir(renderDashboardSA);
+  if(vista?.dataset.reescrito) { vista.innerHTML = _dashboardOriginal; delete vista.dataset.reescrito; renderPendientesSesion(); }
   renderNavQuickGrid(currentView);
   renderDashboardClinica();
 }
@@ -2985,7 +3013,7 @@ function renderDashboardPorUsuario() {
           const atendidas = citasHoy.filter(c => c.medicoId === u.id && c.estado === 'completada').length;
           const pendientes = citasHoy.filter(c => c.medicoId === u.id && (c.estado === 'pendiente'||c.estado==='confirmada')).length;
           const total = citasHoy.filter(c => c.medicoId === u.id).length;
-          const rolLabel = {admin:'Administración',medico:'Médico',medico_admin:'Médico Adm.',recepcion:'Recepcionista',enfermeria:'Enfermería',farmaceutico:'Farmacéutico',optometrista:'Optometrista',oftalmologo:'Oftalmólogo',dermatologo:'Dermatólogo'}[u.rol]||u.rol;
+          const rolLabel = {admin:'Administración',medico:'Médico',medico_admin:'Médico Adm.',recepcion:'Recepcionista',enfermeria:'Enfermería',farmaceutico:'Farmacéutico',optometrista:'Optometrista',oftalmologo:'Oftalmólogo',dermatologo:'Dermatólogo',admin_empresa:'Admin. Empresa'}[u.rol]||u.rol;
           const pct = total ? Math.round(atendidas/total*100) : 0;
           return `<div style="background:var(--bg);border-radius:12px;padding:14px;border:1.5px solid var(--border)">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
@@ -3010,6 +3038,63 @@ function renderDashboardPorUsuario() {
           </div>`;
         }).join('')}
       </div>
+    </div>`;
+}
+
+// Inicio de una empresa médica: lo que importa a una distribuidora es cómo va
+// el mes y qué producto hay que reponer, no las citas del día.
+function renderDashboardEmpresa() {
+  const mes = hoy().slice(0, 7);
+  const delMes = C.fin.filter(x => (x.fecha || '').startsWith(mes));
+  const ingresos = delMes.filter(x => x.tipo === 'ingreso').reduce((s, x) => s + Number(x.monto || 0), 0);
+  const gastos   = delMes.filter(x => x.tipo === 'egreso').reduce((s, x) => s + Number(x.monto || 0), 0);
+  const resultado = ingresos - gastos;
+  const bajos = C.inv.filter(p => p.stockMin > 0 && p.stock <= p.stockMin).sort((a, b) => a.stock - b.stock);
+  const valorInv = C.inv.reduce((s, p) => s + (p.precio != null ? p.stock * p.precio : 0), 0);
+  const ultimas = [...C.fin].sort((a, b) => (b.fecha || '').localeCompare(a.fecha || '') || b.id - a.id).slice(0, 8);
+  const nombreMes = new Date(hoy() + 'T12:00:00').toLocaleDateString('es-ES', { month:'long', year:'numeric' }).replace(/^./, c => c.toUpperCase());
+  const verFin = hasPermiso('finanzas'), verInv = hasPermiso('inventario');
+
+  const view = document.getElementById('view-dashboard');
+  view.innerHTML = `
+    <div class="nav-quick-grid" id="nav-quick-grid"></div>
+    <div class="empresa-encabezado">
+      <div><span class="empresa-kicker">Empresa médica</span><h2>${escAttr(currentClinica?.nombre || 'Tu empresa')}</h2></div>
+      <span class="empresa-mes">${escAttr(nombreMes)}</span>
+    </div>
+    <div class="stats-grid" style="margin-bottom:18px">
+      ${verFin ? `
+      <div class="stat-card"><div class="stat-icon si-green">💰</div><div class="stat-info"><h3>${fmtC(ingresos)}</h3><p>Ingresos del mes</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-red">📤</div><div class="stat-info"><h3 style="color:var(--danger)">${fmtC(gastos)}</h3><p>Gastos del mes</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-blue">📊</div><div class="stat-info"><h3 style="color:${resultado < 0 ? 'var(--danger)' : 'var(--success)'}">${fmtC(resultado)}</h3><p>Resultado del mes</p></div></div>` : ''}
+      ${verInv ? `
+      <div class="stat-card"><div class="stat-icon si-orange">📦</div><div class="stat-info"><h3>${bajos.length}</h3><p>Productos por reponer</p></div></div>` : ''}
+    </div>
+    <div class="grid-2">
+      ${verInv ? `
+      <div class="card">
+        <div class="card-header"><h3>📦 Por reponer</h3><button class="btn btn-secondary btn-sm" onclick="navigate('inventario')">Ver Inventario</button></div>
+        <p class="text-light empresa-nota">${C.inv.length} producto${C.inv.length === 1 ? '' : 's'} · inventario a precio de venta: ${fmtC(valorInv)}</p>
+        ${bajos.length ? bajos.slice(0, 8).map(p => `
+          <div class="search-result-item" style="cursor:default">
+            <span class="tag tag-orange" style="flex-shrink:0">${p.stock} ${escAttr(p.unidad || '')}</span>
+            <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px;overflow-wrap:anywhere">${escAttr(p.nombre)}</div>
+            <div class="text-light">Mínimo: ${p.stockMin}</div></div>
+          </div>`).join('')
+        : `<div class="empty-state" style="padding:24px 0"><div class="empty-icon" style="font-size:28px">✅</div><p>Nada por debajo del mínimo</p></div>`}
+      </div>` : ''}
+      ${verFin ? `
+      <div class="card">
+        <div class="card-header"><h3>🔄 Últimos movimientos</h3><button class="btn btn-primary btn-sm" onclick="navigate('finanzas')">Ver Finanzas</button></div>
+        ${ultimas.length ? ultimas.map(v => `
+          <div class="search-result-item" style="cursor:default">
+            <div style="font-size:18px;flex-shrink:0">${v.tipo === 'ingreso' ? '💰' : '📤'}</div>
+            <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px;overflow-wrap:anywhere">${escAttr(v.descripcion || '—')}</div>
+            <div class="text-light">${formatFecha(v.fecha)}</div></div>
+            <span style="font-weight:700;color:${v.tipo === 'ingreso' ? '#15803D' : '#e53e3e'};flex-shrink:0">${v.tipo === 'ingreso' ? '+' : '−'}${fmtC(v.monto)}</span>
+          </div>`).join('')
+        : `<div class="empty-state" style="padding:24px 0"><div class="empty-icon" style="font-size:28px">💰</div><p>Aún no hay movimientos</p></div>`}
+      </div>` : ''}
     </div>`;
 }
 
@@ -10367,6 +10452,9 @@ function selectSearchResultMascota(id){ document.getElementById('global-search')
 function _syncBuscadorGlobal(){
   const el=document.getElementById('global-search');
   if(el) el.placeholder = esVeterinaria() ? 'Buscar mascota...' : 'Buscar paciente...';
+  // Una empresa médica no tiene pacientes que buscar.
+  const caja=document.querySelector('.topbar-search');
+  if(caja) caja.style.display = esEmpresaMedica() ? 'none' : '';
 }
 
 // ════════════════════ HELPERS ════════════════════
@@ -14849,6 +14937,8 @@ function permisosEfectivos(rol, permisos) {
   return base;
 }
 function hasPermiso(perm) {
+  // En una empresa médica los módulos clínicos no existen, para nadie.
+  if(esEmpresaMedica() && !MODULOS_EMPRESA.includes(perm)) return false;
   if(isSuperAdmin()) return true;
   const p = currentUser?.permisos;
   // Si el administrador configuró los permisos (aunque sea una lista vacía) se
@@ -14858,7 +14948,7 @@ function hasPermiso(perm) {
   return base.includes(perm);
 }
 function puedeVerBalance() {
-  return isSuperAdmin() || currentUser?.key === 'medico_admin';
+  return isSuperAdmin() || currentUser?.key === 'medico_admin' || currentUser?.key === 'admin_empresa';
 }
 function puedeGestionarProcedimientosClinicos() {
   return !esVeterinaria() && hasPermiso('procedimientos');
@@ -14878,7 +14968,8 @@ function applyRoleMenu() {
   const isOdonto = isOdontologo();
   const isOft    = esOftalmologia() || esProfesionalOftalmo();
   const esFarmacia  = currentClinica?.tipo === 'farmacia';
-  const modoFarmacia = isFarm || esFarmacia;
+  const esEmpresa   = esEmpresaMedica();
+  const modoFarmacia = !esEmpresa && (isFarm || esFarmacia);
 
   const vis = (id, show) => {
     const el = document.getElementById(id);
@@ -14892,14 +14983,14 @@ function applyRoleMenu() {
   _syncBuscadorGlobal();
 
   // ─ Expedientes: oculto en modo farmacia y en veterinaria (lo cubre Mascotas)
-  vis('menu-expedientes', !modoFarmacia && !esVet);
-  vis('menu-examenes-digitalizados', !modoFarmacia && !esVet && (sa || hasPermiso('examenes')));
+  vis('menu-expedientes', !modoFarmacia && !esVet && !esEmpresa);
+  vis('menu-examenes-digitalizados', !modoFarmacia && !esVet && !esEmpresa && (sa || hasPermiso('examenes')));
 
   // ─ Módulo Farmacia
-  vis('menu-farmacia', modoFarmacia || sa || hasPermiso('farmacia'));
+  vis('menu-farmacia', !esEmpresa && (modoFarmacia || sa || hasPermiso('farmacia')));
 
-  // ─ Sección Clínica y sus ítems (oculta en modo farmacia)
-  const hasClinica = !modoFarmacia;
+  // ─ Sección Clínica y sus ítems (oculta en farmacia y en empresa médica)
+  const hasClinica = !modoFarmacia && !esEmpresa;
   vis('menu-clinica-section', hasClinica);
   renderSelectorClinicaSA();   // solo se pinta si es Super Admin
   vis('menu-clientes',        hasClinica && esVet && hasPermiso('pacientes'));
@@ -15547,10 +15638,19 @@ function removeAdminLogo() {
   setAdminLogoPreview(null);
 }
 
+function _ayudaTipoClinica() {
+  const el = document.getElementById('cl-tipo-ayuda');
+  if(!el) return;
+  el.textContent = document.getElementById('cl-tipo')?.value === 'empresa_medica'
+    ? 'Distribuidora de insumos médicos: solo Finanzas, Inventario, Estadísticas y Exportar. Sus usuarios llevan el rol «Administrador de empresa».'
+    : '';
+}
+
 function openModalClinica() {
   document.getElementById('modal-clinica-title').textContent = '🏥 Nueva Clínica';
   ['cl-nombre','cl-codigo','cl-logo-url','cl-nombre-doctor','cl-especialidad','cl-registro','cl-telefono','cl-direccion','cl-nota-pie','cl-padecimientos','cl-institucion'].forEach(id => { document.getElementById(id).value = ''; });
   document.getElementById('cl-tipo').value = 'clinica';
+  _ayudaTipoClinica();
   document.getElementById('cl-activa').value = 'true';
   document.getElementById('cl-max-agendas').value = '10';
   document.getElementById('cl-max-pacientes').value = '500';
@@ -15566,6 +15666,7 @@ function openModalClinicaEdit(id) {
   document.getElementById('cl-nombre').value = c.nombre || '';
   document.getElementById('cl-codigo').value = c.codigo || '';
   document.getElementById('cl-tipo').value = c.tipo || 'clinica';
+  _ayudaTipoClinica();
   document.getElementById('cl-activa').value = String(c.activa);
   document.getElementById('cl-max-agendas').value = c.max_agendas ?? 10;
   document.getElementById('cl-max-pacientes').value = c.max_pacientes ?? 500;
@@ -15845,10 +15946,43 @@ function selectIcon(btn) {
   document.getElementById('u-icono').value = btn.dataset.icon;
 }
 
+// Los permisos que tienen sentido para la clínica elegida en el formulario:
+// en una empresa médica, solo sus módulos.
+function _permisosDisponiblesUsuario() {
+  const id = Number(document.getElementById('u-clinica')?.value) || null;
+  const clinica = id ? adminClinicas.find(c => c.id === id) : null;
+  return esEmpresaMedica(clinica) ? ALL_PERMISOS.filter(p => MODULOS_EMPRESA.includes(p.id)) : ALL_PERMISOS;
+}
+
+// En una empresa médica solo hay roles de empresa; fuera de ella, esos roles
+// no existen. Así no se puede crear un médico en una distribuidora ni un
+// administrador de empresa en una clínica.
+function _ajustarRolesPorClinica() {
+  const id = Number(document.getElementById('u-clinica')?.value) || null;
+  const empresa = esEmpresaMedica(id ? adminClinicas.find(c => c.id === id) : null);
+  const sel = document.getElementById('u-rol');
+  if(!sel) return;
+  [...sel.options].forEach(o => {
+    if(o.value === 'superadmin') return;   // lo decide _ajustarOpcionSuperAdmin
+    o.hidden = empresa ? !ROLES_EMPRESA.includes(o.value) : ROLES_EMPRESA.includes(o.value);
+  });
+  const ayuda = document.getElementById('u-roles-ayuda');
+  if(ayuda) { ayuda.hidden = !empresa; ayuda.textContent = empresa ? 'Empresa médica: solo el rol «Administrador de empresa» y sus módulos.' : ''; }
+  const actual = sel.options[sel.selectedIndex];
+  if(actual?.hidden) {
+    sel.value = empresa ? ROLES_EMPRESA[0] : 'medico';
+    onRolChange();
+  } else {
+    // Mismo rol, otra clínica: los módulos que ya no aplican se quitan.
+    const marcados = ALL_PERMISOS.map(p => p.id).filter(p => document.getElementById('perm-' + p)?.checked);
+    renderPermisosModal(marcados);
+  }
+}
+
 function renderPermisosModal(checked = []) {
   const grid = document.getElementById('u-permisos-grid');
   if(!grid) return;
-  grid.innerHTML = ALL_PERMISOS.map(p => {
+  grid.innerHTML = _permisosDisponiblesUsuario().map(p => {
     const on = checked.includes(p.id);
     return `<label id="perm-label-${p.id}" style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg);border:1.5px solid ${on?'var(--primary)':'var(--border)'};border-radius:8px;cursor:pointer;font-size:13px;transition:border .15s;user-select:none">
       <input type="checkbox" id="perm-${p.id}" value="${p.id}" ${on?'checked':''} onchange="togglePermLabel('${p.id}')">
@@ -15860,8 +15994,9 @@ function renderPermisosModal(checked = []) {
 // Marcar los 13 permisos uno a uno es tedioso y se olvidan; el caso típico es
 // "que vea todo". El botón alterna: si ya están todos, los quita.
 function alternarTodosPermisos() {
-  const todos = ALL_PERMISOS.every(p => document.getElementById('perm-'+p.id)?.checked);
-  ALL_PERMISOS.forEach(p => {
+  const disponibles = _permisosDisponiblesUsuario();
+  const todos = disponibles.every(p => document.getElementById('perm-'+p.id)?.checked);
+  disponibles.forEach(p => {
     const cb = document.getElementById('perm-'+p.id);
     if(cb) { cb.checked = !todos; togglePermLabel(p.id); }
   });
@@ -16115,6 +16250,7 @@ function openModalUsuario() {
   fillClinicaSelect(null);
   editingUsuarioId = null;
   _ajustarOpcionSuperAdmin();
+  _ajustarRolesPorClinica();
   renderPermisosModal(PERMISOS_DEFECTO['medico'] || []);
   document.getElementById('u-especialidad').value = '';
   _syncEspecialidadUsuario();
@@ -16166,6 +16302,8 @@ function openModalUsuarioEditById(id) {
   });
   fillClinicaSelect(u.clinica_id);
   editingUsuarioId = u.id;
+  _ajustarRolesPorClinica();
+  document.getElementById('u-rol').value = u.rol;   // su rol, aunque ya no encaje: se avisa al guardar
   const permsActuales = permisosEfectivos(u.rol,u.permisos);
   renderPermisosModal(permsActuales);
   document.getElementById('u-especialidad').value = u.especialidad || '';
@@ -16191,6 +16329,15 @@ async function guardarUsuario() {
     : null;
   if(!nombre){ toast('El nombre es obligatorio','error'); return; }
   if(!editingUsuarioId && !password){ toast('La contraseña es obligatoria','error'); return; }
+  const clinicaElegida = clinica_id ? adminClinicas.find(c => c.id === clinica_id) : null;
+  if(rol !== 'superadmin') {
+    if(esEmpresaMedica(clinicaElegida) && !ROLES_EMPRESA.includes(rol)) {
+      toast('En una empresa médica el rol debe ser «Administrador de empresa».','error'); return;
+    }
+    if(ROLES_EMPRESA.includes(rol) && !esEmpresaMedica(clinicaElegida)) {
+      toast('El rol «Administrador de empresa» es solo para una empresa médica: elige esa clínica o cambia el rol.','error'); return;
+    }
+  }
   setLoading(true);
   if(editingUsuarioId) {
     // Subir la firma primero: si falla, no se guarda una URL que no existe
@@ -16913,7 +17060,7 @@ function renderFinanzas() {
 
 function switchFinTab(tab) {
   if(tab === 'balance' && !puedeVerBalance()) {
-    toast('El balance solo está disponible para médicos administrativos','warning');
+    toast('El balance solo está disponible para el médico administrativo o el administrador de la empresa','warning');
     tab = 'resumen';
   }
   finTab = tab;
@@ -18271,7 +18418,7 @@ function renderBalanceFinanzas() {
 }
 
 async function cambiarModoBalance(modo) {
-  if(!puedeVerBalance()) { toast('El balance solo está disponible para médicos administrativos','error'); return; }
+  if(!puedeVerBalance()) { toast('El balance solo está disponible para el médico administrativo o el administrador de la empresa','error'); return; }
   if(!_exigeClinica()) return;
   if((currentClinica?.balance_modo || 'porcentaje') === modo) return;
   let {error} = await sb.rpc('cambiar_modo_balance_clinica',{p_clinica_id:currentClinicaId,p_modo:modo});
@@ -18285,7 +18432,9 @@ async function cambiarModoBalance(modo) {
   if(error) {
     toast(currentUser?.key==='medico_admin'
       ? 'Ejecuta nuevamente migracion_balance_manual.sql para habilitar esta configuración al médico administrativo.'
-      : 'Error: '+error.message,'error');
+      : currentUser?.key==='admin_empresa'
+        ? 'Falta ejecutar migracion_empresa_medica.sql en Supabase para habilitar esta configuración al administrador de la empresa.'
+        : 'Error: '+error.message,'error');
     return;
   }
   // Lo ya cobrado no se recalcula: cada línea guarda con qué criterio se repartió.
@@ -18318,7 +18467,7 @@ function _previewReparto(input) {
 }
 
 async function guardarRepartoServicios() {
-  if(!puedeVerBalance()) { toast('El balance solo está disponible para médicos administrativos','error'); return; }
+  if(!puedeVerBalance()) { toast('El balance solo está disponible para el médico administrativo o el administrador de la empresa','error'); return; }
   if(!_exigeClinica()) return;
   const valores = [], vacios = [];
   for(const t of TIPOS_SERVICIO_FACTURA) {
@@ -18365,7 +18514,7 @@ async function guardarRepartoServicios() {
 }
 
 function imprimirBalanceReparto() {
-  if(!puedeVerBalance()) { toast('El balance solo está disponible para médicos administrativos','error'); return; }
+  if(!puedeVerBalance()) { toast('El balance solo está disponible para el médico administrativo o el administrador de la empresa','error'); return; }
   const cfg = getClinicaConfig();
   const {from,to} = getFinDateRange();
   const periodo = _etiquetaPeriodoFin();

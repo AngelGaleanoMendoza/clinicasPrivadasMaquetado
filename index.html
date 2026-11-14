@@ -22,7 +22,7 @@
 <!-- Lectura local de machotes. El archivo se procesa en el navegador antes de
      guardarlo; Mammoth extrae DOCX y PDF.js se carga al elegir un PDF. -->
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js" defer></script>
-<link rel="stylesheet" href="css/styles.css?v=20261107b">
+<link rel="stylesheet" href="css/styles.css?v=20261114a">
 </head>
 <body>
 <script>
@@ -1750,7 +1750,7 @@
         <span style="font-size:11px;color:var(--text-light)">Solo letras minúsculas y guiones</span>
       </div>
       <div class="form-group"><label>Tipo de establecimiento</label>
-        <select id="cl-tipo">
+        <select id="cl-tipo" onchange="_ayudaTipoClinica()">
           <option value="clinica">🏥 Clínica General</option>
           <option value="optica">👁️ Óptica / Optometría</option>
           <option value="oftalmologia">🔬 Clínica Oftalmológica</option>
@@ -1759,7 +1759,9 @@
           <option value="especialidad">🩺 Clínica de Especialidad</option>
           <option value="veterinaria">🐾 Clínica Veterinaria</option>
           <option value="farmacia">💊 Farmacia</option>
+          <option value="empresa_medica">🏢 Empresa médica (distribuidora)</option>
         </select>
+        <span class="text-light" id="cl-tipo-ayuda" style="font-size:11px"></span>
       </div>
       <div class="form-group"><label>Estado</label>
         <select id="cl-activa"><option value="true">Activa</option><option value="false">Inactiva</option></select>
@@ -1818,6 +1820,7 @@
           <option value="optometrista">👁️ Optometrista</option>
           <option value="oftalmologo">🔬 Oftalmólogo</option>
           <option value="dermatologo">🩹 Dermatólogo</option>
+          <option value="admin_empresa">🏢 Administrador de empresa</option>
           <option value="superadmin">👑 Super Admin — acceso total a todas las clínicas</option>
         </select>
       </div>
@@ -1859,7 +1862,8 @@
         <span style="font-size:11px;color:var(--text-light);margin-top:2px">Escribe una o elige de la lista</span>
       </div>
       <div class="form-group"><label>Clínica asignada</label>
-        <select id="u-clinica"><option value="">Sin clínica</option></select>
+        <select id="u-clinica" onchange="_ajustarRolesPorClinica()"><option value="">Sin clínica</option></select>
+        <span class="text-light" id="u-roles-ayuda" style="font-size:11px" hidden></span>
       </div>
       <div class="form-group full" id="u-acceso-remoto-wrap" hidden>
         <label class="u-remoto-check">
@@ -2845,7 +2849,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20261107b" defer></script>
+<script src="js/app.js?v=20261114a" defer></script>
 </body>
 </html>
 
