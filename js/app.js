@@ -178,7 +178,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
 // ════════════════════ CACHE LOCAL ════════════════════
 // cli/mas/expMas/vac/desp/hosp son las tablas veterinarias; quedan vacías en clínicas humanas
-const C = { p:[], c:[], m:[], n:[], plantillasNota:[], e:[], historial:[], prof:[], inv:[], mov:[], fin:[], fact:[], factItems:[], reparto:[], procClin:[], hd:[], odo:[], perio:[], cli:[], mas:[], expMas:[], vac:[], desp:[], hosp:[] };
+const C = { p:[], c:[], m:[], n:[], plantillasNota:[], e:[], historial:[], prof:[], inv:[], mov:[], fin:[], fact:[], factItems:[], reparto:[], procClin:[], hd:[], odo:[], perio:[], cli:[], mas:[], expMas:[], vac:[], desp:[], hosp:[], prov:[], comp:[] };
 let currentClinicaId = null;
 let currentClinica   = null;
 
@@ -331,8 +331,12 @@ const toM   = x => ({
 const fromN   = r => ({ id:r.id, pacienteId:r.paciente_id, mascotaId:r.mascota_id||null, citaId:r.cita_id||null, tipo:r.tipo, fecha:r.fecha, titulo:r.titulo, contenido:r.contenido, signos:r.signos||null, estado:r.estado||'finalizada', profesionalId:r.profesional_id||null, profesionalNombre:r.profesional_nombre||'', profesionalEspecialidad:r.profesional_especialidad||'', profesionalFirmaUrl:r.profesional_firma_url||null, profesionalCodigo:r.profesional_codigo||'', plantillaId:r.plantilla_id||null, plantillaValores:r.plantilla_valores&&typeof r.plantilla_valores==='object'?r.plantilla_valores:null });
 const toN     = x => ({ paciente_id:x.pacienteId||null, mascota_id:x.mascotaId||null, cita_id:x.citaId||null, tipo:x.tipo||'evolucion', fecha:x.fecha||hoy(), titulo:x.titulo||null, contenido:x.contenido, signos:x.signos||null, estado:x.estado||'finalizada', profesional_id:x.profesionalId||null, profesional_nombre:x.profesionalNombre||null, profesional_especialidad:x.profesionalEspecialidad||null, profesional_firma_url:x.profesionalFirmaUrl||null, plantilla_id:x.plantillaId||null, ...('profesionalCodigo' in x ? { profesional_codigo:x.profesionalCodigo||null } : {}), ...('plantillaValores' in x ? { plantilla_valores:x.plantillaValores||null } : {}), clinica_id:currentClinicaId });
 const fromPlantillaNota = r => ({ id:r.id, nombre:r.nombre, tipo:r.tipo_nota||'evolucion', contenido:r.contenido_modelo||'', campos:Array.isArray(r.campos)?r.campos:[], archivoNombre:r.archivo_nombre||'', archivoUrl:r.archivo_url||null, activa:r.activa!==false, formato:/\.docx$/i.test(r.archivo_nombre||'')?'docx':'texto' });
-const fromInv = r => ({ id:r.id, nombre:r.nombre, categoria:r.categoria||'general', unidad:r.unidad||'unidad', stock:Number(r.stock_actual||0), stockMin:Number(r.stock_minimo||0), precio:r.precio_unitario!=null?Number(r.precio_unitario):null, descripcion:r.descripcion||null, codigoMinsa:r.codigo_minsa||null, fechaVenc:r.fecha_vencimiento||null, alertaMeses:r.alerta_meses_antes!=null?Number(r.alerta_meses_antes):1 });
+const fromInv = r => ({ id:r.id, nombre:r.nombre, categoria:r.categoria||'general', unidad:r.unidad||'unidad', stock:Number(r.stock_actual||0), stockMin:Number(r.stock_minimo||0), precio:r.precio_unitario!=null?Number(r.precio_unitario):null, costo:r.costo_unitario!=null?Number(r.costo_unitario):null, descripcion:r.descripcion||null, codigoMinsa:r.codigo_minsa||null, fechaVenc:r.fecha_vencimiento||null, alertaMeses:r.alerta_meses_antes!=null?Number(r.alerta_meses_antes):1 });
 const toInv   = x => ({ nombre:x.nombre, categoria:x.categoria||'general', unidad:x.unidad||'unidad', stock_actual:Number(x.stock||0), stock_minimo:Number(x.stockMin||0), precio_unitario:x.precio||null, descripcion:x.descripcion||null, clinica_id:currentClinicaId, codigo_minsa:x.codigoMinsa||null, fecha_vencimiento:x.fechaVenc||null, alerta_meses_antes:Number(x.alertaMeses||1) });
+const fromProv    = r => ({ id:r.id, nombre:r.nombre||'', identificacion:r.identificacion||'', contacto:r.contacto||'', telefono:r.telefono||'', email:r.email||'', direccion:r.direccion||'', notas:r.notas||'', activo:r.activo!==false });
+const fromCompra  = r => ({ id:r.id, proveedorId:r.proveedor_id||null, fecha:r.fecha, numeroFactura:r.numero_factura||'', metodoPago:r.metodo_pago||'efectivo',
+  total:Number(r.total||0), estado:r.estado||'registrada', notas:r.notas||'', finanzasId:r.finanzas_id||null, creadoPor:r.creado_por||'',
+  items:(r.compra_items||[]).map(i => ({ id:i.id, invId:i.inventario_id||null, descripcion:i.descripcion||'', cantidad:Number(i.cantidad||0), costo:Number(i.costo_unitario||0), subtotal:Number(i.subtotal||0) })) });
 const fromMov     = r => ({ id:r.id, invId:r.inventario_id, tipo:r.tipo, cantidad:Number(r.cantidad), motivo:r.motivo||null, fecha:r.fecha, referencia:r.referencia||null, notas:r.notas||null });
 const fromFin     = r => ({ id:r.id, tipo:r.tipo, categoria:r.categoria||'general', descripcion:r.descripcion, monto:Number(r.monto), fecha:r.fecha, metodoPago:r.metodo_pago||'efectivo', referencia:r.referencia||null, facturaId:r.factura_id||null, citaId:r.cita_id||null, pacienteId:r.paciente_id||null, invMovId:r.inventario_mov_id||null, creadoPor:r.creado_por||null });
 const fromProcClin = r => ({
@@ -458,6 +462,19 @@ async function loadAll() {
     // y la facturación sigue igual que antes.
     _repartoDisponible = !rreparto.error;
     C.reparto = rreparto.error ? [] : (rreparto.data||[]).map(fromReparto);
+    // Proveedores y compras: tablas opcionales hasta ejecutar
+    // migracion_compras_proveedores.sql. Sin ellas el inventario sigue igual.
+    if(hasPermiso('inventario')) {
+      const [rprov, rcomp] = await Promise.all([
+        sb.from('proveedores').select('*').eq('clinica_id', currentClinicaId).order('nombre'),
+        sb.from('compras').select('*, compra_items(*)').eq('clinica_id', currentClinicaId).order('fecha', {ascending:false}).order('id', {ascending:false}).limit(500),
+      ]);
+      _comprasDisponibles = !rprov.error && !rcomp.error;
+      C.prov = rprov.error ? [] : (rprov.data||[]).map(fromProv);
+      C.comp = rcomp.error ? [] : (rcomp.data||[]).map(fromCompra);
+    } else {
+      C.prov = []; C.comp = [];
+    }
     // Tablas odontológicas (carga separada: tablas opcionales). Se cargan con el
     // MISMO criterio que decide si la interfaz dental se ve: si no, o faltarían
     // los datos, o se traerían para nadie.
@@ -11247,12 +11264,14 @@ function renderInventario() {
 
 function switchInvTab(tab) {
   invTab = tab;
-  ['productos','movimientos','reportes'].forEach(t=>{
+  ['productos','movimientos','compras','proveedores','reportes'].forEach(t=>{
     document.getElementById('inv-panel-'+t).style.display = t===tab?'block':'none';
     document.getElementById('tab-inv-'+t).classList.toggle('active',t===tab);
   });
   if(tab==='productos')   renderProductos();
   if(tab==='movimientos') renderMovimientos();
+  if(tab==='compras')     renderCompras();
+  if(tab==='proveedores') renderProveedores();
   if(tab==='reportes')    renderReportesInv();
 }
 
@@ -11279,7 +11298,7 @@ function renderProductos(filtro) {
       <div class="inv-item-icon">${catIcon(p.categoria)}</div>
       <div class="inv-item-info">
         <div class="inv-item-name">${p.nombre}${p.codigoMinsa?` <span class="inv-item-minsa">${p.codigoMinsa}</span>`:''}</div>
-        <div class="inv-item-sub">${p.unidad}${p.precio!=null?' · C$ '+p.precio.toFixed(2):''}${p.descripcion?' · '+p.descripcion:''}</div>
+        <div class="inv-item-sub">${p.unidad}${p.costo!=null?' · costo '+fmtC(p.costo):''}${p.precio!=null?' · venta '+fmtC(p.precio):''}${p.costo!=null&&p.precio>0?` · <span class="${p.precio<p.costo?'inv-margen-neg':'inv-margen'}">margen ${_pctMargen(p.costo,p.precio)}</span>`:''}${p.descripcion?' · '+escAttr(p.descripcion):''}</div>
         ${vencBadge}
       </div>
       <div class="inv-item-right">
@@ -11305,7 +11324,8 @@ function abrirKardex(prodId) {
     <div style="background:var(--bg);border-radius:10px;padding:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:14px">
       <div><div style="font-size:11px;color:var(--text-light);font-weight:600;text-transform:uppercase;margin-bottom:4px">Stock actual</div><div style="font-size:22px;font-weight:800;color:${stColor}">${prod.stock} <span style="font-size:14px;font-weight:500">${prod.unidad}</span></div></div>
       <div><div style="font-size:11px;color:var(--text-light);font-weight:600;text-transform:uppercase;margin-bottom:4px">Stock mínimo</div><div style="font-size:20px;font-weight:700">${prod.stockMin}</div></div>
-      <div><div style="font-size:11px;color:var(--text-light);font-weight:600;text-transform:uppercase;margin-bottom:4px">Precio unitario</div><div style="font-size:18px;font-weight:700">${prod.precio!=null?'C$ '+prod.precio.toFixed(2):'—'}</div></div>
+      <div><div style="font-size:11px;color:var(--text-light);font-weight:600;text-transform:uppercase;margin-bottom:4px">Costo promedio</div><div style="font-size:18px;font-weight:700">${prod.costo!=null?fmtC(prod.costo):'—'}</div></div>
+      <div><div style="font-size:11px;color:var(--text-light);font-weight:600;text-transform:uppercase;margin-bottom:4px">Precio de venta</div><div style="font-size:18px;font-weight:700">${prod.precio!=null?fmtC(prod.precio):'—'}</div></div>
       <div><div style="font-size:11px;color:var(--text-light);font-weight:600;text-transform:uppercase;margin-bottom:4px">Categoría</div><div style="font-size:14px;font-weight:600">${prod.categoria}</div></div>
       ${prod.codigoMinsa?`<div><div style="font-size:11px;color:var(--text-light);font-weight:600;text-transform:uppercase;margin-bottom:4px">Código MINSA</div><div style="font-family:monospace;font-size:13px;font-weight:700;color:var(--primary)">${prod.codigoMinsa}</div></div>`:''}
     </div>`;
@@ -11472,6 +11492,7 @@ function openModalProducto(id){
     document.getElementById('prod-unidad').value=p.unidad;
     document.getElementById('prod-stock-min').value=p.stockMin;
     document.getElementById('prod-precio').value=p.precio!=null?p.precio:'';
+    document.getElementById('prod-costo').value=p.costo!=null?Math.round(p.costo*100)/100:'';
     document.getElementById('prod-descripcion').value=p.descripcion||'';
     document.getElementById('prod-vencimiento').value=p.fechaVenc||'';
     document.getElementById('prod-alerta-meses').value=p.alertaMeses||1;
@@ -11479,7 +11500,7 @@ function openModalProducto(id){
     // Ocultar stock al editar — el stock solo cambia mediante movimientos de entrada/salida
     if(stockWrap) stockWrap.style.display='none';
   } else {
-    ['prod-nombre','prod-stock','prod-stock-min','prod-precio','prod-descripcion'].forEach(f=>document.getElementById(f).value='');
+    ['prod-nombre','prod-stock','prod-stock-min','prod-precio','prod-costo','prod-descripcion'].forEach(f=>document.getElementById(f).value='');
     document.getElementById('prod-categoria').value='medicamento';
     document.getElementById('prod-unidad').value='unidad';
     document.getElementById('prod-vencimiento').value='';
@@ -11488,7 +11509,45 @@ function openModalProducto(id){
     if(alertWrap) alertWrap.style.display='none';
     if(stockWrap) stockWrap.style.display='';
   }
+  _margenProducto();
   document.getElementById('modal-producto').classList.add('open');
+}
+
+// Ganancia por unidad y margen sobre el precio de venta, mientras se escribe.
+function _margenProducto() {
+  const el = document.getElementById('prod-margen');
+  if(!el) return;
+  const costo = parseFloat(document.getElementById('prod-costo')?.value);
+  const precio = parseFloat(document.getElementById('prod-precio')?.value);
+  if(!(costo >= 0) || !(precio > 0)) { el.hidden = true; return; }
+  const ganancia = precio - costo;
+  el.hidden = false;
+  el.className = 'form-group full prod-margen' + (ganancia < 0 ? ' prod-margen-neg' : '');
+  el.textContent = ganancia < 0
+    ? `Pierdes ${fmtC(-ganancia)} por unidad: el precio de venta es menor que el costo.`
+    : `Ganas ${fmtC(ganancia)} por unidad · margen ${_pctMargen(costo, precio)}`;
+}
+
+// Margen sobre el precio de venta: de cada C$ 100 vendidos, cuánto es ganancia.
+function _pctMargen(costo, precio) {
+  if(!(precio > 0) || costo == null) return '—';
+  return (Math.round((precio - costo) / precio * 1000) / 10).toLocaleString('es-NI') + ' %';
+}
+
+function _leerCostoProducto() {
+  const v = document.getElementById('prod-costo')?.value;
+  return v === '' || v == null ? null : Math.max(0, Number(v) || 0);
+}
+
+// El costo es una columna nueva: si la base aún no la tiene, el producto se
+// guarda igual y se avisa, en vez de perder todo lo demás que se escribió.
+async function _guardarConCosto(enviar, datos, costo) {
+  let r = await enviar({ ...datos, costo_unitario:costo });
+  if(r.error && _faltaColumna(r.error, 'costo_unitario')) {
+    r = await enviar(datos);
+    if(!r.error && costo != null) toast('Producto guardado sin el costo: falta ejecutar migracion_compras_proveedores.sql en Supabase.','warning');
+  }
+  return r;
 }
 
 async function guardarProducto(){
@@ -11510,7 +11569,8 @@ async function guardarProducto(){
       fecha_vencimiento: document.getElementById('prod-vencimiento').value||null,
       alerta_meses_antes: Number(document.getElementById('prod-alerta-meses').value||1)
     };
-    const{error}=await sb.from('inventario').update(upd).eq('id',editingProdId);
+    const costo = _leerCostoProducto();
+    const{error}=await _guardarConCosto(d => sb.from('inventario').update(d).eq('id',editingProdId), upd, costo);
     if(error){ toast('Error: '+error.message,'error'); setLoading(false); return; }
     toast('Producto actualizado');
   } else {
@@ -11525,7 +11585,7 @@ async function guardarProducto(){
       fechaVenc:document.getElementById('prod-vencimiento').value||null,
       alertaMeses:Number(document.getElementById('prod-alerta-meses').value||1)
     });
-    const{error}=await sb.from('inventario').insert(obj);
+    const{error}=await _guardarConCosto(d => sb.from('inventario').insert(d), obj, _leerCostoProducto());
     if(error){ toast('Error: '+error.message,'error'); setLoading(false); return; }
     toast('Producto agregado ✅');
   }
@@ -11713,6 +11773,397 @@ async function confirmarMovMasivo() {
   toast(tipo==='entrada'?`📥 ${entries.length} entrada${entries.length!==1?'s':''} registrada${entries.length!==1?'s':''}`:`📤 ${entries.length} salida${entries.length!==1?'s':''} registrada${entries.length!==1?'s':''}`);
   closeModal('modal-mov-masivo');
   await loadAll(); renderInventario(); setLoading(false);
+}
+
+// ════════════════════ COMPRAS A PROVEEDORES ════════════════════
+// Una compra trae productos de un proveedor a un costo. Al registrarla:
+// - el stock sube con un movimiento de entrada por producto;
+// - el costo del producto pasa a ser el promedio ponderado entre lo que ya
+//   había y lo que entra (si había 10 a C$ 5 y entran 10 a C$ 7, queda C$ 6);
+// - si se marca, el pago se anota como gasto en Finanzas (categoría Compras).
+// Las compras no se editan: se anulan, y la anulación deshace todo lo anterior.
+let _comprasDisponibles = true;
+let comprasPeriodo = 'mes';
+let editingProveedorId = null, _proveedorDesdeCompra = false;
+let _lineasCompra = [];   // [{ id, invId, cantidad, costo }]
+let _lineaCompraSec = 0;
+
+const _AVISO_MIGRACION_COMPRAS = '<div class="balance-aviso">🛠️ Falta ejecutar <strong>migracion_compras_proveedores.sql</strong> en Supabase para guardar proveedores y compras con su costo.</div>';
+
+function _nombreProveedor(id) { return C.prov.find(p => p.id === id)?.nombre || 'Sin proveedor'; }
+
+// ── Proveedores ──
+function renderProveedores() {
+  const el = document.getElementById('tabla-proveedores');
+  if(!el) return;
+  document.getElementById('proveedores-aviso').innerHTML = _comprasDisponibles ? '' : _AVISO_MIGRACION_COMPRAS;
+  const q = _lumiNormal(document.getElementById('prov-buscar')?.value || '');
+  const lista = C.prov.filter(p => !q || _lumiNormal(`${p.nombre} ${p.identificacion} ${p.contacto} ${p.telefono}`).includes(q))
+    .sort((a, b) => (b.activo - a.activo) || a.nombre.localeCompare(b.nombre, 'es'));
+  if(!lista.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">🚚</div><p>${C.prov.length ? 'Ningún proveedor coincide con la búsqueda' : 'Aún no hay proveedores.<br>Agrega el primero con <strong>+ Proveedor</strong>'}</p></div>`;
+    return;
+  }
+  el.innerHTML = lista.map(p => {
+    const compras = C.comp.filter(c => c.proveedorId === p.id && c.estado !== 'anulada');
+    const total = compras.reduce((s, c) => s + c.total, 0);
+    const ultima = compras.map(c => c.fecha).sort().pop();
+    return `<div class="prov-item${p.activo ? '' : ' prov-inactivo'}">
+      <div class="prov-item-info">
+        <div class="prov-item-nombre">${escAttr(p.nombre)}${p.activo ? '' : ' <span class="tag tag-gray">Inactivo</span>'}</div>
+        <div class="prov-item-sub">${[p.identificacion && 'RUC ' + p.identificacion, p.contacto, p.telefono].filter(Boolean).map(escAttr).join(' · ') || 'Sin datos de contacto'}</div>
+        <div class="prov-item-sub">${compras.length} compra${compras.length === 1 ? '' : 's'} · ${fmtC(total)}${ultima ? ' · última ' + formatFecha(ultima) : ''}</div>
+      </div>
+      <div class="prov-item-acciones">
+        <button class="btn btn-secondary btn-sm" onclick="verComprasProveedor(${p.id})" title="Ver sus compras">🛒</button>
+        <button class="btn btn-secondary btn-sm" onclick="abrirProveedor(${p.id})" title="Editar">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="eliminarProveedor(${p.id})" title="${compras.length ? 'Desactivar' : 'Eliminar'}">🗑️</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function abrirProveedor(id = null, desdeCompra = false) {
+  if(!_exigeClinica()) return;
+  if(!_comprasDisponibles) { toast('Falta ejecutar migracion_compras_proveedores.sql en Supabase para guardar proveedores.','error'); return; }
+  editingProveedorId = id;
+  _proveedorDesdeCompra = desdeCompra;
+  const p = id ? C.prov.find(x => x.id === id) : null;
+  document.getElementById('modal-proveedor-title').textContent = p ? '✏️ Editar proveedor' : '🚚 Nuevo proveedor';
+  for(const [campo, valor] of Object.entries({ nombre:p?.nombre, identificacion:p?.identificacion, contacto:p?.contacto, telefono:p?.telefono, email:p?.email, direccion:p?.direccion, notas:p?.notas }))
+    document.getElementById('prov-' + campo).value = valor || '';
+  openModalOverlay('modal-proveedor');
+  setTimeout(() => document.getElementById('prov-nombre')?.focus(), 60);
+}
+
+async function guardarProveedor() {
+  if(!_exigeClinica()) return;
+  const v = id => document.getElementById('prov-' + id).value.trim() || null;
+  const datos = { nombre:v('nombre'), identificacion:v('identificacion'), contacto:v('contacto'), telefono:v('telefono'), email:v('email'), direccion:v('direccion'), notas:v('notas') };
+  if(!datos.nombre) { toast('Escribe el nombre del proveedor','error'); return; }
+  const repetido = C.prov.find(p => p.id !== editingProveedorId && _lumiNormal(p.nombre) === _lumiNormal(datos.nombre));
+  if(repetido) { toast(`Ya existe un proveedor llamado «${repetido.nombre}»`,'error'); return; }
+  setLoading(true);
+  const r = editingProveedorId
+    ? await sb.from('proveedores').update(datos).eq('id', editingProveedorId).select().single()
+    : await sb.from('proveedores').insert({ ...datos, clinica_id:currentClinicaId, activo:true }).select().single();
+  setLoading(false);
+  if(r.error) { toast('No se pudo guardar el proveedor: ' + r.error.message,'error'); return; }
+  const nuevo = fromProv(r.data);
+  C.prov = [...C.prov.filter(p => p.id !== nuevo.id), nuevo];
+  closeModal('modal-proveedor');
+  toast(editingProveedorId ? 'Proveedor actualizado' : 'Proveedor agregado ✅');
+  if(_proveedorDesdeCompra) { _llenarProveedoresCompra(nuevo.id); }
+  renderProveedores();
+}
+
+// Un proveedor con compras no se borra: su historial quedaría sin nombre.
+async function eliminarProveedor(id) {
+  const p = C.prov.find(x => x.id === id);
+  if(!p) return;
+  const tieneCompras = C.comp.some(c => c.proveedorId === id);
+  const ok = await customConfirm(tieneCompras
+    ? { icon:'🚚', title:p.activo ? 'Desactivar proveedor' : 'Activar proveedor', msg:p.activo
+        ? `<strong>${escAttr(p.nombre)}</strong> tiene compras registradas, así que no se borra: se desactiva y deja de ofrecerse en compras nuevas.`
+        : `¿Volver a ofrecer a <strong>${escAttr(p.nombre)}</strong> en las compras nuevas?`, okText:p.activo ? 'Desactivar' : 'Activar', danger:p.activo }
+    : { icon:'🚚', title:'Eliminar proveedor', msg:`¿Eliminar a <strong>${escAttr(p.nombre)}</strong>? No tiene compras registradas.`, okText:'Eliminar' });
+  if(!ok) return;
+  setLoading(true);
+  const { error } = tieneCompras
+    ? await sb.from('proveedores').update({ activo:!p.activo }).eq('id', id)
+    : await sb.from('proveedores').delete().eq('id', id);
+  setLoading(false);
+  if(error) { toast('No se pudo completar: ' + error.message,'error'); return; }
+  if(tieneCompras) p.activo = !p.activo; else C.prov = C.prov.filter(x => x.id !== id);
+  toast(tieneCompras ? (p.activo ? 'Proveedor activado' : 'Proveedor desactivado') : 'Proveedor eliminado');
+  renderProveedores();
+}
+
+function verComprasProveedor(id) {
+  switchInvTab('compras');
+  const sel = document.getElementById('compras-proveedor');
+  if(sel) { sel.value = String(id); }
+  comprasPeriodo = 'todo';
+  renderCompras();
+}
+
+// ── Lista de compras ──
+function _rangoCompras(p = comprasPeriodo) {
+  const h = new Date(), mes = hoy().slice(0, 7);
+  if(p === 'mes') return { desde:mes + '-01', hasta:hoy() };
+  if(p === 'mes_anterior') {
+    const a = new Date(h.getFullYear(), h.getMonth() - 1, 1), b = new Date(h.getFullYear(), h.getMonth(), 0);
+    return { desde:fechaLocal(a), hasta:fechaLocal(b) };
+  }
+  if(p === 'anio') return { desde:h.getFullYear() + '-01-01', hasta:hoy() };
+  return { desde:'', hasta:'' };
+}
+
+function setComprasPeriodo(p) { comprasPeriodo = p; renderCompras(); }
+
+function renderCompras() {
+  const el = document.getElementById('tabla-compras');
+  if(!el) return;
+  document.getElementById('compras-aviso').innerHTML = _comprasDisponibles ? '' : _AVISO_MIGRACION_COMPRAS;
+  document.getElementById('compras-periodos').innerHTML = [['mes','Este mes'],['mes_anterior','Mes anterior'],['anio','Este año'],['todo','Todo']]
+    .map(([id, l]) => `<span class="chip${comprasPeriodo === id ? ' active' : ''}" onclick="setComprasPeriodo('${id}')">${l}</span>`).join('');
+  const selProv = document.getElementById('compras-proveedor');
+  const provActual = selProv.value;
+  selProv.innerHTML = '<option value="">Todos los proveedores</option>' + [...C.prov].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+    .map(p => `<option value="${p.id}"${String(p.id) === provActual ? ' selected' : ''}>${escAttr(p.nombre)}</option>`).join('');
+
+  const { desde, hasta } = _rangoCompras();
+  const lista = C.comp.filter(c => (!desde || (c.fecha >= desde && c.fecha <= hasta)) && (!provActual || String(c.proveedorId) === provActual));
+  const vigentes = lista.filter(c => c.estado !== 'anulada');
+  const total = vigentes.reduce((s, c) => s + c.total, 0);
+  const unidades = vigentes.reduce((s, c) => s + c.items.reduce((u, i) => u + i.cantidad, 0), 0);
+  document.getElementById('compras-resumen').innerHTML = `
+    <div class="stat-card"><div class="stat-icon si-red">🛒</div><div class="stat-info"><h3>${fmtC(total)}</h3><p>Total comprado</p></div></div>
+    <div class="stat-card"><div class="stat-icon si-blue">🧾</div><div class="stat-info"><h3>${vigentes.length}</h3><p>Compras</p></div></div>
+    <div class="stat-card"><div class="stat-icon si-green">📦</div><div class="stat-info"><h3>${unidades.toLocaleString('es-NI')}</h3><p>Unidades recibidas</p></div></div>`;
+
+  const porProv = {};
+  vigentes.forEach(c => { porProv[c.proveedorId || 0] = (porProv[c.proveedorId || 0] || 0) + c.total; });
+  const filas = Object.entries(porProv).sort((a, b) => b[1] - a[1]);
+  document.getElementById('compras-por-proveedor').innerHTML = !provActual && filas.length > 1 ? `
+    <div class="compras-prov-tabla"><div class="lumi-sub" style="margin:0 0 6px">Por proveedor</div>
+      ${filas.slice(0, 6).map(([id, monto]) => `<div class="compras-prov-fila"><span>${escAttr(_nombreProveedor(Number(id)))}</span>
+        <span class="compras-prov-barra"><span style="width:${Math.round(monto / filas[0][1] * 100)}%"></span></span><strong>${fmtC(monto)}</strong></div>`).join('')}
+    </div>` : '';
+
+  if(!lista.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">🛒</div><p>${C.comp.length ? 'No hay compras en este período' : 'Aún no hay compras.<br>Registra la primera con <strong>+ Nueva compra</strong>'}</p></div>`;
+    return;
+  }
+  el.innerHTML = lista.map(c => `
+    <div class="compra-item${c.estado === 'anulada' ? ' compra-anulada' : ''}" onclick="verCompra(${c.id})">
+      <div class="compra-item-info">
+        <div class="compra-item-titulo">${escAttr(_nombreProveedor(c.proveedorId))}${c.estado === 'anulada' ? ' <span class="tag tag-red">Anulada</span>' : ''}</div>
+        <div class="compra-item-sub">${formatFecha(c.fecha)}${c.numeroFactura ? ' · Fact. ' + escAttr(c.numeroFactura) : ''} · ${c.items.length} producto${c.items.length === 1 ? '' : 's'}</div>
+      </div>
+      <strong class="compra-item-total">${fmtC(c.total)}</strong>
+    </div>`).join('');
+}
+
+// ── Nueva compra ──
+function _llenarProveedoresCompra(elegido = null) {
+  const sel = document.getElementById('compra-proveedor');
+  const actual = elegido != null ? String(elegido) : sel.value;
+  sel.innerHTML = '<option value="">Elige el proveedor…</option>' + C.prov.filter(p => p.activo || String(p.id) === actual)
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+    .map(p => `<option value="${p.id}"${String(p.id) === actual ? ' selected' : ''}>${escAttr(p.nombre)}</option>`).join('');
+}
+
+function abrirNuevaCompra() {
+  if(!_exigeClinica()) return;
+  // Sin la migración se ofrece la entrada de antes, sin proveedor ni costo.
+  if(!_comprasDisponibles) {
+    toast('Falta ejecutar migracion_compras_proveedores.sql: se abre la entrada de productos sin proveedor ni costo.','warning');
+    openModalCompra(); return;
+  }
+  if(!C.inv.length) { toast('Primero agrega tus productos con + Producto','warning'); return; }
+  _lineasCompra = [];
+  _llenarProveedoresCompra('');
+  document.getElementById('compra-fecha').value = hoy();
+  document.getElementById('compra-numero').value = '';
+  document.getElementById('compra-metodo').value = 'efectivo';
+  document.getElementById('compra-gasto').checked = true;
+  document.getElementById('compra-notas').value = '';
+  agregarLineaCompra();
+  openModalOverlay('modal-compra');
+}
+
+function agregarLineaCompra() {
+  _lineasCompra.push({ id:++_lineaCompraSec, invId:null, cantidad:1, costo:null });
+  _pintarLineasCompra();
+}
+function quitarLineaCompra(id) {
+  _lineasCompra = _lineasCompra.filter(l => l.id !== id);
+  if(!_lineasCompra.length) _lineasCompra.push({ id:++_lineaCompraSec, invId:null, cantidad:1, costo:null });
+  _pintarLineasCompra();
+}
+function cambiarLineaCompra(id, campo, valor) {
+  const l = _lineasCompra.find(x => x.id === id);
+  if(!l) return;
+  if(campo === 'invId') {
+    l.invId = Number(valor) || null;
+    // Se propone el último costo conocido del producto; se puede cambiar.
+    const p = C.inv.find(x => x.id === l.invId);
+    l.costo = p?.costo != null ? Math.round(p.costo * 100) / 100 : null;
+    _pintarLineasCompra();
+    return;
+  }
+  l[campo] = valor === '' ? null : Number(valor);
+  _totalCompra();
+}
+
+function _pintarLineasCompra() {
+  const cont = document.getElementById('compra-lineas');
+  const opciones = [...C.inv].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  cont.innerHTML = _lineasCompra.map((l, i) => {
+    const p = C.inv.find(x => x.id === l.invId);
+    return `<div class="compra-linea">
+      <select aria-label="Producto ${i + 1}" onchange="cambiarLineaCompra(${l.id},'invId',this.value)">
+        <option value="">Producto…</option>
+        ${opciones.map(o => `<option value="${o.id}"${o.id === l.invId ? ' selected' : ''}>${escAttr(o.nombre)} (${escAttr(o.unidad)})</option>`).join('')}
+      </select>
+      <label class="compra-campo"><span>Cantidad</span><input type="number" min="0" step="any" value="${l.cantidad ?? ''}" oninput="cambiarLineaCompra(${l.id},'cantidad',this.value)"></label>
+      <label class="compra-campo"><span>Costo unitario</span><input type="number" min="0" step="0.01" placeholder="0.00" value="${l.costo ?? ''}" oninput="cambiarLineaCompra(${l.id},'costo',this.value)"></label>
+      <div class="compra-linea-sub" id="compra-sub-${l.id}"></div>
+      <button type="button" class="btn btn-secondary btn-sm compra-quitar" onclick="quitarLineaCompra(${l.id})" aria-label="Quitar producto">✕</button>
+      ${p && p.precio > 0 && l.costo != null ? `<div class="compra-linea-margen${l.costo > p.precio ? ' prod-margen-neg' : ''}">Lo vendes a ${fmtC(p.precio)} · margen ${_pctMargen(l.costo, p.precio)}</div>` : ''}
+    </div>`;
+  }).join('');
+  _totalCompra();
+}
+
+function _totalCompra() {
+  let total = 0;
+  _lineasCompra.forEach(l => {
+    const sub = (l.cantidad || 0) * (l.costo || 0);
+    total += sub;
+    const el = document.getElementById('compra-sub-' + l.id);
+    if(el) el.textContent = fmtC(sub);
+  });
+  document.getElementById('compra-total').textContent = fmtC(total);
+  return Math.round(total * 100) / 100;
+}
+
+// Costo promedio ponderado tras recibir `cantidad` unidades a `costo` cada una.
+// Sin costo previo (o sin stock) el costo es el de lo que entra.
+function _costoPromedio(stock, costoActual, cantidad, costo) {
+  const base = Math.max(0, stock || 0);
+  if(costoActual == null || base === 0) return costo;
+  return (base * costoActual + cantidad * costo) / (base + cantidad);
+}
+
+async function guardarCompra() {
+  if(!_exigeClinica()) return;
+  const proveedorId = Number(document.getElementById('compra-proveedor').value) || null;
+  const fecha = document.getElementById('compra-fecha').value;
+  const lineas = _lineasCompra.filter(l => l.invId || l.cantidad || l.costo);
+  if(!proveedorId) { toast('Elige el proveedor (o créalo con + Nuevo)','error'); return; }
+  if(!fecha) { toast('Indica la fecha de la compra','error'); return; }
+  if(!lineas.length) { toast('Agrega al menos un producto','error'); return; }
+  for(const [i, l] of lineas.entries()) {
+    if(!l.invId) { toast(`Elige el producto de la línea ${i + 1}`,'error'); return; }
+    if(!(l.cantidad > 0)) { toast(`Indica la cantidad de la línea ${i + 1}`,'error'); return; }
+    if(l.costo == null || !(l.costo >= 0)) { toast(`Indica el costo unitario de la línea ${i + 1}`,'error'); return; }
+  }
+  const total = Math.round(lineas.reduce((s, l) => s + l.cantidad * l.costo, 0) * 100) / 100;
+  const numero = document.getElementById('compra-numero').value.trim() || null;
+  const metodo = document.getElementById('compra-metodo').value;
+  const anotarGasto = document.getElementById('compra-gasto').checked;
+  const proveedor = _nombreProveedor(proveedorId);
+  const btn = document.getElementById('btn-guardar-compra');
+  btn.disabled = true;
+  setLoading(true);
+  try {
+    const rc = await sb.from('compras').insert({ clinica_id:currentClinicaId, proveedor_id:proveedorId, fecha, numero_factura:numero, metodo_pago:metodo,
+      total, notas:document.getElementById('compra-notas').value.trim() || null, creado_por:currentUser?.name || null }).select().single();
+    if(rc.error) throw new Error(rc.error.message);
+    const compraId = rc.data.id;
+    const items = lineas.map(l => {
+      const p = C.inv.find(x => x.id === l.invId);
+      return { compra_id:compraId, clinica_id:currentClinicaId, inventario_id:l.invId, descripcion:p?.nombre || 'Producto',
+        cantidad:l.cantidad, costo_unitario:l.costo, subtotal:Math.round(l.cantidad * l.costo * 100) / 100 };
+    });
+    const ri = await sb.from('compra_items').insert(items);
+    // Sin sus líneas la compra no vale: se borra y no se toca el inventario.
+    if(ri.error) { await sb.from('compras').delete().eq('id', compraId); throw new Error(ri.error.message); }
+
+    // Stock y costo promedio, agrupando si un producto viene en varias líneas.
+    const avisos = [];
+    const motivo = `Compra a ${proveedor}${numero ? ' · Fact. ' + numero : ''}`;
+    const porProducto = new Map();
+    lineas.forEach(l => { const a = porProducto.get(l.invId) || []; a.push(l); porProducto.set(l.invId, a); });
+    for(const [invId, ls] of porProducto) {
+      const p = C.inv.find(x => x.id === invId);
+      let stock = p?.stock || 0, costo = p?.costo ?? null;
+      for(const l of ls) { costo = _costoPromedio(stock, costo, l.cantidad, l.costo); stock += l.cantidad; }
+      const [rm, ru] = await Promise.all([
+        sb.from('inventario_movimientos').insert(ls.map(l => ({ inventario_id:invId, clinica_id:currentClinicaId, tipo:'entrada', cantidad:l.cantidad, motivo, fecha }))),
+        sb.from('inventario').update({ stock_actual:stock, costo_unitario:Math.round(costo * 10000) / 10000 }).eq('id', invId),
+      ]);
+      if(rm.error || ru.error) avisos.push(p?.nombre || 'producto');
+    }
+    if(anotarGasto && total > 0) {
+      const rf = await sb.from('finanzas').insert({ clinica_id:currentClinicaId, tipo:'egreso', categoria:'compras',
+        descripcion:`Compra a ${proveedor}${numero ? ' (fact. ' + numero + ')' : ''}`, monto:total, fecha, metodo_pago:metodo,
+        referencia:`COMPRA-${compraId}`, creado_por:currentUser?.name || null }).select('id').single();
+      if(rf.error) avisos.push('el gasto en Finanzas');
+      else await sb.from('compras').update({ finanzas_id:rf.data.id }).eq('id', compraId);
+    }
+    closeModal('modal-compra');
+    toast(avisos.length ? `Compra registrada, pero no se pudo actualizar: ${avisos.join(', ')}. Revisa Movimientos y Finanzas.` : `Compra registrada ✅ · ${fmtC(total)}`, avisos.length ? 'warning' : 'success');
+  } catch(e) {
+    toast('No se pudo registrar la compra: ' + (e.message || e),'error');
+  } finally {
+    btn.disabled = false;
+    await loadAll(); renderInventario(); setLoading(false);
+  }
+}
+
+// ── Detalle y anulación ──
+function verCompra(id) {
+  const c = C.comp.find(x => x.id === id);
+  if(!c) return;
+  document.getElementById('compra-detalle-titulo').textContent = `🛒 Compra a ${_nombreProveedor(c.proveedorId)}`;
+  const metodo = { efectivo:'Efectivo', transferencia:'Transferencia', tarjeta:'Tarjeta', cheque:'Cheque' }[c.metodoPago] || c.metodoPago;
+  document.getElementById('compra-detalle-cuerpo').innerHTML = `
+    <div class="compra-detalle-datos">
+      <div><span>Fecha</span><strong>${formatFecha(c.fecha)}</strong></div>
+      <div><span>Factura del proveedor</span><strong>${escAttr(c.numeroFactura || '—')}</strong></div>
+      <div><span>Forma de pago</span><strong>${escAttr(metodo)}</strong></div>
+      <div><span>Estado</span><strong>${c.estado === 'anulada' ? '❌ Anulada' : '✅ Registrada'}</strong></div>
+    </div>
+    <div class="table-wrap"><table class="compra-detalle-tabla"><thead><tr><th>Producto</th><th>Cant.</th><th>Costo</th><th>Subtotal</th></tr></thead>
+      <tbody>${c.items.map(i => `<tr><td>${escAttr(i.descripcion)}</td><td>${i.cantidad.toLocaleString('es-NI')}</td><td>${fmtC(i.costo)}</td><td>${fmtC(i.subtotal)}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td colspan="3">Total</td><td>${fmtC(c.total)}</td></tr></tfoot></table></div>
+    ${c.notas ? `<p class="text-light" style="margin-top:10px">📝 ${escAttr(c.notas)}</p>` : ''}
+    <p class="text-light" style="font-size:12px;margin-top:8px">${c.finanzasId ? 'El pago está anotado como gasto en Finanzas.' : 'Esta compra no anotó gasto en Finanzas.'}${c.creadoPor ? ' Registrada por ' + escAttr(c.creadoPor) + '.' : ''}</p>`;
+  document.getElementById('compra-detalle-acciones').innerHTML = `
+    <button class="btn btn-secondary" onclick="closeModal('modal-compra-detalle')">Cerrar</button>
+    ${c.estado !== 'anulada' ? `<button class="btn btn-danger" onclick="anularCompra(${c.id})">❌ Anular compra</button>` : ''}`;
+  openModalOverlay('modal-compra-detalle');
+}
+
+// Anular deshace la compra: saca del stock lo que entró, devuelve el costo
+// promedio al que había antes (cuando se puede calcular) y borra el gasto.
+async function anularCompra(id) {
+  const c = C.comp.find(x => x.id === id);
+  if(!c || c.estado === 'anulada') return;
+  const ok = await customConfirm({ icon:'❌', title:'Anular compra',
+    msg:`Se sacarán del inventario los productos de esta compra${c.finanzasId ? ' y se borrará su gasto en Finanzas' : ''}.<br><br>La compra queda en el historial como anulada.`, okText:'Anular' });
+  if(!ok) return;
+  setLoading(true);
+  const avisos = [];
+  const motivo = `Anulación de compra a ${_nombreProveedor(c.proveedorId)}${c.numeroFactura ? ' · Fact. ' + c.numeroFactura : ''}`;
+  const hoyStr = hoy();
+  const porProducto = new Map();
+  c.items.filter(i => i.invId).forEach(i => { const a = porProducto.get(i.invId) || []; a.push(i); porProducto.set(i.invId, a); });
+  for(const [invId, its] of porProducto) {
+    const p = C.inv.find(x => x.id === invId);
+    if(!p) continue;
+    const cant = its.reduce((s, i) => s + i.cantidad, 0), valor = its.reduce((s, i) => s + i.cantidad * i.costo, 0);
+    const stock = p.stock - cant;
+    let costo = p.costo;
+    if(stock > 0 && p.costo != null) { const previo = (p.stock * p.costo - valor) / stock; if(previo >= 0) costo = previo; }
+    const [rm, ru] = await Promise.all([
+      sb.from('inventario_movimientos').insert({ inventario_id:invId, clinica_id:currentClinicaId, tipo:'salida', cantidad:cant, motivo, fecha:hoyStr }),
+      sb.from('inventario').update({ stock_actual:Math.max(0, stock), costo_unitario:costo != null ? Math.round(costo * 10000) / 10000 : null }).eq('id', invId),
+    ]);
+    if(rm.error || ru.error) avisos.push(p.nombre);
+  }
+  if(c.finanzasId) {
+    const { error } = await sb.from('finanzas').delete().eq('id', c.finanzasId);
+    if(error) avisos.push('el gasto en Finanzas');
+  }
+  const { error } = await sb.from('compras').update({ estado:'anulada' }).eq('id', id);
+  if(error) avisos.push('el estado de la compra');
+  closeModal('modal-compra-detalle');
+  await loadAll(); renderInventario(); setLoading(false);
+  toast(avisos.length ? `Compra anulada a medias: revisa ${avisos.join(', ')}.` : 'Compra anulada', avisos.length ? 'warning' : 'success');
 }
 
 // ════════════════════ CATÁLOGO INVENTARIO ════════════════════
@@ -16935,7 +17386,7 @@ const fmtC = n => 'C$ ' + Number(n||0).toLocaleString('es-NI',{minimumFractionDi
 // gasto de la clínica: ese dinero nunca fue suyo, ya salió de sus ingresos al
 // repartir. Tiene categoría propia para poder dejarlo fuera del balance.
 const CATEGORIA_PAGO_PROFESIONAL = 'pago_profesional';
-const CATEGORIAS_FIN_FIJAS = ['medicamento','insumo','equipo','general','factura',CATEGORIA_PAGO_PROFESIONAL];
+const CATEGORIAS_FIN_FIJAS = ['medicamento','insumo','equipo','general','factura','compras',CATEGORIA_PAGO_PROFESIONAL];
 const CATEGORIAS_FIN_DEFECTO = {
   ingreso: [
     {id:'consulta',      label:'Consulta',      icon:'👨‍⚕️'},
@@ -16953,6 +17404,7 @@ const CATEGORIAS_FIN_DEFECTO = {
     {id:'abarrotes',   label:'Abarrotes',          icon:'🛒'},
     {id:'desechos',    label:'Desechos clínicos',  icon:'☣️'},
     {id:'consumibles', label:'Consumibles',        icon:'🧴'},
+    {id:'compras',     label:'Compras a proveedores', icon:'🚚'},
     {id:'medicamento', label:'Medicamento',        icon:'💊'},
     {id:'insumo',      label:'Insumo',             icon:'🧹'},
     {id:'equipo',      label:'Equipo',             icon:'🔧'},

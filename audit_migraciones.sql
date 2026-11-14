@@ -126,7 +126,17 @@ WITH requisitos(orden, migracion, clase, objeto) AS (VALUES
   (18, 'acceso_red',                 'politica',    'accesos_bloqueados_superadmin'),
   (18, 'acceso_red',                 'disparador',  'profiles_proteger_acceso_remoto'),
   (18, 'acceso_red',                 'funcion',     'ip_cliente'),
-  (18, 'acceso_red',                 'funcion',     'mi_acceso_red')
+  (18, 'acceso_red',                 'funcion',     'mi_acceso_red'),
+
+  -- 19. Compras a proveedores y costo de los productos
+  (19, 'compras_proveedores',        'tabla',       'proveedores'),
+  (19, 'compras_proveedores',        'tabla',       'compras'),
+  (19, 'compras_proveedores',        'tabla',       'compra_items'),
+  (19, 'compras_proveedores',        'politica',    'proveedores_clinica'),
+  (19, 'compras_proveedores',        'politica',    'compras_clinica'),
+  (19, 'compras_proveedores',        'politica',    'compra_items_clinica'),
+  (19, 'compras_proveedores',        'columna',     'inventario.costo_unitario'),
+  (19, 'compras_proveedores',        'columna',     'factura_items.costo_unitario')
 
 ),
 

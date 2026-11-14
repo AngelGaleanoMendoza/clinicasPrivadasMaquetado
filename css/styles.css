@@ -2216,3 +2216,72 @@ body.lumi-abierta .toast-container{z-index:10060}
 .empresa-mes{font-size:12.5px;color:var(--text-light);white-space:nowrap}
 .empresa-nota{font-size:12.5px;margin:-4px 0 10px}
 @media(max-width:480px){.empresa-encabezado h2{font-size:17px}}
+
+/* ══ COMPRAS Y PROVEEDORES ══ */
+.prod-margen{font-size:12.5px;font-weight:600;color:#15803D;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.25);border-radius:10px;padding:8px 12px;margin:0}
+.prod-margen-neg{color:#B91C1C;background:rgba(239,68,68,.07);border-color:rgba(239,68,68,.3)}
+body.dark .prod-margen{color:#6EE7B7}
+body.dark .prod-margen-neg{color:#FCA5A5}
+.inv-margen{color:#15803D;font-weight:600}
+.inv-margen-neg{color:#B91C1C;font-weight:600}
+body.dark .inv-margen{color:#6EE7B7}
+body.dark .inv-margen-neg{color:#FCA5A5}
+
+.compras-filtros{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px}
+.compras-filtros select{padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-family:inherit;font-size:13px;min-width:0;max-width:100%}
+.compras-resumen{margin-bottom:14px}
+.compras-prov-tabla{border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:14px;background:var(--bg)}
+.compras-prov-fila{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(60px,1fr) auto;gap:10px;align-items:center;font-size:13px;padding:4px 0}
+.compras-prov-fila span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.compras-prov-barra{height:8px;border-radius:999px;background:var(--border);overflow:hidden}
+.compras-prov-barra span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--primary),var(--accent))}
+.compra-item,.prov-item{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--card);margin-bottom:8px}
+.compra-item{cursor:pointer;transition:border-color .15s}
+.compra-item:hover{border-color:var(--primary)}
+.compra-item-info,.prov-item-info{flex:1;min-width:0}
+.compra-item-titulo,.prov-item-nombre{font-weight:700;font-size:14px;overflow-wrap:anywhere}
+.compra-item-sub,.prov-item-sub{font-size:12px;color:var(--text-light);margin-top:2px;overflow-wrap:anywhere}
+.compra-item-total{font-size:15px;white-space:nowrap}
+.compra-anulada{opacity:.6}
+.compra-anulada .compra-item-total{text-decoration:line-through}
+.prov-inactivo{opacity:.65}
+.prov-item-acciones{display:flex;gap:6px;flex-shrink:0}
+.prov-item-acciones .btn{margin:0}
+
+.modal-compra{max-width:760px}
+.compra-prov-fila{display:flex;gap:8px;align-items:center}
+.compra-prov-fila select{flex:1;min-width:0}
+.compra-prov-fila .btn{margin:0;flex-shrink:0}
+.compra-check{display:flex!important;align-items:center;gap:8px;font-size:13px!important;text-transform:none!important;letter-spacing:0!important;cursor:pointer;margin-top:24px}
+.compra-check input{width:18px;height:18px;flex-shrink:0}
+.compra-lineas-cab{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin:16px 0 8px;font-weight:700;font-size:14px}
+.compra-lineas-cab .text-light{font-size:12px;font-weight:400}
+.compra-linea{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(80px,.8fr) minmax(100px,1fr) minmax(90px,.9fr) auto;gap:8px;align-items:end;padding:10px;border:1px solid var(--border);border-radius:12px;background:var(--bg);margin-bottom:8px}
+.compra-linea select,.compra-linea input{width:100%;min-width:0;padding:9px 10px;border:1.5px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-family:inherit;font-size:13px}
+.compra-campo{display:flex;flex-direction:column;gap:3px;font-size:11px;font-weight:600;color:var(--text-light);min-width:0}
+.compra-linea-sub{font-weight:700;font-size:13.5px;text-align:right;padding-bottom:10px;white-space:nowrap}
+.compra-quitar{margin:0!important;align-self:end}
+.compra-linea-margen{grid-column:1/-1;font-size:12px;font-weight:600;color:#15803D}
+body.dark .compra-linea-margen{color:#6EE7B7}
+.compra-linea-margen.prod-margen-neg{background:none;border:0;padding:0;color:#B91C1C}
+.compra-nota-producto{font-size:12px;margin:8px 0 0}
+.compra-total{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:14px;padding:14px 16px;border-radius:12px;background:var(--primary-light);font-size:15px}
+.compra-total strong{font-size:20px}
+.compra-detalle-datos{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.compra-detalle-datos div{background:var(--bg);border-radius:10px;padding:10px 12px}
+.compra-detalle-datos span{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:3px}
+.compra-detalle-datos strong{font-size:14px;overflow-wrap:anywhere}
+.compra-detalle-tabla{width:100%;border-collapse:collapse;font-size:13px}
+.compra-detalle-tabla th,.compra-detalle-tabla td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:right}
+.compra-detalle-tabla th:first-child,.compra-detalle-tabla td:first-child{text-align:left}
+.compra-detalle-tabla tfoot td{font-weight:800}
+@media(max-width:600px){
+  .compra-linea{grid-template-columns:1fr 1fr;padding:10px}
+  .compra-linea select{grid-column:1/-1}
+  .compra-linea-sub{grid-column:1;text-align:left;padding-bottom:0;align-self:center}
+  .compra-quitar{grid-column:2;justify-self:end;align-self:center}
+  .compra-check{margin-top:0}
+  .compra-item,.prov-item{flex-wrap:wrap}
+  .prov-item-acciones{width:100%;justify-content:flex-end}
+  .compras-filtros select{width:100%}
+}

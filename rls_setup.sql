@@ -1036,3 +1036,23 @@ BEGIN
                FOR ALL USING (public.is_superadmin()) WITH CHECK (public.is_superadmin())';
   END IF;
 END $$;
+
+
+-- ============================================================
+-- Compras a proveedores (migracion_compras_proveedores.sql)
+-- Cada clínica o empresa ve solo sus proveedores y sus compras. Se protege
+-- aquí también por si las tablas ya existen.
+-- ============================================================
+DO $$
+DECLARE t TEXT;
+BEGIN
+  FOREACH t IN ARRAY ARRAY['proveedores','compras','compra_items'] LOOP
+    IF to_regclass('public.' || t) IS NOT NULL THEN
+      EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
+      EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', t || '_clinica', t);
+      EXECUTE format('CREATE POLICY %I ON public.%I FOR ALL TO authenticated
+                        USING (public.is_superadmin() OR clinica_id = public.get_my_clinica_id())
+                        WITH CHECK (public.is_superadmin() OR clinica_id = public.get_my_clinica_id())', t || '_clinica', t);
+    END IF;
+  END LOOP;
+END $$;

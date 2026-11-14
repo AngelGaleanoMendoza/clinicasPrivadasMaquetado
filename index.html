@@ -22,7 +22,7 @@
 <!-- Lectura local de machotes. El archivo se procesa en el navegador antes de
      guardarlo; Mammoth extrae DOCX y PDF.js se carga al elegir un PDF. -->
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js" defer></script>
-<link rel="stylesheet" href="css/styles.css?v=20261114b">
+<link rel="stylesheet" href="css/styles.css?v=20261114c">
 </head>
 <body>
 <script>
@@ -841,7 +841,7 @@
             <div style="display:flex;gap:8px;flex-wrap:wrap" id="inv-action-btns">
               <button class="btn btn-secondary btn-sm" onclick="openModalEntrada()">📥 Entrada</button>
               <button class="btn btn-secondary btn-sm" onclick="openModalSalida()">📤 Salida</button>
-              <button class="btn btn-secondary btn-sm" onclick="openModalCompra()" title="Registrar compra de varios productos a la vez">🛒 Compra</button>
+              <button class="btn btn-secondary btn-sm" onclick="abrirNuevaCompra()" title="Registrar una compra a un proveedor, con su costo">🛒 Compra</button>
               <button class="btn btn-secondary btn-sm" id="btn-importar-minsa" onclick="abrirSelectorMINSA()" style="display:none">📋 Catálogo MINSA</button>
               <button class="btn btn-danger btn-sm" id="btn-borrar-inventario" onclick="eliminarTodoInventario()" style="display:none">🗑️ Borrar todo</button>
               <button class="btn btn-primary btn-sm" onclick="openModalProducto()">+ Producto</button>
@@ -851,6 +851,8 @@
           <div class="tabs" style="margin-bottom:0">
             <button class="tab active" id="tab-inv-productos"   onclick="switchInvTab('productos')">📦 Productos</button>
             <button class="tab"        id="tab-inv-movimientos" onclick="switchInvTab('movimientos')">🔄 Movimientos</button>
+            <button class="tab"        id="tab-inv-compras"     onclick="switchInvTab('compras')">🛒 Compras</button>
+            <button class="tab"        id="tab-inv-proveedores" onclick="switchInvTab('proveedores')">🚚 Proveedores</button>
             <button class="tab"        id="tab-inv-reportes"    onclick="switchInvTab('reportes')">📈 Reportes</button>
           </div>
         </div>
@@ -891,6 +893,34 @@
             </div>
             <div id="tabla-movimientos"></div>
             <div id="mov-empty" class="empty-state" style="display:none"><div class="empty-icon">🔄</div><p>Sin movimientos registrados</p></div>
+          </div>
+        </div>
+
+        <div id="inv-panel-compras" style="display:none">
+          <div class="card">
+            <div class="card-header"><h3>🛒 Compras a proveedores</h3><button class="btn btn-primary btn-sm" onclick="abrirNuevaCompra()">+ Nueva compra</button></div>
+            <div class="compras-filtros">
+              <div class="filter-chips" id="compras-periodos"></div>
+              <select id="compras-proveedor" onchange="renderCompras()" aria-label="Proveedor"></select>
+            </div>
+            <div id="compras-aviso"></div>
+            <div id="compras-resumen" class="stats-grid compras-resumen"></div>
+            <div id="compras-por-proveedor"></div>
+            <div id="tabla-compras"></div>
+          </div>
+        </div>
+
+        <div id="inv-panel-proveedores" style="display:none">
+          <div class="card">
+            <div class="card-header"><h3>🚚 Proveedores</h3><button class="btn btn-primary btn-sm" onclick="abrirProveedor()">+ Proveedor</button></div>
+            <div class="search-bar" style="margin-bottom:14px">
+              <div class="search-bar-input">
+                <span style="color:var(--text-light)">🔍</span>
+                <input type="text" id="prov-buscar" placeholder="Buscar proveedor..." oninput="renderProveedores()">
+              </div>
+            </div>
+            <div id="proveedores-aviso"></div>
+            <div id="tabla-proveedores"></div>
           </div>
         </div>
 
@@ -1160,6 +1190,74 @@
   </div>
 </div>
 
+<!-- MODAL PROVEEDOR -->
+<div class="modal-overlay" id="modal-proveedor">
+  <div class="modal">
+    <h2 id="modal-proveedor-title">🚚 Nuevo proveedor</h2>
+    <div class="form-grid">
+      <div class="form-group full"><label>Nombre o razón social *</label><input type="text" id="prov-nombre" placeholder="Distribuidora Ejemplo, S.A." autocomplete="off"></div>
+      <div class="form-group"><label>RUC o cédula</label><input type="text" id="prov-identificacion" placeholder="J0310000000000"></div>
+      <div class="form-group"><label>Persona de contacto</label><input type="text" id="prov-contacto" placeholder="Nombre del vendedor"></div>
+      <div class="form-group"><label>Teléfono</label><input type="tel" id="prov-telefono" placeholder="+505 0000 0000"></div>
+      <div class="form-group"><label>Correo</label><input type="email" id="prov-email" placeholder="ventas@proveedor.com"></div>
+      <div class="form-group full"><label>Dirección</label><input type="text" id="prov-direccion" placeholder="Ciudad, dirección"></div>
+      <div class="form-group full"><label>Notas</label><textarea id="prov-notas" placeholder="Condiciones de pago, días de entrega..." style="min-height:64px"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-proveedor')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarProveedor()">💾 Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL COMPRA -->
+<div class="modal-overlay" id="modal-compra">
+  <div class="modal modal-compra">
+    <h2>🛒 Nueva compra</h2>
+    <div class="form-grid">
+      <div class="form-group full"><label>Proveedor *</label>
+        <div class="compra-prov-fila">
+          <select id="compra-proveedor"></select>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="abrirProveedor(null,true)">+ Nuevo</button>
+        </div>
+      </div>
+      <div class="form-group"><label>Fecha *</label><input type="date" id="compra-fecha"></div>
+      <div class="form-group"><label>N.º de factura del proveedor</label><input type="text" id="compra-numero" placeholder="Opcional"></div>
+      <div class="form-group"><label>Forma de pago</label>
+        <select id="compra-metodo">
+          <option value="efectivo">💵 Efectivo</option>
+          <option value="transferencia">🏦 Transferencia</option>
+          <option value="tarjeta">💳 Tarjeta</option>
+          <option value="cheque">🧾 Cheque</option>
+        </select>
+      </div>
+      <div class="form-group compra-gasto"><label class="compra-check"><input type="checkbox" id="compra-gasto" checked> Anotar el pago como gasto en Finanzas</label></div>
+    </div>
+    <div class="compra-lineas-cab">
+      <span>Productos</span>
+      <span class="text-light" id="compra-ayuda-costo">Costo = lo que pagas al proveedor por unidad</span>
+    </div>
+    <div id="compra-lineas"></div>
+    <button type="button" class="btn btn-secondary btn-sm" onclick="agregarLineaCompra()">+ Agregar producto</button>
+    <p class="text-light compra-nota-producto">¿No está en la lista? Créalo primero con <strong>+ Producto</strong> en Inventario.</p>
+    <div class="form-group" style="margin-top:12px"><label>Notas</label><textarea id="compra-notas" placeholder="Opcional" style="min-height:56px"></textarea></div>
+    <div class="compra-total"><span>Total de la compra</span><strong id="compra-total">C$ 0.00</strong></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-compra')">Cancelar</button>
+      <button class="btn btn-primary" id="btn-guardar-compra" onclick="guardarCompra()">🛒 Registrar compra</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DETALLE DE COMPRA -->
+<div class="modal-overlay" id="modal-compra-detalle">
+  <div class="modal">
+    <h2 id="compra-detalle-titulo">🛒 Compra</h2>
+    <div id="compra-detalle-cuerpo"></div>
+    <div class="modal-footer" id="compra-detalle-acciones"></div>
+  </div>
+</div>
+
 <!-- MODAL PRODUCTO -->
 <div class="modal-overlay" id="modal-producto">
   <div class="modal">
@@ -1199,7 +1297,9 @@
       </div>
       <div class="form-group" id="prod-stock-wrap"><label>Stock actual</label><input type="number" id="prod-stock" placeholder="0" min="0"></div>
       <div class="form-group"><label>Stock mínimo (alerta)</label><input type="number" id="prod-stock-min" placeholder="0" min="0"></div>
-      <div class="form-group full"><label>Precio unitario (C$)</label><input type="number" id="prod-precio" placeholder="0.00" min="0" step="0.01"></div>
+      <div class="form-group"><label>Costo (C$) <span style="font-size:11px;color:var(--text-light);font-weight:400">— lo que pagas al proveedor</span></label><input type="number" id="prod-costo" placeholder="0.00" min="0" step="0.01" oninput="_margenProducto()"></div>
+      <div class="form-group"><label>Precio de venta (C$)</label><input type="number" id="prod-precio" placeholder="0.00" min="0" step="0.01" oninput="_margenProducto()"></div>
+      <div class="form-group full prod-margen" id="prod-margen" hidden></div>
       <div class="form-group full"><label>Descripción</label><textarea id="prod-descripcion" placeholder="Observaciones, proveedor, lote..." style="min-height:70px"></textarea></div>
       <div class="form-group" id="prod-vencimiento-wrap">
         <label>Fecha de vencimiento <span style="font-size:11px;color:var(--text-light);font-weight:400">(opcional)</span></label>
@@ -2849,7 +2949,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20261114b" defer></script>
+<script src="js/app.js?v=20261114c" defer></script>
 </body>
 </html>
 
