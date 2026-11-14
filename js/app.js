@@ -55,20 +55,46 @@ const VISTAS_CLINICAS = ['pacientes','expedientes','paciente-detalle','examenes-
   'mascota-detalle','hospitalizacion'];
 function esEmpresaMedica(clinica = currentClinica) { return clinica?.tipo === 'empresa_medica'; }
 
+// Solo presentación: los permisos, filtros de datos y cálculos siguen usando
+// el rol y el establecimiento reales, nunca estas etiquetas.
+function _etiquetaRol(rol) {
+  return ({admin:'Admin',medico:'Médico',medico_admin:'Médico Admin.',dr:'Dr.',dra:'Dra.',
+    recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',
+    farmaceutico:'Farmacéutico',odontologo:'Odontólogo',optometrista:'Optometrista',
+    oftalmologo:'Oftalmólogo',dermatologo:'Dermatólogo',admin_empresa:'Admin. Empresa'}[rol] || rol || 'Usuario');
+}
+
+function _contextoEstablecimiento() {
+  const rol = currentUser?.key;
+  const porRol = {optometrista:'optica',farmaceutico:'farmacia',odontologo:'dental',
+    oftalmologo:'oftalmologia',dermatologo:'dermatologia'};
+  // La empresa y la veterinaria tienen un contexto propio para todo su personal.
+  const tipo = esEmpresaMedica() || rol === 'admin_empresa' ? 'empresa_medica'
+    : currentClinica?.tipo === 'veterinaria' ? 'veterinaria'
+    : porRol[rol] || currentClinica?.tipo || 'clinica';
+  return ({
+    empresa_medica:{nombre:'empresa',etiqueta:'Empresa médica privada'},
+    optica:{nombre:'óptica',etiqueta:'Óptica / Optometría'},
+    farmacia:{nombre:'farmacia',etiqueta:'Farmacia'},
+    dental:{nombre:'clínica dental',etiqueta:'Clínica dental'},
+    oftalmologia:{nombre:'clínica oftalmológica',etiqueta:'Clínica oftalmológica'},
+    dermatologia:{nombre:'clínica dermatológica',etiqueta:'Clínica dermatológica'},
+    especialidad:{nombre:'clínica de especialidad',etiqueta:'Clínica de especialidad'},
+    veterinaria:{nombre:'clínica veterinaria',etiqueta:'Clínica veterinaria'},
+    clinica:{nombre:'clínica',etiqueta:'Clínica privada'}
+  }[tipo] || {nombre:'organización',etiqueta:'Establecimiento privado'});
+}
+
+function _textoEstablecimiento(texto) {
+  const nombre = _contextoEstablecimiento().nombre;
+  // Solo recibe textos de interfaz, antes de interpolar nombres o datos del usuario.
+  return texto.replace(/clínica\b/gi, palabra => palabra[0] === 'C'
+    ? nombre[0].toUpperCase() + nombre.slice(1) : nombre);
+}
+
 function actualizarIdentidadEstablecimiento() {
   const nombre = document.getElementById('sidebar-establecimiento-nombre');
   const tipo = document.getElementById('sidebar-establecimiento-tipo');
-  const etiquetas = {
-    clinica: 'Clínica privada',
-    optica: 'Óptica / Optometría',
-    oftalmologia: 'Clínica oftalmológica',
-    dental: 'Clínica dental',
-    dermatologia: 'Clínica dermatológica',
-    especialidad: 'Clínica de especialidad',
-    veterinaria: 'Clínica veterinaria',
-    farmacia: 'Farmacia',
-    empresa_medica: 'Empresa médica privada'
-  };
   const nombreVisible = currentClinica?.nombre?.trim() || 'LMD';
   if(nombre) {
     nombre.textContent = nombreVisible;
@@ -76,8 +102,15 @@ function actualizarIdentidadEstablecimiento() {
     nombre.classList.toggle('sidebar-nombre-largo', nombreVisible.length > 30);
   }
   if(tipo) tipo.textContent = currentClinica
-    ? (etiquetas[currentClinica.tipo] || 'Establecimiento privado')
+    ? _contextoEstablecimiento().etiqueta
     : 'Gestión médica y empresarial';
+  document.querySelectorAll('[data-texto-establecimiento]').forEach(el => {
+    el.textContent = _textoEstablecimiento(el.dataset.textoEstablecimiento);
+  });
+  const seccion = document.getElementById('menu-clinica-section');
+  if(seccion) seccion.textContent = _textoEstablecimiento('Clínica');
+  const rol = document.getElementById('sf-role');
+  if(rol && currentUser) rol.textContent = _etiquetaRol(currentUser.key);
 }
 
 // ════════════════════ PROCEDIMIENTOS OFTALMOLÓGICOS ════════════════════
@@ -1175,7 +1208,7 @@ async function entrarConPerfil(profile) {
     mostrarLoginAuthError('No existe una sesión válida de Supabase Auth.<br><small>Inicia sesión nuevamente o usa <strong>¿Olvidaste tu contraseña?</strong>.</small>');
     return false;
   }
-  const rolLabel = {admin:'Administración',medico:'Médico',medico_admin:'Médico Adm.',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',farmaceutico:'Farmacéutico',odontologo:'Odontólogo',optometrista:'Optometrista',oftalmologo:'Oftalmólogo',dermatologo:'Dermatólogo',admin_empresa:'Admin. Empresa'}[profile.rol]||profile.rol;
+  const rolLabel = _etiquetaRol(profile.rol);
   currentClinicaId = profile.clinica_id || null;
   // Obtener email desde todas las fuentes disponibles
   let emailFinal = (profile.email || '').trim().toLowerCase() || authUser.email?.trim().toLowerCase() || null;
@@ -2575,7 +2608,8 @@ async function navigate(view, patientId) {
   const mi=document.querySelector(`.menu-item[onclick*="'${view}'"]`);
   if(mi) mi.classList.add('active');
   const titles={dashboard:'Dashboard',expedientes:'Expedientes Clínicos','examenes-digitalizados':'Exámenes digitalizados',pacientes:'Pacientes',citas:'Citas',agendas:'Agendas',medicaciones:'Medicaciones',notas:'Notas Clínicas',atendidos:'Atendidos por Día',estadisticas:'Estadísticas',configuracion:'Configuración Clínica',exportar:'Exportar / Enviar','paciente-detalle':'Expediente del Paciente',admin:'Administración',inventario:'Inventario',finanzas:'Finanzas',contabilidad:'Contabilidad',procedimientos:'Procedimientos clínicos','procedimientos-oftalmo':'Procedimientos clínicos',farmacia:'Farmacia',clientes:'Clientes',mascotas:'Mascotas','mascota-detalle':'Ficha de la Mascota',hospitalizacion:'Hospitalización'};
-  document.getElementById('page-title').textContent = titles[view]||view;
+  document.getElementById('page-title').textContent = view==='configuracion'
+    ? _textoEstablecimiento(titles[view]) : (titles[view]||view);
   currentView=view;
   if(patientId) { if(view==='mascota-detalle') currentMascotaId=patientId; else currentPatientId=patientId; }
   // Guardar vista actual para restaurarla al recargar
@@ -3094,7 +3128,7 @@ function renderDashboardPorUsuario() {
           const atendidas = citasHoy.filter(c => c.medicoId === u.id && c.estado === 'completada').length;
           const pendientes = citasHoy.filter(c => c.medicoId === u.id && (c.estado === 'pendiente'||c.estado==='confirmada')).length;
           const total = citasHoy.filter(c => c.medicoId === u.id).length;
-          const rolLabel = {admin:'Administración',medico:'Médico',medico_admin:'Médico Adm.',recepcion:'Recepcionista',enfermeria:'Enfermería',farmaceutico:'Farmacéutico',optometrista:'Optometrista',oftalmologo:'Oftalmólogo',dermatologo:'Dermatólogo',admin_empresa:'Admin. Empresa'}[u.rol]||u.rol;
+          const rolLabel = _etiquetaRol(u.rol);
           const pct = total ? Math.round(atendidas/total*100) : 0;
           return `<div style="background:var(--bg);border-radius:12px;padding:14px;border:1.5px solid var(--border)">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
@@ -10994,7 +11028,7 @@ async function cargarUsuariosLogin() { /* reemplazado por login email+password *
 let selAgendasDoc = null;
 let selAgendasDate = hoy();
 
-const rolLabel2 = r => ({admin:'Administración',medico:'Médico',medico_admin:'Médico Adm.',dr:'Dr.',dra:'Dra.',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',farmaceutico:'Farmacéutico',odontologo:'Odontólogo',optometrista:'Optometrista',oftalmologo:'Oftalmólogo',dermatologo:'Dermatólogo'}[r]||r);
+const rolLabel2 = r => _etiquetaRol(r);
 
 function renderAgendas() {
   selAgendasDate = hoy();
@@ -17172,7 +17206,7 @@ function renderAdminClinicas() {
 function renderAdminUsuarios() {
   const el = document.getElementById('admin-usuarios-list');
   if(!el) return;
-  const rolLabel = r => ({admin:'Administración',medico:'Médico',medico_admin:'Médico Adm.',dr:'Dr.',dra:'Dra.',recepcion:'Recepcionista',enfermeria:'Enfermería',superadmin:'Super Admin',farmaceutico:'Farmacéutico',odontologo:'Odontólogo',optometrista:'Optometrista',oftalmologo:'Oftalmólogo',dermatologo:'Dermatólogo'}[r]||r);
+  const rolLabel = r => _etiquetaRol(r);
   const rolTag   = r => ({admin:'tag-blue',medico:'tag-cyan',medico_admin:'tag-cyan',dr:'tag-cyan',dra:'tag-cyan',recepcion:'tag-orange',enfermeria:'tag-green',farmaceutico:'tag-emerald',odontologo:'tag-blue',optometrista:'tag-cyan',oftalmologo:'tag-blue',dermatologo:'tag-purple'}[r]||'tag-gray');
   if(!adminUsuarios.length) {
     el.innerHTML = `<div class="empty-state"><div class="empty-icon">👥</div><p>No hay usuarios registrados.<br>Crea el primero con <strong>+ Nuevo Usuario</strong></p></div>`;
@@ -17908,7 +17942,7 @@ function renderDetallePanel(tab) {
 
   if(tab === 'usuarios') {
     const usuarios = adminUsuarios.filter(u=>u.clinica_id===id);
-    const rolLabel = r => ({admin:'Administrador',medico:'Médico',medico_admin:'Médico Adm.',recepcion:'Recepcionista',enfermeria:'Enfermería',farmaceutico:'Farmacéutico',superadmin:'Super Admin',odontologo:'Odontólogo',optometrista:'Optometrista',oftalmologo:'Oftalmólogo',dermatologo:'Dermatólogo'}[r]||r);
+    const rolLabel = r => _etiquetaRol(r);
     const rolTag   = r => ({admin:'tag-blue',medico:'tag-cyan',medico_admin:'tag-cyan',recepcion:'tag-orange',enfermeria:'tag-green',farmaceutico:'tag-emerald',odontologo:'tag-blue',optometrista:'tag-cyan',oftalmologo:'tag-blue',dermatologo:'tag-purple'}[r]||'tag-gray');
     document.getElementById('detalle-panel-usuarios').innerHTML = usuarios.length
       ? `<div class="table-wrap"><table>
@@ -19234,7 +19268,7 @@ function renderResumenFinanzas() {
   const statsEl  = document.getElementById('fin-stats');
   if(statsEl) statsEl.innerHTML = `
     <div class="stat-card"><div class="stat-icon si-green">💰</div>
-      <div class="stat-info"><h3 style="color:var(--success);font-size:20px">${fmtC(valIng)}</h3><p>${verBal?'Ingresos de la clínica':'Entradas del período'}</p></div></div>
+      <div class="stat-info"><h3 style="color:var(--success);font-size:20px">${fmtC(valIng)}</h3><p>${verBal?_textoEstablecimiento('Ingresos de la clínica'):'Entradas del período'}</p></div></div>
     <div class="stat-card"><div class="stat-icon ${utilidad>=0?'si-blue':'si-red'}">📊</div>
       <div class="stat-info"><h3 style="color:${utilidad>=0?'var(--primary)':'var(--danger)'};font-size:20px">${fmtC(utilidad)}</h3><p>${verBal?_tituloBalanceFinanzas():'Caja del período'}</p></div></div>
     <div class="stat-card"><div class="stat-icon si-orange">🧾</div>
@@ -19314,8 +19348,8 @@ function imprimirResumenFinanzas() {
     <div style="font-size:13px;color:#64748B;font-weight:600;margin-bottom:20px">Período: ${periodoLabel} · Generado: ${new Date().toLocaleString('es-ES')}</div>
 
     <div class="kpi-grid">
-      <div class="kpi green"><div class="kpi-val">${fmtC(kpiIng)}</div><div class="kpi-lbl">${verBal?'Ingresos de la clínica':'Entradas'}</div></div>
-      <div class="kpi red"><div class="kpi-val">${fmtC(kpiEgr)}</div><div class="kpi-lbl">${verBal?'Gastos de la clínica':'Salidas'}</div></div>
+      <div class="kpi green"><div class="kpi-val">${fmtC(kpiIng)}</div><div class="kpi-lbl">${verBal?_textoEstablecimiento('Ingresos de la clínica'):'Entradas'}</div></div>
+      <div class="kpi red"><div class="kpi-val">${fmtC(kpiEgr)}</div><div class="kpi-lbl">${verBal?_textoEstablecimiento('Gastos de la clínica'):'Salidas'}</div></div>
       <div class="kpi ${utilidad>=0?'blue':'red'}"><div class="kpi-val">${fmtC(utilidad)}</div><div class="kpi-lbl">${verBal?_tituloBalanceFinanzas():'Caja del período'}</div></div>
       <div class="kpi orange"><div class="kpi-val">${factData.length}</div><div class="kpi-lbl">${_docFactura().plural} (${fPag} pagadas)</div></div>
     </div>
@@ -19881,9 +19915,9 @@ function renderFacturaItemsUI() {
         oninput="updateFactItem(${item.id},'cant',parseFloat(this.value)||0)" style="width:65px;flex-shrink:0">
       <input type="number" value="${item.precio}" min="0" step="0.01" placeholder="Precio"
         oninput="updateFactItem(${item.id},'precio',parseFloat(this.value)||0)" style="width:100px;flex-shrink:0">
-      ${manual?`<input type="number" value="${item.ganancia??''}" min="0" step="0.01" placeholder="Gana clínica" class="fact-item-gana"
+      ${manual?`<input type="number" value="${item.ganancia??''}" min="0" step="0.01" placeholder="${_textoEstablecimiento('Gana clínica')}" class="fact-item-gana"
         oninput="updateFactItem(${item.id},'ganancia',Number.isFinite(parseFloat(this.value))?parseFloat(this.value):null)" style="width:110px;flex-shrink:0"
-        title="De lo cobrado, cuánto queda a la clínica">`:''}
+        title="${_textoEstablecimiento('De lo cobrado, cuánto queda a la clínica')}">`:''}
       <span class="fact-item-sub">${fmtC((item.cant||0)*(item.precio||0))}</span>
       <button onclick="removeFacturaItem(${item.id})" style="background:#FEF2F2;color:#B91C1C;border:none;border-radius:6px;padding:4px 0;width:32px;cursor:pointer;flex-shrink:0;font-size:13px" title="Quitar línea" aria-label="Quitar línea">✕</button>
     </div>`).join('');
@@ -20382,6 +20416,7 @@ function _etiquetaPeriodoFin() {
 }
 
 function renderBalanceFinanzas() {
+  const entidad = _contextoEstablecimiento().nombre;
   const el = document.getElementById('fin-balance');
   if(!el) return;
   if(!puedeVerBalance()) {
@@ -20400,25 +20435,25 @@ function renderBalanceFinanzas() {
   const avisos = [
     !_repartoDisponible ? '🛠️ Falta ejecutar <strong>migracion_balance_reparto.sql</strong> en Supabase para guardar los porcentajes.' : '',
     !bAv.sinReparto ? ''
-      : manual ? `⚠️ <strong>${fmtC(bAv.sinReparto)}</strong> se cobraron sin escribir cuánto quedaba a la clínica. Se cuentan como suyos; escribe el reparto si parte era del profesional.`
-      : `⚠️ Sin porcentaje configurado: <strong>${escAttr(nombresSinPct.join(', '))}</strong>. Esos ${fmtC(bAv.sinReparto)} se cuentan enteros para la clínica hasta que lo configures.`,
-    bAv.cobrosSinDetalle ? `ℹ️ ${fmtC(bAv.cobrosSinDetalle)} de cobros cuyo detalle ya no está: se cuentan enteros para la clínica.` : '',
-    bAv.noRepartible ? `ℹ️ ${fmtC(bAv.noRepartible)} cobrados por encima del detalle de las líneas (impuesto u otros conceptos): cuentan para la clínica y no se reparten.` : '',
+      : manual ? `⚠️ <strong>${fmtC(bAv.sinReparto)}</strong> se cobraron sin escribir cuánto quedaba a la ${entidad}. Se cuentan como suyos; escribe el reparto si parte era del profesional.`
+      : `⚠️ Sin porcentaje configurado: <strong>${escAttr(nombresSinPct.join(', '))}</strong>. Esos ${fmtC(bAv.sinReparto)} se cuentan enteros para la ${entidad} hasta que lo configures.`,
+    bAv.cobrosSinDetalle ? `ℹ️ ${fmtC(bAv.cobrosSinDetalle)} de cobros cuyo detalle ya no está: se cuentan enteros para la ${entidad}.` : '',
+    bAv.noRepartible ? `ℹ️ ${fmtC(bAv.noRepartible)} cobrados por encima del detalle de las líneas (impuesto u otros conceptos): cuentan para la ${entidad} y no se reparten.` : '',
     bAv.anulados ? `ℹ️ ${fmtC(bAv.anulados)} corresponden a ${_docFactura().plural.toLowerCase()} anuladas: su cobro no cuenta como venta del período.` : '',
     _datosTruncados() ? '⚠️ El período tiene más movimientos de los que se cargan de una vez: elige un período más corto para que el balance sea exacto.' : '',
     r.estimados ? `ℹ️ ${r.estimados} línea(s) se facturaron antes de configurar el reparto y usan el porcentaje actual (marcadas con *).` : '',
   ].filter(Boolean).map(t=>`<div class="balance-aviso">${t}</div>`).join('');
 
   const tabla = r.grupos.length ? `<div class="table-wrap"><table class="balance-tabla">
-    <thead><tr><th>Tipo de servicio</th><th class="num">Cantidad</th><th class="num">Total cobrado</th><th class="num">${manual?'Reparto':'% clínica'}</th><th class="num">Queda a la clínica</th><th class="num">Profesionales</th></tr></thead>
+    <thead><tr><th>Tipo de servicio</th><th class="num">Cantidad</th><th class="num">Total cobrado</th><th class="num">${manual?'Reparto':`% ${entidad}`}</th><th class="num">Queda a la ${entidad}</th><th class="num">Profesionales</th></tr></thead>
     <tbody>${r.grupos.map(g=>{
       const t = _tipoServicio(g.tipo), p = _pctGrupoBalance(g);
       return `<tr>
         <td class="tipo">${t.icon} ${escAttr(t.label)}</td>
         <td class="num" data-label="Cantidad">${g.cantidad.toLocaleString('es-NI')}</td>
         <td class="num" data-label="Total cobrado">${fmtC(g.total)}</td>
-        <td class="num" data-label="${manual?'Reparto':'% clínica'}">${p?`<span${p.mixto?' title="Porcentajes distintos en el período: se muestra el efectivo"':''}>${p.texto}</span>`:`<span class="tag tag-orange" style="font-size:10px">${manual?'Sin escribir':'Sin %'}</span>`}${g.sinPct>0&&p?' <span class="tag tag-orange" style="font-size:10px">parcial</span>':''}</td>
-        <td class="num balance-clinica" data-label="Queda a la clínica">${fmtC(g.clinica)}</td>
+        <td class="num" data-label="${manual?'Reparto':`% ${entidad}`}">${p?`<span${p.mixto?' title="Porcentajes distintos en el período: se muestra el efectivo"':''}>${p.texto}</span>`:`<span class="tag tag-orange" style="font-size:10px">${manual?'Sin escribir':'Sin %'}</span>`}${g.sinPct>0&&p?' <span class="tag tag-orange" style="font-size:10px">parcial</span>':''}</td>
+        <td class="num balance-clinica" data-label="Queda a la ${entidad}">${fmtC(g.clinica)}</td>
         <td class="num" data-label="Profesionales">${fmtC(g.conPct-g.clinicaRep)}</td>
       </tr>`;
     }).join('')}</tbody>
@@ -20426,8 +20461,8 @@ function renderBalanceFinanzas() {
       <td class="tipo">Total</td>
       <td class="num" data-label="Cantidad">${r.cantidad.toLocaleString('es-NI')}</td>
       <td class="num" data-label="Total cobrado">${fmtC(r.total)}</td>
-      <td class="num" data-label="% clínica">${r.total-r.sinPct>0?_fmtPct(r.clinicaRep/(r.total-r.sinPct)*100):'—'}</td>
-      <td class="num balance-clinica" data-label="Queda a la clínica">${fmtC(r.clinica)}</td>
+      <td class="num" data-label="% ${entidad}">${r.total-r.sinPct>0?_fmtPct(r.clinicaRep/(r.total-r.sinPct)*100):'—'}</td>
+      <td class="num balance-clinica" data-label="Queda a la ${entidad}">${fmtC(r.clinica)}</td>
       <td class="num" data-label="Profesionales">${fmtC(r.profesionales)}</td>
     </tr></tfoot></table></div>`
     : `<div class="empty-state" style="padding:28px"><div class="empty-icon">⚖️</div><p>No hay ${_docFactura().plural.toLowerCase()} pagadas en este período</p></div>`;
@@ -20444,11 +20479,11 @@ function renderBalanceFinanzas() {
       </div>
     </div>
     ${esEmpresaMedica() ? `<div class="balance-enlace-contable"><p>El balance general contable está en Contabilidad → Balance</p><button type="button" class="btn btn-secondary btn-sm" onclick="contTab='balance'; navigate('contabilidad')">Ver balance contable →</button></div>` : ''}
-    <p class="balance-nota">Período: ${escAttr(_etiquetaPeriodoFin())}. Cuenta el dinero el día que entra en caja, no el día que se emitió el documento. De cada cobro solo entra la parte de la clínica; la del profesional se informa aparte y no se suma ni se resta.</p>
+    <p class="balance-nota">Período: ${escAttr(_etiquetaPeriodoFin())}. Cuenta el dinero el día que entra en caja, no el día que se emitió el documento. De cada cobro solo entra la parte de la ${entidad}; la del profesional se informa aparte y no se suma ni se resta.</p>
     ${avisos}
     <div class="stats-grid balance-kpis">
-      <div class="stat-card"><div class="stat-icon si-green">🏥</div><div class="stat-info"><h3 style="color:var(--success)">${fmtC(b.ingresos)}</h3><p>Ingresos de la clínica</p></div></div>
-      <div class="stat-card"><div class="stat-icon si-red">📤</div><div class="stat-info"><h3 style="color:var(--danger)">${fmtC(b.gastos)}</h3><p>Gastos de la clínica</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-green">🏥</div><div class="stat-info"><h3 style="color:var(--success)">${fmtC(b.ingresos)}</h3><p>Ingresos de la ${entidad}</p></div></div>
+      <div class="stat-card"><div class="stat-icon si-red">📤</div><div class="stat-info"><h3 style="color:var(--danger)">${fmtC(b.gastos)}</h3><p>Gastos de la ${entidad}</p></div></div>
       <div class="stat-card"><div class="stat-icon ${b.balance>=0?'si-blue':'si-red'}"><span>⚖️</span></div><div class="stat-info"><h3 style="color:${b.balance>=0?'var(--primary)':'var(--danger)'}">${fmtC(b.balance)}</h3><p>Balance</p></div></div>
       <div class="stat-card balance-informativo"><div class="stat-icon si-orange">👨‍⚕️</div><div class="stat-info"><h3>${fmtC(b.profesionales)}</h3><p>Corresponde a profesionales · informativo</p></div></div>
     </div>
@@ -20461,9 +20496,9 @@ function renderBalanceFinanzas() {
     <div class="balance-desglose" style="margin-top:10px">
       <div><span>Corresponde a profesionales de lo cobrado</span><strong>${fmtC(b.profesionales)}</strong></div>
       <div><span>Pagado a profesionales en el período</span><strong>${fmtC(b.pagoProfesional)}</strong></div>
-      <div style="border-bottom:none"><small style="color:var(--text-light);line-height:1.5">Ninguna de estas dos cifras entra en el balance: ese dinero nunca fue de la clínica. Registra lo que les pagues con la categoría <strong>👨‍⚕️ Pago a profesionales</strong> para que no se descuente como gasto propio.</small></div>
+      <div style="border-bottom:none"><small style="color:var(--text-light);line-height:1.5">Ninguna de estas dos cifras entra en el balance: ese dinero nunca fue de la ${entidad}. Registra lo que les pagues con la categoría <strong>👨‍⚕️ Pago a profesionales</strong> para que no se descuente como gasto propio.</small></div>
     </div>
-    <p class="balance-nota" style="margin-top:14px">De cada servicio, la parte de la clínica ${manual?'es la que se escribió al cobrar':'sale del porcentaje de su tipo'}; el resto corresponde al profesional.</p>
+    <p class="balance-nota" style="margin-top:14px">De cada servicio, la parte de la ${entidad} ${manual?'es la que se escribió al cobrar':'sale del porcentaje de su tipo'}; el resto corresponde al profesional.</p>
     ${tabla}
   </div>`;
 
@@ -20475,14 +20510,14 @@ function renderBalanceFinanzas() {
         <button type="button" class="balance-modo${(manual?'manual':'porcentaje')===id?' activo':''}"
           onclick="cambiarModoBalance('${id}')" aria-pressed="${(manual?'manual':'porcentaje')===id}">
           <span class="balance-modo-icon">${icon}</span>
-          <span><strong>${titulo}</strong><small>${desc}</small></span>
+          <span><strong>${titulo}</strong><small>${_textoEstablecimiento(desc)}</small></span>
         </button>`).join('')}
   </div>`;
 
   const config = `<div class="card" style="margin-bottom:18px">
-    <div class="card-header"><h3>⚙️ Cómo se calcula la parte de la clínica</h3></div>
+    <div class="card-header"><h3>⚙️ Cómo se calcula la parte de la ${entidad}</h3></div>
     ${modos}
-    ${manual ? `<p class="balance-nota" style="margin-top:14px">Al generar una factura aparece una casilla <strong>Gana clínica</strong> junto al precio de cada línea: ahí se escribe cuánto de lo cobrado queda a la clínica. Lo ya cobrado no cambia si vuelves al modo por porcentaje.</p>`
+    ${manual ? `<p class="balance-nota" style="margin-top:14px">Al generar una factura aparece una casilla <strong>Gana ${entidad}</strong> junto al precio de cada línea: ahí se escribe cuánto de lo cobrado queda a la ${entidad}. Lo ya cobrado no cambia si vuelves al modo por porcentaje.</p>`
     : `<p class="balance-nota" style="margin-top:14px">Por tipo de servicio. Se fija en cada línea al emitir o cobrar la factura, así que cambiarlo no altera lo ya cobrado. Deja vacío el tipo que no aplique.</p>
     <div class="balance-config-grid">${TIPOS_SERVICIO_FACTURA.map(t=>{
       const pct = _porcentajeClinica(t.id);
@@ -20511,7 +20546,7 @@ function renderBalanceFinanzas() {
           </div>
           <div class="balance-linea-montos">
             <div><small>Cobrado</small><strong>${fmtC(l.total)}</strong></div>
-            <div><small>Clínica ${l.manual?'a mano':l.pct==null?'':_fmtPct(l.pct)+(l.estimado?'*':'')}</small><strong class="balance-clinica">${l.clinica==null?'Sin repartir':fmtC(l.clinica)}</strong></div>
+            <div><small>${_textoEstablecimiento('Clínica')} ${l.manual?'a mano':l.pct==null?'':_fmtPct(l.pct)+(l.estimado?'*':'')}</small><strong class="balance-clinica">${l.clinica==null?'Sin repartir':fmtC(l.clinica)}</strong></div>
           </div>
         </div>`;
       }).join('')}</div>
@@ -20549,7 +20584,7 @@ async function cambiarModoBalance(modo) {
 
 function _ejemploReparto(pct) {
   if(pct==null || !Number.isFinite(pct) || pct<0 || pct>100) return '&nbsp;';
-  return `De ${fmtC(100)}: clínica ${fmtC(pct)} · profesional ${fmtC(100-pct)}`;
+  return `De ${fmtC(100)}: ${_contextoEstablecimiento().nombre} ${fmtC(pct)} · profesional ${fmtC(100-pct)}`;
 }
 
 // El campo es de texto: en teléfonos en español se escribe "35,5", que un
@@ -20618,6 +20653,7 @@ async function guardarRepartoServicios() {
 }
 
 function imprimirBalanceReparto() {
+  const entidad = _contextoEstablecimiento().nombre;
   if(!puedeVerBalance()) { toast('El balance solo está disponible para el médico administrativo o el administrador de la empresa','error'); return; }
   const cfg = getClinicaConfig();
   const {from,to} = getFinDateRange();
@@ -20634,7 +20670,7 @@ function imprimirBalanceReparto() {
     <div style="font-size:13px;color:#64748B;font-weight:600;margin-bottom:20px">Período: ${escAttr(periodo)} · Generado: ${new Date().toLocaleString('es-ES')}</div>
 
     <div class="kpi-grid">
-      <div class="kpi green"><div class="kpi-val" style="${kpiVal};color:#15803D">${fmtC(b.ingresos)}</div><div class="kpi-lbl">Ingresos de la clínica</div></div>
+      <div class="kpi green"><div class="kpi-val" style="${kpiVal};color:#15803D">${fmtC(b.ingresos)}</div><div class="kpi-lbl">Ingresos de la ${entidad}</div></div>
       <div class="kpi red"><div class="kpi-val" style="${kpiVal};color:#B91C1C">${fmtC(b.gastos)}</div><div class="kpi-lbl">Gastos</div></div>
       <div class="kpi blue"><div class="kpi-val" style="${kpiVal}">${fmtC(b.balance)}</div><div class="kpi-lbl">Balance</div></div>
       <div class="kpi orange"><div class="kpi-val" style="${kpiVal}">${fmtC(b.profesionales)}</div><div class="kpi-lbl">Profesionales · informativo</div></div>
@@ -20647,21 +20683,21 @@ function imprimirBalanceReparto() {
       <tr><td>Gastos</td><td style="${num};color:#B91C1C">−${fmtC(b.gastos)}</td></tr>
       <tr style="font-weight:800;background:#F1F5F9"><td>Balance</td><td style="${num}">${fmtC(b.balance)}</td></tr>
     </tbody></table>
-    <p style="font-size:11px;color:#64748B;margin:0 0 6px">Cuenta el dinero el día que entra en caja, no el día de emisión del documento. Lo que corresponde a profesionales (${fmtC(b.profesionales)}) y lo que se les pagó (${fmtC(b.pagoProfesional)}) quedan fuera de todas las sumas: ese dinero nunca fue de la clínica.${b.sinReparto?` Incluye ${fmtC(b.sinReparto)} cobrados sin reparto acordado, contados enteros para la clínica.`:''}</p>
+    <p style="font-size:11px;color:#64748B;margin:0 0 6px">Cuenta el dinero el día que entra en caja, no el día de emisión del documento. Lo que corresponde a profesionales (${fmtC(b.profesionales)}) y lo que se les pagó (${fmtC(b.pagoProfesional)}) quedan fuera de todas las sumas: ese dinero nunca fue de la ${entidad}.${b.sinReparto?` Incluye ${fmtC(b.sinReparto)} cobrados sin reparto acordado, contados enteros para la ${entidad}.`:''}</p>
 
     <div class="section-title">⚖️ Balance por tipo de servicio</div>
-    ${r.grupos.length ? `<table style="margin-bottom:12px"><thead><tr><th>Tipo</th><th style="${num}">Cantidad</th><th style="${num}">Total cobrado</th><th style="${num}">% clínica</th><th style="${num}">Queda a la clínica</th><th style="${num}">Profesionales</th></tr></thead>
+    ${r.grupos.length ? `<table style="margin-bottom:12px"><thead><tr><th>Tipo</th><th style="${num}">Cantidad</th><th style="${num}">Total cobrado</th><th style="${num}">% ${entidad}</th><th style="${num}">Queda a la ${entidad}</th><th style="${num}">Profesionales</th></tr></thead>
     <tbody>${r.grupos.map(g=>{
       const t = _tipoServicio(g.tipo), p = _pctGrupoBalance(g);
       return `<tr><td>${t.icon} ${escAttr(t.label)}</td><td style="${num}">${g.cantidad.toLocaleString('es-NI')}</td><td style="${num}">${fmtC(g.total)}</td><td style="${num}">${p?p.texto:'Sin reparto'}</td><td style="${num};font-weight:700;color:#15803D">${fmtC(g.clinica)}</td><td style="${num}">${fmtC(g.conPct-g.clinicaRep)}</td></tr>`;
     }).join('')}
     <tr style="font-weight:800;background:#F1F5F9"><td>Total</td><td style="${num}">${r.cantidad.toLocaleString('es-NI')}</td><td style="${num}">${fmtC(r.total)}</td><td style="${num}">${r.total-r.sinPct>0?_fmtPct(r.clinicaRep/(r.total-r.sinPct)*100):'—'}</td><td style="${num};color:#15803D">${fmtC(r.clinica)}</td><td style="${num}">${fmtC(r.profesionales)}</td></tr>
     </tbody></table>` : '<p style="color:#94A3B8;text-align:center;padding:16px">Sin facturas pagadas en este período</p>'}
-    ${r.sinPct>0?`<p style="font-size:11px;color:#B45309;margin:0 0 6px">Sin reparto acordado: ${fmtC(r.sinPct)} se cuentan enteros para la clínica. Configura el porcentaje o escribe la ganancia si parte era del profesional.</p>`:''}
+    ${r.sinPct>0?`<p style="font-size:11px;color:#B45309;margin:0 0 6px">Sin reparto acordado: ${fmtC(r.sinPct)} se cuentan enteros para la ${entidad}. Configura el porcentaje o escribe la ganancia si parte era del profesional.</p>`:''}
     ${r.estimados?`<p style="font-size:11px;color:#64748B;margin:0 0 6px">* Línea facturada antes de configurar el reparto: se usa el porcentaje actual.</p>`:''}
 
     ${lineas.length ? `<div class="section-title" style="margin-top:18px">📋 Detalle de servicios cobrados</div>
-    <table><thead><tr><th>Fecha</th><th>Factura</th><th>Paciente</th><th>Servicio</th><th style="${num}">Cobrado</th><th style="${num}">% clínica</th><th style="${num}">Clínica</th></tr></thead>
+    <table><thead><tr><th>Fecha</th><th>Factura</th><th>Paciente</th><th>Servicio</th><th style="${num}">Cobrado</th><th style="${num}">% ${entidad}</th><th style="${num}">Clínica</th></tr></thead>
     <tbody>${lineas.map(l=>{
       const t = _tipoServicio(l.tipo);
       return `<tr><td style="white-space:nowrap">${formatFecha(l.factura.fecha)}</td><td style="white-space:nowrap"><code style="font-size:10px">${escAttr(l.factura.numero||'#'+l.factura.id)}</code></td><td style="white-space:nowrap">${escAttr(l.factura.pacienteNombre||'—')}</td><td>${t.icon} ${escAttr(l.item.descripcion||t.label)}${l.item.cantidad>1?` ×${l.item.cantidad.toLocaleString('es-NI')}`:''}</td><td style="${num}">${fmtC(l.total)}</td><td style="${num}">${l.manual?'a mano':l.sinReparto?'sin reparto':_fmtPct(l.pct)+(l.estimado?'*':'')}</td><td style="${num};font-weight:700;color:#15803D">${fmtC(l.clinica)}</td></tr>`;

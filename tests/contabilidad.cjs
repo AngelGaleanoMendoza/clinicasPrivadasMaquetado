@@ -76,10 +76,12 @@ const preambulo=`
   ${extraer('_pctMargen')}
   ${extraer('confirmarMovMasivo')}
   ${bloque('const TIPOS_SERVICIO_FACTURA', 'async function anularFactura')}
-  ${['_tituloBalanceFinanzas','puedeVerBalance','getFinDateRange','renderFinanzas','switchFinTab',
+  ${['_etiquetaRol','_contextoEstablecimiento','_textoEstablecimiento','actualizarIdentidadEstablecimiento',
+    '_tituloBalanceFinanzas','puedeVerBalance','getFinDateRange','renderFinanzas','switchFinTab',
     'renderResumenFinanzas','imprimirResumenFinanzas'].map(extraer).join('\n')}
   window.__estado=(o)=>{ for(const k of Object.keys(o.C||{})) C[k]=JSON.parse(JSON.stringify(o.C[k]));
     if('tipo' in o) { currentClinica.tipo=o.tipo; currentUser.key=o.tipo==='empresa_medica'?'admin_empresa':'medico_admin'; }
+    if('rol' in o) currentUser.key=o.rol;
     if('confirmar' in o) __confirmar=o.confirmar; if('periodo' in o) contPeriodo=o.periodo; if('tab' in o) contTab=o.tab; if('mov' in o) { _movItems=o.mov; _movTipo='salida'; } };
   Object.assign(window,{C,fromVenta,fromLote,fromCompra,fromCliCom,_asignarLotes,_stockSinLote,_valorInventario,_estadoResultados,_balanceGeneral,_rangoCont,
     abrirNuevaVenta,agregarLineaVenta,cambiarLineaVenta,guardarVenta,_lineasV:()=>_lineasVenta,_ajustarCondicionVenta,_ajustarIvaVenta,
@@ -122,6 +124,45 @@ const de=(ll,t,op)=>ll.filter(q=>q.t===t&&q.op===op);
   try {
     const page=await browser.newPage();
     await abrir(page);
+
+    // La cuenta administrativa, la empresa y las especialidades usan sus
+    // propios términos. El usuario sin permiso de reparto sigue viendo caja bruta.
+    for(const [tipo,rol,entidad,verBalance] of [
+      ['empresa_medica','admin_empresa','empresa',true],
+      ['clinica','medico_admin','clínica',true],
+      ['optica','medico_admin','óptica',true],
+      ['farmacia','medico_admin','farmacia',true],
+      ['clinica','optometrista','óptica',false],
+      ['clinica','admin','clínica',false],
+      ['dental','medico_admin','clínica dental',true]
+    ]) {
+      const datos=await page.evaluate(async({tipo,rol})=>{
+        __estado({tipo,rol,C:{fin:[{tipo:'ingreso',monto:500,descripcion:'Venta de productos',fecha:getFinDateRange().to},{tipo:'egreso',monto:115,descripcion:'Pago a proveedor',fecha:getFinDateRange().to}],fact:[],factItems:[],reparto:[]}});
+        actualizarIdentidadEstablecimiento();
+        finTab='resumen'; await navigate('finanzas'); __pdf.length=0; imprimirResumenFinanzas();
+        const resumen={texto:document.getElementById('fin-stats').textContent,pdf:__pdf.at(-1).body};
+        if(puedeVerBalance()) {renderBalanceFinanzas();imprimirBalanceReparto();}
+        return {resumen,balance:document.getElementById('fin-balance').textContent,pdfBalance:__pdf.at(-1).body,
+          ingreso:_textoEstablecimiento('Ingresos de la clínica'), permiso:puedeVerBalance()};
+      },{tipo,rol});
+      assert.equal(datos.ingreso,'Ingresos de la '+entidad);
+      assert.equal(datos.permiso,verBalance,'Las etiquetas no conceden acceso al reparto');
+      assert.match(datos.resumen.texto,/C\$ 500\.00[\s\S]*C\$ 385\.00/,'Mismos importes después del cambio de etiquetas');
+      if(verBalance) {
+        for(const texto of [datos.resumen.texto,datos.resumen.pdf,datos.balance,datos.pdfBalance]) {
+          assert(texto.includes('Ingresos de la '+entidad));
+          if(entidad==='empresa'||entidad==='óptica'||entidad==='farmacia') assert(!/clínica/i.test(texto),'Sin términos clínicos en '+entidad);
+        }
+      } else assert.match(datos.resumen.texto,/Entradas del período/);
+      for(const width of [360,390,430,1280]) for(const dark of [false,true]) {
+        await page.setViewportSize({width,height:900});
+        await page.evaluate(dark=>{document.body.classList.toggle('dark',dark);document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById('view-finanzas').classList.add('active');},dark);
+        const fuera=await page.locator('#fin-stats').evaluate(el=>[...el.querySelectorAll('h3,p')].filter(e=>{const r=e.getBoundingClientRect();return r.right>innerWidth+1||r.left<0;}).map(e=>e.textContent));
+        assert.deepEqual(fuera,[],`${rol} ${tipo} ${width}px ${dark?'oscuro':'claro'}: etiquetas sin desbordes`);
+        if(width===360||width===1280) await page.screenshot({path:path.join(process.env.TEMP||'/tmp',`roles-${tipo}-${rol}-${width}-${dark?'oscuro':'claro'}.png`),fullPage:true,animations:'disabled'});
+      }
+    }
+    console.log('OK: ingresos, gastos, roles e impresos por empresa/óptica/farmacia/clínica; mismos importes y permisos, móvil y escritorio en ambos temas.');
 
     // Finanzas solo cambia su nombre en la empresa; Contabilidad conserva el
     // balance de activos/pasivos. Se pulsa el botón con navigate() real.

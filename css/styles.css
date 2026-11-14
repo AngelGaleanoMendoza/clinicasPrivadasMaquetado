@@ -132,7 +132,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 .sf-avatar{width:38px;height:38px;background:linear-gradient(135deg,#2563EB,#06B6D4);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;flex-shrink:0}
 .sf-info{flex:1;min-width:0}
 .sf-info p{color:#fff;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sf-info span{color:var(--sidebar-text);font-size:11px}
+.sf-info span{display:block;color:var(--sidebar-text);font-size:11px;line-height:1.4;overflow-wrap:anywhere}
 .btn-logout{width:100%;padding:10px 14px;background:rgba(239,68,68,.12);border:1.5px solid rgba(239,68,68,.2);color:#FCA5A5;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;letter-spacing:.02em;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px}
 .btn-logout:hover,.btn-logout:active{background:rgba(239,68,68,.28);border-color:rgba(239,68,68,.45);color:#fff}
 

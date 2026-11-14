@@ -48,7 +48,7 @@ const preambulo=`
   const _saldoVenta=v=>v.estado==='anulada'?0:v.total-v.cobrado;
   ${permisos}
   ${empresa}
-  ${['actualizarIdentidadEstablecimiento','permisosEfectivos','hasPermiso','puedeVerBalance','puedeGestionarProcedimientosClinicos','applyRoleMenu','_syncBuscadorGlobal',
+  ${['_etiquetaRol','_contextoEstablecimiento','_textoEstablecimiento','actualizarIdentidadEstablecimiento','permisosEfectivos','hasPermiso','puedeVerBalance','puedeGestionarProcedimientosClinicos','applyRoleMenu','_syncBuscadorGlobal',
      '_permisosDisponiblesUsuario','_ajustarRolesPorClinica','_ajustarClinicasPorRol','renderPermisosModal','togglePermLabel','onRolChange','fillClinicaSelect',
      'renderDashboardEmpresa','renderNavQuickGrid'].map(extraer).join('\n')}
   window.__set=o=>{ if('sa' in o) superAdmin=o.sa; if('user' in o) currentUser=o.user; if('clinica' in o) currentClinica=o.clinica; };
@@ -116,6 +116,40 @@ const abrir=async p=>{
     assert.deepEqual(menu.rapidos,['Estadísticas','Inventario','Finanzas','Contabilidad','Exportar']);
     assert.equal(menu.buscador,'none','No hay pacientes que buscar');
     assert.equal(menu.identidad,'Empresa médica privada','La barra lateral dice qué es el establecimiento');
+
+    // Los textos se recalculan por rol/contexto, sin modificar nombres propios
+    // ni dejar etiquetas de la sesión o del establecimiento anterior.
+    for(const [rol,tipo,entidad,etiqueta] of [
+      ['admin_empresa','empresa_medica','empresa','Empresa médica privada'],
+      ['admin','clinica','clínica','Clínica privada'],
+      ['medico_admin','optica','óptica','Óptica / Optometría'],
+      ['optometrista','clinica','óptica','Óptica / Optometría'],
+      ['farmaceutico','clinica','farmacia','Farmacia'],
+      ['odontologo','clinica','clínica dental','Clínica dental'],
+      ['oftalmologo','clinica','clínica oftalmológica','Clínica oftalmológica'],
+      ['dermatologo','clinica','clínica dermatológica','Clínica dermatológica'],
+      ['admin','veterinaria','clínica veterinaria','Clínica veterinaria'],
+      ['superadmin','empresa_medica','empresa','Empresa médica privada'],
+      ['superadmin','optica','óptica','Óptica / Optometría'],
+      ['admin','clinica','clínica','Clínica privada']
+    ]) {
+      const textos=await page.evaluate(({rol,tipo})=>{
+        __set({sa:rol==='superadmin',user:{id:'u1',key:rol,permisos:null},clinica:{id:9,tipo,nombre:'Clínica en el nombre registrado'}});
+        applyRoleMenu();
+        return {tipo:document.getElementById('sidebar-establecimiento-tipo').textContent,
+          nombre:document.getElementById('sidebar-establecimiento-nombre').textContent,
+          inventario:document.querySelector('#view-inventario [data-texto-establecimiento]').textContent,
+          respaldo:document.querySelector('#view-exportar [data-texto-establecimiento]').textContent,
+          rol:document.getElementById('sf-role').textContent};
+      },{rol,tipo});
+      assert.equal(textos.tipo,etiqueta);
+      assert.equal(textos.nombre,'Clínica en el nombre registrado');
+      assert.equal(textos.inventario,'📦 Inventario de la '+entidad);
+      assert.equal(textos.respaldo,'📤 Respaldo de la '+entidad);
+      assert(!textos.rol.includes('_'),'Se muestra el nombre del rol, no su clave técnica');
+      if(rol==='admin') assert.equal(textos.rol,'Admin');
+    }
+    await page.evaluate(()=>__set({sa:false,user:{id:'u1',key:'admin_empresa',permisos:null},clinica:{id:9,nombre:'Distribuidora Demo',tipo:'empresa_medica'}}));
 
     // ── Formulario de usuario: los roles dependen de la clínica ──
     const roles=await page.evaluate(()=>{

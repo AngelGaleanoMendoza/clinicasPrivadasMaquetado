@@ -17,7 +17,7 @@ function extraer(name) {
   if(abiertas===0 && primeraLinea.includes('{')) return primeraLinea;
   return source.slice(start,source.indexOf('\n}',start)+2);
 }
-const code=['_tipoServicio','_porcentajeClinica','_balanceManual',
+const code=['_contextoEstablecimiento','_textoEstablecimiento','_tipoServicio','_porcentajeClinica','_balanceManual',
   '_facturaDeIngreso','_indiceFacturasPorNumero',
   '_facturasConRastroDeCobro','_tieneRastroDeCobro','_facturaVale','_pctDeLinea','_baseFactura','_repartoFactura','_factorCobro','_facturasDelBalance','_lineasBalance',
   '_resumenBalance','_pctGrupoBalance','calcFacturaTotals','renderFacturaItemsUI',
@@ -58,6 +58,8 @@ const preambulo=`
     return api;
   }})};
 
+  let currentUser=null;
+  const esEmpresaMedica=()=>false;
   let currentClinicaId=7, currentClinica={id:7,balance_modo:'porcentaje'};
   window.__modo=m=>{currentClinica.balance_modo=m;};
   const C={fact:[],factItems:[],reparto:[],fin:[]};
