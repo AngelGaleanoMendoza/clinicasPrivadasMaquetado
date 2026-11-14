@@ -115,7 +115,7 @@ const abrir=async p=>{
     for(const id of ['menu-inventario','menu-finanzas','menu-contabilidad','menu-estadisticas','menu-exportar']) assert.equal(menu[id],true,id+' debe verse');
     assert.deepEqual(menu.rapidos,['Estadísticas','Inventario','Finanzas','Contabilidad','Exportar']);
     assert.equal(menu.buscador,'none','No hay pacientes que buscar');
-    assert.equal(menu.identidad,'Empresa médica privada','La barra lateral dice qué es el establecimiento');
+    assert.equal(menu.identidad,'Empresa privada','La barra lateral dice qué es el establecimiento');
 
     // El Super Admin tiene Contabilidad en cualquier clínica (la vista le pide
     // elegir una empresa); un administrador de clínica no.
@@ -138,7 +138,7 @@ const abrir=async p=>{
     // Los textos se recalculan por rol/contexto, sin modificar nombres propios
     // ni dejar etiquetas de la sesión o del establecimiento anterior.
     for(const [rol,tipo,entidad,etiqueta] of [
-      ['admin_empresa','empresa_medica','empresa','Empresa médica privada'],
+      ['admin_empresa','empresa_medica','empresa','Empresa privada'],
       ['admin','clinica','clínica','Clínica privada'],
       ['medico_admin','optica','óptica','Óptica / Optometría'],
       ['optometrista','clinica','óptica','Óptica / Optometría'],
@@ -147,7 +147,7 @@ const abrir=async p=>{
       ['oftalmologo','clinica','clínica oftalmológica','Clínica oftalmológica'],
       ['dermatologo','clinica','clínica dermatológica','Clínica dermatológica'],
       ['admin','veterinaria','clínica veterinaria','Clínica veterinaria'],
-      ['superadmin','empresa_medica','empresa','Empresa médica privada'],
+      ['superadmin','empresa_medica','empresa','Empresa privada'],
       ['superadmin','optica','óptica','Óptica / Optometría'],
       ['admin','clinica','clínica','Clínica privada']
     ]) {

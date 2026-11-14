@@ -74,7 +74,7 @@ function _contextoEstablecimiento() {
     : currentClinica?.tipo === 'veterinaria' ? 'veterinaria'
     : porRol[rol] || currentClinica?.tipo || 'clinica';
   return ({
-    empresa_medica:{nombre:'empresa',etiqueta:'Empresa médica privada'},
+    empresa_medica:{nombre:'empresa',etiqueta:'Empresa privada'},
     optica:{nombre:'óptica',etiqueta:'Óptica / Optometría'},
     farmacia:{nombre:'farmacia',etiqueta:'Farmacia'},
     dental:{nombre:'clínica dental',etiqueta:'Clínica dental'},
@@ -277,7 +277,7 @@ async function renderSelectorClinicaSA() {
     // Sin clínica elegida hay que decirlo: si no, las pantallas vacías parecen
     // datos que no existen en vez de una clínica sin seleccionar.
     aviso.textContent = currentClinicaId
-      ? 'Ves y editas los datos de esta clínica.'
+      ? _textoEstablecimiento('Ves y editas los datos de esta clínica.')
       : 'Elige una clínica para ver pacientes, citas y exámenes.';
     aviso.className = currentClinicaId ? '' : 'sa-clinica-pendiente';
   }
