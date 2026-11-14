@@ -46,7 +46,7 @@ const preambulo=`
   ${permisos}
   ${empresa}
   ${['permisosEfectivos','hasPermiso','puedeVerBalance','puedeGestionarProcedimientosClinicos','applyRoleMenu','_syncBuscadorGlobal',
-     '_permisosDisponiblesUsuario','_ajustarRolesPorClinica','renderPermisosModal','togglePermLabel','onRolChange','fillClinicaSelect',
+     '_permisosDisponiblesUsuario','_ajustarRolesPorClinica','_ajustarClinicasPorRol','renderPermisosModal','togglePermLabel','onRolChange','fillClinicaSelect',
      'renderDashboardEmpresa','renderNavQuickGrid'].map(extraer).join('\n')}
   window.__set=o=>{ if('sa' in o) superAdmin=o.sa; if('user' in o) currentUser=o.user; if('clinica' in o) currentClinica=o.clinica; };
   Object.assign(window,{hasPermiso,puedeVerBalance,applyRoleMenu,_ajustarRolesPorClinica,fillClinicaSelect,renderPermisosModal,renderDashboardEmpresa,renderNavQuickGrid,esEmpresaMedica});
@@ -132,6 +132,21 @@ const abrir=async p=>{
     assert.deepEqual(roles.empresa.marcados,['inventario','finanzas','estadisticas','exportar'],'El rol trae sus módulos marcados');
     assert.equal(roles.empresa.ayuda,true);
     assert.deepEqual(roles.clinica,{rolEmpresaOculto:true,rol:'medico',modulos:13,ayuda:false},'En una clínica el rol de empresa no existe');
+
+    // Sin clínica elegida (el campo está debajo del rol) el rol de empresa se ve,
+    // y al elegirlo solo se pueden escoger empresas médicas.
+    const alReves=await page.evaluate(()=>{
+      fillClinicaSelect(null);
+      const sel=document.getElementById('u-rol'); sel.value='medico'; _ajustarRolesPorClinica();
+      const visible=!sel.querySelector('option[value="admin_empresa"]').hidden;
+      document.getElementById('u-clinica').value='3';
+      sel.value='admin_empresa'; sel.dispatchEvent(new Event('change'));
+      const cl=document.getElementById('u-clinica');
+      return {visible,clinicaDeshabilitada:cl.querySelector('option[value="3"]').disabled,empresaHabilitada:!cl.querySelector('option[value="9"]').disabled,
+        clinicaQuitada:cl.value,ayuda:document.getElementById('u-roles-ayuda').textContent};
+    });
+    assert.deepEqual(alReves,{visible:true,clinicaDeshabilitada:true,empresaHabilitada:true,clinicaQuitada:'',
+      ayuda:'Elige aquí la empresa médica: el rol de empresa no se puede asignar a una clínica.'});
 
     // ── Validación al guardar: el código está en guardarUsuario ──
     const guardar=extraer('guardarUsuario');

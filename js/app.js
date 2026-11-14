@@ -15957,17 +15957,20 @@ function _permisosDisponiblesUsuario() {
 // En una empresa médica solo hay roles de empresa; fuera de ella, esos roles
 // no existen. Así no se puede crear un médico en una distribuidora ni un
 // administrador de empresa en una clínica.
+// Sin clínica elegida se ofrecen todos los roles (la clínica está más abajo
+// en el formulario); elegido el rol, la lista de clínicas se ajusta a él.
 function _ajustarRolesPorClinica() {
   const id = Number(document.getElementById('u-clinica')?.value) || null;
-  const empresa = esEmpresaMedica(id ? adminClinicas.find(c => c.id === id) : null);
+  const clinica = id ? adminClinicas.find(c => c.id === id) : null;
+  const empresa = esEmpresaMedica(clinica);
   const sel = document.getElementById('u-rol');
   if(!sel) return;
   [...sel.options].forEach(o => {
     if(o.value === 'superadmin') return;   // lo decide _ajustarOpcionSuperAdmin
-    o.hidden = empresa ? !ROLES_EMPRESA.includes(o.value) : ROLES_EMPRESA.includes(o.value);
+    o.hidden = !clinica ? false : empresa ? !ROLES_EMPRESA.includes(o.value) : ROLES_EMPRESA.includes(o.value);
   });
-  const ayuda = document.getElementById('u-roles-ayuda');
-  if(ayuda) { ayuda.hidden = !empresa; ayuda.textContent = empresa ? 'Empresa médica: solo el rol «Administrador de empresa» y sus módulos.' : ''; }
+  // Aquí manda la clínica: primero se corrige el rol (onRolChange ajusta
+  // después la lista de clínicas, que ya encaja con él).
   const actual = sel.options[sel.selectedIndex];
   if(actual?.hidden) {
     sel.value = empresa ? ROLES_EMPRESA[0] : 'medico';
@@ -15976,6 +15979,29 @@ function _ajustarRolesPorClinica() {
     // Mismo rol, otra clínica: los módulos que ya no aplican se quitan.
     const marcados = ALL_PERMISOS.map(p => p.id).filter(p => document.getElementById('perm-' + p)?.checked);
     renderPermisosModal(marcados);
+    _ajustarClinicasPorRol();
+  }
+}
+
+// El rol de empresa solo puede ir a una empresa médica, y los demás roles
+// solo a clínicas: las clínicas que no encajan se deshabilitan en la lista.
+function _ajustarClinicasPorRol() {
+  const rol = document.getElementById('u-rol')?.value;
+  const sel = document.getElementById('u-clinica');
+  if(!sel || !rol) return;
+  const deEmpresa = ROLES_EMPRESA.includes(rol);
+  [...sel.options].forEach(o => {
+    if(!o.value) return;
+    const c = adminClinicas.find(x => x.id === Number(o.value));
+    o.disabled = rol !== 'superadmin' && (deEmpresa ? !esEmpresaMedica(c) : esEmpresaMedica(c));
+  });
+  if(sel.options[sel.selectedIndex]?.disabled) sel.value = '';
+  const ayuda = document.getElementById('u-roles-ayuda');
+  if(ayuda) {
+    ayuda.hidden = !deEmpresa;
+    ayuda.textContent = deEmpresa
+      ? (adminClinicas.some(c => esEmpresaMedica(c)) ? 'Elige aquí la empresa médica: el rol de empresa no se puede asignar a una clínica.' : 'Primero crea una clínica de tipo «Empresa médica» en la pestaña Clínicas.')
+      : '';
   }
 }
 
@@ -16227,6 +16253,7 @@ function onRolChange() {
   const rol = document.getElementById('u-rol').value;
   renderPermisosModal(PERMISOS_DEFECTO[rol] || []);
   _syncEspecialidadUsuario();
+  _ajustarClinicasPorRol();
 }
 
 // Solo un Super Admin puede repartir el rol de Super Admin: el trigger de la
