@@ -10021,25 +10021,68 @@ function imprimirResumen() {
 }
 
 // ════════════════════ EXPORTAR ════════════════════
+function _resumenExportar() {
+  if(!esEmpresaMedica()) return [
+    ['👥','Pacientes',C.p.length],['📅','Citas',C.c.length],
+    ['💊','Medicaciones',C.m.length],['📝','Notas',C.n.length]
+  ];
+  const grupos = [
+    ['inventario', [['📦','Productos',(C.inv||[]).length],['🤝','Proveedores',(C.prov||[]).length],['🛒','Compras',(C.comp||[]).length]]],
+    ['contabilidad', [['🏢','Clientes comerciales',(C.cliCom||[]).length],['🧾','Ventas',(C.ventas||[]).filter(v=>v.estado!=='anulada').length]]],
+    ['finanzas', [['💰','Movimientos financieros',(C.fin||[]).length]]]
+  ];
+  return grupos.filter(([permiso])=>hasPermiso(permiso)).flatMap(([,items])=>items);
+}
+
 function renderExportar(){
+  const empresa = esEmpresaMedica();
+  const titulo = document.getElementById('titulo-resumen-exportar');
+  if(titulo) titulo.textContent = empresa ? '📊 Resumen de la empresa' : '📊 Resumen';
+  const descripcion = document.getElementById('export-json-descripcion');
+  if(descripcion) descripcion.textContent = empresa
+    ? 'Descarga el inventario, proveedores, compras, clientes, ventas y movimientos financieros, junto con los usuarios sin contraseñas.'
+    : 'Descarga todos los expedientes agrupados por paciente y los usuarios sin contraseñas.';
+  const pdfClinico = document.getElementById('export-pdf-clinico');
+  const reportesEmpresa = document.getElementById('export-reportes-empresa');
+  if(pdfClinico) pdfClinico.hidden = empresa;
+  if(reportesEmpresa) reportesEmpresa.hidden = !empresa || !hasPermiso('contabilidad');
+  const resumen = _resumenExportar();
   document.getElementById('resumen-exportar').innerHTML=`
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
-      ${[['👥','Pacientes',C.p.length],['📅','Citas',C.c.length],['💊','Medicaciones',C.m.length],['📝','Notas',C.n.length]].map(([ic,lb,v])=>`
-        <div style="background:var(--bg);border-radius:12px;padding:16px;text-align:center;border:1px solid var(--border)">
-          <div style="font-size:28px">${ic}</div><div style="font-size:22px;font-weight:800;margin:4px 0">${v}</div><div class="text-light">${lb}</div>
+    <div class="export-resumen-grid">
+      ${resumen.map(([ic,lb,v])=>`
+        <div class="export-resumen-item">
+          <div class="export-resumen-icono">${ic}</div><strong>${v}</strong><div class="text-light">${lb}</div>
         </div>`).join('')}
     </div>
+    ${!resumen.length ? '<p class="text-light">No tienes módulos de gestión habilitados para mostrar un resumen.</p>' : ''}
     <div class="divider"></div>
     <p class="text-light">Datos en: <strong>Supabase Cloud</strong> 🌐</p>
     <p class="text-light" style="margin-top:4px">Lumea Med v5.1 · ${new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'})}</p>`;
 }
 
-async function exportarEmail(){
-  const h=hoy();
+function _contenidoEmailExportar() {
   const asunto=`Lumea Med — Reporte ${new Date().toLocaleDateString('es-ES')}`;
-  const body=`REPORTE GALESISTEM\n\nPacientes: ${C.p.length} | Citas: ${C.c.length} | Medicaciones activas: ${C.m.filter(x=>x.estado==='activa').length}\n\nPACIENTES:\n${C.p.map(x=>`• ${x.nombre} ${x.apellidos} | ${x.identificacion||'-'} | ${x.telefono||'-'}`).join('\n')||'Ninguno'}\n\nCITAS HOY:\n${C.c.filter(x=>x.fecha===h).map(x=>{const p=_sujetoCita(x);return`• ${x.hora} - ${p?p.titulo:'N/A'} — ${x.motivo} [${x.estado}]`}).join('\n')||'Ninguna'}\n\nGenerado por Lumea Med v5.1`;
-  window.location.href=`mailto:sebasgale65@gmail.com?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(body)}`;
+  const destinatario = (currentUser?.email||'').trim();
+  if(esEmpresaMedica()) {
+    const nombre = currentClinica?.nombre || 'Empresa';
+    const cuerpo = `REPORTE DE LA EMPRESA — ${nombre}\n\n${_resumenExportar().map(([,label,valor])=>`${label}: ${valor}`).join('\n') || 'Sin módulos de gestión habilitados.'}\n\nResumen de registros disponibles. Los reportes financieros detallados están en Contabilidad.\n\nGenerado por Lumea Med`;
+    return {asunto,destinatario,cuerpo};
+  }
+  const h=hoy();
+  const cuerpo=`REPORTE GALESISTEM\n\nPacientes: ${C.p.length} | Citas: ${C.c.length} | Medicaciones activas: ${C.m.filter(x=>x.estado==='activa').length}\n\nPACIENTES:\n${C.p.map(x=>`• ${x.nombre} ${x.apellidos} | ${x.identificacion||'-'} | ${x.telefono||'-'}`).join('\n')||'Ninguno'}\n\nCITAS HOY:\n${C.c.filter(x=>x.fecha===h).map(x=>{const p=_sujetoCita(x);return`• ${x.hora} - ${p?p.titulo:'N/A'} — ${x.motivo} [${x.estado}]`}).join('\n')||'Ninguna'}\n\nGenerado por Lumea Med v5.1`;
+  return {asunto,destinatario,cuerpo};
+}
+
+async function exportarEmail(){
+  const {asunto,destinatario,cuerpo} = _contenidoEmailExportar();
+  window.location.href=`mailto:${encodeURIComponent(destinatario)}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
   toast('Abriendo cliente de correo...','info');
+}
+
+function abrirReportesExportarEmpresa() {
+  if(!esEmpresaMedica() || !hasPermiso('contabilidad')) return;
+  contTab = 'reportes';
+  navigate('contabilidad');
 }
 
 // Backup real por clínica. El formato anterior se conserva solo para poder
@@ -10237,7 +10280,10 @@ async function exportarJSON(){
     const blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json;charset=utf-8'});
     _descargarArchivo(blob, _nombreArchivoBackup('json'));
     const aviso = backup.advertencias.length ? ` · ${backup.advertencias.length} módulo(s) opcional(es) no disponibles` : '';
-    toast(`Backup descargado: ${backup.resumen.pacientes} pacientes${aviso}`, backup.advertencias.length?'warning':'success');
+    const contenido = esEmpresaMedica()
+      ? `${(backup.datosClinica?.inventario||[]).length} productos · ${backup.resumen.ventas||0} ventas`
+      : `${backup.resumen.pacientes} pacientes`;
+    toast(`Backup descargado: ${contenido}${aviso}`, backup.advertencias.length?'warning':'success');
   } catch(error) {
     console.error('Exportar backup:', error);
     toast('No se pudo generar el backup: ' + (error.message||'error desconocido'), 'error');
@@ -10310,6 +10356,7 @@ function _sujetoBackupPDF(grupo, indice, veterinario=false) {
 }
 
 async function exportarPDFClinica() {
+  if(esEmpresaMedica()) { abrirReportesExportarEmpresa(); return; }
   if(!_exigeClinica()) return;
   // La ventana de impresión se abre antes del primer await para que el
   // navegador no la bloquee; la descarga no necesita ventana.

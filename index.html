@@ -22,7 +22,7 @@
 <!-- Lectura local de machotes. El archivo se procesa en el navegador antes de
      guardarlo; Mammoth extrae DOCX y PDF.js se carga al elegir un PDF. -->
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js" defer></script>
-<link rel="stylesheet" href="css/styles.css?v=20261114g">
+<link rel="stylesheet" href="css/styles.css?v=20261114h">
 </head>
 <body>
 <script>
@@ -1224,7 +1224,7 @@
 
       <!-- EXPORTAR -->
       <div id="view-exportar" class="view">
-        <div class="grid-2">
+        <div class="grid-2 exportar-layout">
           <div class="card">
             <h3 style="margin-bottom:8px" data-texto-establecimiento="📤 Respaldo de la clínica">📤 Respaldo de la clínica</h3>
             <p class="text-light export-security-note">Los archivos contienen información confidencial. Guárdalos en un lugar seguro.</p>
@@ -1236,16 +1236,21 @@
             </div>
             <div class="export-box">
               <div class="export-icon">🗃️</div><h3>Backup JSON</h3>
-              <p>Descarga todos los expedientes agrupados por paciente y los usuarios sin contraseñas.</p>
+              <p id="export-json-descripcion">Descarga todos los expedientes agrupados por paciente y los usuarios sin contraseñas.</p>
               <button class="btn btn-primary" onclick="exportarJSON()">⬇️ Descargar JSON</button>
             </div>
-            <div class="export-box">
+            <div class="export-box" id="export-pdf-clinico">
               <div class="export-icon">📄</div><h3>Expedientes en PDF</h3>
               <p>Genera un documento legible, con una sección independiente para cada paciente.</p>
               <div class="doc-acciones doc-acciones-centro">
                 <button class="btn btn-secondary" onclick="exportarPDFClinica()">🖨️ Imprimir</button>
                 <button class="btn btn-primary" onclick="descargarDocumento(exportarPDFClinica)">⬇️ Descargar PDF</button>
               </div>
+            </div>
+            <div class="export-box" id="export-reportes-empresa" hidden>
+              <div class="export-icon">📊</div><h3>Reportes de la empresa</h3>
+              <p>Imprime o descarga ventas, cuentas por cobrar, inventario y estados financieros desde Contabilidad.</p>
+              <button type="button" class="btn btn-primary" onclick="abrirReportesExportarEmpresa()">📒 Ver reportes</button>
             </div>
             <div class="export-box">
               <div class="export-icon">📥</div><h3>Importar Backup</h3>
@@ -1255,7 +1260,7 @@
             </div>
             </div>
           </div>
-          <div class="card"><h3 style="margin-bottom:18px">📊 Resumen</h3><div id="resumen-exportar"></div></div>
+          <div class="card export-summary-card"><h3 id="titulo-resumen-exportar" style="margin-bottom:18px">📊 Resumen</h3><div id="resumen-exportar"></div></div>
         </div>
       </div>
 
@@ -3171,7 +3176,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20261114g" defer></script>
+<script src="js/app.js?v=20261114h" defer></script>
 </body>
 </html>
 
