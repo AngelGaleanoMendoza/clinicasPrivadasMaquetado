@@ -22,7 +22,7 @@ const ALL_PERMISOS = [
   { id:'procedimientos', label:'Procedimientos clínicos', icon:'🩺' },
   { id:'contabilidad', label:'Contabilidad',        icon:'📒' },
 ];
-// Inventario y Finanzas NUNCA se otorgan por rol: el administrador debe marcarlos
+// Inventario, Finanzas y Contabilidad NUNCA se otorgan por rol: el administrador debe marcarlos
 // explícitamente al crear o editar el usuario.
 const PERMISOS_DEFECTO = {
   medico:       ['pacientes','examenes','citas','agendas','medicaciones','notas','procedimientos'],
@@ -36,7 +36,7 @@ const PERMISOS_DEFECTO = {
   oftalmologo:  ['pacientes','examenes','citas','agendas','medicaciones','notas','atendidos','procedimientos'],
   dermatologo:  ['pacientes','examenes','citas','agendas','medicaciones','notas','atendidos','procedimientos'],
   // Excepción a la regla de arriba: en una empresa médica (distribuidora)
-  // Inventario y Finanzas son justamente su trabajo.
+  // Inventario, Finanzas y Contabilidad son justamente su trabajo.
   admin_empresa: ['inventario','finanzas','contabilidad','estadisticas','exportar'],
 };
 
@@ -46,9 +46,10 @@ const PERMISOS_DEFECTO = {
 // módulos de gestión. El tipo limita a todos sus usuarios; admin_empresa es
 // el rol de su administrador.
 const MODULOS_EMPRESA = ['inventario','finanzas','contabilidad','estadisticas','exportar'];
-// Contabilidad (ventas a clientes, cuentas por cobrar, estados financieros)
-// solo existe en una empresa médica.
-const MODULOS_SOLO_EMPRESA = ['contabilidad'];
+// Contabilidad es un módulo que se marca por usuario en cualquier
+// establecimiento. La empresa médica lo trae completo y por defecto (ventas,
+// clientes, cobros, lotes); en una clínica solo lo ve quien lo tenga marcado,
+// en versión reducida: resultados, balance y reportes con Finanzas e Inventario.
 const ROLES_EMPRESA = ['admin_empresa'];
 const VISTAS_CLINICAS = ['pacientes','expedientes','paciente-detalle','examenes-digitalizados','citas','agendas',
   'medicaciones','notas','atendidos','procedimientos','procedimientos-oftalmo','farmacia','clientes','mascotas',
@@ -539,7 +540,8 @@ async function loadAll() {
     C.reparto = rreparto.error ? [] : (rreparto.data||[]).map(fromReparto);
     // Proveedores y compras: tablas opcionales hasta ejecutar
     // migracion_compras_proveedores.sql. Sin ellas el inventario sigue igual.
-    if(hasPermiso('inventario')) {
+    // Contabilidad también las usa: cuentas por pagar e IVA de compras.
+    if(hasPermiso('inventario') || hasPermiso('contabilidad')) {
       const [rprov, rcomp] = await Promise.all([
         sb.from('proveedores').select('*').eq('clinica_id', currentClinicaId).order('nombre'),
         sb.from('compras').select('*, compra_items(*), compra_pagos(*)').eq('clinica_id', currentClinicaId).order('fecha', {ascending:false}).order('id', {ascending:false}).limit(500),
@@ -2631,11 +2633,7 @@ async function navigate(view, patientId) {
     navigate('dashboard'); return;
   }
   // Guards por permiso
-  // El Super Admin entra siempre: fuera de una empresa la vista le pide elegir una.
-  if(view==='contabilidad' && !sa && !esEmpresaMedica()) {
-    toast('Contabilidad es el módulo de las empresas médicas.','info'); navigate('dashboard'); return;
-  }
-  if(view==='contabilidad' && !puedeAbrirContabilidad()) { _sinPermiso('Contabilidad'); return; }
+  if(view==='contabilidad' && !hasPermiso('contabilidad')) { _sinPermiso('Contabilidad'); return; }
   if(view==='finanzas'     && !hasPermiso('finanzas'))     { _sinPermiso('Finanzas'); return; }
   if(view==='inventario'   && !hasPermiso('inventario'))   { _sinPermiso('Inventario'); return; }
   if(view==='estadisticas' && !hasPermiso('estadisticas')) { _sinPermiso('Estadísticas'); return; }
@@ -2843,7 +2841,7 @@ function renderNavQuickGrid(cv) {
     { view:'estadisticas', icon:'📈', label:'Estadísticas', show: hasPermiso('estadisticas') },
     { view:'inventario',   icon:'📦', label:'Inventario',   show: hasPermiso('inventario') },
     { view:'finanzas',     icon:'💰', label:'Finanzas',     show: hasPermiso('finanzas') },
-    { view:'contabilidad', icon:'📒', label:'Contabilidad', show: puedeAbrirContabilidad() },
+    { view:'contabilidad', icon:'📒', label:'Contabilidad', show: hasPermiso('contabilidad') },
     { view:'exportar',     icon:'📤', label:'Exportar',     show: hasPermiso('exportar') },
     { view:'configuracion',icon:'⚙️', label:'Config.',      show: sa },
   ].filter(x=>x.show && !(esEmpresaMedica() && VISTAS_CLINICAS.includes(x.view)));
@@ -12771,11 +12769,21 @@ function setContPeriodo(p) { contPeriodo = p; renderContabilidad(); }
 // una venta ya cuenta como venta, el pago de una compra se vuelve costo cuando
 // el producto se vende, y el pago del IVA salda un impuesto cobrado a terceros.
 const _FIN_FUERA_RESULTADOS = ['ventas','compras','pago_iva'];
+// Clínicas (Contabilidad reducida): el costo es lo que salió del inventario
+// (consumo, despacho, mermas) al costo promedio actual de cada producto. La
+// anulación de una compra no es consumo.
+function _costoInventarioUsado(r) {
+  return _r2(C.mov.filter(m => m.tipo === 'salida' && _enRango(m.fecha, r) && !/^Anulación de compra/.test(m.motivo || ''))
+    .reduce((s, m) => s + m.cantidad * (C.inv.find(p => p.id === m.invId)?.costo || 0), 0));
+}
+// Empresa médica: ventas − costo de cada lote = utilidad bruta, más otros
+// ingresos y menos gastos de Finanzas. Clínica: los ingresos son los de
+// Finanzas y el costo, lo usado del inventario.
 function _estadoResultados(r = _rangoCont()) {
-  const ventas = C.ventas.filter(v => v.estado !== 'anulada' && _enRango(v.fecha, r));
+  const empresa = esEmpresaMedica();
+  const ventas = empresa ? C.ventas.filter(v => v.estado !== 'anulada' && _enRango(v.fecha, r)) : [];
   const ingresosVentas = _r2(ventas.reduce((s, v) => s + v.subtotal, 0));
-  const costoVentas = _r2(ventas.reduce((s, v) => s + _costoVenta(v), 0));
-  const bruta = _r2(ingresosVentas - costoVentas);
+  const costoVentas = empresa ? _r2(ventas.reduce((s, v) => s + _costoVenta(v), 0)) : _costoInventarioUsado(r);
   const fin = C.fin.filter(f => _enRango(f.fecha, r) && !_FIN_FUERA_RESULTADOS.includes(f.categoria));
   const agrupar = tipo => {
     const g = {};
@@ -12785,8 +12793,10 @@ function _estadoResultados(r = _rangoCont()) {
   const otrosIngresos = agrupar('ingreso'), gastos = agrupar('egreso');
   const totOtros = _r2(otrosIngresos.reduce((s, x) => s + x.monto, 0));
   const totGastos = _r2(gastos.reduce((s, x) => s + x.monto, 0));
-  return { ventas, ingresosVentas, costoVentas, bruta, margen:ingresosVentas ? bruta / ingresosVentas * 100 : null,
-    otrosIngresos, totOtros, gastos, totGastos, neta:_r2(bruta + totOtros - totGastos),
+  const base = empresa ? ingresosVentas : totOtros;
+  const bruta = _r2(base - costoVentas);
+  return { empresa, ventas, ingresosVentas, costoVentas, bruta, margen:base ? bruta / base * 100 : null,
+    otrosIngresos, totOtros, gastos, totGastos, neta:_r2(ingresosVentas + totOtros - costoVentas - totGastos),
     ivaVentas:_r2(ventas.reduce((s, v) => s + v.iva, 0)) };
 }
 // Inventario a costo: cada lote a su costo y lo que no tiene lote al costo promedio.
@@ -12822,11 +12832,22 @@ function _serieMensual(n = 12) {
   const h = new Date(hoy() + 'T12:00:00');
   const meses = [];
   for(let i = n - 1; i >= 0; i--) meses.push(fechaLocal(new Date(h.getFullYear(), h.getMonth() - i, 1)).slice(0, 7));
+  // En una clínica las series son ingresos y utilidad neta del mes.
+  if(!esEmpresaMedica()) return meses.map(mes => {
+    const er = _estadoResultados({ desde:mes + '-01', hasta:mes + '-31' });
+    return { mes, ventas:er.totOtros, utilidad:er.neta, n:null };
+  });
   return meses.map(mes => {
     const vs = C.ventas.filter(v => v.estado !== 'anulada' && (v.fecha || '').startsWith(mes));
     const ventas = _r2(vs.reduce((s, v) => s + v.subtotal, 0));
     return { mes, ventas, utilidad:_r2(ventas - vs.reduce((s, v) => s + _costoVenta(v), 0)), n:vs.length };
   });
+}
+// Rótulos de la gráfica según la versión del módulo.
+function _textosGraficaCont() {
+  return esEmpresaMedica()
+    ? { titulo:'Ventas de los últimos 12 meses', nota:'Sin IVA · por mes de venta', s1:'Ventas', s2:'Utilidad bruta', costo:'Costo', aria:'Ventas y utilidad bruta por mes, últimos 12 meses' }
+    : { titulo:'Ingresos de los últimos 12 meses', nota:'Según Finanzas e Inventario · por mes', s1:'Ingresos', s2:'Utilidad neta', costo:'Costos y gastos', aria:'Ingresos y utilidad neta por mes, últimos 12 meses' };
 }
 function _gananciaPorProducto(r = _rangoCont()) {
   const g = {};
@@ -12844,37 +12865,24 @@ function _etiquetaMes(mes, largo = false) {
 
 // ── Vista ──
 const _TABS_CONT = ['resumen','ventas','cobrar','clientes','resultados','balance','reportes'];
-// El Super Admin abre Contabilidad desde cualquier clínica. Fuera de una
-// empresa médica no hay nada que mostrar: se le ofrece elegir cuál revisar.
-function _htmlElegirEmpresaContabilidad() {
-  const empresas = adminClinicas.filter(c => esEmpresaMedica(c)).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es'));
-  return `<div class="card cont-elegir">
-    <div class="card-header"><h3>📒 Contabilidad</h3></div>
-    <p class="text-light cont-ayuda">${currentClinicaId ? `<strong>${escAttr(currentClinica?.nombre || 'Esta clínica')}</strong> no es una empresa médica.` : 'Estás en la vista global, sin clínica elegida.'} Elige la empresa médica cuya contabilidad quieres revisar:</p>
-    ${empresas.length ? `<div class="cont-elegir-lista">${empresas.map(c => `<button type="button" class="cont-elegir-item" onclick="cambiarClinicaTrabajo(${Number(c.id)})">
-        <span class="cont-elegir-icono">🏢</span><span class="cont-elegir-nombre">${escAttr(c.nombre || 'Empresa médica')}</span><span class="cont-elegir-ir">Abrir →</span></button>`).join('')}</div>`
-      : '<div class="empty-state"><div class="empty-icon">🏢</div><p>Aún no hay empresas médicas.<br>Créala en <strong>Administración</strong> con el tipo «Empresa médica».</p></div>'}
-  </div>`;
-}
-async function renderContabilidad() {
+// Ventas, cobros y clientes son de la empresa médica; en una clínica el módulo
+// se queda con resumen, resultados, balance y reportes.
+const _TABS_SOLO_EMPRESA = ['ventas','cobrar','clientes'];
+const _tabsContDisponibles = () => esEmpresaMedica() ? _TABS_CONT : _TABS_CONT.filter(t => !_TABS_SOLO_EMPRESA.includes(t));
+const _NOTA_CONT_CLINICA = '<p class="cont-modo-nota">Versión para clínicas: resultados, balance y reportes con los datos de Finanzas e Inventario. Ventas a clientes, cobros y lotes son de las empresas médicas.</p>';
+function renderContabilidad() {
   if(!document.getElementById('view-contabilidad')) return;
-  const sinEmpresa = !esEmpresaMedica();
-  document.getElementById('cont-contenido').hidden = sinEmpresa;
-  const elegir = document.getElementById('cont-sin-empresa');
-  elegir.hidden = !sinEmpresa;
-  if(sinEmpresa) {
-    if(isSuperAdmin()) await _clinicasDisponiblesSA();
-    elegir.innerHTML = _htmlElegirEmpresaContabilidad();
-    return;
-  }
-  elegir.innerHTML = '';
-  document.getElementById('cont-aviso').innerHTML = _contabilidadDisponible ? '' : _AVISO_MIGRACION_CONTABILIDAD;
+  const empresa = esEmpresaMedica();
+  // La tabla de ventas solo se carga en una empresa: su aviso de migración no aplica a una clínica.
+  document.getElementById('cont-aviso').innerHTML = !empresa ? _NOTA_CONT_CLINICA : _contabilidadDisponible ? '' : _AVISO_MIGRACION_CONTABILIDAD;
+  ['btn-cont-cliente','btn-cont-venta'].forEach(id => { const b = document.getElementById(id); if(b) b.style.display = empresa ? '' : 'none'; });
+  _TABS_SOLO_EMPRESA.forEach(t => { document.getElementById('tab-cont-' + t).style.display = empresa ? '' : 'none'; });
   document.getElementById('cont-periodos').innerHTML = _PERIODOS_CONT
     .map(([id, l]) => `<span class="chip${contPeriodo === id ? ' active' : ''}" onclick="setContPeriodo('${id}')">${l}</span>`).join('');
   switchContTab(contTab);
 }
 function switchContTab(tab) {
-  if(!_TABS_CONT.includes(tab)) tab = 'resumen';
+  if(!_tabsContDisponibles().includes(tab)) tab = 'resumen';
   contTab = tab;
   _TABS_CONT.forEach(t => {
     document.getElementById('cont-panel-' + t).style.display = t === tab ? 'block' : 'none';
@@ -12890,7 +12898,55 @@ function _statCard(icono, color, valor, texto, extra = '') {
   return `<div class="stat-card"><div class="stat-icon si-${color}">${icono}</div><div class="stat-info"><h3>${valor}</h3><p>${texto}${extra}</p></div></div>`;
 }
 
+// La tarjeta de la gráfica (con su leyenda y su tabla), igual en las dos versiones.
+function _htmlGraficaCont() {
+  const t = _textosGraficaCont();
+  return `<div class="card cont-grafica-card">
+      <div class="card-header"><h3>📈 ${t.titulo}</h3><span class="text-light cont-grafica-nota">${t.nota}</span></div>
+      <div class="cg-leyenda" aria-hidden="true"><span><i class="cg-sw cg-sw-ventas"></i>${t.s1}</span><span><i class="cg-sw cg-sw-utilidad"></i>${t.s2}</span></div>
+      <div class="cont-grafica-wrap" id="cont-grafica"></div>
+      <details class="cg-tabla"><summary>Ver como tabla</summary><div class="table-wrap"><table class="compra-detalle-tabla"><thead><tr><th>Mes</th><th>${t.s1}</th><th>${t.costo}</th><th>${t.s2}</th></tr></thead>
+        <tbody>${_serieMensual(12).map(d => `<tr><td>${_etiquetaMes(d.mes, true)}</td><td>${fmtC(d.ventas)}</td><td>${fmtC(d.ventas - d.utilidad)}</td><td>${fmtC(d.utilidad)}</td></tr>`).join('')}</tbody></table></div></details>
+    </div>`;
+}
+// Resumen de la versión para clínicas: ingresos de Finanzas, costo de lo usado
+// del inventario, gastos, utilidad, lo que se debe a proveedores e inventario.
+function _renderContResumenClinica() {
+  const er = _estadoResultados();
+  const cxp = C.comp.reduce((s, c) => s + _saldoCompra(c), 0);
+  const vencido = C.comp.filter(c => _estadoPagoCompra(c) === 'vencida').reduce((s, c) => s + _saldoCompra(c), 0);
+  const pagos = C.comp.filter(c => _saldoCompra(c) > 0).sort((a, b) => (a.vencimiento || '9999').localeCompare(b.vencimiento || '9999')).slice(0, 6);
+  const neg = n => n < 0 ? ' style="color:var(--danger)"' : '';
+  document.getElementById('cont-panel-resumen').innerHTML = `
+    <div class="stats-grid cont-kpis">
+      ${_statCard('💰', 'blue', fmtC(er.totOtros), 'Ingresos')}
+      ${_statCard('📦', 'orange', fmtC(er.costoVentas), 'Costo de lo usado del inventario')}
+      ${_statCard('📤', 'red', fmtC(er.totGastos), 'Gastos de operación')}
+      <div class="stat-card"><div class="stat-icon si-purple">💼</div><div class="stat-info"><h3${neg(er.neta)}>${fmtC(er.neta)}</h3><p>Utilidad neta${er.totOtros ? ' · margen ' + (Math.round(er.neta / er.totOtros * 1000) / 10).toLocaleString('es-NI') + ' %' : ''}</p></div></div>
+      ${_statCard('🚚', 'red', fmtC(cxp), 'Por pagar a proveedores', vencido ? ` · <span class="compra-vencido">${fmtC(vencido)} vencido</span>` : '')}
+      ${_statCard('🏷️', 'green', fmtC(_valorInventario().total), 'Inventario a costo')}
+    </div>
+    ${_htmlGraficaCont()}
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header"><h3>🚚 Próximos pagos</h3></div>
+        ${pagos.length ? pagos.map(c => `<div class="compra-item" onclick="verCompra(${c.id})">
+          <div class="compra-item-info"><div class="compra-item-titulo">${escAttr(_nombreProveedor(c.proveedorId))} ${_tagPagoCompra(c)}</div>
+          <div class="compra-item-sub">${formatFecha(c.fecha)}${c.vencimiento ? ' · vence ' + formatFecha(c.vencimiento) : ''}</div></div>
+          <div class="compra-item-montos"><strong class="compra-item-total">${fmtC(_saldoCompra(c))}</strong></div></div>`).join('')
+        : '<div class="empty-state" style="padding:20px 0"><div class="empty-icon" style="font-size:28px">✅</div><p>No hay nada pendiente de pago</p></div>'}
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>💰 Ingresos por categoría</h3><span class="text-light" style="font-size:12px">${_etiquetaPeriodoCont()}</span></div>
+        ${er.otrosIngresos.length ? er.otrosIngresos.slice(0, 8).map(x => `<div class="cont-top-fila"><div><strong>${escAttr(x.label)}</strong><span>${er.totOtros ? (Math.round(x.monto / er.totOtros * 1000) / 10).toLocaleString('es-NI') + ' % de los ingresos' : ''}</span></div><strong>${fmtC(x.monto)}</strong></div>`).join('')
+        : '<div class="empty-state" style="padding:20px 0"><div class="empty-icon" style="font-size:28px">💰</div><p>Sin ingresos en este período</p></div>'}
+      </div>
+    </div>`;
+  _pintarGraficaVentas();
+}
+
 function renderContResumen() {
+  if(!esEmpresaMedica()) return _renderContResumenClinica();
   const er = _estadoResultados();
   const cxc = C.ventas.reduce((s, v) => s + _saldoVenta(v), 0);
   const vencido = C.ventas.filter(v => _estadoCobroVenta(v) === 'vencida').reduce((s, v) => s + _saldoVenta(v), 0);
@@ -12907,13 +12963,7 @@ function renderContResumen() {
       ${_statCard('📆', 'blue', fmtC(cxc), 'Por cobrar', vencido ? ` · <span class="compra-vencido">${fmtC(vencido)} vencido</span>` : '')}
       ${_statCard('🚚', 'red', fmtC(cxp), 'Por pagar a proveedores')}
     </div>
-    <div class="card cont-grafica-card">
-      <div class="card-header"><h3>📈 Ventas de los últimos 12 meses</h3><span class="text-light cont-grafica-nota">Sin IVA · por mes de venta</span></div>
-      <div class="cg-leyenda" aria-hidden="true"><span><i class="cg-sw cg-sw-ventas"></i>Ventas</span><span><i class="cg-sw cg-sw-utilidad"></i>Utilidad bruta</span></div>
-      <div class="cont-grafica-wrap" id="cont-grafica"></div>
-      <details class="cg-tabla"><summary>Ver como tabla</summary><div class="table-wrap"><table class="compra-detalle-tabla"><thead><tr><th>Mes</th><th>Ventas</th><th>Costo</th><th>Utilidad bruta</th></tr></thead>
-        <tbody>${_serieMensual(12).map(d => `<tr><td>${_etiquetaMes(d.mes, true)}</td><td>${fmtC(d.ventas)}</td><td>${fmtC(d.ventas - d.utilidad)}</td><td>${fmtC(d.utilidad)}</td></tr>`).join('')}</tbody></table></div></details>
-    </div>
+    ${_htmlGraficaCont()}
     <div class="grid-2">
       <div class="card">
         <div class="card-header"><h3>📆 Próximos cobros</h3><button class="btn btn-secondary btn-sm" onclick="switchContTab('cobrar')">Ver todo</button></div>
@@ -12947,10 +12997,11 @@ function _montoCorto(v) {
 function _pintarGraficaVentas() {
   const el = document.getElementById('cont-grafica');
   if(!el) return;
-  const datos = _serieMensual(12);
+  const datos = _serieMensual(12), tx = _textosGraficaCont();
   const W = Math.max(280, Math.round(el.clientWidth || 640)), angosto = W < 520;
   const H = angosto ? 220 : 260;
-  const m = { t:14, r:angosto ? 62 : 80, b:26, l:angosto ? 56 : 66 };
+  // El margen derecho guarda sitio para el nombre de cada línea («Ingresos» es más largo).
+  const m = { t:14, r:(angosto ? 62 : 80) + (tx.s1.length > 6 ? 10 : 0), b:26, l:angosto ? 56 : 66 };
   const vals = datos.flatMap(d => [d.ventas, d.utilidad]);
   let max = Math.max(0, ...vals), min = Math.min(0, ...vals);
   if(max === min) max = min + 1000;
@@ -12966,7 +13017,7 @@ function _pintarGraficaVentas() {
   let yV = y(datos[ult].ventas), yU = y(datos[ult].utilidad);
   if(Math.abs(yV - yU) < 15) { const c = (yV + yU) / 2; [yV, yU] = yV <= yU ? [c - 8, c + 8] : [c + 8, c - 8]; }
   const cada = angosto ? 2 : 1, col = ancho / ult;
-  el.innerHTML = `<svg class="cg-svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Ventas y utilidad bruta por mes, últimos 12 meses">
+  el.innerHTML = `<svg class="cg-svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${tx.aria}">
     <g class="cg-grid">${ticks.map(v => `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"${v === 0 ? ' class="cg-cero"' : ''}/>`).join('')}</g>
     <g class="cg-eje">${ticks.map(v => `<text x="${m.l - 8}" y="${(y(v) + 4).toFixed(1)}" text-anchor="end">${_montoCorto(v)}</text>`).join('')}
       ${datos.map((d, i) => (ult - i) % cada === 0 ? `<text x="${x(i).toFixed(1)}" y="${H - 6}" text-anchor="middle">${_etiquetaMes(d.mes)}</text>` : '').join('')}</g>
@@ -12974,7 +13025,7 @@ function _pintarGraficaVentas() {
     <path class="cg-linea cg-ventas" d="${linea('ventas')}"/>
     <path class="cg-linea cg-utilidad" d="${linea('utilidad')}"/>
     ${datos.map((d, i) => `<circle class="cg-punto cg-ventas" cx="${x(i).toFixed(1)}" cy="${y(d.ventas).toFixed(1)}" r="4"/><circle class="cg-punto cg-utilidad" cx="${x(i).toFixed(1)}" cy="${y(d.utilidad).toFixed(1)}" r="4"/>`).join('')}
-    <text class="cg-etiqueta" x="${(x(ult) + 9).toFixed(1)}" y="${(yV + 4).toFixed(1)}">Ventas</text>
+    <text class="cg-etiqueta" x="${(x(ult) + 9).toFixed(1)}" y="${(yV + 4).toFixed(1)}">${tx.s1}</text>
     <text class="cg-etiqueta" x="${(x(ult) + 9).toFixed(1)}" y="${(yU + 4).toFixed(1)}">Utilidad</text>
     ${datos.map((d, i) => `<rect class="cg-zona" data-i="${i}" x="${(x(i) - col / 2).toFixed(1)}" y="${m.t}" width="${col.toFixed(1)}" height="${alto}"/>`).join('')}
   </svg><div class="cg-tooltip" hidden></div>`;
@@ -12984,9 +13035,9 @@ function _pintarGraficaVentas() {
     cruz.setAttribute('x1', x(i)); cruz.setAttribute('x2', x(i)); cruz.setAttribute('visibility', 'visible');
     el.querySelectorAll('.cg-punto').forEach((c, k) => c.classList.toggle('cg-activo', Math.floor(k / 2) === i));
     tip.innerHTML = `<strong>${_etiquetaMes(d.mes, true)}</strong>
-      <div><i class="cg-sw cg-sw-ventas"></i>Ventas <b>${fmtC(d.ventas)}</b></div>
-      <div><i class="cg-sw cg-sw-utilidad"></i>Utilidad bruta <b>${fmtC(d.utilidad)}</b></div>
-      <div class="cg-tip-sub">${d.n} venta${d.n === 1 ? '' : 's'}</div>`;
+      <div><i class="cg-sw cg-sw-ventas"></i>${tx.s1} <b>${fmtC(d.ventas)}</b></div>
+      <div><i class="cg-sw cg-sw-utilidad"></i>${tx.s2} <b>${fmtC(d.utilidad)}</b></div>
+      ${d.n != null ? `<div class="cg-tip-sub">${d.n} venta${d.n === 1 ? '' : 's'}</div>` : ''}`;
     tip.hidden = false;
     const izq = x(i) + 12 + tip.offsetWidth > W ? x(i) - 12 - tip.offsetWidth : x(i) + 12;
     tip.style.left = Math.max(0, izq) + 'px';
@@ -13548,19 +13599,32 @@ function renderEstadoResultados() {
         <button class="btn btn-secondary btn-sm" onclick="imprimirEstadoResultados()">🖨️ Imprimir</button>
         <button class="btn btn-primary btn-sm" onclick="descargarDocumento(imprimirEstadoResultados)">⬇️ PDF</button>
       </div></div>
-    <p class="text-light cont-ayuda">${_etiquetaPeriodoCont()} · montos sin IVA.</p>
+    <p class="text-light cont-ayuda">${_etiquetaPeriodoCont()}${er.empresa ? ' · montos sin IVA' : ''}.</p>
     <div class="er-tabla">
+      ${er.empresa ? `
       ${_filaEstado('Ventas netas', er.ingresosVentas, '', `${er.ventas.length} venta${er.ventas.length === 1 ? '' : 's'}`)}
       ${_filaEstado('(−) Costo de lo vendido', -er.costoVentas, 'er-resta', 'al costo de cada lote')}
-      ${_filaEstado('Utilidad bruta', er.bruta, 'er-subtotal', er.margen != null ? 'margen ' + (Math.round(er.margen * 10) / 10).toLocaleString('es-NI') + ' %' : '')}
+      ${_filaEstado('Utilidad bruta', er.bruta, 'er-subtotal', _textoMargen(er))}
       ${er.otrosIngresos.length ? `<div class="er-grupo">(+) Otros ingresos</div>${er.otrosIngresos.map(x => _filaEstado(x.label, x.monto, 'er-detalle')).join('')}` : ''}
-      ${_filaEstado('Total otros ingresos', er.totOtros, 'er-suma')}
+      ${_filaEstado('Total otros ingresos', er.totOtros, 'er-suma')}` : `
+      ${er.otrosIngresos.length ? `<div class="er-grupo">Ingresos</div>${er.otrosIngresos.map(x => _filaEstado(x.label, x.monto, 'er-detalle')).join('')}` : ''}
+      ${_filaEstado('Total ingresos', er.totOtros, 'er-suma')}
+      ${_filaEstado('(−) Costo de lo usado del inventario', -er.costoVentas, 'er-resta', 'salidas al costo promedio')}
+      ${_filaEstado('Utilidad bruta', er.bruta, 'er-subtotal', _textoMargen(er))}`}
       ${er.gastos.length ? `<div class="er-grupo">(−) Gastos de operación</div>${er.gastos.map(x => _filaEstado(x.label, -x.monto, 'er-detalle')).join('')}` : ''}
       ${_filaEstado('Total gastos', -er.totGastos, 'er-suma')}
       ${_filaEstado('Utilidad neta del período', er.neta, 'er-total')}
     </div>
-    <p class="text-light cont-nota">Las ventas salen de Contabilidad; los otros ingresos y los gastos, de Finanzas. No entran aquí los cobros de ventas (ya son ventas), los pagos de compras (el producto se vuelve costo cuando se vende) ni el pago del IVA.${_topeDatos.fin ? ' ⚠️ Finanzas trae solo los 1000 movimientos más recientes: los totales de períodos largos pueden quedar cortos.' : ''}</p>
+    <p class="text-light cont-nota">${er.empresa
+      ? 'Las ventas salen de Contabilidad; los otros ingresos y los gastos, de Finanzas. No entran aquí los cobros de ventas (ya son ventas), los pagos de compras (el producto se vuelve costo cuando se vende) ni el pago del IVA.'
+      : 'Los ingresos y los gastos salen de Finanzas; el costo, de las salidas del inventario al costo promedio de cada producto. No entran aquí los pagos de compras (el producto se vuelve costo cuando se usa) ni el pago del IVA.'}${_avisosTopeCont(er)}</p>
   </div>`;
+}
+function _textoMargen(er) { return er.margen != null ? 'margen ' + (Math.round(er.margen * 10) / 10).toLocaleString('es-NI') + ' %' : ''; }
+// Las consultas traen un máximo de filas: si se alcanza, los totales largos quedan cortos.
+function _avisosTopeCont(er) {
+  return (_topeDatos.fin ? ' ⚠️ Finanzas trae solo los 1000 movimientos más recientes: los totales de períodos largos pueden quedar cortos.' : '')
+    + (!er.empresa && C.mov.length >= 500 ? ' ⚠️ Inventario trae solo los 500 movimientos más recientes: el costo de períodos largos puede quedar corto.' : '');
 }
 function renderBalanceGeneral() {
   const b = _balanceGeneral();
@@ -13576,8 +13640,8 @@ function renderBalanceGeneral() {
       <div class="er-tabla">
         <div class="er-grupo">Activos</div>
         ${_filaEstado('Efectivo y bancos', b.efectivo, 'er-detalle', 'ingresos − gastos de Finanzas')}
-        ${_filaEstado('Cuentas por cobrar', b.cxc, 'er-detalle')}
-        ${_filaEstado('Inventario', b.inventario.total, 'er-detalle', 'a costo, por lote')}
+        ${esEmpresaMedica() ? _filaEstado('Cuentas por cobrar', b.cxc, 'er-detalle') : ''}
+        ${_filaEstado('Inventario', b.inventario.total, 'er-detalle', esEmpresaMedica() ? 'a costo, por lote' : 'a costo promedio')}
         ${b.ivaFavor ? _filaEstado('IVA a favor', b.ivaFavor, 'er-detalle', 'crédito fiscal') : ''}
         ${_filaEstado('Total activos', b.activos, 'er-total')}
       </div>
@@ -13609,22 +13673,27 @@ const _REPORTES_CONT = [
   ['🏷️', 'Existencias por lote', 'Qué queda de cada lote, a qué proveedor se compró y a qué costo.', 'imprimirExistenciasLotes'],
   ['🚚', 'Cuentas por pagar', 'Lo que falta pagar a cada proveedor.', 'imprimirCuentasPorPagar'],
 ];
+// En una clínica solo aplican los reportes que no dependen de ventas a clientes.
+const _REPORTES_CLINICA = ['imprimirEstadoResultados','imprimirBalanceGeneral','imprimirCuentasPorPagar'];
 function renderContReportes() {
+  const empresa = esEmpresaMedica();
+  const reportes = empresa ? _REPORTES_CONT : _REPORTES_CONT.filter(r => _REPORTES_CLINICA.includes(r[3]))
+    .map(r => r[3] === 'imprimirEstadoResultados' ? [r[0], r[1], 'Ingresos, costo del inventario usado, gastos y utilidad neta del período.', r[3]] : r);
   const sel = [...C.cliCom].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')).map(c => `<option value="${c.id}">${escAttr(c.nombre)}</option>`).join('');
   document.getElementById('cont-panel-reportes').innerHTML = `<div class="card">
     <div class="card-header"><h3>🖨️ Reportes</h3><span class="text-light" style="font-size:12px">Período: ${_etiquetaPeriodoCont()}</span></div>
     <div class="cont-reportes">
-      ${_REPORTES_CONT.map(([icono, titulo, desc, fn]) => `<div class="cont-reporte">
+      ${reportes.map(([icono, titulo, desc, fn]) => `<div class="cont-reporte">
         <div class="cont-reporte-icono">${icono}</div>
         <div class="cont-reporte-info"><strong>${titulo}</strong><span>${desc}</span></div>
         <div class="cont-reporte-acciones"><button class="btn btn-secondary btn-sm" onclick="${fn}()" aria-label="Imprimir ${titulo}">🖨️</button><button class="btn btn-primary btn-sm" onclick="descargarDocumento(${fn})">⬇️ PDF</button></div>
       </div>`).join('')}
-      <div class="cont-reporte">
+      ${empresa ? `<div class="cont-reporte">
         <div class="cont-reporte-icono">📄</div>
         <div class="cont-reporte-info"><strong>Estado de cuenta de un cliente</strong>
           ${sel ? `<select id="rep-cliente-com" aria-label="Cliente">${sel}</select>` : '<span>Aún no hay clientes.</span>'}</div>
         <div class="cont-reporte-acciones"><button class="btn btn-secondary btn-sm" onclick="imprimirEstadoCuentaSel()"${sel ? '' : ' disabled'} aria-label="Imprimir estado de cuenta">🖨️</button><button class="btn btn-primary btn-sm" onclick="descargarDocumento(imprimirEstadoCuentaSel)"${sel ? '' : ' disabled'}>⬇️ PDF</button></div>
-      </div>
+      </div>` : ''}
     </div>
   </div>`;
 }
@@ -13637,6 +13706,7 @@ const _PDF_SUB = 'font-weight:800;background:#F1F5F9';
 const _PDF_TOT = 'font-weight:900;background:#E2E8F0;font-size:13px';
 function imprimirEstadoResultados() {
   const er = _estadoResultados();
+  if(!er.empresa) return _imprimirEstadoResultadosClinica(er);
   const body = `${_pdfEncabezado('Estado de resultados', _etiquetaPeriodoCont())}
     <div class="kpi-grid">
       <div class="kpi blue"><div class="kpi-val">${fmtC(er.ingresosVentas)}</div><div class="kpi-lbl">Ventas netas</div></div>
@@ -13657,6 +13727,26 @@ function imprimirEstadoResultados() {
     <p style="font-size:11px;color:#64748B;margin-top:10px">Montos sin IVA. El costo de lo vendido es el de cada lote al momento de vender. Los cobros de ventas, los pagos de compras y el pago del IVA no son ingreso ni gasto del período.</p>`;
   return pdfAbrir('Estado de resultados', body);
 }
+function _imprimirEstadoResultadosClinica(er) {
+  const body = `${_pdfEncabezado('Estado de resultados', _etiquetaPeriodoCont())}
+    <div class="kpi-grid">
+      <div class="kpi blue"><div class="kpi-val">${fmtC(er.totOtros)}</div><div class="kpi-lbl">Ingresos</div></div>
+      <div class="kpi orange"><div class="kpi-val">${fmtC(er.costoVentas)}</div><div class="kpi-lbl">Costo del inventario usado</div></div>
+      <div class="kpi red"><div class="kpi-val">${fmtC(er.totGastos)}</div><div class="kpi-lbl">Gastos de operación</div></div>
+      <div class="kpi ${er.neta < 0 ? 'red' : 'green'}"><div class="kpi-val">${fmtC(er.neta)}</div><div class="kpi-lbl">Utilidad neta</div></div>
+    </div>
+    <table><thead><tr><th>Concepto</th><th style="${_num}">Monto</th></tr></thead><tbody>
+      ${er.otrosIngresos.map(x => _pdfFilaEstado('&nbsp;&nbsp;' + x.label, x.monto)).join('')}
+      ${_pdfFilaEstado('Total ingresos', er.totOtros, _PDF_SUB)}
+      ${_pdfFilaEstado('(−) Costo de lo usado del inventario', -er.costoVentas)}
+      ${_pdfFilaEstado('Utilidad bruta' + (er.margen != null ? ' · margen ' + (Math.round(er.margen * 10) / 10).toLocaleString('es-NI') + ' %' : ''), er.bruta, _PDF_SUB)}
+      ${er.gastos.map(x => _pdfFilaEstado('&nbsp;&nbsp;' + x.label, -x.monto)).join('')}
+      ${_pdfFilaEstado('(−) Total gastos de operación', -er.totGastos, _PDF_SUB)}
+      ${_pdfFilaEstado('Utilidad neta del período', er.neta, _PDF_TOT)}
+    </tbody></table>
+    <p style="font-size:11px;color:#64748B;margin-top:10px">Ingresos y gastos según Finanzas. El costo del inventario usado son las salidas del período al costo promedio de cada producto. Los pagos de compras y el pago del IVA no son gasto del período.</p>`;
+  return pdfAbrir('Estado de resultados', body);
+}
 function imprimirBalanceGeneral() {
   const b = _balanceGeneral();
   const body = `${_pdfEncabezado('Balance general', `Al ${formatFecha(hoy())}`)}
@@ -13669,7 +13759,7 @@ function imprimirBalanceGeneral() {
     <div class="section-title">Activos</div>
     <table><tbody>
       ${_pdfFilaEstado('Efectivo y bancos', b.efectivo)}
-      ${_pdfFilaEstado('Cuentas por cobrar a clientes', b.cxc)}
+      ${esEmpresaMedica() ? _pdfFilaEstado('Cuentas por cobrar a clientes', b.cxc) : ''}
       ${_pdfFilaEstado('Inventario (a costo)', b.inventario.total)}
       ${b.ivaFavor ? _pdfFilaEstado('IVA a favor (crédito fiscal)', b.ivaFavor) : ''}
       ${_pdfFilaEstado('Total activos', b.activos, _PDF_TOT)}
@@ -13687,7 +13777,7 @@ function imprimirBalanceGeneral() {
       ${_pdfFilaEstado('Total patrimonio', b.patrimonio, _PDF_SUB)}
       ${_pdfFilaEstado('Total pasivos + patrimonio', _r2(b.pasivos + b.patrimonio), _PDF_TOT)}
     </tbody></table>
-    <p style="font-size:11px;color:#64748B;margin-top:10px">IVA cobrado en ventas ${fmtC(b.ivaVentas)} · IVA pagado en compras ${fmtC(b.ivaCompras)} · IVA pagado a la DGI ${fmtC(b.ivaPagado)}.<br>
+    <p style="font-size:11px;color:#64748B;margin-top:10px">${esEmpresaMedica() ? `IVA cobrado en ventas ${fmtC(b.ivaVentas)} · ` : ''}IVA pagado en compras ${fmtC(b.ivaCompras)} · IVA pagado a la DGI ${fmtC(b.ivaPagado)}.<br>
     «Capital y saldos iniciales» es lo que el negocio tenía antes de registrar en el sistema más los aportes del dueño; se calcula para que el balance cuadre.</p>`;
   return pdfAbrir('Balance general', body);
 }
@@ -17087,7 +17177,6 @@ function permisosEfectivos(rol, permisos) {
 function hasPermiso(perm) {
   // En una empresa médica los módulos clínicos no existen, para nadie.
   if(esEmpresaMedica() && !MODULOS_EMPRESA.includes(perm)) return false;
-  if(!esEmpresaMedica() && MODULOS_SOLO_EMPRESA.includes(perm)) return false;
   if(isSuperAdmin()) return true;
   const p = currentUser?.permisos;
   // Si el administrador configuró los permisos (aunque sea una lista vacía) se
@@ -17095,11 +17184,6 @@ function hasPermiso(perm) {
   // que nunca tuvieron permisos guardados.
   const base = permisosEfectivos(currentUser?.key,p);
   return base.includes(perm);
-}
-// Contabilidad: quien tenga el permiso dentro de una empresa médica, y el
-// Super Admin siempre (fuera de una empresa la vista le pide elegir una).
-function puedeAbrirContabilidad() {
-  return isSuperAdmin() || hasPermiso('contabilidad');
 }
 function puedeVerBalance() {
   return isSuperAdmin() || currentUser?.key === 'medico_admin' || currentUser?.key === 'admin_empresa';
@@ -17166,7 +17250,7 @@ function applyRoleMenu() {
   const finAccess  = hasPermiso('finanzas');
   const expAccess  = hasPermiso('exportar');
   const statAccess = hasPermiso('estadisticas');
-  const contAccess = puedeAbrirContabilidad();
+  const contAccess = hasPermiso('contabilidad');
   const hasGestion = invAccess || finAccess || expAccess || statAccess || contAccess;
   vis('menu-gestion-section', hasGestion);
   vis('menu-inventario',      invAccess);
@@ -18124,7 +18208,7 @@ function selectIcon(btn) {
 function _permisosDisponiblesUsuario() {
   const id = Number(document.getElementById('u-clinica')?.value) || null;
   const clinica = id ? adminClinicas.find(c => c.id === id) : null;
-  return esEmpresaMedica(clinica) ? ALL_PERMISOS.filter(p => MODULOS_EMPRESA.includes(p.id)) : ALL_PERMISOS.filter(p => !MODULOS_SOLO_EMPRESA.includes(p.id));
+  return esEmpresaMedica(clinica) ? ALL_PERMISOS.filter(p => MODULOS_EMPRESA.includes(p.id)) : ALL_PERMISOS;
 }
 
 // En una empresa médica solo hay roles de empresa; fuera de ella, esos roles

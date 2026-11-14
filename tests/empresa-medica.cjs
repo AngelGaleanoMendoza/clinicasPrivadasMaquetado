@@ -49,7 +49,7 @@ const preambulo=`
   ${permisos}
   ${empresa}
   ${['_etiquetaRol','_contextoEstablecimiento','_textoEstablecimiento','actualizarIdentidadEstablecimiento','permisosEfectivos','hasPermiso','puedeVerBalance','puedeGestionarProcedimientosClinicos','applyRoleMenu','_syncBuscadorGlobal',
-     'puedeAbrirContabilidad','_permisosDisponiblesUsuario','_ajustarRolesPorClinica','_ajustarClinicasPorRol','renderPermisosModal','togglePermLabel','onRolChange','fillClinicaSelect',
+     '_permisosDisponiblesUsuario','_ajustarRolesPorClinica','_ajustarClinicasPorRol','renderPermisosModal','togglePermLabel','onRolChange','fillClinicaSelect',
      'renderDashboardEmpresa','renderNavQuickGrid'].map(extraer).join('\n')}
   window.__set=o=>{ if('sa' in o) superAdmin=o.sa; if('user' in o) currentUser=o.user; if('clinica' in o) currentClinica=o.clinica; };
   Object.assign(window,{hasPermiso,puedeVerBalance,applyRoleMenu,_ajustarRolesPorClinica,fillClinicaSelect,renderPermisosModal,renderDashboardEmpresa,renderNavQuickGrid,esEmpresaMedica});
@@ -93,7 +93,7 @@ const abrir=async p=>{
     assert.deepEqual(perm.admin,['inventario','finanzas','contabilidad','estadisticas','exportar']);
     assert.equal(perm.balance,true,'El administrador de empresa ve el balance');
     assert.deepEqual(perm.sa,['inventario','finanzas','contabilidad','estadisticas','exportar'],'Ni el Super Admin ve módulos clínicos dentro de una empresa');
-    assert.equal(perm.saClinica,8,'En una clínica el Super Admin lo ve todo, menos Contabilidad, que es de empresa');
+    assert.equal(perm.saClinica,9,'En una clínica el Super Admin lo ve todo, también Contabilidad (versión reducida)');
     assert.deepEqual(perm.vacio,[]);
     assert.deepEqual(perm.forzado,['finanzas']);
 
@@ -126,12 +126,14 @@ const abrir=async p=>{
       const r={sa:ver('menu-contabilidad'),rapido:[...document.querySelectorAll('#nav-quick-grid .nq-label')].some(e=>e.textContent==='Contabilidad')};
       __set({sa:false,user:{id:'u9',key:'admin',permisos:null}}); applyRoleMenu();
       r.adminClinica=ver('menu-contabilidad');
+      __set({user:{id:'u8',key:'admin',permisos:['pacientes','contabilidad']}}); applyRoleMenu();
+      r.marcado=ver('menu-contabilidad');
       __set({user:{id:'u1',key:'admin_empresa',permisos:null},clinica:{id:9,nombre:'Distribuidora Demo',tipo:'empresa_medica'}}); applyRoleMenu();
       return r;
     });
-    assert.deepEqual(saMenu,{sa:true,rapido:true,adminClinica:false});
+    assert.deepEqual(saMenu,{sa:true,rapido:true,adminClinica:false,marcado:true},'En una clínica, Contabilidad solo para quien la tenga marcada');
     const navSA=extraer('navigate');
-    assert.match(navSA,/view==='contabilidad' && !sa && !esEmpresaMedica\(\)/,'El Super Admin no rebota fuera de una empresa');
+    assert.doesNotMatch(navSA,/Contabilidad es el módulo de las empresas médicas/,'En una clínica se abre con su permiso');
 
     // Los textos se recalculan por rol/contexto, sin modificar nombres propios
     // ni dejar etiquetas de la sesión o del establecimiento anterior.
@@ -186,7 +188,7 @@ const abrir=async p=>{
     assert.deepEqual(roles.empresa.modulos,['inventario','finanzas','estadisticas','exportar','contabilidad']);
     assert.deepEqual(roles.empresa.marcados,['inventario','finanzas','estadisticas','exportar','contabilidad'],'El rol trae sus módulos marcados');
     assert.equal(roles.empresa.ayuda,true);
-    assert.deepEqual(roles.clinica,{rolEmpresaOculto:true,rol:'medico',modulos:13,ayuda:false},'En una clínica el rol de empresa no existe');
+    assert.deepEqual(roles.clinica,{rolEmpresaOculto:true,rol:'medico',modulos:14,ayuda:false},'En una clínica el rol de empresa no existe');
 
     // Sin clínica elegida (el campo está debajo del rol) el rol de empresa se ve,
     // y al elegirlo solo se pueden escoger empresas médicas.

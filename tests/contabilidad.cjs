@@ -38,14 +38,13 @@ const preambulo=`
   let __confirmar=true; const customConfirm=async()=>__confirmar;
   const closeModal=id=>{document.getElementById(id).classList.remove('open');};
   const openModalCompra=()=>{}; const switchInvTab=()=>{};
-  const _guiaModulo={modulo:null}; let __sa=false; const isSuperAdmin=()=>__sa; let adminClinicas=[]; const _clinicasDisponiblesSA=async()=>adminClinicas; function cambiarClinicaTrabajo(id){__llamadas.push({t:'cambiar',id});} const esVeterinaria=()=>false;
+  const _guiaModulo={modulo:null}; const isSuperAdmin=()=>false; const esVeterinaria=()=>false;
   const VISTAS_CLINICAS=[]; const closeSidebar=()=>{};
   const renderView=v=>{if(v==='contabilidad') renderContabilidad();};
   const getClinicaConfig=()=>({});
   const CATEGORIA_PAGO_PROFESIONAL='pago_profesionales';
   let finTab='balance', finPeriodo='mes';
   ${extraer('navigate')}
-  ${extraer('puedeAbrirContabilidad')}
   const pdfAbrir=(titulo,body)=>__pdf.push({titulo,body});
   const descargarDocumento=fn=>fn();
   const formatFecha=f=>f;
@@ -221,7 +220,8 @@ const de=(ll,t,op)=>ll.filter(q=>q.t===t&&q.op===op);
     assert.match(source,/\{tabla:'ventas', opcional:true, select:'\*,venta_items\(\*\),venta_cobros\(\*\)'\}/,'Las ventas van en el respaldo');
     assert.match(source,/\{tabla:'inventario_lotes', opcional:true\}/);
     assert.match(source,/lotesInventario:t\.inventario_lotes\|\|\[\], clientesComerciales:t\.clientes_comerciales\|\|\[\], ventas:t\.ventas\|\|\[\]/);
-    assert.match(extraer('navigate'),/view==='contabilidad' && !sa && !esEmpresaMedica\(\)/,'Contabilidad es solo de empresa (el Super Admin elige una)');
+    assert.match(extraer('navigate'),/view==='contabilidad' && !hasPermiso\('contabilidad'\)/,'Contabilidad se abre con su permiso');
+    assert.doesNotMatch(extraer('navigate'),/Contabilidad es el módulo de las empresas médicas/,'Una clínica con el permiso también entra');
 
     // ── Lotes: primero lo más antiguo ──
     const fifo=await page.evaluate(({INV,LOTES})=>{
@@ -573,31 +573,77 @@ const de=(ll,t,op)=>ll.filter(q=>q.t===t&&q.op===op);
     assert.match(P['Venta V-000010'],/Saldo pendiente: C\$ 100\.00/);
     assert.match(P['Balance general'],/Capital y saldos iniciales/);
 
-    // ── Super Admin fuera de una empresa: elige cuál revisar ──
+    // ── Clínica con el módulo marcado: versión reducida con Finanzas e Inventario ──
     await page.setViewportSize({width:360,height:800});
-    const elegir=await page.evaluate(async()=>{
-      __sa=true; adminClinicas=[{id:9,nombre:'Distribuidora Demo',tipo:'empresa_medica'},{id:3,nombre:'Clínica Norte',tipo:'clinica'},{id:12,nombre:'Alfa Médica',tipo:'empresa_medica'}];
+    const clinica=await page.evaluate(()=>{
+      document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+      document.getElementById('view-contabilidad').classList.add('active'); currentView='contabilidad';
       currentClinica={id:3,nombre:'Clínica Norte',tipo:'clinica'}; currentClinicaId=3;
-      await renderContabilidad();
-      const caja=document.getElementById('cont-sin-empresa');
-      const r={contenidoOculto:document.getElementById('cont-contenido').hidden,visible:!caja.hidden,
-        texto:caja.querySelector('.cont-ayuda').textContent.replace(/\s+/g,' ').trim(),empresas:[...caja.querySelectorAll('.cont-elegir-nombre')].map(e=>e.textContent),
-        fuera:[...caja.querySelectorAll('*')].filter(e=>{const b=e.getBoundingClientRect();return b.width&&b.right>innerWidth+1;}).length};
-      __llamadas.length=0; caja.querySelectorAll('.cont-elegir-item')[1].click(); r.cambio=__llamadas.find(q=>q.t==='cambiar')?.id;
-      adminClinicas=[]; currentClinica=null; currentClinicaId=null; await renderContabilidad();
-      r.global=caja.textContent.replace(/\s+/g,' ').trim();
-      currentClinica={id:9,nombre:'Distribuidora Demo',tipo:'empresa_medica'}; currentClinicaId=9; __sa=false;
-      await renderContabilidad();
-      r.vuelve={contenido:!document.getElementById('cont-contenido').hidden,elegirOculto:caja.hidden};
+      __estado({periodo:'mes',tab:'ventas',C:{ventas:[],cliCom:[],lotes:[],prov:[{id:7,nombre:'Proveedor A',activo:true}],
+        inv:[{id:1,nombre:'Guantes',unidad:'caja',stock:30,costo:6,precio:10}],
+        mov:[{id:1,invId:1,tipo:'salida',cantidad:10,fecha:'2026-11-03',motivo:'Uso en consulta'},
+             {id:2,invId:1,tipo:'salida',cantidad:5,fecha:'2026-11-04',motivo:'Anulación de compra a Proveedor A'},
+             {id:3,invId:1,tipo:'entrada',cantidad:40,fecha:'2026-11-02',motivo:'Compra a Proveedor A'},
+             {id:4,invId:1,tipo:'salida',cantidad:2,fecha:'2026-10-20',motivo:'Uso en consulta'}],
+        fin:[{id:1,tipo:'ingreso',categoria:'consulta',monto:1000,fecha:'2026-11-05'},{id:2,tipo:'ingreso',categoria:'factura',monto:500,fecha:'2026-11-06'},
+             {id:3,tipo:'egreso',categoria:'alquiler',monto:300,fecha:'2026-11-01'},{id:4,tipo:'egreso',categoria:'compras',monto:200,fecha:'2026-11-02'},
+             {id:5,tipo:'egreso',categoria:'pago_profesional',monto:200,fecha:'2026-11-07'}],
+        comp:[fromCompra({id:80,proveedor_id:7,fecha:'2026-11-02',subtotal:400,iva:0,total:400,condicion:'credito',vencimiento:'2026-12-02',estado:'registrada',
+          compra_items:[],compra_pagos:[{id:1,fecha:'2026-11-02',monto:200}]})]}});
+      renderContabilidad();
+      const ver=id=>getComputedStyle(document.getElementById(id)).display!=='none';
+      const er=_estadoResultados();
+      const r={tab:contTab,tabs:['resumen','ventas','cobrar','clientes','resultados','balance','reportes'].filter(t=>ver('tab-cont-'+t)),
+        botones:[ver('btn-cont-cliente'),ver('btn-cont-venta')],nota:document.querySelector('#cont-aviso .cont-modo-nota')?.textContent||'',
+        er:[er.ingresosVentas,er.costoVentas,er.totOtros,er.totGastos,er.bruta,er.neta],
+        kpis:[...document.querySelectorAll('.cont-kpis h3')].map(h=>h.textContent),
+        leyenda:[...document.querySelectorAll('.cg-leyenda span')].map(s=>s.textContent),
+        etiquetas:[...document.querySelectorAll('#cont-grafica .cg-etiqueta')].map(t=>t.textContent),
+        serie:_serieMensual(12).slice(-2)};
+      switchContTab('cobrar'); r.cobrar=contTab;
+      switchContTab('resultados'); r.resultados=document.getElementById('cont-panel-resultados').textContent.replace(/\s+/g,' ');
+      switchContTab('balance'); r.balance=document.getElementById('cont-panel-balance').textContent.replace(/\s+/g,' ');
+      switchContTab('reportes'); r.reportes=[...document.querySelectorAll('#cont-panel-reportes .cont-reporte strong')].map(s=>s.textContent);
+      const fuera=[];
+      for(const t of ['resumen','resultados','balance','reportes']) {
+        switchContTab(t);
+        fuera.push(...[...document.querySelectorAll('#view-contabilidad *')].filter(e=>{const b=e.getBoundingClientRect();return b.width&&b.right>innerWidth+1&&!e.closest('.tabs,.cg-tooltip');})
+          .map(e=>t+': '+((e.className?.baseVal??e.className)||e.tagName)));
+      }
+      r.fuera=fuera.slice(0,4);
+      r.visibles=document.getElementById('cont-panel-reportes').getBoundingClientRect().width>0;
+      __pdf.length=0; imprimirEstadoResultados();
+      const d=document.createElement('div'); d.innerHTML=__pdf[0].body; r.pdf=d.textContent.replace(/\s+/g,' ');
+      currentClinica={id:9,nombre:'Distribuidora Demo',tipo:'empresa_medica'}; currentClinicaId=9; contTab='resumen'; renderContabilidad();
+      r.vuelve={tabs:['ventas','cobrar','clientes'].every(t=>ver('tab-cont-'+t)),boton:ver('btn-cont-venta'),nota:!!document.querySelector('#cont-aviso .cont-modo-nota')};
       return r;
     });
-    assert.deepEqual([elegir.contenidoOculto,elegir.visible],[true,true]);
-    assert.match(elegir.texto,/^Clínica Norte no es una empresa médica\. Elige la empresa médica/);
-    assert.deepEqual(elegir.empresas,['Alfa Médica','Distribuidora Demo'],'Solo empresas médicas, en orden');
-    assert.equal(elegir.fuera,0,'La lista cabe en 360px');
-    assert.equal(elegir.cambio,9,'Elegir una empresa cambia la clínica de trabajo');
-    assert.match(elegir.global,/vista global.*Aún no hay empresas médicas/);
-    assert.deepEqual(elegir.vuelve,{contenido:true,elegirOculto:true});
+    assert.equal(clinica.tab,'resumen','Ventas no existe en una clínica: se abre el resumen');
+    assert.deepEqual(clinica.tabs,['resumen','resultados','balance','reportes']);
+    assert.deepEqual(clinica.botones,[false,false],'Sin «+ Cliente» ni «+ Nueva venta»');
+    assert.match(clinica.nota,/^Versión para clínicas/);
+    assert.deepEqual(clinica.er,[0,60,1500,500,1440,940],'Ingresos de Finanzas; costo = 10 usadas a C$ 6 (la anulación no cuenta); sin el pago de compras');
+    assert.deepEqual(clinica.kpis,['C$ 1500.00','C$ 60.00','C$ 500.00','C$ 940.00','C$ 200.00','C$ 180.00']);
+    assert.deepEqual(clinica.leyenda,['Ingresos','Utilidad neta']);
+    assert.deepEqual(clinica.etiquetas,['Ingresos','Utilidad']);
+    assert.deepEqual(clinica.serie,[{mes:'2026-10',ventas:0,utilidad:-12,n:null},{mes:'2026-11',ventas:1500,utilidad:940,n:null}]);
+    assert.equal(clinica.cobrar,'resumen','Por cobrar no existe en una clínica');
+    assert.match(clinica.resultados,/Total ingresosC\$ 1500\.00/);
+    assert.match(clinica.resultados,/\(−\) Costo de lo usado del inventario/);
+    assert.doesNotMatch(clinica.resultados,/Ventas netas/);
+    assert.doesNotMatch(clinica.balance,/Cuentas por cobrar/);
+    assert.match(clinica.balance,/a costo promedio/);
+    assert.deepEqual(clinica.reportes,['Estado de resultados','Balance general','Cuentas por pagar']);
+    assert.equal(clinica.visibles,true,'La vista medida está en pantalla');
+    assert.deepEqual(clinica.fuera,[],'La versión reducida cabe en 360px');
+    assert.match(clinica.pdf,/Total ingresosC\$ 1500\.00/);
+    assert.match(clinica.pdf,/Utilidad neta del períodoC\$ 940\.00/);
+    assert.deepEqual(clinica.vuelve,{tabs:true,boton:true,nota:false},'En la empresa vuelve completo');
+    await page.evaluate(()=>{currentClinica={id:3,nombre:'Clínica Norte',tipo:'clinica'};currentClinicaId=3;contTab='resumen';renderContabilidad();window.scrollTo(0,0);});
+    await page.screenshot({path:path.join(process.env.TEMP||'/tmp','cont-clinica-360.png'),fullPage:true,animations:'disabled'});
+    await page.evaluate(()=>{switchContTab('resultados');window.scrollTo(0,0);});
+    await page.screenshot({path:path.join(process.env.TEMP||'/tmp','cont-clinica-resultados-360.png'),fullPage:true,animations:'disabled'});
+    await page.evaluate(()=>{currentClinica={id:9,nombre:'Distribuidora Demo',tipo:'empresa_medica'};currentClinicaId=9;contTab='resumen';renderContabilidad();});
     await page.setViewportSize({width:1280,height:900});
 
     // ── Clientes: sin repetir y con sus días de crédito ──

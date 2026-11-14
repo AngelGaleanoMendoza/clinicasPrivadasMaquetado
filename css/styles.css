@@ -2456,10 +2456,5 @@ body.dark .bg-cuadre{color:#6EE7B7}
   .er-detalle{padding-left:20px}
 }
 
-/* Contabilidad: el Super Admin elige qué empresa médica revisar */
-.cont-elegir-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
-.cont-elegir-item{display:flex;align-items:center;gap:12px;width:100%;min-height:52px;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--card);color:var(--text);font-family:inherit;font-size:14px;text-align:left;cursor:pointer;transition:border-color .15s,background .15s}
-.cont-elegir-item:hover,.cont-elegir-item:focus-visible{border-color:var(--primary);background:var(--primary-light);outline:none}
-.cont-elegir-icono{font-size:20px;flex-shrink:0}
-.cont-elegir-nombre{flex:1;min-width:0;font-weight:700;overflow-wrap:anywhere}
-.cont-elegir-ir{font-size:12.5px;font-weight:600;color:var(--primary);white-space:nowrap}
+/* Contabilidad en una clínica: versión reducida */
+.cont-modo-nota{font-size:12.5px;line-height:1.45;color:var(--text-light);background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:9px 12px;margin:0 0 12px}
