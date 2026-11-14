@@ -13,6 +13,11 @@ backend y GitHub Pages como hosting.
 - El sistema se usa mucho **desde el teléfono**. Toda vista nueva se prueba a
   360–430 px, no solo en escritorio.
 - La interfaz está **en español**, incluidos mensajes de error y textos de botones.
+- **SQL para Supabase: siempre completo y paso a paso.** Cuando haya que correr
+  algo en Supabase, entregar en el chat el SQL entero listo para copiar y pegar,
+  numerado por pasos (dónde pegarlo, qué pulsar y qué resultado debe salir). El
+  usuario lo corre a mano para saber qué está haciendo; no basta con nombrar el
+  archivo.
 
 ## Estructura
 
