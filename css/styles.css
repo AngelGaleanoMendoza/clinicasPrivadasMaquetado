@@ -2199,6 +2199,14 @@ body.lumi-abierta .toast-container{z-index:10060}
   .t-close{min-width:32px;min-height:32px;margin:-8px -8px 0 0}
   .login-lumi{min-height:40px;padding:10px 14px}
 }
+.admin-usuarios-grupo{border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden}
+.admin-usuarios-grupo>summary{display:flex;align-items:center;gap:12px;cursor:pointer;padding:15px;font-weight:600;list-style:none}
+.admin-usuarios-grupo>summary::-webkit-details-marker{display:none}
+.admin-usuarios-grupo>summary::before{content:'▸';color:var(--text-light)}
+.admin-usuarios-grupo[open]>summary::before{content:'▾'}
+.admin-usuarios-grupo>summary>span:first-of-type{flex:1;min-width:0;overflow-wrap:anywhere}
+.admin-usuarios-grupo>summary:focus-visible{outline:2px solid var(--primary);outline-offset:-3px}
+.admin-usuarios-grupo-contenido{padding:0 12px 12px;border-top:1px solid var(--border)}
 @media(prefers-reduced-motion:reduce){.lumi-hoja{animation:none}.lumi-btn.lumi-alerta .lumi-btn-punto{animation:none}}
 
 /* ══ EMPRESA MÉDICA: inicio ══ */

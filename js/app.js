@@ -15129,7 +15129,19 @@ function renderAdminUsuarios() {
     el.innerHTML = `<div class="empty-state"><div class="empty-icon">👥</div><p>No hay usuarios registrados.<br>Crea el primero con <strong>+ Nuevo Usuario</strong></p></div>`;
     return;
   }
-  el.innerHTML = adminUsuarios.map(u => {
+  const abiertos = new Set(Array.from(el.querySelectorAll('details[data-clinica][open]'), d => d.dataset.clinica));
+  const escapar = texto => String(texto ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const grupos = new Map();
+  adminUsuarios.forEach(u => {
+    const clinica = adminClinicas.find(c => String(c.id) === String(u.clinica_id));
+    const clave = clinica ? String(clinica.id) : 'sin-clinica';
+    if(!grupos.has(clave)) grupos.set(clave, { nombre: clinica ? clinica.nombre : 'Sin clínica asignada', usuarios: [] });
+    grupos.get(clave).usuarios.push(u);
+  });
+  el.innerHTML = Array.from(grupos).sort((a,b) => a[1].nombre.localeCompare(b[1].nombre, 'es')).map(([clave, grupo]) => `
+    <details class="admin-usuarios-grupo" data-clinica="${escapar(clave)}" ${abiertos.has(clave)?'open':''}>
+      <summary><span>🏥 ${escapar(grupo.nombre)}</span><span class="tag tag-blue">${grupo.usuarios.length} usuario${grupo.usuarios.length!==1?'s':''}</span></summary>
+      <div class="admin-usuarios-grupo-contenido">${grupo.usuarios.map(u => {
     const clinica = adminClinicas.find(c=>c.id===u.clinica_id);
     const perms = permisosEfectivos(u.rol,u.permisos);
     const permIcons = perms.map(id => {
@@ -15172,7 +15184,7 @@ function renderAdminUsuarios() {
         <button class="btn btn-sm btn-danger" data-uid="${u.id}" onclick="eliminarUsuario(this.dataset.uid)">🗑️</button>
       </div>
     </div>`;
-  }).join('');
+  }).join('')}</div></details>`).join('');
 }
 
 // ── Productividad ──
