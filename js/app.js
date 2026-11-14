@@ -69,6 +69,7 @@ function actualizarIdentidadEstablecimiento() {
   if(nombre) {
     nombre.textContent = nombreVisible;
     nombre.title = nombreVisible;
+    nombre.classList.toggle('sidebar-nombre-largo', nombreVisible.length > 30);
   }
   if(tipo) tipo.textContent = currentClinica
     ? (etiquetas[currentClinica.tipo] || 'Establecimiento privado')

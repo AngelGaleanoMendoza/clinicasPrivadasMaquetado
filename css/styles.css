@@ -118,6 +118,8 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 .sidebar-logo span{color:var(--sidebar-text);font-size:11px}
 .sidebar-identidad{flex:1;min-width:0}
 .sidebar-identidad h2,.sidebar-identidad span{display:block;overflow-wrap:anywhere}
+.sidebar-identidad h2{line-height:1.25;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden}
+.sidebar-identidad h2.sidebar-nombre-largo{font-size:12px;letter-spacing:0!important}
 .sidebar-menu{flex:1;min-height:0;padding:12px 0;overflow-y:scroll;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 .menu-section{padding:12px 20px 4px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,.25)}
 .menu-item{display:flex;align-items:center;gap:12px;padding:11px 20px;cursor:pointer;color:var(--sidebar-text);transition:all .2s;border-left:3px solid transparent;font-size:14px;user-select:none}
