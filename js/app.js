@@ -17912,7 +17912,7 @@ function renderResumenFinanzas() {
     <div class="stat-card"><div class="stat-icon si-green">💰</div>
       <div class="stat-info"><h3 style="color:var(--success);font-size:20px">${fmtC(valIng)}</h3><p>${verBal?'Ingresos de la clínica':'Entradas del período'}</p></div></div>
     <div class="stat-card"><div class="stat-icon ${utilidad>=0?'si-blue':'si-red'}">📊</div>
-      <div class="stat-info"><h3 style="color:${utilidad>=0?'var(--primary)':'var(--danger)'};font-size:20px">${fmtC(utilidad)}</h3><p>${verBal?'Balance de la clínica':'Caja del período'}</p></div></div>
+      <div class="stat-info"><h3 style="color:${utilidad>=0?'var(--primary)':'var(--danger)'};font-size:20px">${fmtC(utilidad)}</h3><p>${verBal?'Balance general':'Caja del período'}</p></div></div>
     <div class="stat-card"><div class="stat-icon si-orange">🧾</div>
       <div class="stat-info"><h3 style="font-size:20px">${fEmit}</h3><p>${_docFactura().plural} (${fPag} pagadas)</p></div></div>`;
   const recent = [...finData].sort((a,b)=>b.fecha.localeCompare(a.fecha)).slice(0,8);
@@ -17992,7 +17992,7 @@ function imprimirResumenFinanzas() {
     <div class="kpi-grid">
       <div class="kpi green"><div class="kpi-val">${fmtC(kpiIng)}</div><div class="kpi-lbl">${verBal?'Ingresos de la clínica':'Entradas'}</div></div>
       <div class="kpi red"><div class="kpi-val">${fmtC(kpiEgr)}</div><div class="kpi-lbl">${verBal?'Gastos de la clínica':'Salidas'}</div></div>
-      <div class="kpi ${utilidad>=0?'blue':'red'}"><div class="kpi-val">${fmtC(utilidad)}</div><div class="kpi-lbl">${verBal?'Balance de la clínica':'Caja del período'}</div></div>
+      <div class="kpi ${utilidad>=0?'blue':'red'}"><div class="kpi-val">${fmtC(utilidad)}</div><div class="kpi-lbl">${verBal?'Balance general':'Caja del período'}</div></div>
       <div class="kpi orange"><div class="kpi-val">${factData.length}</div><div class="kpi-lbl">${_docFactura().plural} (${fPag} pagadas)</div></div>
     </div>
 
@@ -19113,7 +19113,7 @@ function renderBalanceFinanzas() {
 
   const balance = `<div class="card" style="margin-bottom:18px">
     <div class="card-header doc-header">
-      <h3>⚖️ Balance de la clínica</h3>
+      <h3>⚖️ Balance general</h3>
       <div class="doc-acciones">
         <button class="btn btn-secondary btn-sm" onclick="imprimirBalanceReparto()">🖨️ Imprimir</button>
         <button class="btn btn-primary btn-sm" onclick="descargarDocumento(imprimirBalanceReparto)">⬇️ Descargar PDF</button>
@@ -19305,7 +19305,7 @@ function imprimirBalanceReparto() {
   // Importes en una línea: a 28px, como en los demás reportes, "C$" y la cifra se separaban.
   const kpiVal = 'font-size:18px;white-space:nowrap';
   const body = `
-    <div style="font-size:22px;font-weight:900;color:#0F172A;margin-bottom:4px">Balance de la clínica</div>
+    <div style="font-size:22px;font-weight:900;color:#0F172A;margin-bottom:4px">Balance general</div>
     <div style="font-size:13px;color:#64748B;font-weight:600;margin-bottom:20px">Período: ${escAttr(periodo)} · Generado: ${new Date().toLocaleString('es-ES')}</div>
 
     <div class="kpi-grid">
