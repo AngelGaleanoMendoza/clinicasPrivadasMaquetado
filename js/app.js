@@ -51,6 +51,30 @@ const VISTAS_CLINICAS = ['pacientes','expedientes','paciente-detalle','examenes-
   'mascota-detalle','hospitalizacion'];
 function esEmpresaMedica(clinica = currentClinica) { return clinica?.tipo === 'empresa_medica'; }
 
+function actualizarIdentidadEstablecimiento() {
+  const nombre = document.getElementById('sidebar-establecimiento-nombre');
+  const tipo = document.getElementById('sidebar-establecimiento-tipo');
+  const etiquetas = {
+    clinica: 'Clínica privada',
+    optica: 'Óptica / Optometría',
+    oftalmologia: 'Clínica oftalmológica',
+    dental: 'Clínica dental',
+    dermatologia: 'Clínica dermatológica',
+    especialidad: 'Clínica de especialidad',
+    veterinaria: 'Clínica veterinaria',
+    farmacia: 'Farmacia',
+    empresa_medica: 'Empresa médica privada'
+  };
+  const nombreVisible = currentClinica?.nombre?.trim() || 'LMD';
+  if(nombre) {
+    nombre.textContent = nombreVisible;
+    nombre.title = nombreVisible;
+  }
+  if(tipo) tipo.textContent = currentClinica
+    ? (etiquetas[currentClinica.tipo] || 'Establecimiento privado')
+    : 'Gestión médica y empresarial';
+}
+
 // ════════════════════ PROCEDIMIENTOS OFTALMOLÓGICOS ════════════════════
 // Catálogo separado del plan dental. `tipo` alimenta filtros y reportes, mientras
 // que `cat` es el encabezado clínico visible para el usuario.
@@ -9641,7 +9665,10 @@ async function guardarConfigClinica() {
   if(data) {
     const i = configClinicas.findIndex(c => c.id === configClinicaId);
     if(i >= 0) configClinicas[i] = data;
-    if(configClinicaId === currentClinicaId) currentClinica = data;
+    if(configClinicaId === currentClinicaId) {
+      currentClinica = data;
+      actualizarIdentidadEstablecimiento();
+    }
   }
   setLoading(false);
   _pintarSelectorClinicas();
@@ -15408,6 +15435,7 @@ function puedeGestionarProcedimientosClinicos() {
 function toggleAdminMenu() { applyRoleMenu(); }
 
 function applyRoleMenu() {
+  actualizarIdentidadEstablecimiento();
   const sa       = isSuperAdmin();
   const role     = currentUser?.key;
   const isAdmin  = role === 'admin';
@@ -16173,7 +16201,10 @@ async function guardarClinica() {
     if(error){ toast('Error al actualizar: '+error.message,'error'); setLoading(false); return; }
     if(editingClinicaId === currentClinicaId) {
       const {data} = await sb.from('clinicas').select('*').eq('id',currentClinicaId).single();
-      if(data) currentClinica = data;
+      if(data) {
+        currentClinica = data;
+        actualizarIdentidadEstablecimiento();
+      }
     }
     toast('Clínica actualizada','success');
   } else {
