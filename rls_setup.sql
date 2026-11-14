@@ -1046,7 +1046,7 @@ END $$;
 DO $$
 DECLARE t TEXT;
 BEGIN
-  FOREACH t IN ARRAY ARRAY['proveedores','compras','compra_items'] LOOP
+  FOREACH t IN ARRAY ARRAY['proveedores','compras','compra_items','compra_pagos'] LOOP
     IF to_regclass('public.' || t) IS NOT NULL THEN
       EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
       EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', t || '_clinica', t);

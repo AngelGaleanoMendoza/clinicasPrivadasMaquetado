@@ -22,7 +22,7 @@
 <!-- Lectura local de machotes. El archivo se procesa en el navegador antes de
      guardarlo; Mammoth extrae DOCX y PDF.js se carga al elegir un PDF. -->
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js" defer></script>
-<link rel="stylesheet" href="css/styles.css?v=20261114c">
+<link rel="stylesheet" href="css/styles.css?v=20261114d">
 </head>
 <body>
 <script>
@@ -898,7 +898,14 @@
 
         <div id="inv-panel-compras" style="display:none">
           <div class="card">
-            <div class="card-header"><h3>🛒 Compras a proveedores</h3><button class="btn btn-primary btn-sm" onclick="abrirNuevaCompra()">+ Nueva compra</button></div>
+            <div class="card-header"><h3>🛒 Compras a proveedores</h3>
+              <div class="doc-acciones">
+                <button class="btn btn-secondary btn-sm" onclick="imprimirReporteCompras()" title="Reporte de compras del período">🖨️ Reporte</button>
+                <button class="btn btn-secondary btn-sm" onclick="descargarDocumento(imprimirReporteCompras)" title="Descargar el reporte en PDF">⬇️ PDF</button>
+                <button class="btn btn-secondary btn-sm" onclick="imprimirCuentasPorPagar()" title="Lo que falta pagar a cada proveedor">📆 Por pagar</button>
+                <button class="btn btn-primary btn-sm" onclick="abrirNuevaCompra()">+ Nueva compra</button>
+              </div>
+            </div>
             <div class="compras-filtros">
               <div class="filter-chips" id="compras-periodos"></div>
               <select id="compras-proveedor" onchange="renderCompras()" aria-label="Proveedor"></select>
@@ -912,7 +919,12 @@
 
         <div id="inv-panel-proveedores" style="display:none">
           <div class="card">
-            <div class="card-header"><h3>🚚 Proveedores</h3><button class="btn btn-primary btn-sm" onclick="abrirProveedor()">+ Proveedor</button></div>
+            <div class="card-header"><h3>🚚 Proveedores</h3>
+              <div class="doc-acciones">
+                <button class="btn btn-secondary btn-sm" onclick="imprimirProveedores()" title="Directorio con lo comprado y lo pendiente">🖨️ Directorio</button>
+                <button class="btn btn-primary btn-sm" onclick="abrirProveedor()">+ Proveedor</button>
+              </div>
+            </div>
             <div class="search-bar" style="margin-bottom:14px">
               <div class="search-bar-input">
                 <span style="color:var(--text-light)">🔍</span>
@@ -1223,7 +1235,14 @@
       </div>
       <div class="form-group"><label>Fecha *</label><input type="date" id="compra-fecha"></div>
       <div class="form-group"><label>N.º de factura del proveedor</label><input type="text" id="compra-numero" placeholder="Opcional"></div>
-      <div class="form-group"><label>Forma de pago</label>
+      <div class="form-group"><label>Condición</label>
+        <select id="compra-condicion" onchange="_ajustarCondicionCompra()">
+          <option value="contado">💵 De contado (se paga hoy)</option>
+          <option value="credito">📆 Al crédito (se paga después)</option>
+        </select>
+      </div>
+      <div class="form-group" id="compra-vence-wrap" hidden><label>Vence el</label><input type="date" id="compra-vencimiento"></div>
+      <div class="form-group" id="compra-metodo-wrap"><label>Forma de pago</label>
         <select id="compra-metodo">
           <option value="efectivo">💵 Efectivo</option>
           <option value="transferencia">🏦 Transferencia</option>
@@ -1231,20 +1250,54 @@
           <option value="cheque">🧾 Cheque</option>
         </select>
       </div>
-      <div class="form-group compra-gasto"><label class="compra-check"><input type="checkbox" id="compra-gasto" checked> Anotar el pago como gasto en Finanzas</label></div>
+      <div class="form-group" id="compra-gasto-wrap"><label class="compra-check"><input type="checkbox" id="compra-gasto" checked> Anotar el pago como gasto en Finanzas</label></div>
+      <div class="form-group full compra-iva-fila">
+        <label class="compra-check"><input type="checkbox" id="compra-con-iva" onchange="_ajustarIvaCompra()"> La factura del proveedor lleva IVA</label>
+        <label class="compra-iva-pct" id="compra-iva-pct-wrap" hidden><span>IVA</span><input type="number" id="compra-iva-pct" value="15" min="0" max="100" step="0.01" oninput="_totalCompra()"><span>%</span></label>
+      </div>
     </div>
     <div class="compra-lineas-cab">
       <span>Productos</span>
-      <span class="text-light" id="compra-ayuda-costo">Costo = lo que pagas al proveedor por unidad</span>
+      <span class="text-light" id="compra-ayuda-costo">Costo unitario sin IVA = lo que pagas al proveedor por unidad</span>
     </div>
     <div id="compra-lineas"></div>
     <button type="button" class="btn btn-secondary btn-sm" onclick="agregarLineaCompra()">+ Agregar producto</button>
     <p class="text-light compra-nota-producto">¿No está en la lista? Créalo primero con <strong>+ Producto</strong> en Inventario.</p>
     <div class="form-group" style="margin-top:12px"><label>Notas</label><textarea id="compra-notas" placeholder="Opcional" style="min-height:56px"></textarea></div>
-    <div class="compra-total"><span>Total de la compra</span><strong id="compra-total">C$ 0.00</strong></div>
+    <div class="compra-totales">
+      <div><span>Subtotal</span><strong id="compra-subtotal">C$ 0.00</strong></div>
+      <div id="compra-iva-linea" hidden><span id="compra-iva-lbl">IVA</span><strong id="compra-iva">C$ 0.00</strong></div>
+      <div class="compra-total"><span>Total de la compra</span><strong id="compra-total">C$ 0.00</strong></div>
+    </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-compra')">Cancelar</button>
       <button class="btn btn-primary" id="btn-guardar-compra" onclick="guardarCompra()">🛒 Registrar compra</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PAGO A PROVEEDOR -->
+<div class="modal-overlay" id="modal-pago-compra">
+  <div class="modal" style="max-width:460px">
+    <h2>💵 Pago al proveedor</h2>
+    <p class="text-light" id="pago-compra-info" style="margin-bottom:12px"></p>
+    <div class="form-grid">
+      <div class="form-group"><label>Fecha *</label><input type="date" id="pago-compra-fecha"></div>
+      <div class="form-group"><label>Monto (C$) *</label><input type="number" id="pago-compra-monto" min="0" step="0.01"></div>
+      <div class="form-group"><label>Forma de pago</label>
+        <select id="pago-compra-metodo">
+          <option value="efectivo">💵 Efectivo</option>
+          <option value="transferencia">🏦 Transferencia</option>
+          <option value="tarjeta">💳 Tarjeta</option>
+          <option value="cheque">🧾 Cheque</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Referencia</label><input type="text" id="pago-compra-referencia" placeholder="N.º de cheque o transferencia"></div>
+      <div class="form-group full"><label class="compra-check"><input type="checkbox" id="pago-compra-gasto" checked> Anotar el pago como gasto en Finanzas</label></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-pago-compra')">Cancelar</button>
+      <button class="btn btn-primary" id="btn-guardar-pago-compra" onclick="guardarPagoCompra()">💵 Registrar pago</button>
     </div>
   </div>
 </div>
@@ -2949,7 +3002,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20261114c" defer></script>
+<script src="js/app.js?v=20261114d" defer></script>
 </body>
 </html>
 

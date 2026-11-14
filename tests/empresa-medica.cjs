@@ -45,7 +45,7 @@ const preambulo=`
          {id:2,nombre:'Jeringas 5 ml',stock:400,stockMin:50,unidad:'unidad',precio:2}]};
   ${permisos}
   ${empresa}
-  ${['permisosEfectivos','hasPermiso','puedeVerBalance','puedeGestionarProcedimientosClinicos','applyRoleMenu','_syncBuscadorGlobal',
+  ${['actualizarIdentidadEstablecimiento','permisosEfectivos','hasPermiso','puedeVerBalance','puedeGestionarProcedimientosClinicos','applyRoleMenu','_syncBuscadorGlobal',
      '_permisosDisponiblesUsuario','_ajustarRolesPorClinica','_ajustarClinicasPorRol','renderPermisosModal','togglePermLabel','onRolChange','fillClinicaSelect',
      'renderDashboardEmpresa','renderNavQuickGrid'].map(extraer).join('\n')}
   window.__set=o=>{ if('sa' in o) superAdmin=o.sa; if('user' in o) currentUser=o.user; if('clinica' in o) currentClinica=o.clinica; };
@@ -104,6 +104,7 @@ const abrir=async p=>{
       renderNavQuickGrid('dashboard');
       r.rapidos=[...document.querySelectorAll('#nav-quick-grid .nq-label')].map(e=>e.textContent);
       r.buscador=getComputedStyle(document.querySelector('.topbar-search')).display;
+      r.identidad=document.getElementById('sidebar-establecimiento-tipo')?.textContent;
       return r;
     });
     for(const id of ['menu-pacientes','menu-citas','menu-agendas','menu-medicaciones','menu-notas','menu-expedientes','menu-examenes-digitalizados','menu-farmacia','menu-procedimientos','menu-clinica-section','menu-admin'])
@@ -111,6 +112,7 @@ const abrir=async p=>{
     for(const id of ['menu-inventario','menu-finanzas','menu-estadisticas','menu-exportar']) assert.equal(menu[id],true,id+' debe verse');
     assert.deepEqual(menu.rapidos,['Estadísticas','Inventario','Finanzas','Exportar']);
     assert.equal(menu.buscador,'none','No hay pacientes que buscar');
+    assert.equal(menu.identidad,'Empresa médica privada','La barra lateral dice qué es el establecimiento');
 
     // ── Formulario de usuario: los roles dependen de la clínica ──
     const roles=await page.evaluate(()=>{

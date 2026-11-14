@@ -507,6 +507,7 @@ body.dark .balance-pct{background:#0F172A}
 .form-grid.cols-1{grid-template-columns:1fr}
 @media(max-width:500px){.form-grid{grid-template-columns:1fr}}
 .form-group{display:flex;flex-direction:column;gap:6px}
+.form-group[hidden]{display:none}
 .form-group.full{grid-column:1/-1}
 .form-group label{font-size:11px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:.6px}
 .form-group input,.form-group select,.form-group textarea{padding:10px 14px;border:1.5px solid var(--border);border-radius:12px;font-size:14px;font-family:inherit;color:var(--text);background:var(--card);outline:none;transition:all .2s}
@@ -2267,8 +2268,24 @@ body.dark .inv-margen-neg{color:#FCA5A5}
 body.dark .compra-linea-margen{color:#6EE7B7}
 .compra-linea-margen.prod-margen-neg{background:none;border:0;padding:0;color:#B91C1C}
 .compra-nota-producto{font-size:12px;margin:8px 0 0}
-.compra-total{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:14px;padding:14px 16px;border-radius:12px;background:var(--primary-light);font-size:15px}
+.compra-totales{margin-top:14px;border-radius:12px;background:var(--primary-light);padding:10px 16px}
+.compra-totales>div{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:13.5px;padding:3px 0}
+.compra-totales>div[hidden]{display:none}
+.compra-total{font-size:15px!important;border-top:1px solid var(--border);margin-top:4px;padding-top:8px!important}
 .compra-total strong{font-size:20px}
+.compra-iva-fila{display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;gap:10px 18px}
+.compra-iva-fila .compra-check{margin-top:0}
+.compra-iva-pct{display:flex!important;align-items:center;gap:6px;font-size:13px!important;text-transform:none!important;letter-spacing:0!important;margin:0}
+.compra-iva-pct[hidden]{display:none!important}
+.compra-iva-pct input{width:80px;padding:7px 9px;border:1.5px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-family:inherit;font-size:13px}
+.compra-item-montos{display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0}
+.compra-item-saldo,.compra-vencido{font-size:12px;font-weight:700;color:#B45309}
+body.dark .compra-item-saldo,body.dark .compra-vencido{color:#FCD34D}
+.compra-saldo td{color:#B45309}
+body.dark .compra-saldo td{color:#FCD34D}
+.compra-pagos{display:flex;flex-direction:column;gap:6px}
+.compra-pagos>div{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:8px 10px;border-radius:9px;background:var(--bg)}
+.compra-pagos span{color:var(--text-light);overflow-wrap:anywhere}
 .compra-detalle-datos{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
 .compra-detalle-datos div{background:var(--bg);border-radius:10px;padding:10px 12px}
 .compra-detalle-datos span{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:3px}
@@ -2284,6 +2301,7 @@ body.dark .compra-linea-margen{color:#6EE7B7}
   .compra-quitar{grid-column:2;justify-self:end;align-self:center}
   .compra-check{margin-top:0}
   .compra-item,.prov-item{flex-wrap:wrap}
+  .compra-item-montos{flex-direction:row;align-items:baseline;gap:10px;width:100%;justify-content:space-between}
   .prov-item-acciones{width:100%;justify-content:flex-end}
   .compras-filtros select{width:100%}
 }

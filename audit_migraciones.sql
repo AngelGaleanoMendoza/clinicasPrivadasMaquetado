@@ -135,6 +135,11 @@ WITH requisitos(orden, migracion, clase, objeto) AS (VALUES
   (19, 'compras_proveedores',        'politica',    'proveedores_clinica'),
   (19, 'compras_proveedores',        'politica',    'compras_clinica'),
   (19, 'compras_proveedores',        'politica',    'compra_items_clinica'),
+  (19, 'compras_proveedores',        'tabla',       'compra_pagos'),
+  (19, 'compras_proveedores',        'politica',    'compra_pagos_clinica'),
+  (19, 'compras_proveedores',        'columna',     'compras.iva'),
+  (19, 'compras_proveedores',        'columna',     'compras.condicion'),
+  (19, 'compras_proveedores',        'columna',     'compras.vencimiento'),
   (19, 'compras_proveedores',        'columna',     'inventario.costo_unitario'),
   (19, 'compras_proveedores',        'columna',     'factura_items.costo_unitario')
 
