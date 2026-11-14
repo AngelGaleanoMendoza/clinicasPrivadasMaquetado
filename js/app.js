@@ -3994,7 +3994,7 @@ function imprimirExpedienteCompleto(pid) {
 
   const pie = `
     <div style="text-align:center;margin-top:30px;padding-top:12px;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:11px">
-      Lumea Med — Sistema de Gestión Clínica | lumeamed.net · ${new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'})}
+      Lumea Med — Sistema de Gestión Privada | lumeamed.net · ${new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'})}
     </div>`;
 
   const body = cabecera + secPaciente + secExp + secExamen + secProcClin + secCitas + secMeds + secNotas + pie;
@@ -10009,7 +10009,7 @@ function verResumenCita(citaId) {
       </div>
     </div>
     <div class="rc-footer" style="margin-top:14px">
-      ${cfg.nombreClinica||'Lumea Med'} · ${cfg.notaPie||cfg.direccion||'Sistema de Gestión Clínica'} · ${new Date().toLocaleString('es-ES')}
+      ${cfg.nombreClinica||'Lumea Med'} · ${cfg.notaPie||cfg.direccion||'Sistema de Gestión Privada'} · ${new Date().toLocaleString('es-ES')}
     </div>`;
 
   document.getElementById('modal-resumen-cita').classList.add('open');
@@ -20975,7 +20975,7 @@ function verFacturaPDF(id) {
     </div>
     ${fact.notas?`<div style="margin-top:20px;padding:12px;background:#f8fafc;border-radius:8px;font-size:12px;color:#64748b;border:1px solid #e2e8f0"><strong>Notas:</strong> ${fact.notas}</div>`:''}
     <div style="text-align:center;margin-top:28px;color:#94a3b8;font-size:11px">
-      Lumea Med — Sistema de Gestión Clínica | lumeamed.net
+      Lumea Med — Sistema de Gestión Privada | lumeamed.net
     </div>`;
   pdfAbrir(`${tipoDocumento} ${numeroImpreso}`, body, {orientation:'portrait'});
 }
@@ -21174,7 +21174,7 @@ function renderExpedienteHistorialPDF(pacienteId) {
     </div>
     ${secPaciente}${secExp}${secCitas}${secMeds}${secNotas}${secFacts}
     <div style="text-align:center;margin-top:30px;padding-top:12px;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:11px">
-      Lumea Med — Sistema de Gestión Clínica | lumeamed.net
+      Lumea Med — Sistema de Gestión Privada | lumeamed.net
     </div>`;
   pdfAbrir(`Historial — ${p.nombre} ${p.apellidos}`, body, {orientation:'portrait'});
 }
