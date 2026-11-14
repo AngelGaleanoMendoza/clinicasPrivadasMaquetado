@@ -14332,6 +14332,7 @@ const MINSA_CATALOG = (function(){
 let _minsaSelected = new Set();
 
 function abrirSelectorMINSA() {
+  if(esEmpresaMedica()) return;
   if(!currentClinicaId){ toast('No tienes clínica asignada','error'); return; }
   _minsaSelected.clear();
   document.getElementById('minsa-search').value = '';
@@ -14392,6 +14393,7 @@ function seleccionarTodoMINSA() {
 }
 
 async function confirmarImportMINSA() {
+  if(esEmpresaMedica()) return;
   if(!_minsaSelected.size){ toast('Selecciona al menos un medicamento','error'); return; }
   const toInsert = MINSA_CATALOG.filter(p=>_minsaSelected.has(p.cod)).map(p=>({
     clinica_id:currentClinicaId, nombre:p.n, categoria:'medicamento', unidad:p.u||'unidad',
@@ -14417,6 +14419,13 @@ let prodSugIdx = -1;
 
 function buscarProductoInv(q) {
   const box = document.getElementById('prod-sug');
+  if(esEmpresaMedica()) {
+    box.style.display = 'none';
+    box.innerHTML = '';
+    box._matches = [];
+    prodSugIdx = -1;
+    return;
+  }
   if(!q || q.length < 2) { box.style.display='none'; prodSugIdx=-1; return; }
   const q2 = q.toLowerCase();
   const catIcon = c=>({medicamento:'💊',material:'🩺',equipo:'🔬',insumo:'🧹',papeleria:'📄',general:'📦'}[c]||'📦');
@@ -17063,9 +17072,10 @@ function applyRoleMenu() {
   vis('menu-admin',          sa);
   vis('menu-configuracion',  sa);
 
-  // ─ Botón importar catálogo MINSA: quien tenga acceso a inventario o estadísticas
+  // Las empresas médicas registran su propio catálogo de productos.
   const btnMinsa = document.getElementById('btn-importar-minsa');
-  if(btnMinsa) btnMinsa.style.display = (sa || invAccess || statAccess) ? '' : 'none';
+  if(btnMinsa) btnMinsa.style.display = !esEmpresa && (sa || invAccess || statAccess) ? '' : 'none';
+  if(esEmpresa) closeModal('modal-minsa-selector');
 }
 
 async function loadAdminData() {
