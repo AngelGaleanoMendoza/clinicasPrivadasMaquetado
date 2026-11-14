@@ -32,19 +32,20 @@ const preambulo=`
   const setLoading=()=>{};
   const _exigeClinica=()=>!!currentClinicaId;
   const _faltaColumna=(e,c)=>String(e?.message||'').includes(c);
-  const esEmpresaMedica=()=>currentClinica?.tipo==='empresa_medica';
+  const esEmpresaMedica=(c=currentClinica)=>c?.tipo==='empresa_medica';
   const hasPermiso=()=>true;
   const loadAll=async()=>{}; const renderInventario=()=>{};
   let __confirmar=true; const customConfirm=async()=>__confirmar;
   const closeModal=id=>{document.getElementById(id).classList.remove('open');};
   const openModalCompra=()=>{}; const switchInvTab=()=>{};
-  const _guiaModulo={modulo:null}; const isSuperAdmin=()=>false; const esVeterinaria=()=>false;
+  const _guiaModulo={modulo:null}; let __sa=false; const isSuperAdmin=()=>__sa; let adminClinicas=[]; const _clinicasDisponiblesSA=async()=>adminClinicas; function cambiarClinicaTrabajo(id){__llamadas.push({t:'cambiar',id});} const esVeterinaria=()=>false;
   const VISTAS_CLINICAS=[]; const closeSidebar=()=>{};
   const renderView=v=>{if(v==='contabilidad') renderContabilidad();};
   const getClinicaConfig=()=>({});
   const CATEGORIA_PAGO_PROFESIONAL='pago_profesionales';
   let finTab='balance', finPeriodo='mes';
   ${extraer('navigate')}
+  ${extraer('puedeAbrirContabilidad')}
   const pdfAbrir=(titulo,body)=>__pdf.push({titulo,body});
   const descargarDocumento=fn=>fn();
   const formatFecha=f=>f;
@@ -220,7 +221,7 @@ const de=(ll,t,op)=>ll.filter(q=>q.t===t&&q.op===op);
     assert.match(source,/\{tabla:'ventas', opcional:true, select:'\*,venta_items\(\*\),venta_cobros\(\*\)'\}/,'Las ventas van en el respaldo');
     assert.match(source,/\{tabla:'inventario_lotes', opcional:true\}/);
     assert.match(source,/lotesInventario:t\.inventario_lotes\|\|\[\], clientesComerciales:t\.clientes_comerciales\|\|\[\], ventas:t\.ventas\|\|\[\]/);
-    assert.match(extraer('navigate'),/view==='contabilidad' && !esEmpresaMedica\(\)/,'Contabilidad es solo de empresa');
+    assert.match(extraer('navigate'),/view==='contabilidad' && !sa && !esEmpresaMedica\(\)/,'Contabilidad es solo de empresa (el Super Admin elige una)');
 
     // ── Lotes: primero lo más antiguo ──
     const fifo=await page.evaluate(({INV,LOTES})=>{
@@ -571,6 +572,33 @@ const de=(ll,t,op)=>ll.filter(q=>q.t===t&&q.op===op);
     assert.match(P['Venta V-000010'],/L-A/);
     assert.match(P['Venta V-000010'],/Saldo pendiente: C\$ 100\.00/);
     assert.match(P['Balance general'],/Capital y saldos iniciales/);
+
+    // ── Super Admin fuera de una empresa: elige cuál revisar ──
+    await page.setViewportSize({width:360,height:800});
+    const elegir=await page.evaluate(async()=>{
+      __sa=true; adminClinicas=[{id:9,nombre:'Distribuidora Demo',tipo:'empresa_medica'},{id:3,nombre:'Clínica Norte',tipo:'clinica'},{id:12,nombre:'Alfa Médica',tipo:'empresa_medica'}];
+      currentClinica={id:3,nombre:'Clínica Norte',tipo:'clinica'}; currentClinicaId=3;
+      await renderContabilidad();
+      const caja=document.getElementById('cont-sin-empresa');
+      const r={contenidoOculto:document.getElementById('cont-contenido').hidden,visible:!caja.hidden,
+        texto:caja.querySelector('.cont-ayuda').textContent.replace(/\s+/g,' ').trim(),empresas:[...caja.querySelectorAll('.cont-elegir-nombre')].map(e=>e.textContent),
+        fuera:[...caja.querySelectorAll('*')].filter(e=>{const b=e.getBoundingClientRect();return b.width&&b.right>innerWidth+1;}).length};
+      __llamadas.length=0; caja.querySelectorAll('.cont-elegir-item')[1].click(); r.cambio=__llamadas.find(q=>q.t==='cambiar')?.id;
+      adminClinicas=[]; currentClinica=null; currentClinicaId=null; await renderContabilidad();
+      r.global=caja.textContent.replace(/\s+/g,' ').trim();
+      currentClinica={id:9,nombre:'Distribuidora Demo',tipo:'empresa_medica'}; currentClinicaId=9; __sa=false;
+      await renderContabilidad();
+      r.vuelve={contenido:!document.getElementById('cont-contenido').hidden,elegirOculto:caja.hidden};
+      return r;
+    });
+    assert.deepEqual([elegir.contenidoOculto,elegir.visible],[true,true]);
+    assert.match(elegir.texto,/^Clínica Norte no es una empresa médica\. Elige la empresa médica/);
+    assert.deepEqual(elegir.empresas,['Alfa Médica','Distribuidora Demo'],'Solo empresas médicas, en orden');
+    assert.equal(elegir.fuera,0,'La lista cabe en 360px');
+    assert.equal(elegir.cambio,9,'Elegir una empresa cambia la clínica de trabajo');
+    assert.match(elegir.global,/vista global.*Aún no hay empresas médicas/);
+    assert.deepEqual(elegir.vuelve,{contenido:true,elegirOculto:true});
+    await page.setViewportSize({width:1280,height:900});
 
     // ── Clientes: sin repetir y con sus días de crédito ──
     const cli=await page.evaluate(async({CLIENTES})=>{

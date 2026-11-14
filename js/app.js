@@ -2631,10 +2631,11 @@ async function navigate(view, patientId) {
     navigate('dashboard'); return;
   }
   // Guards por permiso
-  if(view==='contabilidad' && !esEmpresaMedica()) {
+  // El Super Admin entra siempre: fuera de una empresa la vista le pide elegir una.
+  if(view==='contabilidad' && !sa && !esEmpresaMedica()) {
     toast('Contabilidad es el módulo de las empresas médicas.','info'); navigate('dashboard'); return;
   }
-  if(view==='contabilidad' && !hasPermiso('contabilidad')) { _sinPermiso('Contabilidad'); return; }
+  if(view==='contabilidad' && !puedeAbrirContabilidad()) { _sinPermiso('Contabilidad'); return; }
   if(view==='finanzas'     && !hasPermiso('finanzas'))     { _sinPermiso('Finanzas'); return; }
   if(view==='inventario'   && !hasPermiso('inventario'))   { _sinPermiso('Inventario'); return; }
   if(view==='estadisticas' && !hasPermiso('estadisticas')) { _sinPermiso('Estadísticas'); return; }
@@ -2842,7 +2843,7 @@ function renderNavQuickGrid(cv) {
     { view:'estadisticas', icon:'📈', label:'Estadísticas', show: hasPermiso('estadisticas') },
     { view:'inventario',   icon:'📦', label:'Inventario',   show: hasPermiso('inventario') },
     { view:'finanzas',     icon:'💰', label:'Finanzas',     show: hasPermiso('finanzas') },
-    { view:'contabilidad', icon:'📒', label:'Contabilidad', show: hasPermiso('contabilidad') },
+    { view:'contabilidad', icon:'📒', label:'Contabilidad', show: puedeAbrirContabilidad() },
     { view:'exportar',     icon:'📤', label:'Exportar',     show: hasPermiso('exportar') },
     { view:'configuracion',icon:'⚙️', label:'Config.',      show: sa },
   ].filter(x=>x.show && !(esEmpresaMedica() && VISTAS_CLINICAS.includes(x.view)));
@@ -12843,8 +12844,30 @@ function _etiquetaMes(mes, largo = false) {
 
 // ── Vista ──
 const _TABS_CONT = ['resumen','ventas','cobrar','clientes','resultados','balance','reportes'];
-function renderContabilidad() {
+// El Super Admin abre Contabilidad desde cualquier clínica. Fuera de una
+// empresa médica no hay nada que mostrar: se le ofrece elegir cuál revisar.
+function _htmlElegirEmpresaContabilidad() {
+  const empresas = adminClinicas.filter(c => esEmpresaMedica(c)).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es'));
+  return `<div class="card cont-elegir">
+    <div class="card-header"><h3>📒 Contabilidad</h3></div>
+    <p class="text-light cont-ayuda">${currentClinicaId ? `<strong>${escAttr(currentClinica?.nombre || 'Esta clínica')}</strong> no es una empresa médica.` : 'Estás en la vista global, sin clínica elegida.'} Elige la empresa médica cuya contabilidad quieres revisar:</p>
+    ${empresas.length ? `<div class="cont-elegir-lista">${empresas.map(c => `<button type="button" class="cont-elegir-item" onclick="cambiarClinicaTrabajo(${Number(c.id)})">
+        <span class="cont-elegir-icono">🏢</span><span class="cont-elegir-nombre">${escAttr(c.nombre || 'Empresa médica')}</span><span class="cont-elegir-ir">Abrir →</span></button>`).join('')}</div>`
+      : '<div class="empty-state"><div class="empty-icon">🏢</div><p>Aún no hay empresas médicas.<br>Créala en <strong>Administración</strong> con el tipo «Empresa médica».</p></div>'}
+  </div>`;
+}
+async function renderContabilidad() {
   if(!document.getElementById('view-contabilidad')) return;
+  const sinEmpresa = !esEmpresaMedica();
+  document.getElementById('cont-contenido').hidden = sinEmpresa;
+  const elegir = document.getElementById('cont-sin-empresa');
+  elegir.hidden = !sinEmpresa;
+  if(sinEmpresa) {
+    if(isSuperAdmin()) await _clinicasDisponiblesSA();
+    elegir.innerHTML = _htmlElegirEmpresaContabilidad();
+    return;
+  }
+  elegir.innerHTML = '';
   document.getElementById('cont-aviso').innerHTML = _contabilidadDisponible ? '' : _AVISO_MIGRACION_CONTABILIDAD;
   document.getElementById('cont-periodos').innerHTML = _PERIODOS_CONT
     .map(([id, l]) => `<span class="chip${contPeriodo === id ? ' active' : ''}" onclick="setContPeriodo('${id}')">${l}</span>`).join('');
@@ -17073,6 +17096,11 @@ function hasPermiso(perm) {
   const base = permisosEfectivos(currentUser?.key,p);
   return base.includes(perm);
 }
+// Contabilidad: quien tenga el permiso dentro de una empresa médica, y el
+// Super Admin siempre (fuera de una empresa la vista le pide elegir una).
+function puedeAbrirContabilidad() {
+  return isSuperAdmin() || hasPermiso('contabilidad');
+}
 function puedeVerBalance() {
   return isSuperAdmin() || currentUser?.key === 'medico_admin' || currentUser?.key === 'admin_empresa';
 }
@@ -17138,7 +17166,7 @@ function applyRoleMenu() {
   const finAccess  = hasPermiso('finanzas');
   const expAccess  = hasPermiso('exportar');
   const statAccess = hasPermiso('estadisticas');
-  const contAccess = hasPermiso('contabilidad');
+  const contAccess = puedeAbrirContabilidad();
   const hasGestion = invAccess || finAccess || expAccess || statAccess || contAccess;
   vis('menu-gestion-section', hasGestion);
   vis('menu-inventario',      invAccess);

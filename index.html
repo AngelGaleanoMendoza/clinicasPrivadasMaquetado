@@ -22,7 +22,7 @@
 <!-- Lectura local de machotes. El archivo se procesa en el navegador antes de
      guardarlo; Mammoth extrae DOCX y PDF.js se carga al elegir un PDF. -->
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js" defer></script>
-<link rel="stylesheet" href="css/styles.css?v=20261114h">
+<link rel="stylesheet" href="css/styles.css?v=20261114i">
 </head>
 <body>
 <script>
@@ -1073,6 +1073,8 @@
 
       <!-- CONTABILIDAD (empresa médica) -->
       <div id="view-contabilidad" class="view">
+        <div id="cont-sin-empresa" hidden></div>
+        <div id="cont-contenido">
         <div class="card" style="margin-bottom:18px">
           <div class="card-header">
             <h3>📒 Contabilidad</h3>
@@ -1129,6 +1131,7 @@
         <div id="cont-panel-resultados" style="display:none"></div>
         <div id="cont-panel-balance" style="display:none"></div>
         <div id="cont-panel-reportes" style="display:none"></div>
+        </div>
       </div>
 
       <!-- ADMIN SUPER -->
@@ -3176,7 +3179,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20261114h" defer></script>
+<script src="js/app.js?v=20261114i" defer></script>
 </body>
 </html>
 

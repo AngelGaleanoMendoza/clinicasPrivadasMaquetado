@@ -49,7 +49,7 @@ const preambulo=`
   ${permisos}
   ${empresa}
   ${['_etiquetaRol','_contextoEstablecimiento','_textoEstablecimiento','actualizarIdentidadEstablecimiento','permisosEfectivos','hasPermiso','puedeVerBalance','puedeGestionarProcedimientosClinicos','applyRoleMenu','_syncBuscadorGlobal',
-     '_permisosDisponiblesUsuario','_ajustarRolesPorClinica','_ajustarClinicasPorRol','renderPermisosModal','togglePermLabel','onRolChange','fillClinicaSelect',
+     'puedeAbrirContabilidad','_permisosDisponiblesUsuario','_ajustarRolesPorClinica','_ajustarClinicasPorRol','renderPermisosModal','togglePermLabel','onRolChange','fillClinicaSelect',
      'renderDashboardEmpresa','renderNavQuickGrid'].map(extraer).join('\n')}
   window.__set=o=>{ if('sa' in o) superAdmin=o.sa; if('user' in o) currentUser=o.user; if('clinica' in o) currentClinica=o.clinica; };
   Object.assign(window,{hasPermiso,puedeVerBalance,applyRoleMenu,_ajustarRolesPorClinica,fillClinicaSelect,renderPermisosModal,renderDashboardEmpresa,renderNavQuickGrid,esEmpresaMedica});
@@ -116,6 +116,22 @@ const abrir=async p=>{
     assert.deepEqual(menu.rapidos,['Estadísticas','Inventario','Finanzas','Contabilidad','Exportar']);
     assert.equal(menu.buscador,'none','No hay pacientes que buscar');
     assert.equal(menu.identidad,'Empresa médica privada','La barra lateral dice qué es el establecimiento');
+
+    // El Super Admin tiene Contabilidad en cualquier clínica (la vista le pide
+    // elegir una empresa); un administrador de clínica no.
+    const saMenu=await page.evaluate(()=>{
+      const ver=id=>{const el=document.getElementById(id);return !!el && el.style.display!=='none';};
+      __set({sa:true,user:{id:'sa',key:'superadmin'},clinica:{id:3,nombre:'Clínica Norte',tipo:'clinica'}});
+      applyRoleMenu(); renderNavQuickGrid('dashboard');
+      const r={sa:ver('menu-contabilidad'),rapido:[...document.querySelectorAll('#nav-quick-grid .nq-label')].some(e=>e.textContent==='Contabilidad')};
+      __set({sa:false,user:{id:'u9',key:'admin',permisos:null}}); applyRoleMenu();
+      r.adminClinica=ver('menu-contabilidad');
+      __set({user:{id:'u1',key:'admin_empresa',permisos:null},clinica:{id:9,nombre:'Distribuidora Demo',tipo:'empresa_medica'}}); applyRoleMenu();
+      return r;
+    });
+    assert.deepEqual(saMenu,{sa:true,rapido:true,adminClinica:false});
+    const navSA=extraer('navigate');
+    assert.match(navSA,/view==='contabilidad' && !sa && !esEmpresaMedica\(\)/,'El Super Admin no rebota fuera de una empresa');
 
     // Los textos se recalculan por rol/contexto, sin modificar nombres propios
     // ni dejar etiquetas de la sesión o del establecimiento anterior.

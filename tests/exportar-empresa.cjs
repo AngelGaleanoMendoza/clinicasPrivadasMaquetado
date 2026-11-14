@@ -37,7 +37,7 @@ const preambulo=`
     if(o.tipo) {currentClinica.tipo=o.tipo;currentUser.key=o.tipo==='empresa_medica'?'admin_empresa':'medico_admin';}
     if(o.vacio) for(const k of Object.keys(C)) C[k]=[];};
   ${['_etiquetaRol','_contextoEstablecimiento','_textoEstablecimiento','actualizarIdentidadEstablecimiento',
-    '_syncBuscadorGlobal','puedeVerBalance','puedeGestionarProcedimientosClinicos','applyRoleMenu',
+    '_syncBuscadorGlobal','puedeVerBalance','puedeAbrirContabilidad','puedeGestionarProcedimientosClinicos','applyRoleMenu',
     '_resumenExportar','renderExportar','_contenidoEmailExportar','abrirReportesExportarEmpresa','exportarPDFClinica','exportarJSON'].map(extraer).join('\n')}
 `;
 (async()=>{
