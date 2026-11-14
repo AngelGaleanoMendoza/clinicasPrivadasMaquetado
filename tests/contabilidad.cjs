@@ -37,7 +37,14 @@ const preambulo=`
   const loadAll=async()=>{}; const renderInventario=()=>{};
   let __confirmar=true; const customConfirm=async()=>__confirmar;
   const closeModal=id=>{document.getElementById(id).classList.remove('open');};
-  const openModalCompra=()=>{}; const switchInvTab=()=>{}; const navigate=()=>{};
+  const openModalCompra=()=>{}; const switchInvTab=()=>{};
+  const _guiaModulo={modulo:null}; const isSuperAdmin=()=>false; const esVeterinaria=()=>false;
+  const VISTAS_CLINICAS=[]; const closeSidebar=()=>{};
+  const renderView=v=>{if(v==='contabilidad') renderContabilidad();};
+  const getClinicaConfig=()=>({});
+  const CATEGORIA_PAGO_PROFESIONAL='pago_profesionales';
+  let finTab='balance', finPeriodo='mes';
+  ${extraer('navigate')}
   const pdfAbrir=(titulo,body)=>__pdf.push({titulo,body});
   const descargarDocumento=fn=>fn();
   const formatFecha=f=>f;
@@ -45,7 +52,6 @@ const preambulo=`
   const escAttr=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const fmtC=n=>'C$ '+Number(n||0).toFixed(2);
   const _etiquetaCategoria=id=>id;
-  let _topeDatos={fin:false,fact:false};
   let _movItems={}, _movTipo='salida';
   ${extraer('fechaLocal')}
   ${extraer('_lumiNormal')}
@@ -69,7 +75,11 @@ const preambulo=`
   ${bloque('let _comprasDisponibles','// ════════════════════ CATÁLOGO INVENTARIO')}
   ${extraer('_pctMargen')}
   ${extraer('confirmarMovMasivo')}
+  ${bloque('const TIPOS_SERVICIO_FACTURA', 'async function anularFactura')}
+  ${['_tituloBalanceFinanzas','puedeVerBalance','getFinDateRange','renderFinanzas','switchFinTab',
+    'renderResumenFinanzas','imprimirResumenFinanzas'].map(extraer).join('\n')}
   window.__estado=(o)=>{ for(const k of Object.keys(o.C||{})) C[k]=JSON.parse(JSON.stringify(o.C[k]));
+    if('tipo' in o) { currentClinica.tipo=o.tipo; currentUser.key=o.tipo==='empresa_medica'?'admin_empresa':'medico_admin'; }
     if('confirmar' in o) __confirmar=o.confirmar; if('periodo' in o) contPeriodo=o.periodo; if('tab' in o) contTab=o.tab; if('mov' in o) { _movItems=o.mov; _movTipo='salida'; } };
   Object.assign(window,{C,fromVenta,fromLote,fromCompra,fromCliCom,_asignarLotes,_stockSinLote,_valorInventario,_estadoResultados,_balanceGeneral,_rangoCont,
     abrirNuevaVenta,agregarLineaVenta,cambiarLineaVenta,guardarVenta,_lineasV:()=>_lineasVenta,_ajustarCondicionVenta,_ajustarIvaVenta,
@@ -112,6 +122,50 @@ const de=(ll,t,op)=>ll.filter(q=>q.t===t&&q.op===op);
   try {
     const page=await browser.newPage();
     await abrir(page);
+
+    // Finanzas solo cambia su nombre en la empresa; Contabilidad conserva el
+    // balance de activos/pasivos. Se pulsa el botón con navigate() real.
+    for(const tipo of ['empresa_medica','clinica']) {
+      const titulo=tipo==='empresa_medica'?'Flujo de caja':'Balance general';
+      await page.evaluate(tipo=>{
+        __estado({tipo,C:{fin:[],fact:[],factItems:[],reparto:[]}});
+        finTab='balance'; navigate('finanzas');
+      },tipo);
+      assert.equal(await page.locator('#tab-fin-balance').textContent(),tipo==='empresa_medica'?'⚖️ Flujo de caja':'⚖️ Balance');
+      assert.equal(await page.locator('#fin-balance .doc-header h3').textContent(),'⚖️ '+titulo);
+      assert.equal(await page.locator('.balance-enlace-contable').count(),tipo==='empresa_medica'?1:0);
+      const impresos=await page.evaluate(()=>{
+        __pdf.length=0; imprimirBalanceReparto(); imprimirResumenFinanzas();
+        renderResumenFinanzas(); return {pdf:__pdf,tarjeta:document.querySelector('#fin-stats').textContent};
+      });
+      assert.match(impresos.tarjeta,new RegExp(titulo));
+      assert.match(impresos.pdf[0].body,new RegExp(titulo));
+      assert.match(impresos.pdf[1].body,new RegExp(titulo));
+      if(tipo==='empresa_medica') assert.match(impresos.pdf[0].titulo,/^Flujo de caja — /);
+      else assert.match(impresos.pdf[0].titulo,/^Balance de servicios — /);
+      for(const width of [360,390,430,1280]) for(const dark of [false,true]) {
+        await page.setViewportSize({width,height:900});
+        await page.evaluate(dark=>document.body.classList.toggle('dark',dark),dark);
+        const fuera=await page.locator('#fin-panel-balance').evaluate(el=>{
+          return [...el.querySelectorAll('.doc-header h3,.doc-acciones .btn,.balance-enlace-contable,.balance-enlace-contable p,.balance-enlace-contable .btn')]
+            .filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&(r.left<0||r.right>innerWidth+1);}).map(e=>e.outerHTML);
+        });
+        assert.deepEqual(fuera,[],`${tipo} ${width}px ${dark?'oscuro':'claro'} sin desbordes`);
+        assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Sin scroll horizontal');
+        await page.evaluate(()=>window.scrollTo(0,0));
+        await page.screenshot({path:path.join(process.env.TEMP||'/tmp',`flujo-${tipo}-${width}-${dark?'oscuro':'claro'}.png`),fullPage:true,animations:'disabled'});
+      }
+      if(tipo==='empresa_medica') {
+        assert.match(await page.locator('.balance-enlace-contable p').textContent(),/^El balance general contable está en Contabilidad → Balance$/);
+        await page.locator('.balance-enlace-contable button').click();
+        await page.waitForSelector('#cont-panel-balance',{state:'visible'});
+        assert.equal(await page.evaluate(()=>currentView),'contabilidad');
+        assert.equal(await page.evaluate(()=>contTab),'balance');
+        assert.equal(await page.locator('#cont-panel-balance h3').first().textContent(),'⚖️ Balance general');
+      }
+    }
+    await page.evaluate(()=>{__estado({tipo:'empresa_medica'});document.body.classList.remove('dark');});
+    console.log('OK: Flujo de caja solo en empresa, clínica intacta, tarjetas, PDF y navegación al balance contable; claro/oscuro a 360–430 y 1280 px.');
 
     // ── Migración: tablas con RLS, en rls_setup, auditoría y respaldo ──
     for(const t of ['clientes_comerciales','inventario_lotes','ventas','venta_items','venta_cobros']) {

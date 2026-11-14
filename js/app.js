@@ -19155,7 +19155,13 @@ function renderFinanzas() {
   switchFinTab(finTab||'resumen');
 }
 
+function _tituloBalanceFinanzas() {
+  return esEmpresaMedica() ? 'Flujo de caja' : 'Balance general';
+}
+
 function switchFinTab(tab) {
+  const tabBalance = document.getElementById('tab-fin-balance');
+  if(tabBalance) tabBalance.textContent = esEmpresaMedica() ? '⚖️ Flujo de caja' : '⚖️ Balance';
   if(tab === 'balance' && !puedeVerBalance()) {
     toast('El balance solo está disponible para el médico administrativo o el administrador de la empresa','warning');
     tab = 'resumen';
@@ -19230,7 +19236,7 @@ function renderResumenFinanzas() {
     <div class="stat-card"><div class="stat-icon si-green">💰</div>
       <div class="stat-info"><h3 style="color:var(--success);font-size:20px">${fmtC(valIng)}</h3><p>${verBal?'Ingresos de la clínica':'Entradas del período'}</p></div></div>
     <div class="stat-card"><div class="stat-icon ${utilidad>=0?'si-blue':'si-red'}">📊</div>
-      <div class="stat-info"><h3 style="color:${utilidad>=0?'var(--primary)':'var(--danger)'};font-size:20px">${fmtC(utilidad)}</h3><p>${verBal?'Balance general':'Caja del período'}</p></div></div>
+      <div class="stat-info"><h3 style="color:${utilidad>=0?'var(--primary)':'var(--danger)'};font-size:20px">${fmtC(utilidad)}</h3><p>${verBal?_tituloBalanceFinanzas():'Caja del período'}</p></div></div>
     <div class="stat-card"><div class="stat-icon si-orange">🧾</div>
       <div class="stat-info"><h3 style="font-size:20px">${fEmit}</h3><p>${_docFactura().plural} (${fPag} pagadas)</p></div></div>`;
   const recent = [...finData].sort((a,b)=>b.fecha.localeCompare(a.fecha)).slice(0,8);
@@ -19310,7 +19316,7 @@ function imprimirResumenFinanzas() {
     <div class="kpi-grid">
       <div class="kpi green"><div class="kpi-val">${fmtC(kpiIng)}</div><div class="kpi-lbl">${verBal?'Ingresos de la clínica':'Entradas'}</div></div>
       <div class="kpi red"><div class="kpi-val">${fmtC(kpiEgr)}</div><div class="kpi-lbl">${verBal?'Gastos de la clínica':'Salidas'}</div></div>
-      <div class="kpi ${utilidad>=0?'blue':'red'}"><div class="kpi-val">${fmtC(utilidad)}</div><div class="kpi-lbl">${verBal?'Balance general':'Caja del período'}</div></div>
+      <div class="kpi ${utilidad>=0?'blue':'red'}"><div class="kpi-val">${fmtC(utilidad)}</div><div class="kpi-lbl">${verBal?_tituloBalanceFinanzas():'Caja del período'}</div></div>
       <div class="kpi orange"><div class="kpi-val">${factData.length}</div><div class="kpi-lbl">${_docFactura().plural} (${fPag} pagadas)</div></div>
     </div>
 
@@ -20431,12 +20437,13 @@ function renderBalanceFinanzas() {
 
   const balance = `<div class="card" style="margin-bottom:18px">
     <div class="card-header doc-header">
-      <h3>⚖️ Balance general</h3>
+      <h3>⚖️ ${_tituloBalanceFinanzas()}</h3>
       <div class="doc-acciones">
         <button class="btn btn-secondary btn-sm" onclick="imprimirBalanceReparto()">🖨️ Imprimir</button>
         <button class="btn btn-primary btn-sm" onclick="descargarDocumento(imprimirBalanceReparto)">⬇️ Descargar PDF</button>
       </div>
     </div>
+    ${esEmpresaMedica() ? `<div class="balance-enlace-contable"><p>El balance general contable está en Contabilidad → Balance</p><button type="button" class="btn btn-secondary btn-sm" onclick="contTab='balance'; navigate('contabilidad')">Ver balance contable →</button></div>` : ''}
     <p class="balance-nota">Período: ${escAttr(_etiquetaPeriodoFin())}. Cuenta el dinero el día que entra en caja, no el día que se emitió el documento. De cada cobro solo entra la parte de la clínica; la del profesional se informa aparte y no se suma ni se resta.</p>
     ${avisos}
     <div class="stats-grid balance-kpis">
@@ -20623,7 +20630,7 @@ function imprimirBalanceReparto() {
   // Importes en una línea: a 28px, como en los demás reportes, "C$" y la cifra se separaban.
   const kpiVal = 'font-size:18px;white-space:nowrap';
   const body = `
-    <div style="font-size:22px;font-weight:900;color:#0F172A;margin-bottom:4px">Balance general</div>
+    <div style="font-size:22px;font-weight:900;color:#0F172A;margin-bottom:4px">${_tituloBalanceFinanzas()}</div>
     <div style="font-size:13px;color:#64748B;font-weight:600;margin-bottom:20px">Período: ${escAttr(periodo)} · Generado: ${new Date().toLocaleString('es-ES')}</div>
 
     <div class="kpi-grid">
@@ -20660,7 +20667,7 @@ function imprimirBalanceReparto() {
       return `<tr><td style="white-space:nowrap">${formatFecha(l.factura.fecha)}</td><td style="white-space:nowrap"><code style="font-size:10px">${escAttr(l.factura.numero||'#'+l.factura.id)}</code></td><td style="white-space:nowrap">${escAttr(l.factura.pacienteNombre||'—')}</td><td>${t.icon} ${escAttr(l.item.descripcion||t.label)}${l.item.cantidad>1?` ×${l.item.cantidad.toLocaleString('es-NI')}`:''}</td><td style="${num}">${fmtC(l.total)}</td><td style="${num}">${l.manual?'a mano':l.sinReparto?'sin reparto':_fmtPct(l.pct)+(l.estimado?'*':'')}</td><td style="${num};font-weight:700;color:#15803D">${fmtC(l.clinica)}</td></tr>`;
     }).join('')}</tbody></table>` : ''}`;
 
-  return pdfAbrir('Balance de servicios — ' + periodo, body, cfg);
+  return pdfAbrir((esEmpresaMedica() ? 'Flujo de caja' : 'Balance de servicios') + ' — ' + periodo, body, cfg);
 }
 
 async function anularFactura(id) {

@@ -279,6 +279,9 @@ body.dark .balance-aviso{background:rgba(245,158,11,.1);border-color:rgba(245,15
 #fin-balance .balance-kpis{margin-bottom:18px;gap:12px;grid-template-columns:repeat(2,minmax(0,1fr))}
 #fin-balance .balance-kpis .stat-card{padding:16px;gap:14px}
 #fin-balance .balance-kpis .stat-icon{width:44px;height:44px;font-size:20px}
+.balance-enlace-contable{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 14px;margin:12px 0;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text)}
+.balance-enlace-contable p{flex:1 1 240px;margin:0;font-size:13px;line-height:1.5;overflow-wrap:anywhere}
+.balance-enlace-contable .btn{min-height:40px;white-space:normal;text-align:center;max-width:100%}
 .balance-kpis .stat-info{min-width:0}
 #fin-balance .balance-kpis .stat-info h3{font-size:22px;white-space:nowrap}
 #fin-balance .balance-tabla th,#fin-balance .balance-tabla td{display:table-cell}

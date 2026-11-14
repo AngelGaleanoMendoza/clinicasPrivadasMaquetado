@@ -30,6 +30,7 @@ const preambulo=`
   const isSuperAdmin=()=>superAdmin;
   const isOdontologo=()=>false, esOftalmologia=()=>false, esProfesionalOftalmo=()=>false;
   const renderSelectorClinicaSA=()=>{};
+  const closeModal=id=>document.getElementById(id)?.classList.remove('open');
   const esVeterinaria=()=>currentClinica?.tipo==='veterinaria';
   const escAttr=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const fmtC=v=>'C$ '+Number(v||0).toFixed(2);
