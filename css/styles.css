@@ -57,7 +57,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 /* Spinner de operaciones: arco degradado con los colores de la marca */
 .spinner{width:42px;height:42px;border-radius:50%;background:conic-gradient(from 0deg,transparent 12%,var(--primary) 65%,#06B6D4 100%);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3.5px));mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3.5px));animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-.loading-text{color:var(--text-light);font-size:13px;font-weight:500}
+.loading-text{color:var(--text-light);font-size:13px;font-weight:500;max-width:min(380px,calc(100vw - 48px));text-align:center}
 
 /* Modo boot: pantalla completa de marca (arranque y login) */
 .loading-overlay .load-brand{display:none}

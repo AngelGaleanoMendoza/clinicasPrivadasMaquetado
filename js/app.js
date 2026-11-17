@@ -16282,17 +16282,17 @@ function _cortesPaginaPdf(win, doc, altoPagina, total) {
 // hoja: {ancho, alto, margen} en mm. alto:null genera una sola página del alto
 // del contenido (tickets). anchoMarco permite maquetar más ancho que la hoja
 // cuando el documento tiene media queries de pantalla que no deben activarse.
-async function _descargarHtmlComoPdf({titulo, html, hoja=HOJA_CARTA, cssDescarga='', paraZip=false}) {
+async function _descargarHtmlComoPdf({titulo, html, hoja=HOJA_CARTA, cssDescarga='', paraZip=false, informarProgreso}) {
   if(_pdfEnCurso) {
     if(paraZip) throw new Error('Ya se está preparando otro PDF.');
     toast('Ya se está preparando otro PDF, espera un momento','info'); return;
   }
   _pdfEnCurso = true;
-  const aviso = document.querySelector('#loading-overlay .load-text-op');
+  const aviso = paraZip ? null : document.querySelector('#loading-overlay .load-text-op');
   const avisoPrevio = aviso?.textContent;
-  const avance = texto => { if(aviso) aviso.textContent = texto; };
+  const avance = informarProgreso || (texto => { if(aviso) aviso.textContent = texto; });
   const marco = document.createElement('iframe');
-  setLoading(true);
+  if(!paraZip) setLoading(true);
   avance('Preparando PDF…');
   try {
     const anchoPx = Math.round((hoja.ancho - 2 * hoja.margen) * PX_POR_MM);
@@ -16300,8 +16300,9 @@ async function _descargarHtmlComoPdf({titulo, html, hoja=HOJA_CARTA, cssDescarga
     const anchoMarco = Math.max(hoja.anchoMarco || 0, anchoPx);
     // Un iframe aislado: los estilos del impreso no tocan la app ni al revés.
     marco.setAttribute('aria-hidden', 'true');
+    marco.inert = true;
     marco.tabIndex = -1;
-    marco.style.cssText = `position:fixed;top:0;left:${-anchoMarco - 200}px;width:${anchoMarco}px;height:${Math.ceil(altoPagina) || 80}px;border:0;pointer-events:none`;
+    marco.style.cssText = `position:fixed;top:0;left:${-anchoMarco - 200}px;width:${anchoMarco}px;height:${Math.ceil(altoPagina) || 80}px;border:0;opacity:0;pointer-events:none`;
     const extras = `<style>html,body{background:#fff!important}${cssDescarga}</style>`
       + PDF_LIBRERIAS.map(src => `<script src="${src}"><\/script>`).join('');
     const fuente = await _incrustarImagenesPdf(html);
@@ -16387,7 +16388,7 @@ async function _descargarHtmlComoPdf({titulo, html, hoja=HOJA_CARTA, cssDescarga
   } finally {
     marco.remove();
     if(aviso) aviso.textContent = avisoPrevio;
-    setLoading(false);
+    if(!paraZip) setLoading(false);
     _pdfEnCurso = false;
   }
 }

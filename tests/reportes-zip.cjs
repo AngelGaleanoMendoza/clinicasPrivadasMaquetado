@@ -29,7 +29,19 @@ const origen = 'http://localhost:38638/';
       hasPermiso = permiso => ['exportar','estadisticas','finanzas','inventario','contabilidad'].includes(permiso);
       getClinicaConfig = () => ({nombreClinica:'Clínica de prueba'});
       hoy = () => '2026-11-17';
-      window.prueba = {consultas:[],notificaciones:[]};
+      window.prueba = {consultas:[],notificaciones:[],cargas:[],marcos:[],progreso:[]};
+      const cargaOriginal = setLoading;
+      setLoading = visible => {
+        prueba.cargas.push(visible);
+        cargaOriginal(visible);
+      };
+      const aviso = document.querySelector('#loading-overlay .load-text-op');
+      new MutationObserver(() => prueba.progreso.push(aviso.textContent)).observe(aviso,{childList:true,subtree:true});
+      new MutationObserver(registros => {
+        for(const registro of registros) for(const nodo of registro.addedNodes) {
+          if(nodo.nodeName === 'IFRAME' && nodo.hasAttribute('srcdoc')) prueba.marcos.push([nodo.style.opacity,nodo.inert]);
+        }
+      }).observe(document.body,{childList:true});
       const tablas = {
         citas:[{fecha:'2026-10-18',estado:'completada'},{fecha:'2026-11-18',estado:'pendiente'}],
         finanzas:[
@@ -48,8 +60,12 @@ const origen = 'http://localhost:38638/';
         prueba.consultas.push([d.tabla,clinica]);
         return {tabla:d.tabla,filas:tablas[d.tabla] || []};
       };
-      _notificarReportesRespaldo = async (b,f) => { prueba.notificaciones.push([b.clinica.id,f]); };
-      document.querySelectorAll('.loading-overlay,#login-screen').forEach(e=>e.style.display='none');
+      _notificarReportesRespaldo = async (b,f) => {
+        prueba.notificaciones.push([b.clinica.id,f]);
+        await new Promise(resolver => { prueba.terminarCorreo = resolver; });
+      };
+      document.getElementById('login-screen').style.display='none';
+      document.getElementById('loading-overlay').classList.remove('show','boot');
       document.getElementById('app').classList.add('visible');
       document.getElementById('view-exportar').classList.add('active');
       window.informes = _armarReportesZip(tablas,['actividad','finanzas','inventario','contabilidad'],hoy(),false);
@@ -71,6 +87,15 @@ const origen = 'http://localhost:38638/';
     assert.equal(entradas.length,informes.length);
     assert.ok(entradas.every(([n,f])=>n.endsWith('.pdf')&&f==='%PDF-'));
     assert.deepEqual(await pagina.evaluate(() => prueba.notificaciones),[[1,'zip']]);
+    const presentacion = await pagina.evaluate(() => {
+      const overlay = document.getElementById('loading-overlay');
+      return {cargas:prueba.cargas,marcos:prueba.marcos,progreso:prueba.progreso,visible:overlay.classList.contains('show')};
+    });
+    assert.deepEqual(presentacion.cargas,[true,false]);
+    assert.equal(presentacion.visible,false);
+    assert.deepEqual(presentacion.marcos,informes.map(()=>['0',true]));
+    for(const i of informes.keys()) assert.ok(presentacion.progreso.some(p=>p.startsWith(`Reporte ${i+1} de ${informes.length}`)));
+    await pagina.evaluate(() => prueba.terminarCorreo());
     assert.ok((await pagina.evaluate(()=>prueba.consultas)).every(([,c])=>c===1));
     if(process.env.REPORTES_LIB_DIR) fs.writeFileSync(path.join(process.env.REPORTES_LIB_DIR,'reportes-prueba.zip'),bytes);
     console.log('OK: reporte histórico, fecha de corte, permisos, ZIP con PDF válidos y aviso por correo.');

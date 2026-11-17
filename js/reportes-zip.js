@@ -23,7 +23,11 @@ async function descargarReportesZip(boton) {
   if(!modulos.length) { toast('Habilita un módulo con reportes para descargar el ZIP.','info'); return; }
   const corte = hoy();
   const nombre = _nombreArchivoBackup('zip').replace(/^lumea-backup-/,'lumea-reportes-');
+  const aviso = document.querySelector('#loading-overlay .load-text-op');
+  const avisoPrevio = aviso?.textContent;
+  const progreso = mensaje => { if(aviso) aviso.textContent = mensaje; };
   boton.disabled = true;
+  progreso('Consultando datos de los reportes…');
   setLoading(true);
   try {
     const grupos = empresa && modulos.includes('contabilidad') ? [...modulos,'empresa'] : modulos;
@@ -42,22 +46,24 @@ async function descargarReportesZip(boton) {
 
     await _cargarScriptExterno(JSZIP_URL, () => !!globalThis.JSZip);
     const zip = new globalThis.JSZip();
-    for(const archivo of archivos) {
+    for(const [indice,archivo] of archivos.entries()) {
       if(String(clinica) !== String(currentClinicaId)) throw new Error('Cambió el establecimiento activo.');
-      const pdf = await _descargarHtmlComoPdf({...archivo,paraZip:true});
+      const informarProgreso = mensaje => progreso(`Reporte ${indice+1} de ${archivos.length} · ${archivo.titulo}. ${mensaje}`);
+      const pdf = await _descargarHtmlComoPdf({...archivo,paraZip:true,informarProgreso});
       zip.file(_nombreArchivoPdf(archivo.titulo), await pdf.arrayBuffer());
-      setLoading(true);
     }
+    progreso('Empaquetando los PDF…');
     const empaquetado = await zip.generateAsync({type:'blob'});
     if(String(clinica) !== String(currentClinicaId)) throw new Error('Cambió el establecimiento activo.');
     _descargarArchivo(empaquetado,nombre);
     toast(`ZIP descargado con ${archivos.length} reportes en PDF.`);
-    await _notificarReportesRespaldo({clinica:{id:clinica}},'zip');
+    void _notificarReportesRespaldo({clinica:{id:clinica}},'zip');
   } catch(error) {
     toast('No se pudo generar el ZIP de reportes. '+(error.message || ''),'error');
   } finally {
     boton.disabled = false;
     setLoading(false);
+    if(aviso) aviso.textContent = avisoPrevio;
   }
 }
 
