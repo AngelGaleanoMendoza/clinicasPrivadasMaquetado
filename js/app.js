@@ -482,8 +482,20 @@ const toDesp   = x => ({ mascota_id:x.mascotaId, producto:x.producto, tipo:x.tip
 const toExpMas    = x => ({ mascota_id:x.mascotaId, peso:x.peso||null, temperatura:x.temperatura||null, fc:x.fc||null, fr:x.fr||null, condicion_corporal:x.condicionCorporal||null, enfermedades_cronicas:x.enfermedadesCronicas||null, cirugias_previas:x.cirugias||null, dieta:x.dieta||null, ambiente:x.ambiente||null, convive_con:x.conviveCon||null, reproductivo:x.reproductivo||null, temperamento:x.temperamento||null, observaciones_medicas:x.observacionesMedicas||null, clinica_id:currentClinicaId });
 
 // ════════════════════ LOAD DATA ════════════════════
+async function consultarPaginas(consulta) {
+  const data = [];
+  const pagina = 500;
+  for(let inicio = 0; ; inicio += pagina) {
+    const {data:filas, error} = await consulta().range(inicio, inicio + pagina - 1);
+    if(error) return {data:null, error};
+    data.push(...filas);
+    if(filas.length < pagina) return {data, error:null};
+  }
+}
+
 async function loadAll() {
   if(!currentClinicaId) { setDbStatus(true); setLoading(false); return; }
+  const clinicaCarga = currentClinicaId;
   setLoading(true);
   try {
     const [rp,rc,rm,rn,re,rhist,rpf,ri,rmov,rfin,rfact,rplantillas,rreparto] = await Promise.all([
@@ -494,13 +506,14 @@ async function loadAll() {
       sb.from('expediente').select('*').eq('clinica_id', currentClinicaId).order('id'),
       sb.from('historial_expediente').select('*').eq('clinica_id', currentClinicaId).order('fecha_hora', {ascending:false}),
       _consultaPerfil(cols => sb.from('profiles').select(cols).eq('clinica_id', currentClinicaId)),
-      sb.from('inventario').select('*').eq('clinica_id', currentClinicaId).order('nombre'),
-      sb.from('inventario_movimientos').select('*').eq('clinica_id', currentClinicaId).order('fecha', {ascending:false}).limit(500),
-      sb.from('finanzas').select('*').eq('clinica_id', currentClinicaId).order('fecha', {ascending:false}).limit(1000),
+      consultarPaginas(() => sb.from('inventario').select('*').eq('clinica_id', clinicaCarga).order('nombre').order('id')),
+      consultarPaginas(() => sb.from('inventario_movimientos').select('*').eq('clinica_id', clinicaCarga).order('fecha', {ascending:false}).order('id',{ascending:false})),
+      consultarPaginas(() => sb.from('finanzas').select('*').eq('clinica_id', clinicaCarga).order('fecha', {ascending:false}).order('id',{ascending:false})),
       sb.from('facturas').select('*, factura_items(*)').eq('clinica_id', currentClinicaId).order('fecha', {ascending:false}).limit(500),
       sb.from('plantillas_notas').select('id,nombre,tipo_nota,contenido_modelo,campos,archivo_nombre,archivo_url,activa').eq('clinica_id', currentClinicaId).eq('activa',true).order('nombre'),
       sb.from('reparto_servicios').select('*').eq('clinica_id', currentClinicaId)
     ]);
+    if(clinicaCarga !== currentClinicaId) return;
     if(rp.error) throw rp.error;
     if(rc.error) throw rc.error;
     if(rm.error) throw rm.error;
@@ -528,10 +541,7 @@ async function loadAll() {
     C.mov = rmov.error ? [] : (rmov.data||[]).map(fromMov);
     C.fin = rfin.error ? [] : (rfin.data||[]).map(fromFin);
     const rawFact = rfact.error ? [] : (rfact.data||[]);
-    // Las consultas traen como mucho 1000 movimientos y 500 facturas. Si se
-    // alcanza el tope faltan filas antiguas y el balance sale desviado: se
-    // recuerda para poder avisarlo en vez de dar una cifra incompleta por buena.
-    _topeDatos = { fin: C.fin.length >= 1000, fact: rawFact.length >= 500 };
+    _topeDatos = { fin: !!rfin.error, fact: rawFact.length >= 500 };
     C.fact = rawFact.map(r => fromFact(r));
     C.factItems = rawFact.flatMap(r => (r.factura_items||[]).map(fromFactItem));
     // Sin migracion_balance_reparto.sql la tabla no existe: el balance lo avisa
@@ -12872,6 +12882,8 @@ const _tabsContDisponibles = () => esEmpresaMedica() ? _TABS_CONT : _TABS_CONT.f
 const _NOTA_CONT_CLINICA = '<p class="cont-modo-nota">Versión para clínicas: resultados, balance y reportes con los datos de Finanzas e Inventario. Ventas a clientes, cobros y lotes son de las empresas médicas.</p>';
 function renderContabilidad() {
   if(!document.getElementById('view-contabilidad')) return;
+  const btnExcel = document.getElementById('btn-cont-excel');
+  if(btnExcel) btnExcel.hidden = !hasPermiso('inventario') && !hasPermiso('finanzas');
   const empresa = esEmpresaMedica();
   // La tabla de ventas solo se carga en una empresa: su aviso de migración no aplica a una clínica.
   document.getElementById('cont-aviso').innerHTML = !empresa ? _NOTA_CONT_CLINICA : _contabilidadDisponible ? '' : _AVISO_MIGRACION_CONTABILIDAD;
@@ -13623,7 +13635,7 @@ function renderEstadoResultados() {
 function _textoMargen(er) { return er.margen != null ? 'margen ' + (Math.round(er.margen * 10) / 10).toLocaleString('es-NI') + ' %' : ''; }
 // Las consultas traen un máximo de filas: si se alcanza, los totales largos quedan cortos.
 function _avisosTopeCont(er) {
-  return (_topeDatos.fin ? ' ⚠️ Finanzas trae solo los 1000 movimientos más recientes: los totales de períodos largos pueden quedar cortos.' : '')
+  return (_topeDatos.fin ? ' ⚠️ No se pudo cargar el historial de Finanzas. Revisa la conexión antes de usar los totales.' : '')
     + (!er.empresa && C.mov.length >= 500 ? ' ⚠️ Inventario trae solo los 500 movimientos más recientes: el costo de períodos largos puede quedar corto.' : '');
 }
 function renderBalanceGeneral() {
@@ -13658,7 +13670,7 @@ function renderBalanceGeneral() {
       </div>
     </div>
     <p class="bg-cuadre${cuadra ? '' : ' bg-descuadre'}">${cuadra ? '✅ Activos = Pasivos + Patrimonio' : '⚠️ El balance no cuadra'}</p>
-    <p class="text-light cont-nota"><strong>Capital y saldos iniciales</strong> es lo que el negocio ya tenía antes de registrar en el sistema (efectivo, inventario anterior) más lo que el dueño aportó o retiró. Se calcula para que el balance cuadre. Para que el efectivo sea real, anota en Finanzas el saldo con que empezaste y anota el pago del IVA a la DGI con la categoría «Pago de IVA».${_topeDatos.fin ? ' ⚠️ Finanzas trae solo los 1000 movimientos más recientes: el efectivo puede quedar incompleto.' : ''}</p>
+    <p class="text-light cont-nota"><strong>Capital y saldos iniciales</strong> es lo que el negocio ya tenía antes de registrar en el sistema (efectivo, inventario anterior) más lo que el dueño aportó o retiró. Se calcula para que el balance cuadre. Para que el efectivo sea real, anota en Finanzas el saldo con que empezaste y anota el pago del IVA a la DGI con la categoría «Pago de IVA».${_topeDatos.fin ? ' ⚠️ No se pudo cargar el historial de Finanzas. Revisa la conexión antes de usar el balance.' : ''}</p>
   </div>`;
 }
 
@@ -20599,7 +20611,8 @@ function renderBalanceFinanzas() {
     bAv.cobrosSinDetalle ? `ℹ️ ${fmtC(bAv.cobrosSinDetalle)} de cobros cuyo detalle ya no está: se cuentan enteros para la ${entidad}.` : '',
     bAv.noRepartible ? `ℹ️ ${fmtC(bAv.noRepartible)} cobrados por encima del detalle de las líneas (impuesto u otros conceptos): cuentan para la ${entidad} y no se reparten.` : '',
     bAv.anulados ? `ℹ️ ${fmtC(bAv.anulados)} corresponden a ${_docFactura().plural.toLowerCase()} anuladas: su cobro no cuenta como venta del período.` : '',
-    _datosTruncados() ? '⚠️ El período tiene más movimientos de los que se cargan de una vez: elige un período más corto para que el balance sea exacto.' : '',
+    _topeDatos.fin ? '⚠️ No se pudo cargar el historial de Finanzas. Revisa la conexión antes de usar el balance.'
+      : _datosTruncados() ? '⚠️ El historial de documentos alcanzó el límite de carga. Revisa que el período incluya todos sus documentos.' : '',
     r.estimados ? `ℹ️ ${r.estimados} línea(s) se facturaron antes de configurar el reparto y usan el porcentaje actual (marcadas con *).` : '',
   ].filter(Boolean).map(t=>`<div class="balance-aviso">${t}</div>`).join('');
 

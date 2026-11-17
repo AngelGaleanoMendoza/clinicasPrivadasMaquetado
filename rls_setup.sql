@@ -612,6 +612,22 @@ BEGIN
   END LOOP;
 END $$;
 
+-- Comprobantes de Excel. Las escrituras se realizan mediante importar_excel.
+DO $$
+BEGIN
+  IF to_regclass('public.importaciones_excel_filas') IS NOT NULL THEN
+    ALTER TABLE public.importaciones_excel ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.importaciones_excel_filas ENABLE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS importaciones_excel_leer ON public.importaciones_excel;
+    CREATE POLICY importaciones_excel_leer ON public.importaciones_excel FOR SELECT TO authenticated
+      USING (cardinality(modulos) > 0 AND modulos <@ public.modulos_importacion_excel(clinica_id));
+    DROP POLICY IF EXISTS importaciones_excel_filas_leer ON public.importaciones_excel_filas;
+    CREATE POLICY importaciones_excel_filas_leer ON public.importaciones_excel_filas FOR SELECT TO authenticated
+      USING (EXISTS (SELECT 1 FROM public.importaciones_excel l
+        WHERE l.clinica_id = importaciones_excel_filas.clinica_id AND l.id = importaciones_excel_filas.lote_id));
+  END IF;
+END $$;
+
 -- 8.5 — Comprobación: no debe quedar ninguna fila con "id_desalineado" = true
 SELECT p.email, p.rol, p.clinica_id,
        (u.id IS NULL)              AS sin_cuenta_en_auth,
