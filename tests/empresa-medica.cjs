@@ -49,7 +49,7 @@ const preambulo=`
   ${permisos}
   ${empresa}
   ${['_etiquetaRol','_contextoEstablecimiento','_textoEstablecimiento','actualizarIdentidadEstablecimiento','permisosEfectivos','hasPermiso','puedeVerBalance','puedeGestionarProcedimientosClinicos','applyRoleMenu','_syncBuscadorGlobal',
-     '_permisosDisponiblesUsuario','_ajustarRolesPorClinica','_ajustarClinicasPorRol','renderPermisosModal','togglePermLabel','onRolChange','fillClinicaSelect',
+     '_permisosDisponiblesUsuario','_ajustarRolesPorClinica','_ajustarClinicasPorRol','renderPermisosModal','togglePermLabel','onRolChange','fillClinicaSelect','_actualizarOpcionesReportesRespaldo',
      'renderDashboardEmpresa','renderNavQuickGrid'].map(extraer).join('\n')}
   window.__set=o=>{ if('sa' in o) superAdmin=o.sa; if('user' in o) currentUser=o.user; if('clinica' in o) currentClinica=o.clinica; };
   Object.assign(window,{hasPermiso,puedeVerBalance,applyRoleMenu,_ajustarRolesPorClinica,fillClinicaSelect,renderPermisosModal,renderDashboardEmpresa,renderNavQuickGrid,esEmpresaMedica});

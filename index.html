@@ -22,7 +22,7 @@
 <!-- Lectura local de machotes. El archivo se procesa en el navegador antes de
      guardarlo; Mammoth extrae DOCX y PDF.js se carga al elegir un PDF. -->
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js" defer></script>
-<link rel="stylesheet" href="css/styles.css?v=20261117">
+<link rel="stylesheet" href="css/styles.css?v=20261117r">
 </head>
 <body>
 <script>
@@ -1230,12 +1230,16 @@
         <div class="grid-2 exportar-layout">
           <div class="card">
             <h3 style="margin-bottom:8px" data-texto-establecimiento="📤 Respaldo de la clínica">📤 Respaldo de la clínica</h3>
-            <p class="text-light export-security-note">Los archivos contienen información confidencial. Guárdalos en un lugar seguro.</p>
+            <p class="text-light export-security-note">Guarda los respaldos en un lugar seguro. Al generarlos, los usuarios habilitados reciben sus reportes por correo.</p>
+            <section id="export-respaldos-pendientes" class="reportes-respaldo" hidden onclick="const boton=event.target.closest('button[data-respaldo]'); if(boton) _enviarReportesRespaldo(boton.dataset.respaldo)">
+              <h4>Correos de respaldo pendientes</h4>
+              <ul></ul>
+            </section>
             <div class="export-actions-grid">
             <div class="export-box">
-              <div class="export-icon">📧</div><h3>Enviar a tu correo</h3>
-              <p>Envía un resumen breve de actividad por correo.</p>
-              <button class="btn btn-primary" onclick="exportarEmail()">📧 Enviar</button>
+              <div class="export-icon">📧</div><h3>Reporte manual por correo</h3>
+              <p>Abre un borrador con el resumen de actividad en tu cliente de correo.</p>
+              <button class="btn btn-primary" onclick="exportarEmail()">📧 Abrir correo</button>
             </div>
             <div class="export-box">
               <div class="export-icon">🗃️</div><h3>Backup JSON</h3>
@@ -2302,6 +2306,23 @@
         </label>
         <div id="u-permisos-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:7px;margin-top:6px"></div>
       </div>
+      <fieldset id="u-reportes-respaldo" class="form-group full reportes-respaldo" hidden>
+        <legend>Reportes por correo al generar un respaldo</legend>
+        <p class="text-light">Selecciona los reportes que recibirá el usuario en su correo de acceso confirmado. Cada opción requiere el permiso de su módulo. Deja las opciones vacías para desactivar el envío.</p>
+        <div class="reportes-respaldo-opciones">
+          <label><input type="checkbox" data-permiso="estadisticas" value="actividad"> Actividad de la clínica</label>
+          <label><input type="checkbox" data-permiso="finanzas" value="finanzas"> Finanzas</label>
+          <label><input type="checkbox" data-permiso="inventario" value="inventario"> Inventario</label>
+          <label><input type="checkbox" data-permiso="contabilidad" value="contabilidad"> Contabilidad</label>
+        </div>
+        <label for="u-reportes-periodo">Período</label>
+        <select id="u-reportes-periodo">
+          <option value="hoy">Hoy</option>
+          <option value="semana">Esta semana</option>
+          <option value="mes" selected>Este mes</option>
+          <option value="historial">Todo el historial</option>
+        </select>
+      </fieldset>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-usuario')">Cancelar</button>
@@ -3206,7 +3227,7 @@
     </div>
   </section>
 </div>
-<script src="js/app.js?v=20261117" defer></script>
+<script src="js/app.js?v=20261117r" defer></script>
 <script src="js/importar-excel.js?v=20261117" defer></script>
 </body>
 </html>

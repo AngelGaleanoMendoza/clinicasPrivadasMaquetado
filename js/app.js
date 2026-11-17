@@ -340,7 +340,7 @@ const PROFILE_COLS_BASE = ['id','nombre','rol','email','icono','clinica_id','per
 // Opcionales: se fueron agregando con el tiempo y pueden no existir todavía en
 // una base que no haya corrido los scripts. Si falta alguna, se pide sin ella:
 // una columna ausente NO puede dejar a nadie fuera del sistema.
-const PROFILE_COLS_OPC = ['especialidad','firma_url','recetario_url','recetario_config','bloqueado','intentos_fallidos','horario','ultimo_acceso','con_agenda','acceso_remoto'];
+const PROFILE_COLS_OPC = ['especialidad','firma_url','recetario_url','recetario_config','bloqueado','intentos_fallidos','horario','ultimo_acceso','con_agenda','acceso_remoto','reportes_respaldo'];
 let _profileColsOK = null;   // se recuerda la lista válida tras el primer intento
 
 function _profileCols() {
@@ -10067,6 +10067,7 @@ function renderExportar(){
     <div class="divider"></div>
     <p class="text-light">Datos en: <strong>Supabase Cloud</strong> 🌐</p>
     <p class="text-light" style="margin-top:4px">Lumea Med v5.1 · ${new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'})}</p>`;
+  void _mostrarReportesRespaldoPendientes();
 }
 
 function _contenidoEmailExportar() {
@@ -10172,7 +10173,7 @@ async function _consultarPerfilesBackup() {
 
 function _sanitizarUsuarioBackup(usuario) {
   const limpio = {...usuario};
-  ['password','password_hash','encrypted_password','intentos_fallidos','confirmation_token','recovery_token','access_token','refresh_token'].forEach(k=>delete limpio[k]);
+  ['password','password_hash','encrypted_password','intentos_fallidos','confirmation_token','recovery_token','access_token','refresh_token','reportes_respaldo'].forEach(k=>delete limpio[k]);
   return limpio;
 }
 
@@ -10293,6 +10294,7 @@ async function exportarJSON(){
       ? `${(backup.datosClinica?.inventario||[]).length} productos · ${backup.resumen.ventas||0} ventas`
       : `${backup.resumen.pacientes} pacientes`;
     toast(`Backup descargado: ${contenido}${aviso}`, backup.advertencias.length?'warning':'success');
+    await _notificarReportesRespaldo(backup,'json');
   } catch(error) {
     console.error('Exportar backup:', error);
     toast('No se pudo generar el backup: ' + (error.message||'error desconocido'), 'error');
@@ -10388,6 +10390,7 @@ async function exportarPDFClinica() {
       @page{size:A4;margin:12mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#172033;margin:0;font-size:11px;line-height:1.45}a{color:#075985}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:9px/1.4 Consolas,monospace;margin:0}.backup-cover{min-height:255mm;display:flex;flex-direction:column;justify-content:center;text-align:center;padding:20mm}.backup-cover .mark{font-size:52px}.backup-cover h1{font-size:30px;color:#0f766e;margin:12px 0 4px}.backup-cover h2{font-size:18px;margin:0;color:#334155}.backup-cover .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:32px auto 0;max-width:520px}.backup-cover .summary div{border:1px solid #cbd5e1;border-radius:12px;padding:14px;background:#f8fafc}.backup-cover strong{display:block;font-size:24px;color:#0f766e}.backup-conf{margin:30px auto 0;max-width:500px;color:#b45309}.backup-warning{margin:10px auto 0;max-width:520px;padding:9px;border:1px solid #f59e0b;background:#fffbeb;color:#92400e;border-radius:8px}.backup-patient{break-before:page;padding-top:2mm}.backup-patient>header{border-bottom:3px solid #0f766e;padding:0 0 12px;margin-bottom:14px}.backup-patient>header span{text-transform:uppercase;color:#0f766e;font-size:9px;font-weight:700;letter-spacing:1.2px}.backup-patient>header h2{font-size:23px;margin:3px 0 0}.backup-patient>header p{color:#64748b;margin:2px 0}.backup-section{margin:14px 0}.backup-section h3{font-size:12px;color:#0f766e;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #cbd5e1;padding-bottom:5px;margin:0 0 8px}.backup-section h3 small{float:right;background:#ccfbf1;border-radius:20px;padding:1px 8px}.backup-fields{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}.backup-field{display:grid;grid-template-columns:140px 1fr;gap:8px;padding:5px 7px;border-bottom:1px solid #e2e8f0;break-inside:avoid}.backup-field>span{color:#64748b;font-size:9px;text-transform:uppercase;font-weight:700}.backup-field>div{overflow-wrap:anywhere;white-space:pre-wrap}.backup-record{border:1px solid #e2e8f0;border-radius:7px;padding:8px;margin-bottom:7px;break-inside:avoid}.backup-record-number{display:block;color:#0f766e;margin-bottom:5px}.backup-record .backup-section{margin:10px 0 0}.backup-empty{color:#94a3b8;font-style:italic}.backup-users{break-before:page}@media print{.backup-cover{min-height:250mm}}@media screen{body{max-width:850px;margin:0 auto;padding:24px}.backup-patient{padding-top:24px}}@media(max-width:600px){.backup-cover{padding:10px}.backup-cover .summary,.backup-fields{grid-template-columns:1fr}.backup-field{grid-template-columns:110px 1fr}}
     </style></head><body><section class="backup-cover"><div class="mark">🏥</div><h1>${nombre}</h1><h2>Respaldo completo de expedientes</h2><p>Generado ${escAttr(new Date(b.generadoEn).toLocaleString('es-NI'))}</p><div class="summary"><div><strong>${b.resumen.pacientes}</strong>Pacientes</div><div><strong>${b.resumen.mascotas}</strong>Mascotas</div><div><strong>${b.resumen.usuarios}</strong>Usuarios</div></div><p class="backup-conf">Documento médico confidencial. Los archivos digitalizados se muestran mediante su enlace.</p>${advertencias}</section>${pacientes}${mascotas}${usuarios?`<div class="backup-users">${usuarios}</div>`:''}</body></html>`});
     if(!descargar) toast(`PDF preparado con ${b.resumen.pacientes+b.resumen.mascotas} expediente(s)`);
+    await _notificarReportesRespaldo(b,'pdf');
   } catch(error) {
     console.error('Exportar PDF:',error);
     if(w&&!w.closed) w.document.body.innerHTML=`<h2>No se pudo generar el PDF</h2><p>${escAttr(error.message||'Error desconocido')}</p>`;
@@ -10395,6 +10398,66 @@ async function exportarPDFClinica() {
   } finally {
     setLoading(false);
   }
+}
+
+async function _notificarReportesRespaldo(backup, formato) {
+  const clinica = backup.clinica?.id;
+  if(!clinica || String(clinica) !== String(currentClinicaId)) return;
+  try {
+    const id = crypto.randomUUID();
+    const {data, error} = await sb.rpc('preparar_reportes_respaldo',{p_id:id,p_clinica:clinica,p_formato:formato});
+    if(error) {
+      throw new Error(error.code === 'PGRST202'
+        ? 'Falta aplicar la migración de reportes de respaldo en Supabase.'
+        : 'No se pudo preparar el envío de reportes.');
+    }
+    if(data > 0) await _enviarReportesRespaldo(id, clinica);
+  } catch(error) {
+    toast('Respaldo generado. ' + (error.message || 'No se pudo iniciar el correo de reportes.'), 'warning');
+    await _mostrarReportesRespaldoPendientes();
+  }
+}
+
+const _enviosRespaldoActivos = new Set();
+async function _enviarReportesRespaldo(id, clinica = currentClinicaId) {
+  if(!clinica || String(clinica) !== String(currentClinicaId)) return;
+  if(_enviosRespaldoActivos.has(id)) return;
+  _enviosRespaldoActivos.add(id);
+  document.querySelectorAll('#export-respaldos-pendientes button').forEach(b => {
+    if(b.dataset.respaldo === id) b.disabled = true;
+  });
+  try {
+    const {data, error} = await sb.functions.invoke('enviar-reportes-respaldo',{body:{id}});
+    if(error) throw new Error('Quedaron reportes pendientes. Puedes reintentar desde Respaldo.');
+    if(data.pendientes) {
+      toast(data.configurado
+        ? `${data.aceptados} correo(s) aceptados y ${data.pendientes} pendiente(s). Puedes reintentar desde Respaldo.`
+        : 'El envío de reportes está pendiente de configurar en Supabase.', 'warning');
+    } else if(data.aceptados) {
+      toast(`Reportes de respaldo enviados a ${data.aceptados} cuenta(s)${data.omitidos ? ` · ${data.omitidos} sin acceso vigente` : ''}.`,
+        data.omitidos ? 'warning' : 'success');
+    } else if(data.omitidos) toast('Ya no hay destinatarios habilitados para este respaldo.','info');
+  } catch(error) {
+    toast(error.message || 'No se pudo completar el correo de reportes.', 'warning');
+  } finally {
+    _enviosRespaldoActivos.delete(id);
+    await _mostrarReportesRespaldoPendientes();
+  }
+}
+
+async function _mostrarReportesRespaldoPendientes() {
+  const panel = document.getElementById('export-respaldos-pendientes');
+  if(!panel) return;
+  panel.hidden = true;
+  const clinica = currentClinicaId;
+  const usuario = currentUser?.id;
+  if(!clinica || !usuario || !hasPermiso('exportar')) return;
+  const {data, error} = await sb.rpc('pendientes_reportes_respaldo',{p_clinica:clinica})
+    .then(resultado => resultado, () => ({data:null, error:true}));
+  if(clinica !== currentClinicaId || usuario !== currentUser?.id || error || !data?.length) return;
+  panel.querySelector('ul').innerHTML = data.map(r => `<li><span>${escAttr(r.formato.toUpperCase())} · ${escAttr(new Date(r.creado_en).toLocaleString('es'))}
+    · ${Number(r.pendientes)} pendiente(s)</span><button type="button" class="btn btn-secondary btn-sm" data-respaldo="${escAttr(r.id)}" ${_enviosRespaldoActivos.has(r.id)?'disabled':''}>Reintentar</button></li>`).join('');
+  panel.hidden = false;
 }
 
 function _agregarFilasBackup(destino, tabla, filas) {
@@ -18285,6 +18348,7 @@ function renderPermisosModal(checked = []) {
       <span>${p.label}</span>
     </label>`;
   }).join('');
+  _actualizarOpcionesReportesRespaldo();
 }
 // Marcar los 13 permisos uno a uno es tedioso y se olvidan; el caso típico es
 // "que vea todo". El botón alterna: si ya están todos, los quita.
@@ -18303,6 +18367,49 @@ function togglePermLabel(id) {
   const cb = document.getElementById('perm-'+id);
   const lbl = document.getElementById('perm-label-'+id);
   if(lbl) lbl.style.borderColor = cb?.checked ? 'var(--primary)' : 'var(--border)';
+  _actualizarOpcionesReportesRespaldo();
+}
+
+function _actualizarOpcionesReportesRespaldo() {
+  const panel = document.getElementById('u-reportes-respaldo');
+  if(!panel) return;
+  const id = Number(document.getElementById('u-clinica')?.value);
+  const empresa = esEmpresaMedica(adminClinicas.find(c=>c.id===id) || null);
+  const superadmin = document.getElementById('u-rol')?.value === 'superadmin';
+  panel.querySelectorAll('[data-permiso]').forEach(input => {
+    const permitido = superadmin || document.getElementById('perm-'+input.dataset.permiso)?.checked;
+    input.disabled = !id || !permitido || (empresa && input.value === 'actividad');
+    input.closest('label').hidden = empresa && input.value === 'actividad';
+    if(input.disabled) input.checked = false;
+  });
+  document.getElementById('u-reportes-periodo').disabled = !id;
+}
+
+function _pintarReportesRespaldo(preferencias) {
+  const panel = document.getElementById('u-reportes-respaldo');
+  if(!panel) return;
+  panel.hidden = !isSuperAdmin();
+  panel.querySelectorAll('[data-permiso]').forEach(input => {
+    input.checked = Array.isArray(preferencias?.tipos) && preferencias.tipos.includes(input.value);
+  });
+  document.getElementById('u-reportes-periodo').value = preferencias?.periodo || 'mes';
+  _actualizarOpcionesReportesRespaldo();
+}
+
+function _leerReportesRespaldo() {
+  const panel = document.getElementById('u-reportes-respaldo');
+  if(!isSuperAdmin() || !panel) return null;
+  const tipos = [...panel.querySelectorAll('[data-permiso]:checked:not(:disabled)')].map(input => input.value);
+  return { tipos, periodo:document.getElementById('u-reportes-periodo').value };
+}
+
+async function _escribirPerfilConReportes(escribir, perfil, preferencias) {
+  if(!preferencias) return {...await escribir(perfil), avisoReportes:''};
+  const r = await escribir({...perfil,reportes_respaldo:preferencias});
+  if(!r.error || !_faltaColumna(r.error,'reportes_respaldo')) return {...r, avisoReportes:''};
+  const base = await escribir(perfil);
+  return {...base, avisoReportes:preferencias.tipos.length
+    ? ' Los reportes por correo requieren migracion_reportes_respaldo.sql.' : ''};
 }
 // ── Firma manuscrita del usuario ──
 let _pendingFirmaFile = null;   // archivo elegido, se sube al guardar
@@ -18523,6 +18630,7 @@ function onRolChange() {
   renderPermisosModal(PERMISOS_DEFECTO[rol] || []);
   _syncEspecialidadUsuario();
   _ajustarClinicasPorRol();
+  _actualizarOpcionesReportesRespaldo();
 }
 
 // Solo un Super Admin puede repartir el rol de Super Admin: el trigger de la
@@ -18553,6 +18661,7 @@ function openModalUsuario() {
   _resetFirmaUsuario(null);
   _resetRecetarioUsuario(null, null);
   _pintarAccesoRemoto(false);
+  _pintarReportesRespaldo(null);
   document.getElementById('modal-usuario').classList.add('open');
 }
 
@@ -18607,6 +18716,7 @@ function openModalUsuarioEditById(id) {
   _resetFirmaUsuario(u.firma_url || null);
   _resetRecetarioUsuario(u.recetario_url || null, u.recetario_config || null);
   _pintarAccesoRemoto(u.acceso_remoto);
+  _pintarReportesRespaldo(u.reportes_respaldo);
   document.getElementById('modal-usuario').classList.add('open');
 }
 
@@ -18619,11 +18729,15 @@ async function guardarUsuario() {
   const clinicaVal = document.getElementById('u-clinica').value;
   const clinica_id = clinicaVal ? Number(clinicaVal) : null;
   const permisos = ALL_PERMISOS.map(p => p.id).filter(id => document.getElementById('perm-'+id)?.checked);
+  const reportesRespaldo = _leerReportesRespaldo();
   // Solo se conserva la especialidad en los roles que la ejercen
   const especialidad = ROLES_CON_ESPECIALIDAD.includes(rol)
     ? (document.getElementById('u-especialidad')?.value.trim() || null)
     : null;
   if(!nombre){ toast('El nombre es obligatorio','error'); return; }
+  if(reportesRespaldo?.tipos.length && (!email || !document.getElementById('u-email').validity.valid)) {
+    toast('Indica un correo válido para recibir reportes del respaldo.','error'); return;
+  }
   if(!editingUsuarioId && !password){ toast('La contraseña es obligatoria','error'); return; }
   const clinicaElegida = clinica_id ? adminClinicas.find(c => c.id === clinica_id) : null;
   if(rol !== 'superadmin') {
@@ -18667,7 +18781,8 @@ async function guardarUsuario() {
         avisoPass = ' La contraseña NO se cambió: usa el botón 🔑 Contraseña de la lista.';
       }
     }
-    let {error} = await sb.from('profiles').update(upd).eq('id',editingUsuarioId);
+    const editarPerfil = datos => sb.from('profiles').update(datos).eq('id', editingUsuarioId);
+    let {error,avisoReportes} = await _escribirPerfilConReportes(editarPerfil,upd,reportesRespaldo);
     if(error && _faltaColumna(error,'recetario_config')) {
       toast('Falta ejecutar migracion_plantillas_recetario.sql en Supabase','error');
       setLoading(false); return;
@@ -18676,7 +18791,7 @@ async function guardarUsuario() {
       const faltaFirma = _faltaColumna(error,'firma_url');
       const {especialidad:_e, firma_url:_f, ...base} = upd;
       const reintento = faltaFirma ? base : {...base, especialidad};
-      ({error} = await sb.from('profiles').update(reintento).eq('id',editingUsuarioId));
+      ({error,avisoReportes} = await _escribirPerfilConReportes(editarPerfil,reintento,reportesRespaldo));
       if(!error) toast('Usuario guardado, pero falta la columna "'+(faltaFirma?'firma_url':'especialidad')+'" en la tabla profiles de Supabase','warning');
     }
     if(error){ toast('Error al actualizar: '+error.message,'error'); setLoading(false); return; }
@@ -18692,8 +18807,8 @@ async function guardarUsuario() {
     if(profCache) Object.assign(profCache,{nombre,rol,especialidad,firma_url,recetario_url:null,recetario_config});
     const anterior = adminUsuarios.find(x=>x.id===editingUsuarioId)?.acceso_remoto;
     const avisoRed = await _guardarAccesoRemoto(editingUsuarioId, anterior);
-    const hayAviso = avisoPass.includes('NO se cambió') || !!avisoRed;
-    toast('Usuario actualizado.'+avisoPass+avisoRed, hayAviso ? 'warning' : 'success');
+    const hayAviso = avisoPass.includes('NO se cambió') || avisoRed || avisoReportes;
+    toast('Usuario actualizado.'+avisoPass+avisoRed+avisoReportes, hayAviso ? 'warning' : 'success');
   } else {
     // Sin correo no hay forma de iniciar sesión: todo el login se articula por él.
     if(!email){ toast('El correo es obligatorio: sin él la persona no podrá entrar','error'); setLoading(false); return; }
@@ -18720,15 +18835,16 @@ async function guardarUsuario() {
     // como "pendiente de migrar" desde el primer día.
     let recetario_config = null;
     const nuevo = {id:newId,nombre,email:emailNorm,rol,icono,clinica_id,permisos,especialidad,recetario_config};
-    let {error} = await sb.from('profiles').insert(nuevo);
+    const crearPerfil = datos => sb.from('profiles').insert(datos);
+    let {error,avisoReportes} = await _escribirPerfilConReportes(crearPerfil,nuevo,reportesRespaldo);
     if(error && _faltaColumnaEspecialidad(error)) {
       const {especialidad:_omitida, ...sinEsp} = nuevo;
-      ({error} = await sb.from('profiles').insert(sinEsp));
+      ({error,avisoReportes} = await _escribirPerfilConReportes(crearPerfil,sinEsp,reportesRespaldo));
       if(!error) _avisarFaltaColumnaEspecialidad();
     }
     if(error){ toast('Error al crear: '+error.message,'error'); setLoading(false); return; }
     const avisoRedNuevo = await _guardarAccesoRemoto(newId, false);
-    if(avisoRedNuevo) toast(avisoRedNuevo.trim(),'warning');
+    if(avisoRedNuevo || avisoReportes) toast((avisoRedNuevo+avisoReportes).trim(),'warning');
     if(faltaConfirmar) toast(`Usuario creado, pero ${emailNorm} debe confirmar su correo antes de poder entrar. Para evitarlo, desactiva "Confirm email" en Supabase → Authentication → Settings.`,'warning');
     else toast('Usuario creado exitosamente','success');
   }

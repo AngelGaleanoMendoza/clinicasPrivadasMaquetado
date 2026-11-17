@@ -30,6 +30,7 @@ const preambulo=`
   const _nombreArchivoBackup=e=>'backup.'+e;
   const respaldo={schemaVersion:2,resumen:{pacientes:0,ventas:2},datosClinica:{inventario:[{id:1},{id:2},{id:3}],ventas:[{id:1},{id:2}]},advertencias:[]};
   const _construirBackupClinica=async()=>respaldo;
+  const _notificarReportesRespaldo=async()=>{}, _mostrarReportesRespaldoPendientes=async()=>{};
   const C={p:[{nombre:'Paciente',apellidos:'Demo'}],c:[{fecha:hoy(),hora:'10:00',motivo:'Consulta',estado:'pendiente'}],
     m:[{estado:'activa'}],n:[{}],inv:[{},{},{}],prov:[{},{}],comp:[{}],cliCom:[{},{}],
     ventas:[{estado:'registrada'},{estado:'registrada'},{estado:'anulada'}],fin:[{},{}]};

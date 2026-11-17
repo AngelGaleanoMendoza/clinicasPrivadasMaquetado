@@ -612,6 +612,16 @@ BEGIN
   END LOOP;
 END $$;
 
+-- Reportes automáticos del respaldo. La migración concede acceso al servidor.
+DO $$
+BEGIN
+  IF to_regclass('public.respaldos_reportes_envios') IS NOT NULL THEN
+    ALTER TABLE public.respaldos_reportes ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.respaldos_reportes_envios ENABLE ROW LEVEL SECURITY;
+    REVOKE ALL ON public.respaldos_reportes, public.respaldos_reportes_envios FROM PUBLIC, anon, authenticated;
+  END IF;
+END $$;
+
 -- Comprobantes de Excel. Las escrituras se realizan mediante importar_excel.
 DO $$
 BEGIN
