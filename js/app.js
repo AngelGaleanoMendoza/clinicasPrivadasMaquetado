@@ -10137,13 +10137,13 @@ function _errorTablaAusenteBackup(error) {
   return /does not exist|could not find the table|schema cache/i.test(msg);
 }
 
-async function _consultarTablaBackup(def) {
+async function _consultarTablaBackup(def, clinica = currentClinicaId) {
   const filas = [];
   const pagina = 1000;
   for(let desde=0;;desde+=pagina) {
     const {data,error} = await sb.from(def.tabla)
       .select(def.select||'*')
-      .eq('clinica_id', currentClinicaId)
+      .eq('clinica_id', clinica)
       .order('id', {ascending:true})
       .range(desde, desde+pagina-1);
     if(error) {
@@ -10158,12 +10158,12 @@ async function _consultarTablaBackup(def) {
   return {tabla:def.tabla, filas};
 }
 
-async function _consultarPerfilesBackup() {
+async function _consultarPerfilesBackup(clinica = currentClinicaId) {
   const data=[];
   const pagina=1000;
   for(let desde=0;;desde+=pagina) {
     const r=await _consultaPerfil(cols=>sb.from('profiles').select(cols)
-      .eq('clinica_id',currentClinicaId).order('nombre').range(desde,desde+pagina-1));
+      .eq('clinica_id',clinica).order('nombre').order('id').range(desde,desde+pagina-1));
     if(r.error) return r;
     data.push(...(r.data||[]));
     if((r.data||[]).length<pagina) break;
@@ -10186,10 +10186,11 @@ function _facturasConItems(facturas, items) {
 }
 
 async function _construirBackupClinica() {
+  const clinica = currentClinicaId;
   const [resultados, perfiles, clinicaResp] = await Promise.all([
-    Promise.all(BACKUP_TABLAS.map(_consultarTablaBackup)),
-    _consultarPerfilesBackup(),
-    sb.from('clinicas').select('*').eq('id',currentClinicaId).single(),
+    Promise.all(BACKUP_TABLAS.map(def => _consultarTablaBackup(def,clinica))),
+    _consultarPerfilesBackup(clinica),
+    sb.from('clinicas').select('*').eq('id',clinica).single(),
   ]);
   if(perfiles.error) throw new Error(`profiles: ${perfiles.error.message}`);
   if(clinicaResp.error) throw new Error(`clinicas: ${clinicaResp.error.message}`);
@@ -10407,11 +10408,13 @@ async function _notificarReportesRespaldo(backup, formato) {
     const id = crypto.randomUUID();
     const {data, error} = await sb.rpc('preparar_reportes_respaldo',{p_id:id,p_clinica:clinica,p_formato:formato});
     if(error) {
-      throw new Error(error.code === 'PGRST202'
+      throw new Error(error.code === 'PGRST202' ||
+        (formato === 'zip' && error.code === '22023' && error.message === 'Los datos del respaldo son inválidos.')
         ? 'Falta aplicar la migración de reportes de respaldo en Supabase.'
         : 'No se pudo preparar el envío de reportes.');
     }
     if(data > 0) await _enviarReportesRespaldo(id, clinica);
+    else if(formato === 'zip') toast('El ZIP está listo. No hay destinatarios habilitados para el correo de reportes.','info');
   } catch(error) {
     toast('Respaldo generado. ' + (error.message || 'No se pudo iniciar el correo de reportes.'), 'warning');
     await _mostrarReportesRespaldoPendientes();
@@ -12722,9 +12725,9 @@ function _lotesDisponibles(invId) {
 }
 // Existencia que no está en ningún lote: la que había antes de llevar lotes o
 // la que entró con una entrada manual.
-function _stockSinLote(p) {
+function _stockSinLote(p, lotes = C.lotes) {
   if(!p) return 0;
-  const enLotes = C.lotes.filter(l => l.invId === p.id).reduce((s, l) => s + l.disponible, 0);
+  const enLotes = lotes.filter(l => l.invId === p.id).reduce((s, l) => s + l.disponible, 0);
   return Math.max(0, Math.round((p.stock - enLotes) * 1000) / 1000);
 }
 // Reparte `cantidad` de un producto entre lo disponible. Con un lote elegido
@@ -12845,19 +12848,19 @@ const _FIN_FUERA_RESULTADOS = ['ventas','compras','pago_iva'];
 // Clínicas (Contabilidad reducida): el costo es lo que salió del inventario
 // (consumo, despacho, mermas) al costo promedio actual de cada producto. La
 // anulación de una compra no es consumo.
-function _costoInventarioUsado(r) {
-  return _r2(C.mov.filter(m => m.tipo === 'salida' && _enRango(m.fecha, r) && !/^Anulación de compra/.test(m.motivo || ''))
-    .reduce((s, m) => s + m.cantidad * (C.inv.find(p => p.id === m.invId)?.costo || 0), 0));
+function _costoInventarioUsado(r, datos = C) {
+  const costos = new Map(datos.inv.map(p => [p.id,p.costo]));
+  return _r2(datos.mov.filter(m => m.tipo === 'salida' && _enRango(m.fecha, r) && !/^Anulación de compra/.test(m.motivo || ''))
+    .reduce((s, m) => s + m.cantidad * (costos.get(m.invId) || 0), 0));
 }
 // Empresa médica: ventas − costo de cada lote = utilidad bruta, más otros
 // ingresos y menos gastos de Finanzas. Clínica: los ingresos son los de
 // Finanzas y el costo, lo usado del inventario.
-function _estadoResultados(r = _rangoCont()) {
-  const empresa = esEmpresaMedica();
-  const ventas = empresa ? C.ventas.filter(v => v.estado !== 'anulada' && _enRango(v.fecha, r)) : [];
+function _estadoResultados(r = _rangoCont(), datos = C, empresa = esEmpresaMedica()) {
+  const ventas = empresa ? datos.ventas.filter(v => v.estado !== 'anulada' && _enRango(v.fecha, r)) : [];
   const ingresosVentas = _r2(ventas.reduce((s, v) => s + v.subtotal, 0));
-  const costoVentas = empresa ? _r2(ventas.reduce((s, v) => s + _costoVenta(v), 0)) : _costoInventarioUsado(r);
-  const fin = C.fin.filter(f => _enRango(f.fecha, r) && !_FIN_FUERA_RESULTADOS.includes(f.categoria));
+  const costoVentas = empresa ? _r2(ventas.reduce((s, v) => s + _costoVenta(v), 0)) : _costoInventarioUsado(r,datos);
+  const fin = datos.fin.filter(f => _enRango(f.fecha, r) && !_FIN_FUERA_RESULTADOS.includes(f.categoria));
   const agrupar = tipo => {
     const g = {};
     fin.filter(f => f.tipo === tipo).forEach(f => { g[f.categoria] = (g[f.categoria] || 0) + f.monto; });
@@ -12873,30 +12876,30 @@ function _estadoResultados(r = _rangoCont()) {
     ivaVentas:_r2(ventas.reduce((s, v) => s + v.iva, 0)) };
 }
 // Inventario a costo: cada lote a su costo y lo que no tiene lote al costo promedio.
-function _valorInventario() {
+function _valorInventario(datos = C) {
   let lotes = 0, sinLote = 0;
-  C.inv.forEach(p => {
-    lotes += C.lotes.filter(l => l.invId === p.id).reduce((s, l) => s + l.disponible * l.costo, 0);
-    sinLote += _stockSinLote(p) * (p.costo || 0);
+  datos.inv.forEach(p => {
+    lotes += datos.lotes.filter(l => l.invId === p.id).reduce((s, l) => s + l.disponible * l.costo, 0);
+    sinLote += _stockSinLote(p, datos.lotes) * (p.costo || 0);
   });
   return { total:_r2(lotes + sinLote), lotes:_r2(lotes), sinLote:_r2(sinLote) };
 }
 // Balance general al día de hoy. El capital es la cifra que hace cuadrar:
 // lo que el negocio ya tenía al empezar a registrar (efectivo, inventario) más
 // los aportes del dueño.
-function _balanceGeneral() {
-  const efectivo = _r2(C.fin.reduce((s, f) => s + (f.tipo === 'ingreso' ? f.monto : -f.monto), 0));
-  const cxc = _r2(C.ventas.reduce((s, v) => s + _saldoVenta(v), 0));
-  const inventario = _valorInventario();
-  const ivaVentas = _r2(C.ventas.filter(v => v.estado !== 'anulada').reduce((s, v) => s + v.iva, 0));
-  const ivaCompras = _r2(C.comp.filter(c => c.estado !== 'anulada').reduce((s, c) => s + c.iva, 0));
-  const ivaPagado = _r2(C.fin.filter(f => f.tipo === 'egreso' && f.categoria === 'pago_iva').reduce((s, f) => s + f.monto, 0));
+function _balanceGeneral(datos = C, empresa = esEmpresaMedica()) {
+  const efectivo = _r2(datos.fin.reduce((s, f) => s + (f.tipo === 'ingreso' ? f.monto : -f.monto), 0));
+  const cxc = _r2(datos.ventas.reduce((s, v) => s + _saldoVenta(v), 0));
+  const inventario = _valorInventario(datos);
+  const ivaVentas = _r2(datos.ventas.filter(v => v.estado !== 'anulada').reduce((s, v) => s + v.iva, 0));
+  const ivaCompras = _r2(datos.comp.filter(c => c.estado !== 'anulada').reduce((s, c) => s + c.iva, 0));
+  const ivaPagado = _r2(datos.fin.filter(f => f.tipo === 'egreso' && f.categoria === 'pago_iva').reduce((s, f) => s + f.monto, 0));
   const ivaNeto = _r2(ivaVentas - ivaCompras - ivaPagado);
   const ivaFavor = ivaNeto < 0 ? -ivaNeto : 0, ivaPorPagar = ivaNeto > 0 ? ivaNeto : 0;
-  const cxp = _r2(C.comp.reduce((s, c) => s + _saldoCompra(c), 0));
+  const cxp = _r2(datos.comp.reduce((s, c) => s + _saldoCompra(c), 0));
   const activos = _r2(efectivo + cxc + inventario.total + ivaFavor);
   const pasivos = _r2(cxp + ivaPorPagar);
-  const resultados = _estadoResultados({ desde:'', hasta:'' }).neta;
+  const resultados = _estadoResultados({ desde:'', hasta:'' },datos,empresa).neta;
   const capital = _r2(activos - pasivos - resultados);
   return { efectivo, cxc, inventario, ivaVentas, ivaCompras, ivaPagado, ivaFavor, ivaPorPagar, cxp, activos, pasivos,
     resultados, capital, patrimonio:_r2(resultados + capital) };
@@ -16094,10 +16097,14 @@ function pdfFooter(cfg) {
 }
 
 function pdfAbrir(titulo, body, cfg={}) {
+  return _entregarDocumento(_armarDocumentoPdf(titulo,body,cfg));
+}
+
+function _armarDocumentoPdf(titulo, body, cfg={}) {
   // Todos los documentos comparten la identidad de la clínica. Las opciones
   // particulares (por ejemplo orientación) complementan, no reemplazan, el logo.
   cfg = {...getClinicaConfig(), ...cfg};
-  return _entregarDocumento({
+  return {
     titulo,
     html:`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>${titulo}</title>
     <style>${PDF_CSS}</style></head><body>
@@ -16105,7 +16112,7 @@ function pdfAbrir(titulo, body, cfg={}) {
     </body></html>`,
     // Mismo relleno que @media print, que el renderizado a PDF no aplica.
     cssDescarga:'.page{padding:20px 24px!important}'
-  });
+  };
 }
 
 // ════════════════════ DESCARGA DE DOCUMENTOS EN PDF ════════════════════
@@ -16275,8 +16282,11 @@ function _cortesPaginaPdf(win, doc, altoPagina, total) {
 // hoja: {ancho, alto, margen} en mm. alto:null genera una sola página del alto
 // del contenido (tickets). anchoMarco permite maquetar más ancho que la hoja
 // cuando el documento tiene media queries de pantalla que no deben activarse.
-async function _descargarHtmlComoPdf({titulo, html, hoja=HOJA_CARTA, cssDescarga=''}) {
-  if(_pdfEnCurso) { toast('Ya se está preparando otro PDF, espera un momento','info'); return; }
+async function _descargarHtmlComoPdf({titulo, html, hoja=HOJA_CARTA, cssDescarga='', paraZip=false}) {
+  if(_pdfEnCurso) {
+    if(paraZip) throw new Error('Ya se está preparando otro PDF.');
+    toast('Ya se está preparando otro PDF, espera un momento','info'); return;
+  }
   _pdfEnCurso = true;
   const aviso = document.querySelector('#loading-overlay .load-text-op');
   const avisoPrevio = aviso?.textContent;
@@ -16365,10 +16375,13 @@ async function _descargarHtmlComoPdf({titulo, html, hoja=HOJA_CARTA, cssDescarga
       lienzo.width = lienzo.height = 0;
       i = j + 1;
     }
+    const blob = new Blob([pdf.output('arraybuffer')], {type:'application/pdf'});
+    if(paraZip) return blob;
     const nombre = _nombreArchivoPdf(titulo);
-    _descargarArchivo(new Blob([pdf.output('arraybuffer')], {type:'application/pdf'}), nombre);
+    _descargarArchivo(blob, nombre);
     toast('PDF descargado: ' + escAttr(nombre));
   } catch(error) {
+    if(paraZip) throw error;
     console.error('Descargar PDF:', error);
     toast('No se pudo generar el PDF: ' + escAttr(error.message || 'error desconocido') + '. Puedes usar Imprimir → Guardar como PDF.', 'error');
   } finally {

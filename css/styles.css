@@ -482,6 +482,8 @@ body.dark .balance-pct{background:#0F172A}
 .export-box h3{font-size:16px;font-weight:700;margin-bottom:6px}
 .export-box p{color:var(--text-light);font-size:13px;margin-bottom:16px}
 .export-security-note{font-size:12px;line-height:1.5;margin-bottom:18px;padding:10px 12px;border-radius:10px;background:var(--bg);border:1px solid var(--border)}
+.export-json-tecnico summary{font-size:14px;font-weight:700;cursor:pointer;overflow-wrap:anywhere}
+.export-json-tecnico[open] summary{margin-bottom:10px}
 .reportes-respaldo[hidden],.reportes-respaldo label[hidden]{display:none!important}
 .reportes-respaldo{min-width:0;border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--bg)}
 .reportes-respaldo legend,.reportes-respaldo h4{font-size:13px;font-weight:800}

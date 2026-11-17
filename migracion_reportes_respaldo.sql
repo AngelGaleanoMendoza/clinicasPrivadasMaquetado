@@ -46,9 +46,13 @@ CREATE TABLE IF NOT EXISTS public.respaldos_reportes (
   clinica_id bigint NOT NULL REFERENCES public.clinicas(id) ON DELETE CASCADE,
   solicitante uuid NOT NULL,
   establecimiento text NOT NULL,
-  formato text NOT NULL CHECK (formato IN ('json','pdf')),
+  formato text NOT NULL,
   creado_en timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE public.respaldos_reportes DROP CONSTRAINT IF EXISTS respaldos_reportes_formato_check;
+ALTER TABLE public.respaldos_reportes ADD CONSTRAINT respaldos_reportes_formato_check
+  CHECK (formato IN ('json','pdf','zip'));
 
 CREATE TABLE IF NOT EXISTS public.respaldos_reportes_envios (
   respaldo_id uuid NOT NULL REFERENCES public.respaldos_reportes(id) ON DELETE CASCADE,
@@ -185,7 +189,7 @@ DECLARE
   v_empresa boolean;
   v_respaldo public.respaldos_reportes%ROWTYPE;
 BEGIN
-  IF p_id IS NULL OR p_clinica IS NULL OR coalesce(p_formato,'') NOT IN ('json','pdf') THEN
+  IF p_id IS NULL OR p_clinica IS NULL OR coalesce(p_formato,'') NOT IN ('json','pdf','zip') THEN
     RAISE EXCEPTION 'Los datos del respaldo son inválidos.' USING ERRCODE = '22023';
   END IF;
   IF v_uid IS NULL OR (NOT public.is_superadmin() AND (

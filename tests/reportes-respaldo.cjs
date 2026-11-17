@@ -102,6 +102,10 @@ async function probarSQL() {
     await db.exec(`RESET ROLE; SET ROLE authenticated; SET prueba.uid='${uid(9)}';
       UPDATE profiles SET reportes_respaldo='{"tipos":["actividad"],"periodo":"semana"}' WHERE id='${uid(1)}'`);
     assert.equal((await db.query('SELECT reportes_respaldo FROM profiles WHERE id=$1',[uid(1)])).rows[0].reportes_respaldo.periodo,'semana');
+    const zip = 'b0000000-0000-0000-0000-000000000002';
+    assert.equal((await db.query("SELECT preparar_reportes_respaldo($1,1,'zip') AS n",[zip])).rows[0].n,1);
+    await db.exec('RESET ROLE');
+    assert.equal((await db.query('SELECT formato FROM respaldos_reportes WHERE id=$1',[zip])).rows[0].formato,'zip');
   } finally {
     await db.close();
   }
