@@ -1,5 +1,20 @@
 const ExcelImportacion = (() => {
   const LIMITE = 1000;
+  const COSTOS = [
+    ['costo','Costo unitario',0,'costo|costo promedio|costo unitario promedio|costo por unidad|precio de compra|p compra|precio costo|costo de adquisicion unitario|coste unitario'],
+    ['costo_total','Valor total al costo',0,'costo total|coste total|valor a costo|valor al costo|valor total al costo|importe al costo|valor de inventario|valor del inventario|existencia valorizada|costo extendido'],
+    ['moneda','Moneda del costo',0,'moneda|divisa|currency|codigo de moneda']
+  ];
+  const NOMBRE_PRODUCTO = 'producto|nombre|articulo|item|insumo|medicamento|nombre del producto|nombre de producto|nombre producto|nombre del articulo|nombre articulo|nombre comercial|descripcion del producto|descripcion de producto|descripcion producto|descripcion del articulo|descripcion de articulo|descripcion articulo|descripcion';
+  const SKU = ['sku','SKU o código de producto',0,'sku|codigo|cod|codigo sku|codigo interno|codigo articulo|codigo de articulo|codigo producto|codigo de producto|codigo del producto|codigo del articulo|cod producto|cod articulo|referencia del producto'];
+  const UNIDAD = ['unidad','Unidad',0,'unidad de medida|um|u m|presentacion|medida'];
+  const COSTOS_KARDEX = ['entrada','salida'].flatMap(clase => [
+    ['costo_unitario_' + clase,'Costo unitario de ' + clase,0,
+      `costo unitario ${clase}|costo unitario ${clase}s|costo unitario de ${clase}s|costo unitario de las ${clase}s|${clase} costo unitario|${clase}s costo unitario`],
+    ['costo_total_' + clase,'Costo total de ' + clase,0,
+      `costo total ${clase}|costo total ${clase}s|costo total de ${clase}s|costo total de las ${clase}s|${clase} costo total|${clase}s costo total|valor al costo de ${clase}s`]
+  ]);
+  const CAMPOS_MONETARIOS_INV = ['costo','costo_total','precio', ...COSTOS_KARDEX.map(c => c[0])];
   // Cada destino: [id, rótulo, obligatorio, encabezados con que suele aparecer].
   // «obligatorio» 2 = se exige, pero el sistema puede completarlo (ver faltantes()).
   const TIPOS = {
@@ -26,23 +41,30 @@ const ExcelImportacion = (() => {
       ['referencia','Referencia bancaria o documental',0,'comprobante|referencia|recibo|factura|documento|no documento|cheque']
     ]},
     productos:{permiso:'inventario', titulo:'Productos y existencias iniciales', pista:'productos|producto|inventario|catalogo|existencias|articulos|stock|insumos|medicamentos', campos:[
-      ['nombre','Nombre del producto',1,'producto|nombre|articulo|item|insumo|medicamento|nombre del producto|descripcion del producto|descripcion'],
+      ['nombre','Nombre del producto',1,NOMBRE_PRODUCTO],
+      SKU,
       ['categoria','Categoría',0,'familia|grupo|linea|tipo de producto'],
-      ['unidad','Unidad',0,'unidad de medida|um|u m|presentacion|medida'],
-      ['stock','Stock inicial',0,'stock|existencia|existencias|cantidad|cantidad inicial|stock actual|disponible|inventario inicial'],
+      UNIDAD,
+      ['stock','Stock inicial',0,'stock|existencia|existencias|cantidad|unidades|cantidad inicial|stock actual|disponible|inventario inicial|existencia inicial|existencia actual|existencia final|saldo en unidades|stock disponible|cantidad disponible|unidades disponibles|cantidad en existencia'],
       ['fecha','Fecha de apertura',0,'fecha|fecha de inventario|fecha de corte'],
       ['minimo','Stock mínimo',0,'minimo|stock minimo|existencia minima|punto de reorden'],
-      ['costo','Costo unitario',0,'costo|costo promedio|precio de compra|p compra|precio costo|costo c'],
+      ...COSTOS,
       ['precio','Precio de venta',0,'precio unitario|precio|p venta|pvp|precio venta|precio de venta c'],
       ['vencimiento','Vencimiento',0,'fecha de vencimiento|caducidad|vence|expira'],
       ['descripcion','Descripción',0,'observaciones|detalle|notas|comentarios']
     ]},
     movimientos:{permiso:'inventario', titulo:'Entradas y salidas de inventario', pista:'movimientos de inventario|entradas|salidas|kardex|consumo', campos:[
       ['id_origen','ID de origen',0,'id externo|id|folio|correlativo|no|n'],
-      ['producto','Nombre exacto del producto',1,'producto|nombre|articulo|item|nombre del producto'],
+      ['producto','Nombre exacto del producto',1,NOMBRE_PRODUCTO],
+      SKU,
+      UNIDAD,
       ['fecha','Fecha',1,'fecha del movimiento|dia'],
       ['clase','Tipo de movimiento',2,'tipo|movimiento|tipo de movimiento|clase'],
-      ['cantidad','Cantidad',1,'unidades|cant|cantidad movida'],
+      ['cantidad','Cantidad',2,'unidades|cant|cantidad movida'],
+      ['cant_entrada','Unidades de entrada',0,'entrada|entradas|cantidad entrada|cantidad de entrada|unidades entradas|entradas unidades'],
+      ['cant_salida','Unidades de salida',0,'salida|salidas|cantidad salida|cantidad de salida|unidades salidas|salidas unidades'],
+      ...COSTOS,
+      ...COSTOS_KARDEX,
       ['motivo','Motivo',0,'concepto|descripcion|observacion|observaciones']
     ]},
     proveedores:{permiso:'inventario', titulo:'Proveedores', pista:'proveedores|proveedor|distribuidores|suplidores|laboratorios', campos:[
@@ -96,8 +118,8 @@ const ExcelImportacion = (() => {
   const NUCLEO = {
     diario:m => ['documento','fecha','cuenta','nombre_cuenta','debe','haber'].every(k => m[k] != null),
     finanzas:m => m.fecha != null && m.descripcion != null && (m.monto != null || m.monto_ingreso != null || m.monto_egreso != null),
-    productos:m => m.nombre != null && ['stock','costo','precio','unidad'].some(k => m[k] != null),
-    movimientos:m => m.producto != null && m.fecha != null && m.cantidad != null,
+    productos:m => m.nombre != null && ['stock','costo','costo_total','precio','unidad','sku'].some(k => m[k] != null),
+    movimientos:m => m.producto != null && m.fecha != null && ['cantidad','cant_entrada','cant_salida'].some(k => m[k] != null),
     proveedores:m => m.nombre != null && ['identificacion','telefono','contacto','email','direccion'].some(k => m[k] != null),
     clientes:m => m.nombre != null && ['identificacion','telefono','contacto','email','direccion','dias_credito'].some(k => m[k] != null),
     facturas:m => ['documento','nombre','fecha','descripcion','cantidad','precio_linea','costo_linea','iva_pct','total_factura'].every(k => m[k] != null),
@@ -108,7 +130,7 @@ const ExcelImportacion = (() => {
     finanzas:{ingreso:'ingreso',ingresos:'ingreso',entrada:'ingreso',entradas:'ingreso',cobro:'ingreso',i:'ingreso',
       egreso:'egreso',egresos:'egreso',gasto:'egreso',gastos:'egreso',salida:'egreso',salidas:'egreso',pago:'egreso',e:'egreso',g:'egreso'},
     movimientos:{entrada:'entrada',entradas:'entrada',ingreso:'entrada',compra:'entrada',e:'entrada',
-      salida:'salida',salidas:'salida',egreso:'salida',consumo:'salida',despacho:'salida',s:'salida'}
+      salida:'salida',salidas:'salida',egreso:'salida',consumo:'salida',merma:'salida',venta:'salida',despacho:'salida',s:'salida'}
   };
   const METODOS = {efectivo:'efectivo',contado:'efectivo',cash:'efectivo',caja:'efectivo',
     transferencia:'transferencia','transferencia bancaria':'transferencia',deposito:'transferencia','deposito bancario':'transferencia',banco:'transferencia',
@@ -130,7 +152,7 @@ const ExcelImportacion = (() => {
 
   function tiposDisponibles() {
     return Object.keys(TIPOS).filter(t => hasPermiso(TIPOS[t].permiso) &&
-      (t !== 'movimientos' || !esEmpresaMedica()) && (!TIPOS[t].soloEmpresa || esEmpresaMedica()));
+      (!TIPOS[t].soloEmpresa || esEmpresaMedica()));
   }
 
   function activo(e) {
@@ -142,7 +164,8 @@ const ExcelImportacion = (() => {
       toast('Selecciona un establecimiento con acceso a Finanzas, Inventario o Contabilidad.', 'info');
       return;
     }
-    estado = {clinica:currentClinicaId, usuario:currentUser?.id, hojas:[], recibos:[], respaldos:[], documentos:[], version:0};
+    estado = {clinica:currentClinicaId, usuario:currentUser?.id, hojas:[], recibos:[], respaldos:[], documentos:[], version:0, fechaApertura:hoy()};
+    el('fecha-apertura').value = estado.fechaApertura;
     el('carpeta').value = '';
     el('archivos').value = '';
     el('hojas').replaceChildren();
@@ -180,6 +203,8 @@ const ExcelImportacion = (() => {
 
   function controles() {
     const ocupado = !!estado.ocupado;
+    el('fecha-apertura-campo').hidden = !estado.hojas.some(h => h.tipo === 'productos');
+    el('fecha-apertura').disabled = ocupado;
     el('archivos').disabled = el('carpeta').disabled = ocupado;
     el('archivar').hidden = !estado.respaldos.length || !hasPermiso('contabilidad');
     el('archivar').disabled = ocupado;
@@ -195,6 +220,13 @@ const ExcelImportacion = (() => {
     estado.plan = null;
     el('resultados').replaceChildren();
     controles();
+  }
+
+  function cambiarFechaApertura() {
+    if (!activo(estado) || estado.ocupado) return;
+    estado.fechaApertura = el('fecha-apertura').value;
+    invalidar();
+    mensaje('Pulsa «Revisar filas» para comprobar la fecha de apertura.');
   }
 
   function leerArchivo(archivo) {
@@ -297,15 +329,22 @@ const ExcelImportacion = (() => {
   // Asigna cada campo a la columna que mejor le corresponde, sin repetir columnas.
   function mapear(tipo, celdas) {
     const candidatos = [];
+    const inventario = tipo === 'productos' || tipo === 'movimientos';
     TIPOS[tipo].campos.forEach(([id], orden) => {
       const opciones = aliasDe(tipo, id);
       celdas.forEach((c, i) => {
         if (!c || c.invalida || typeof c.valor !== 'string') return;
-        const p = coincide(normal(c.valor), opciones);
-        if (p) candidatos.push({id, i, p, orden});
+        const encabezado = normal(c.valor);
+        const monetario = CAMPOS_MONETARIOS_INV.includes(id);
+        const etiqueta = inventario && monetario
+          ? encabezado.replace(/\s+(?:en )?(c|cs|nio|cordobas|us|usd|eur|gtq|mxn|crc|hnl|dolares)$/, '') : encabezado;
+        // Un costo total, un precio de venta y una cantidad física nunca son intercambiables.
+        const p = inventario && (monetario || ['sku','stock','nombre','producto','unidad','moneda','cantidad','cant_entrada','cant_salida','clase'].includes(id))
+          ? (opciones.includes(etiqueta) ? 3 : 0) : coincide(encabezado, opciones);
+        if (p) candidatos.push({id, i, p, orden, generico:inventario && ['nombre','producto'].includes(id) && etiqueta === 'descripcion'});
       });
     });
-    candidatos.sort((a, b) => b.p - a.p || a.orden - b.orden || a.i - b.i);
+    candidatos.sort((a, b) => b.p - a.p || a.orden - b.orden || Number(a.generico) - Number(b.generico) || a.i - b.i);
     const mapa = {}, usadas = new Set();
     let puntos = 0;
     for (const c of candidatos) {
@@ -327,9 +366,10 @@ const ExcelImportacion = (() => {
       if (tiene('gasto') || tiene('egreso') || tiene('pago')) fijos.clase = 'egreso';
       else if (tiene('ingreso') || tiene('cobro')) fijos.clase = 'ingreso';
     }
-    if (tipo === 'movimientos' && mapa.clase == null) {
-      if (tiene('salida') || tiene('consumo')) fijos.clase = 'salida';
-      else if (tiene('entrada')) fijos.clase = 'entrada';
+    if (tipo === 'movimientos' && mapa.clase == null && mapa.cant_entrada == null && mapa.cant_salida == null) {
+      const salidas = tiene('salida') || tiene('consumo'), entradas = tiene('entrada');
+      if (salidas !== entradas) fijos.clase = salidas ? 'salida' : 'entrada';
+      if (salidas && !entradas && tiene('consumo')) fijos.motivo = 'Consumo';
     }
     return fijos;
   }
@@ -353,6 +393,8 @@ const ExcelImportacion = (() => {
     const etiqueta = normal(hoja.nombre);
     const nombre = normal(hoja.archivo);
     const origen = /balanza|auxiliar|diario/.test(etiqueta) ? etiqueta : nombre;
+    if (/\bauxiliar(?:es)?\b/.test(origen) && /\b(inventario|kardex|existencias|almacen)\b/.test(origen) &&
+        campos.some(c => c.some(v => /\b(producto|articulo|sku|stock|existencias)\b/.test(v)))) return false;
     for (const [i, c] of campos.entries()) {
       const mapa = {};
       for (const [id,alias] of Object.entries(claves)) {
@@ -382,6 +424,8 @@ const ExcelImportacion = (() => {
     if (clasificarExpediente(hoja)) return hoja;
     const texto = normal(hoja.nombre + ' ' + hoja.archivo.replace(/\.[^.]+$/, ''));
     const porTipo = {};
+    let kardex = null;
+    let catalogo = null;
     let facturaIncompleta = false;
     let diarioIncompleto = false;
     for (const fila of hoja.filas.slice(0, 15)) {
@@ -391,6 +435,27 @@ const ExcelImportacion = (() => {
       const camposFactura = mapear('facturas',fila.celdas).mapa;
       if (camposFactura.documento != null && camposFactura.nombre != null && camposFactura.descripcion != null &&
           camposFactura.precio_linea != null && !NUCLEO.facturas(camposFactura)) facturaIncompleta = true;
+      const mov = mapear('movimientos',fila.celdas).mapa;
+      const prod = mapear('productos',fila.celdas).mapa;
+      const identidad = normal(fila.celdas[mov.producto]?.valor);
+      const nombreHoja = normal(hoja.nombre);
+      const contexto = pista('productos',nombreHoja) && !pista('movimientos',nombreHoja) ? nombreHoja : texto;
+      const nombrado = /\b(kardex|movimientos de inventario|movimientos de almacen)\b/.test(contexto);
+      const productoExplicito = /\b(producto|articulo|insumo|medicamento|item)\b/.test(identidad);
+      const tieneCosto = prod.costo != null || prod.costo_total != null;
+      const esCatalogo = (prod.nombre != null || prod.sku != null) && (prod.stock != null || tieneCosto) &&
+        (pista('productos',texto) || prod.sku != null || productoExplicito && tieneCosto);
+      if (esCatalogo && (!catalogo || Object.keys(prod).length > Object.keys(catalogo.mapa).length))
+        catalogo = {tipo:'productos',fila:fila.numero,mapa:prod};
+      const cantidadesSeparadas = mov.cant_entrada != null || mov.cant_salida != null;
+      const claseEnFilas = mov.clase != null && hoja.filas.slice(0, 40).some(f =>
+        f.numero > fila.numero && CLASES.movimientos[normal(f.celdas[mov.clase]?.valor)]);
+      const pareceKardex = nombrado && (mov.producto != null || mov.sku != null) && (mov.fecha != null || cantidadesSeparadas) ||
+        (productoExplicito || mov.sku != null || nombrado) && (cantidadesSeparadas ||
+        mov.cantidad != null && (nombrado || mov.clase != null && (claseEnFilas || mov.fecha != null))) ||
+        mov.producto != null && mov.fecha != null && mov.cantidad != null && (claseEnFilas || pista('movimientos',texto));
+      if (pareceKardex && (!kardex || Object.keys(mov).length > Object.keys(kardex.mapa).length))
+        kardex = {tipo:'movimientos', fila:fila.numero, mapa:mov};
       for (const tipo of tiposDisponibles()) {
         const {mapa, puntos} = mapear(tipo, fila.celdas);
         if (!NUCLEO[tipo](mapa)) continue;
@@ -411,6 +476,17 @@ const ExcelImportacion = (() => {
       hoja.deteccion = {estado:'dudosa', opciones:tiposDisponibles().includes('facturas') ? ['facturas'] : []};
       if (!hoja.deteccion.opciones.length) hoja.deteccion = {estado:'ninguna'};
       return hoja;
+    }
+    const inventario = kardex || catalogo;
+    if (inventario && !porTipo.facturas) {
+      const {tipo,fila,mapa} = inventario;
+      hoja.destinoInventario = tipo;
+      if (!tiposDisponibles().includes(tipo)) {
+        hoja.deteccion = {estado:'sinInventario'};
+        return hoja;
+      }
+      return Object.assign(hoja,{tipo,encabezado:fila,mapa,fijos:fijosPorNombre(tipo,texto,mapa),
+        deteccion:{estado:'reconocida',columnas:Object.keys(mapa).length}});
     }
     const orden = Object.values(porTipo).sort((a, b) => b.total - a.total);
     if (!orden.length) { hoja.deteccion = {estado:'ninguna'}; return hoja; }
@@ -445,7 +521,22 @@ const ExcelImportacion = (() => {
       if (!separadas && m.monto == null) falta.push('Monto (o columnas de ingresos y gastos)');
       if (!separadas && m.clase == null && !h.fijos.clase) falta.push('Tipo de movimiento (o «todas son…»)');
     }
-    if (h.tipo === 'movimientos' && m.clase == null && !h.fijos.clase) falta.push('Tipo de movimiento (o «todas son…»)');
+    if (h.tipo === 'movimientos' && m.cant_entrada == null && m.cant_salida == null) {
+      if (m.cantidad == null) falta.push('Cantidad (o unidades de entrada/salida)');
+      if (m.clase == null && !h.fijos.clase) falta.push('Tipo de movimiento (o «todas son…»)');
+    }
+    if (['productos','movimientos'].includes(h.tipo)) {
+      if (h.tipo === 'movimientos' && esEmpresaMedica() &&
+          !CAMPOS_MONETARIOS_INV.some(k => k !== 'precio' && m[k] != null))
+        falta.push('Costo unitario o valor total al costo del movimiento');
+      const columnas = cabecera(h);
+      if (CAMPOS_MONETARIOS_INV.some(k => otraMoneda(columnas[m[k]]?.valor)))
+        falta.push('Importes de inventario en C$');
+      if (h.tipo === 'movimientos' && [...CAMPOS_MONETARIOS_INV,'cantidad','cant_entrada','cant_salida'].some(k => {
+        const nombre = normal(columnas[m[k]]?.valor);
+        return nombre && columnas.filter(c => normal(c?.valor) === nombre).length > 1;
+      })) falta.push('Encabezados distintos para las cantidades y los costos de entrada y salida');
+    }
     return falta;
   }
 
@@ -457,6 +548,7 @@ const ExcelImportacion = (() => {
   function avisoDeteccion(h) {
     const d = h.deteccion;
     if (!d) return '';
+    if (d.estado === 'sinInventario') return '<p class="excel-aviso">Se reconoció una hoja de inventario. Hace falta el permiso de Inventario para cargarla.</p>';
     if (h.tipo && d.estado === 'reconocida' && h.tipo === h.tipoDetectado)
       return `<p class="excel-detectado">✓ Reconocida como «${TIPOS[h.tipo].titulo}» · ${d.columnas} columna${d.columnas === 1 ? '' : 's'} asignada${d.columnas === 1 ? '' : 's'}</p>`;
     if (!h.tipo && d.estado === 'dudosa')
@@ -471,7 +563,8 @@ const ExcelImportacion = (() => {
       const titulo = escAttr(h.archivo) + ' · ' + escAttr(h.nombre) + (h.oculta ? ' (oculta)' : '');
       if (h.error || !h.filas.length) return `<section class="excel-hoja"><strong>${titulo}</strong><p>${escAttr(h.error || 'Hoja vacía')}</p></section>`;
       if (h.fiscal || h.control) return `<section class="excel-hoja"><strong>${titulo}</strong><p>${h.fiscal ? 'Respaldo fiscal' : h.control === 'balanza' ? 'Balanza de comprobación' : 'Auxiliar contable'} · ${h.fiscal ? 'Disponible para el expediente' : 'Control de conciliación'}</p></section>`;
-      const opciones = tiposDisponibles().map(t => `<option value="${t}" ${h.tipo === t ? 'selected' : ''}>${TIPOS[t].titulo}</option>`).join('');
+      const opciones = tiposDisponibles().filter(t => !h.destinoInventario || t === h.destinoInventario)
+        .map(t => `<option value="${t}" ${h.tipo === t ? 'selected' : ''}>${TIPOS[t].titulo}</option>`).join('');
       const columnas = cabecera(h);
       const falta = h.tipo ? faltantes(h) : [];
       return `<section class="excel-hoja${h.tipo && !falta.length ? ' excel-hoja-lista' : ''}" data-hoja="${i}">
@@ -497,8 +590,10 @@ const ExcelImportacion = (() => {
   function ayuda(tipo) {
     return ({
       finanzas:'Una columna de tipo (ingreso o gasto) con el monto, o dos columnas: ingresos y gastos. Las categorías que no existan quedan como «General» con su nombre en la descripción.',
-      productos:'Si hay stock inicial, se registra con su costo unitario. Sin fecha se toma la de hoy. Los productos que ya existen no se tocan.',
-      movimientos:'Usa entrada o salida. Escribe el nombre del producto tal como aparece en el catálogo.',
+      productos:'El valor de apertura se calcula con las existencias y el costo. También puedes usar el valor total al costo que indica el archivo. Si falta la fecha, se usa la que selecciones para la apertura.',
+      movimientos:esEmpresaMedica()
+        ? 'Cada entrada o salida se conserva como kardex histórico con el costo del archivo. Los saldos físicos por lote se gestionan en Inventario.'
+        : 'Usa el nombre del catálogo, una cantidad con tipo o columnas de entrada y salida. Agrega el costo histórico para valorar el movimiento.',
       proveedores:'Los proveedores que ya existen con el mismo nombre se señalan para no duplicarlos.',
       clientes:'Sin días de crédito se usan 30. Los clientes que ya existen con el mismo nombre se señalan.',
       facturas:'Usa una fila por línea y repite el número, cliente, fecha, IVA y total de factura. Incluye la fecha de cobro completo o el vencimiento si está pendiente. El inventario y los ingresos históricos se migran por separado.',
@@ -549,6 +644,10 @@ const ExcelImportacion = (() => {
     return String(formato ? celda.texto ?? celda.valor : celda.valor).trim();
   }
 
+  function otraMoneda(valor) {
+    return /\$|USD|EUR|GTQ|MXN|CRC|HNL|€|£|d[oó]lares/i.test(String(valor ?? '').replace(/C\s*\$/gi,''));
+  }
+
   // Montos tal como vienen en hojas reales: «C$ 1,250.50», «1.250,50», 15.333333 (fórmulas).
   function decimal(celda, precision, negativo = false, exacto = false) {
     const valor = texto(celda);
@@ -564,7 +663,12 @@ const ExcelImportacion = (() => {
       t = t.replace(/^\(|\)$/g, '').replace(/^-/, '');
       if (/^\d{1,3},\d{3}$/.test(t)) throw new Error('El número ' + valor + ' es ambiguo: escribe el separador decimal (1250.00 o 1.25).');
       if (/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(t)) t = t.replace(/,/g, '');
-      else if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(t)) t = t.replace(/\./g, '').replace(',', '.');
+      else if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(t)) {
+        // Una sola marca en una cantidad fraccionable también puede representar miles.
+        if (exacto && precision > 2 && /^\d{1,3}\.\d{3}$/.test(t))
+          throw new Error('El separador de «' + valor + '» es ambiguo. Usa una celda numérica o escribe la cantidad sin separadores de miles.');
+        t = t.replace(/\./g, '').replace(',', '.');
+      }
       else t = t.replace(',', '.');
       if (!/^\d+(\.\d+)?$/.test(t)) throw new Error('«' + valor + '» no es un número.');
       numero = signo * Number(t);
@@ -573,7 +677,7 @@ const ExcelImportacion = (() => {
     if (numero < 0 && !negativo) throw new Error('No se admiten valores negativos.');
     const factor = 10 ** precision;
     if (exacto && Math.abs(numero - Math.round(numero * factor) / factor) > Number.EPSILON * Math.max(1,Math.abs(numero)))
-      throw new Error('El importe tiene más de dos decimales.');
+      throw new Error(precision === 2 ? 'El importe tiene más de dos decimales.' : 'El valor admite hasta ' + precision + ' decimales.');
     return Math.round(numero * factor) / factor;
   }
 
@@ -613,21 +717,41 @@ const ExcelImportacion = (() => {
     return {id:cat.id};
   }
 
-  const DECIMALES = {debe:2, haber:2, monto:2, monto_ingreso:2, monto_egreso:2, costo:4, precio:2, stock:3, minimo:3, cantidad:3, saldo:2, dias_credito:0,
-    precio_linea:4,costo_linea:4,iva_pct:2,total_factura:2};
-  const TEXTO_CON_FORMATO = ['id_origen','referencia','documento','identificacion','telefono','cuenta'];
+  const DECIMALES = {debe:2, haber:2, monto:2, monto_ingreso:2, monto_egreso:2, costo:4, costo_total:2, precio:2, stock:3, minimo:3, cantidad:3, cant_entrada:3, cant_salida:3, saldo:2, dias_credito:0,
+    precio_linea:4,costo_linea:4,iva_pct:2,total_factura:2,costo_unitario_entrada:4,costo_unitario_salida:4,costo_total_entrada:2,costo_total_salida:2};
+  const TEXTO_CON_FORMATO = ['id_origen','referencia','documento','identificacion','telefono','cuenta','sku'];
+
+  function validarCosto(datos, cantidad) {
+    if (datos.costo_total == null) return;
+    if (cantidad == null) throw new Error('El valor total al costo requiere una cantidad explícita.');
+    // Las cantidades tienen tres decimales y los costos unitarios cuatro. Compara centavos exactamente.
+    const unidades = BigInt(Math.round(cantidad * 1000));
+    const centavos = BigInt(Math.round(datos.costo_total * 100));
+    if (datos.costo == null && unidades > 0n) {
+      datos.costo = Number((2n * centavos * 100000n + unidades) / (2n * unidades)) / 10000;
+      if (datos.costo >= 1e9) throw new Error('El costo unitario calculado supera el límite permitido.');
+    }
+    const unitario = BigInt(Math.round((datos.costo ?? 0) * 10000));
+    if ((unidades * unitario + 50000n) / 100000n !== centavos)
+      throw new Error('La cantidad por el costo unitario debe coincidir al centavo con el valor total al costo. Comprueba las cifras del archivo.');
+  }
 
   function normalizar(hoja, fila) {
     const datos = {};
+    const inventario = hoja.tipo === 'productos' || hoja.tipo === 'movimientos';
     for (const [id, rotulo] of TIPOS[hoja.tipo].campos) {
       if (hoja.mapa[id] == null) continue;
       const celda = fila.celdas[hoja.mapa[id]];
       try {
         let valor;
+        if (inventario && CAMPOS_MONETARIOS_INV.includes(id) &&
+            (otraMoneda(cabecera(hoja)[hoja.mapa[id]]?.valor) || otraMoneda(celda?.texto) || otraMoneda(celda?.valor)))
+          throw new Error('Verifica la moneda. Los valores de inventario deben estar expresados en C$.');
         if (['fecha','vencimiento','fecha_pago'].includes(id)) valor = fecha(celda, hoja.fecha1904);
         else if (id === 'iva_pct' && (typeof celda?.valor === 'number' && String(celda.texto).endsWith('%') || typeof celda?.valor === 'string' && celda.valor.trim().endsWith('%')))
           valor = decimal({valor:typeof celda.valor === 'number' ? celda.valor*100 : celda.valor.trim().slice(0,-1)},2);
-        else if (id in DECIMALES) valor = decimal(celda, DECIMALES[id], hoja.tipo === 'finanzas' && id === 'monto', hoja.tipo === 'diario');
+        else if (id in DECIMALES) valor = decimal(celda, DECIMALES[id], hoja.tipo === 'finanzas' && id === 'monto',
+          ['diario','productos','movimientos'].includes(hoja.tipo));
         else valor = texto(celda, TEXTO_CON_FORMATO.includes(id));
         if (valor !== null && valor !== '') datos[id] = valor;
       } catch (error) {
@@ -635,6 +759,11 @@ const ExcelImportacion = (() => {
       }
     }
     const t = hoja.tipo;
+    if (inventario && datos.moneda != null) {
+      if (!['c','cs','nio','cordoba','cordobas','cordoba oro','cordobas oro'].includes(normal(datos.moneda)))
+        throw new Error('Moneda del costo · la fila debe estar valorizada en córdobas (C$).');
+      delete datos.moneda;
+    }
     if (t === 'diario') {
       datos.debe ??= 0;
       datos.haber ??= 0;
@@ -644,6 +773,8 @@ const ExcelImportacion = (() => {
       if (datos.clase != null) {
         const clase = CLASES[t][normal(datos.clase)];
         if (!clase) throw new Error('Tipo de movimiento · «' + datos.clase + '» no es ' + (t === 'finanzas' ? 'ingreso ni gasto.' : 'entrada ni salida.'));
+        if (t === 'movimientos' && ['consumo','merma','venta','compra','despacho'].includes(normal(datos.clase)) && !datos.motivo)
+          datos.motivo = datos.clase;
         datos.clase = clase;
       } else if (hoja.fijos.clase) datos.clase = hoja.fijos.clase;
     }
@@ -668,15 +799,57 @@ const ExcelImportacion = (() => {
       if (cat.nota) datos.descripcion = (datos.descripcion + ' (' + cat.nota + ')').slice(0, 300);
       if (datos.metodo) datos.metodo = METODOS[normal(datos.metodo)] || 'otro';
     }
-    if (t === 'movimientos' && !datos.clase) throw new Error('Tipo de movimiento · indica si es entrada o salida.');
+    if (t === 'movimientos') {
+      if (!datos.motivo && hoja.fijos.motivo) datos.motivo = hoja.fijos.motivo;
+      if (datos.cant_entrada > 0 || datos.cant_salida > 0 ||
+          datos.cantidad == null && (hoja.mapa.cant_entrada != null || hoja.mapa.cant_salida != null)) {
+        const entrada = datos.cant_entrada || 0, salida = datos.cant_salida || 0;
+        if ((entrada > 0) === (salida > 0)) throw new Error('Cada fila del kardex debe indicar unidades en entrada o en salida.');
+        const clase = entrada ? 'entrada' : 'salida', cantidad = entrada || salida;
+        if (datos.clase && datos.clase !== clase || datos.cantidad != null && datos.cantidad !== cantidad)
+          throw new Error('La cantidad o el tipo contradice las columnas de entrada y salida.');
+        datos.cantidad = cantidad;
+        datos.clase = clase;
+      }
+      delete datos.cant_entrada;
+      delete datos.cant_salida;
+      if (!datos.clase) throw new Error('Tipo de movimiento · indica si es entrada o salida.');
+      if (!(datos.cantidad > 0)) throw new Error('Cantidad · indica las unidades del movimiento.');
+      for (const campo of ['costo','costo_total']) {
+        const prefijo = campo === 'costo' ? 'costo_unitario_' : 'costo_total_';
+        const especifico = datos[prefijo + datos.clase];
+        const contrario = datos[prefijo + (datos.clase === 'entrada' ? 'salida' : 'entrada')];
+        if (contrario > 0 || especifico != null && datos[campo] != null && datos[campo] !== especifico)
+          throw new Error('Los costos declarados en las columnas de entrada y salida contradicen el movimiento.');
+        if (especifico != null) datos[campo] = especifico;
+        delete datos[prefijo + 'entrada'];
+        delete datos[prefijo + 'salida'];
+      }
+      validarCosto(datos, datos.cantidad);
+      if (esEmpresaMedica()) {
+        if (datos.costo == null) throw new Error('El kardex histórico requiere el costo unitario o el valor total al costo.');
+        datos.documental = true;
+      } else if (datos.unidad) {
+        const unidad = UNIDADES[normal(datos.unidad)];
+        if (!unidad) throw new Error('Unidad de movimiento desconocida: ' + datos.unidad + '. Verifica la presentación del catálogo.');
+        datos.unidad = unidad;
+      }
+    }
+    if (datos.sku?.length > 100) throw new Error('El código de producto supera los 100 caracteres.');
     if (t === 'productos') {
+      validarCosto(datos, datos.stock);
+      if (datos.stock > 0 && datos.costo == null) throw new Error('Para valorar las existencias, indica su costo unitario o su valor total al costo.');
       if (datos.unidad) {
         const unidad = UNIDADES[normal(datos.unidad)];
+        if (!unidad && datos.stock > 0) throw new Error('Unidad de apertura desconocida: ' + datos.unidad + '. Verifica la presentación antes de cargar las existencias.');
         if (!unidad) datos.descripcion = [datos.descripcion, 'Unidad original: ' + datos.unidad].filter(Boolean).join(' · ').slice(0, 300);
         datos.unidad = unidad || 'unidad';
       }
       if (datos.categoria) datos.categoria = CATEGORIAS_INV[normal(datos.categoria)] || 'general';
-      if (datos.stock > 0 && !datos.fecha) datos.fecha = hoy();
+      if (datos.stock > 0 && !datos.fecha) {
+        datos.fecha = estado?.fechaApertura ?? hoy();
+        if (!datos.fecha) throw new Error('Selecciona la fecha de apertura de las existencias sin fecha en el archivo.');
+      }
     }
     for (const [id, rotulo, obligatorio] of TIPOS[t].campos)
       if (obligatorio === 1 && (datos[id] == null || datos[id] === '')) throw new Error(rotulo + ' · Falta un valor válido.');
@@ -697,6 +870,10 @@ const ExcelImportacion = (() => {
     if (hoja.tipo === 'diario' && hoja.mapa.documento != null && texto(fila.celdas[hoja.mapa.documento])) return false;
     const valores = columnas.map(i => fila.celdas[i]).filter(c => c && !c.invalida && String(c.valor ?? '').trim() !== '');
     if (!valores.length) return true;
+    if (['productos','movimientos'].includes(hoja.tipo)) {
+      const nombre = normal(fila.celdas[hoja.mapa[hoja.tipo === 'productos' ? 'nombre' : 'producto']]?.valor);
+      if (nombre && !TOTALES.has(nombre)) return false;
+    }
     return columnas.some(i => typeof fila.celdas[i]?.valor === 'string' && TOTALES.has(normal(fila.celdas[i].valor)));
   }
 
@@ -708,6 +885,7 @@ const ExcelImportacion = (() => {
     const facturas = new Map();
     const asientos = new Map();
     let ignoradas = 0;
+    let aperturasSinFecha = 0;
     for (const h of estado.hojas.filter(h => h.tipo)) {
       const origen = {archivo:h.archivo, hoja:h.nombre, fila:h.encabezado};
       const falta = faltantes(h);
@@ -716,15 +894,41 @@ const ExcelImportacion = (() => {
         continue;
       }
       const candidatas = h.filas.filter(f => f.numero > h.encabezado);
+      const lotes = cabecera(h).flatMap((c,i) => /\b(lote|serie|bodega|almacen)\b/.test(normal(c?.valor)) ? [i] : []);
+      if (h.tipo === 'productos' && lotes.length && candidatas.some(f => lotes.some(i => String(f.celdas[i]?.valor ?? '').trim()))) {
+        errores.push({...origen, error:'El archivo detalla existencias por lote, serie o almacén. La apertura de productos requiere existencias consolidadas por artículo. Conserva el desglose para cargarlo con sus lotes.'});
+        continue;
+      }
       let datosHoja = 0;
+      let sumaCentavos = 0n, costosIncompletos = false;
       for (const fila of candidatas) {
         if (filaIgnorable(h, fila)) { ignoradas++; continue; }
         datosHoja++;
         try {
           const r = normalizar(h, fila);
+          if (r.tipo === 'productos' && r.datos.stock > 0 && !texto(fila.celdas[h.mapa.fecha])) aperturasSinFecha++;
+          if (r.tipo === 'productos' && h.mapa.costo_total != null) {
+            if (r.datos.costo == null && r.datos.stock !== 0 && r.datos.costo_total == null) costosIncompletos = true;
+            else {
+              const unidades = BigInt(Math.round((r.datos.stock ?? 0) * 1000));
+              const costo = BigInt(Math.round((r.datos.costo ?? 0) * 10000));
+              sumaCentavos += (unidades * costo + 50000n) / 100000n;
+            }
+          }
           if (['finanzas','movimientos'].includes(r.tipo) && !r.datos.id_origen) {
-            const base = r.tipo + '|' + JSON.stringify(r.datos);
+            const identidad = {...r.datos};
+            if (r.tipo === 'movimientos' && !r.datos.documental) {
+              // La misma fila física conserva la clave que generaba el importador anterior.
+              delete identidad.sku;
+              delete identidad.unidad;
+              delete identidad.costo;
+              delete identidad.costo_total;
+              if (!texto(fila.celdas[h.mapa.motivo])) delete identidad.motivo;
+            }
+            const base = r.tipo + '|' + JSON.stringify(identidad);
             vistas[base] = (vistas[base] || 0) + 1;
+            if (r.tipo === 'movimientos' && vistas[base] > 1)
+              throw new Error('Hay movimientos idénticos sin ID de origen. Indica el identificador de cada movimiento para evitar registrarlos dos veces.');
             r.datos.id_origen = 'auto-' + huella(base) + '-' + vistas[base];
           }
           if (r.tipo === 'diario') {
@@ -759,6 +963,16 @@ const ExcelImportacion = (() => {
           } else filas.push(r);
         }
         catch (error) { errores.push({...origen, fila:fila.numero, error:error.message}); }
+      }
+      if (h.tipo === 'productos' && h.mapa.costo_total != null) {
+        const pie = candidatas.filter(f => f.celdas.some(c => String(c?.valor ?? '').trim())).at(-1);
+        if (pie && filaIgnorable(h,pie) && pie.celdas.some(c => ['total','total general','gran total','totales'].includes(normal(c?.valor)))) {
+          try {
+            const declarado = decimal(pie.celdas[h.mapa.costo_total],2,false,true);
+            if (declarado != null && (costosIncompletos || sumaCentavos !== BigInt(Math.round(declarado * 100))))
+              throw new Error('El valor total al costo al pie de la hoja no cuadra con el detalle de los productos.');
+          } catch (error) { errores.push({...origen,fila:pie.numero,error:error.message}); }
+        }
       }
       if (!datosHoja) errores.push({...origen, error:'La hoja no tiene datos después del encabezado.'});
     }
@@ -802,7 +1016,7 @@ const ExcelImportacion = (() => {
       }
       if (!cantidad) errores.push({archivo:h.archivo,hoja:h.nombre,error:'El control no contiene cuentas válidas.'});
     }
-    return {filas, errores, ignoradas};
+    return {filas, errores, ignoradas, aperturasSinFecha};
   }
 
   function resultados(entradas, resumen = null) {
@@ -811,6 +1025,12 @@ const ExcelImportacion = (() => {
       resumen.conciliacion && 'Diario, balanza y auxiliares conciliados del ' + resumen.conciliacion.desde + ' al ' + resumen.conciliacion.hasta,
       resumen.productos && resumen.productos + ' producto(s)', resumen.proveedores && resumen.proveedores + ' proveedor(es)',
       resumen.clientes && resumen.clientes + ' cliente(s)', resumen.movimientos && resumen.movimientos + ' movimiento(s)',
+      resumen.productos && resumen.valor_inventario_inicial != null && 'Inventario de apertura valorizado: ' + fmtC(resumen.valor_inventario_inicial),
+      resumen.productos_sin_costo && resumen.productos_sin_costo + ' producto(s) sin costo informado',
+      resumen.movimientos && resumen.valor_entradas != null && 'Entradas valorizadas: ' + fmtC(resumen.valor_entradas) + ' · Salidas valorizadas: ' + fmtC(resumen.valor_salidas),
+      resumen.entradas_sin_costo && resumen.entradas_sin_costo + ' entrada(s) sin costo histórico',
+      resumen.salidas_sin_costo && resumen.salidas_sin_costo + ' salida(s) sin costo histórico',
+      estado.aperturasSinFecha && estado.aperturasSinFecha + ' apertura(s) sin fecha en el archivo. Se asignó ' + estado.fechaApertura,
       resumen.finanzas && `${resumen.finanzas} movimiento(s) de caja · Ingresos ${fmtC(resumen.ingresos)} · Gastos ${fmtC(resumen.egresos)}`,
       resumen.cxc && `${resumen.cxc} saldo(s) por cobrar: ${fmtC(resumen.por_cobrar)}`,
       resumen.cxp && `${resumen.cxp} saldo(s) por pagar: ${fmtC(resumen.por_pagar)}`,
@@ -823,7 +1043,7 @@ const ExcelImportacion = (() => {
     el('resultados').innerHTML = montos + (entradas.length ? `<div class="excel-tabla" tabindex="0" aria-label="Detalle de filas"><table>
       <thead><tr><th>Archivo y hoja</th><th>Fila</th><th>Registro</th><th>Resultado</th></tr></thead>
       <tbody>${entradas.map(r => `<tr><td>${escAttr(r.archivo)}<br>${escAttr(r.hoja)}</td><td>${escAttr(r.fila)}</td>
-        <td>${escAttr(r.detalle || '')}</td><td class="${r.error ? 'excel-error' : ''}">${escAttr(r.error || (r.estado === 'duplicada' ? 'Ya registrada' : r.registro_id ? 'Guardada' : 'Lista para guardar'))}</td></tr>`).join('')}</tbody>
+        <td>${escAttr(r.detalle || '')}</td><td class="${r.error ? 'excel-error' : ''}">${escAttr(r.error || (r.estado === 'duplicada' ? 'Ya registrada' : r.registro_id || r.estado === 'guardada' ? 'Guardada' : 'Lista para guardar'))}</td></tr>`).join('')}</tbody>
       </table></div>` : '');
   }
 
@@ -833,7 +1053,10 @@ const ExcelImportacion = (() => {
     if (!confirmar) e.plan = null;
     const plan = confirmar ? e.plan : preparar();
     if (!plan) return;
-    if (!confirmar) e.ignoradas = plan.ignoradas;
+    if (!confirmar) {
+      e.ignoradas = plan.ignoradas;
+      e.aperturasSinFecha = plan.aperturasSinFecha;
+    }
     if (!confirmar && (plan.errores.length || !plan.filas.length || plan.filas.filter(r => !['auxiliar','balanza'].includes(r.tipo)).length > LIMITE)) {
       resultados(plan.errores);
       mensaje(plan.filas.filter(r => !['auxiliar','balanza'].includes(r.tipo)).length > LIMITE ? 'Divide la carga en grupos de hasta 1,000 filas.' : 'Corrige los errores de la revisión.', true);
@@ -850,6 +1073,10 @@ const ExcelImportacion = (() => {
       if (error && /tipo_check|no tienes permiso para uno de los destinos/i.test(error.message || ''))
         throw new Error('Falta aplicar la versión nueva de migracion_importar_excel.sql en Supabase (proveedores, clientes y saldos).');
       if (error) throw new Error(error.message);
+      const requiereValoracion = plan.filas.some(r => r.tipo === 'productos' && (r.datos.sku != null || r.datos.costo_total != null) ||
+        r.tipo === 'movimientos' && (r.datos.documental || r.datos.sku != null || r.datos.unidad != null || r.datos.costo != null || r.datos.costo_total != null));
+      if (!confirmar && requiereValoracion && data.resumen?.valor_inventario_inicial == null)
+        throw new Error('Actualiza migracion_importar_excel.sql en Supabase para guardar los códigos y los costos del inventario.');
       resultados(data.filas, data.resumen);
       e.plan = !data.resumen.errores && data.resumen.nuevas && (!confirmar || data.cambio)
         ? {...plan, revision:data.revision} : null;
@@ -992,7 +1219,7 @@ const ExcelImportacion = (() => {
     descargar(JSON.stringify({...lote, filas:data}, null, 2), 'importacion-' + lote.id + '.json', 'application/json');
   }
 
-  return {abrir,cerrar,cargar,cambiar,plantilla,historial,comprobante,archivar,descargarOriginal,leerArchivo,originalFiscal,fecha,
+  return {abrir,cerrar,cargar,cambiar,cambiarFechaApertura,plantilla,historial,comprobante,archivar,descargarOriginal,leerArchivo,originalFiscal,fecha,
     revisar:() => estado && solicitar(estado,false),
     confirmar:() => estado && solicitar(estado,true),
     // Para pruebas: el reconocimiento y la lectura de valores sin interfaz.

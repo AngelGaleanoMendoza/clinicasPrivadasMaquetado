@@ -151,6 +151,37 @@
     return '';
   }
 
+  async function auxiliarInventario(clinica,desde,hasta) {
+    if (clinica!==currentClinicaId || !hasPermiso('inventario')) throw new Error('Se requiere acceso al inventario del establecimiento.');
+    const {data,error}=await consultarPaginas(()=>sb.from('importaciones_excel_filas')
+      .select('tipo,archivo,hoja,fila,datos,importe:datos->>costo_total').eq('clinica_id',clinica).in('tipo',['productos','movimientos'])
+      .gte('datos->>fecha',desde).lte('datos->>fecha',hasta).order('lote_id').order('ordinal'));
+    if (error) throw error;
+    const filas=[];
+    for (const recibo of data) {
+      const d=recibo.datos, apertura=recibo.tipo==='productos', cantidad=apertura?d.stock:d.cantidad;
+      if (!(Number(cantidad)>0)) continue;
+      let importe=null;
+      if (recibo.importe!=null) importe=decimalEntero(recibo.importe,2);
+      else if (d.costo!=null) {
+        // Cantidades a milésimas y costo unitario a diezmilésimas. Redondear cada renglón a centavos.
+        importe=(decimalEntero(cantidad,3)*decimalEntero(d.costo,4)+50000n)/100000n;
+      }
+      filas.push({
+        fecha:d.fecha, producto:d.nombre||d.producto, sku:d.sku, cantidad, unidad:d.unidad, costo:d.costo,
+        clase:apertura?'apertura':d.clase, documental:d.documental===true, motivo:d.motivo,
+        importe, fuente:[recibo.archivo,recibo.hoja,'fila '+recibo.fila].join(' · ')
+      });
+    }
+    if (clinica!==currentClinicaId || !hasPermiso('inventario')) throw new Error('Cambió el establecimiento o el permiso de Inventario.');
+    return filas.sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  }
+
+  function decimalEntero(valor,escala) {
+    const [entero,fraccion='']=String(valor).split('.');
+    return BigInt(entero+fraccion.padEnd(escala,'0').slice(0,escala));
+  }
+
   async function obtener(clinica,desde,hasta,vigente,progreso=()=>{}) {
     if (!hasPermiso('contabilidad') || clinica !== currentClinicaId) throw new Error('Selecciona el establecimiento con acceso a Contabilidad.');
     const {data,error} = await consultarPaginas(()=>sb.from('expediente_fiscal_excel').select('id,archivo,digest').eq('clinica_id',clinica).order('id'));
@@ -246,10 +277,46 @@
       const encontrados=data.filter(d=>patron.test(normal(d.archivo.split('/').pop()).replace(/_/g,' ')));
       return [titulo,encontrados.length ? encontrados.map(d=>d.archivo).join(' / ')+' · Verificar corte y contenido' : 'Pendiente de identificar en el expediente'];
     });
-    return {lineas,avisos,libros};
+    let inventario=null;
+    if (vigente() && hasPermiso('inventario')) {
+      try { inventario=await auxiliarInventario(clinica,desde,hasta); }
+      catch { avisos.push('No se pudieron consultar los comprobantes del inventario. Vuelve a generar el borrador.'); }
+      if (!vigente()) return;
+      if (!hasPermiso('inventario')) inventario=null;
+    }
+    return {lineas,avisos,libros,inventario};
   }
 
-  function mostrar({lineas,avisos,libros}) {
+  function mostrarInventario(filas,tabla,imprimir=false) {
+    if (!filas?.length) return '';
+    const moneda=n=>'C$ '+(n/100n).toLocaleString('es-NI')+'.'+String(n%100n).padStart(2,'0');
+    const grupos=new Map(), destinos=new Map();
+    const acumular=(mapa,clave,importe)=>{
+      if (!mapa.has(clave)) mapa.set(clave,{suma:0n,pendientes:0,filas:0});
+      const g=mapa.get(clave);
+      g.filas++;
+      if (importe===null) g.pendientes++;
+      else g.suma+=importe;
+    };
+    const resumen=mapa=>[...mapa].map(([tipo,g])=>[tipo,g.filas,g.filas===g.pendientes?'Pendiente':moneda(g.suma),g.pendientes]);
+    const detalle=filas.map(f=>{
+      const origen=f.clase==='apertura'?'Apertura':(f.documental?'Kardex histórico':'Movimiento de stock');
+      const tipo=f.clase==='apertura'?origen:origen+' · '+(f.clase==='salida'?'Salida':'Entrada');
+      acumular(grupos,tipo,f.importe);
+      if (f.clase==='salida') acumular(destinos,origen+' · '+_destinoSalidaInventario(f.motivo),f.importe);
+      return [f.fecha,tipo,[f.sku,f.producto].filter(Boolean).join(' · '),
+        [f.cantidad,f.unidad].filter(Boolean).join(' '),f.costo==null?'—':_fmtCostoUnitario(Number(f.costo)),
+        f.importe===null?'Costo pendiente':moneda(f.importe),f.motivo||'—',f.fuente];
+    });
+    const columnas=['Origen','Filas','Valor con costo documentado','Filas sin costo'];
+    const productos=tabla('Detalle de inventario',['Fecha','Origen','Producto','Cantidad','Costo unitario','Valor al costo','Motivo','Archivo, hoja y fila'],detalle);
+    return tabla('Inventario importado en el período',columnas,resumen(grupos))+
+      (destinos.size?tabla('Salidas según el motivo del documento',['Clasificación propuesta',...columnas.slice(1)],resumen(destinos)):'')+
+      '<p>La apertura respalda las existencias al corte. Para reconocer el costo de venta, el consumo o la merma, concilia cada salida con su comprobante y su cuenta. Los movimientos del kardex histórico pueden estar incluidos en la apertura.</p>'+
+      (imprimir?productos:'<details><summary>Ver productos y documentos de origen</summary>'+productos+'</details>');
+  }
+
+  function mostrar({lineas,avisos,libros,inventario}) {
     const tabla = (titulo,cols,filas)=>'<h3>'+titulo+'</h3><div class="excel-tabla">'+_tablaReporteZip('',cols,filas)+'</div>';
     const saldos=new Map(),totales={debe:0,haber:0};
     const diario=lineas.map(l=>{
@@ -267,7 +334,9 @@
       tabla('Balanza provisional de movimientos',['Concepto propuesto','Debe','Haber','Movimiento neto (Debe − Haber)'],balanza)+
       '<p>Diferencia Debe menos Haber: <strong>'+dinero(totales.debe-totales.haber)+'</strong>. Los saldos de apertura y las contrapartidas están pendientes.</p>' :
       '<p>Sin importes fiscales utilizables para el rango seleccionado.</p>')+
-      tabla('Documentos para conciliar',['Documento','Situación según el nombre del archivo'],libros)+
+      mostrarInventario(inventario,tabla)+
+      tabla('Documentos para conciliar',['Documento','Situación del respaldo'],libros.map(([titulo,estado])=>
+        titulo==='Inventario valorizado' && inventario?.length ? [titulo,inventario.length+' filas en el auxiliar de inventario importado · Cotejar las fechas con el corte de la balanza'] : [titulo,estado]))+
       '<h3>Pendientes para conciliar</h3><ul>'+[
         ...avisos,
         'Identificar las cuentas y los saldos iniciales con el catálogo contable y la balanza de apertura.',
@@ -276,5 +345,5 @@
         'Validar contra el diario y la balanza de origen al mismo corte antes de registrar asientos definitivos.'
       ].map(a=>'<li>'+escAttr(a)+'</li>').join('')+'</ul>';
   }
-  return {obtener,mostrar};
+  return {obtener,mostrar,auxiliarInventario,mostrarInventario};
 })();

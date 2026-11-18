@@ -547,6 +547,10 @@ body.dark .balance-pct{background:#0F172A}
 .libro-diario .excel-tabla table{min-width:580px;table-layout:auto}
 .libro-diario .excel-tabla th{width:auto}
 .libro-diario [hidden]{display:none!important}
+#excel-fecha-apertura-campo:not([hidden]){display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:12px 0;font-size:13px}
+#excel-fecha-apertura{background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px}
+#libro-diario-resultados details{margin:12px 0}
+#libro-diario-resultados summary{cursor:pointer;font-weight:600}
 .excel-hoja-lista{border-color:rgba(16,185,129,.45)}
 .excel-modal p.excel-detectado{margin:6px 0 0;font-weight:700;color:#15803D}
 body.dark .excel-modal p.excel-detectado{color:#6EE7B7}

@@ -3,6 +3,7 @@ const LibroDiario = (() => {
   const el = nombre => document.getElementById('libro-diario-'+nombre);
   let consulta = 0;
   let reporte = null;
+  let soloInventario = false;
 
   // Mantiene precisión de centavos incluso en una balanza con totales grandes.
   function centavos(valor) {
@@ -62,10 +63,24 @@ const LibroDiario = (() => {
       el('estado').textContent = 'Elige un rango de fechas válido.';
       return;
     }
-    if (!hasPermiso('contabilidad')) { el('estado').textContent = 'Se requiere acceso a Contabilidad.'; return; }
+    const permiso=soloInventario?'inventario':'contabilidad';
+    if (!hasPermiso(permiso)) { el('estado').textContent = 'Se requiere acceso a '+permiso+'.'; return; }
     controles.forEach(b => b.disabled = true);
     el('estado').textContent = 'Consultando…';
     try {
+      if (soloInventario) {
+        const filas=await BorradorDiario.auxiliarInventario(clinica,desde,hasta);
+        if (turno!==consulta || clinica!==currentClinicaId || !hasPermiso(permiso)) return;
+        if (!filas.length) {
+          el('estado').textContent='Sin aperturas ni movimientos importados en este período.';
+          return;
+        }
+        reporte={clinica,desde,hasta,inventario:filas};
+        el('resultados').innerHTML=BorradorDiario.mostrarInventario(filas,(t,c,f)=>'<div class="excel-tabla" tabindex="0">'+_tablaReporteZip(t,c,f)+'</div>');
+        el('estado').textContent='Comprobantes de Excel · Importes en córdobas.';
+        el('pdf').hidden=false;
+        return;
+      }
       if (borrador) {
         const vigente = () => turno === consulta && clinica === currentClinicaId && hasPermiso('contabilidad');
         el('estado').textContent = 'Preparando el borrador con los documentos del expediente…';
@@ -74,7 +89,7 @@ const LibroDiario = (() => {
         });
         if (!vigente()) return;
         el('resultados').innerHTML = BorradorDiario.mostrar(datos);
-        el('estado').textContent = 'Borrador fiscal · Pendiente de conciliación. Importes en córdobas.';
+        el('estado').textContent = 'Borrador contable · Pendiente de conciliación. Importes en córdobas.';
         return;
       }
       const datos = await obtener(clinica,desde,hasta);
@@ -94,8 +109,13 @@ const LibroDiario = (() => {
     }
   }
 
-  function abrir(anio) {
-    if(!hasPermiso('contabilidad') || !_exigeClinica()) return;
+  function abrir(anio,inventario=false) {
+    if(!hasPermiso(inventario?'inventario':'contabilidad') || !_exigeClinica()) return;
+    soloInventario=inventario;
+    el('titulo').textContent=inventario?'Auxiliar de inventario importado':'Libro diario y balanza de comprobación';
+    el('consultar').textContent=inventario?'Consultar inventario':'Consultar libro';
+    el('borrador').hidden=inventario;
+    el('nota').hidden=inventario;
     const year = /^\d{4}$/.test(anio) ? String(anio) : hoy().slice(0,4);
     el('hasta').value = year === hoy().slice(0,4) ? hoy() : year+'-12-31';
     el('desde').value = year+'-01-01';
@@ -112,6 +132,12 @@ const LibroDiario = (() => {
   function pdf() {
     if(reporte?.clinica !== currentClinicaId) return;
     const periodo = `Del ${formatFecha(reporte.desde)} al ${formatFecha(reporte.hasta)}`;
+    if (reporte.inventario) {
+      if (!hasPermiso('inventario')) return;
+      const titulo='Auxiliar de inventario importado';
+      return pdfAbrir(titulo,_pdfEncabezado(titulo,periodo)+BorradorDiario.mostrarInventario(reporte.inventario,_tablaReporteZip,true));
+    }
+    if (!hasPermiso('contabilidad')) return;
     return pdfAbrir('Balanza y libro diario',informes(reporte).map(i => _pdfEncabezado(i.titulo,periodo)+i.secciones.join('')).join(''));
   }
 

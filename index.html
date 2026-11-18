@@ -22,7 +22,7 @@
 <!-- Lectura local de machotes. El archivo se procesa en el navegador antes de
      guardarlo; Mammoth extrae DOCX y PDF.js se carga al elegir un PDF. -->
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js" defer></script>
-<link rel="stylesheet" href="css/styles.css?v=20261118diario">
+<link rel="stylesheet" href="css/styles.css?v=20261118inventario">
 </head>
 <body>
 <script>
@@ -940,7 +940,11 @@
 
         <div id="inv-panel-reportes" style="display:none">
           <div class="card" style="margin-bottom:16px">
-            <div class="card-header"><h3>📈 Período</h3><div class="doc-acciones"><button class="btn btn-secondary btn-sm" onclick="imprimirReporteInventario()">🖨️ Imprimir</button><button class="btn btn-primary btn-sm" onclick="descargarDocumento(imprimirReporteInventario)">⬇️ Descargar PDF</button></div></div>
+            <div class="card-header"><h3>📈 Período</h3><div class="doc-acciones">
+              <button class="btn btn-secondary btn-sm" onclick="LibroDiario.abrir(null,true)">Auxiliar de Excel</button>
+              <button class="btn btn-secondary btn-sm" onclick="imprimirReporteInventario()">🖨️ Imprimir</button>
+              <button class="btn btn-primary btn-sm" onclick="descargarDocumento(imprimirReporteInventario)">⬇️ Descargar PDF</button>
+            </div></div>
             <div class="tabs" style="margin-bottom:16px">
               <button class="tab active" id="tab-rep-dia"    onclick="switchRepTab('dia')">📅 Diario</button>
               <button class="tab"        id="tab-rep-semana" onclick="switchRepTab('semana')">📆 Semanal</button>
@@ -3237,6 +3241,9 @@
       </div>
     </div>
     <fieldset id="excel-hojas" class="excel-hojas" aria-label="Hojas del archivo" onchange="ExcelImportacion.cambiar(event)"></fieldset>
+    <label id="excel-fecha-apertura-campo" hidden>Fecha de apertura para productos sin fecha en el archivo
+      <input type="date" id="excel-fecha-apertura" onchange="ExcelImportacion.cambiarFechaApertura()">
+    </label>
     <p id="excel-estado" role="status"></p>
     <div id="excel-resultados"></div>
     <p id="excel-situacion"></p>
@@ -3256,22 +3263,22 @@
     </div>
   </section>
 </div>
-<script src="js/app.js?v=20261118caja" defer></script>
-<script src="js/reportes-zip.js?v=20261118diario" defer></script>
-<script src="js/importar-excel.js?v=20261118borrador" defer></script>
-<script src="js/libro-diario.js?v=20261118borrador" defer></script>
+<script src="js/app.js?v=20261118inventario" defer></script>
+<script src="js/reportes-zip.js?v=20261118inventario" defer></script>
+<script src="js/importar-excel.js?v=20261118inventario" defer></script>
+<script src="js/libro-diario.js?v=20261118inventario" defer></script>
 <script src="js/caja-empresa.js?v=20261118borrador" defer></script>
-<script src="js/borrador-diario.js?v=20261118" defer></script>
+<script src="js/borrador-diario.js?v=20261118inventario" defer></script>
 <div class="modal-overlay" id="modal-libro-diario">
   <section class="modal modal-lg libro-diario" role="dialog" aria-modal="true" aria-labelledby="libro-diario-titulo">
     <h2 id="libro-diario-titulo">Libro diario y balanza de comprobación</h2>
     <form class="libro-diario-filtros" onsubmit="event.preventDefault(); LibroDiario.consultar()">
       <label>Desde<input type="date" id="libro-diario-desde" required></label>
       <label>Hasta<input type="date" id="libro-diario-hasta" required></label>
-      <button type="submit" class="btn btn-primary">Consultar libro</button>
-      <button type="button" class="btn btn-secondary" onclick="LibroDiario.consultar(true)">Generar borrador fiscal</button>
+      <button type="submit" class="btn btn-primary" id="libro-diario-consultar">Consultar libro</button>
+      <button type="button" class="btn btn-secondary" id="libro-diario-borrador" onclick="LibroDiario.consultar(true)">Generar borrador contable</button>
     </form>
-    <p class="text-light">La balanza se calcula con los asientos importados, incluido el asiento de apertura.</p>
+    <p class="text-light" id="libro-diario-nota">La balanza se calcula con los asientos importados, incluido el asiento de apertura.</p>
     <p id="libro-diario-estado" role="status"></p>
     <div id="libro-diario-resultados"></div>
     <div class="modal-footer">

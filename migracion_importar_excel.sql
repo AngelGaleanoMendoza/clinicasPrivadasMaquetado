@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS public.importaciones_excel_filas (
   hoja text NOT NULL,
   fila integer NOT NULL,
   datos jsonb NOT NULL,
-  registro_id bigint NOT NULL,
+  registro_id bigint,
   movimiento_inicial_id bigint,
   PRIMARY KEY (clinica_id, tipo, clave),
   UNIQUE (clinica_id, lote_id, ordinal),
@@ -33,6 +33,30 @@ CREATE TABLE IF NOT EXISTS public.importaciones_excel_filas (
 
 CREATE INDEX IF NOT EXISTS importaciones_excel_historial
   ON public.importaciones_excel (clinica_id, creado_en DESC);
+
+-- Un Kardex histórico de empresa es un auxiliar documental, sin movimiento físico.
+ALTER TABLE public.importaciones_excel_filas ALTER COLUMN registro_id DROP NOT NULL;
+ALTER TABLE public.importaciones_excel_filas DROP CONSTRAINT IF EXISTS importaciones_excel_registro_destino;
+ALTER TABLE public.importaciones_excel_filas ADD CONSTRAINT importaciones_excel_registro_destino
+  CHECK ((registro_id IS NULL) = (tipo = 'movimientos' AND datos @> '{"documental":true}'));
+
+ALTER TABLE public.inventario ADD COLUMN IF NOT EXISTS sku text;
+CREATE UNIQUE INDEX IF NOT EXISTS inventario_sku_empresa
+  ON public.inventario (clinica_id, lower(btrim(sku))) WHERE nullif(btrim(sku),'') IS NOT NULL;
+ALTER TABLE public.inventario_movimientos
+  ADD COLUMN IF NOT EXISTS costo_unitario numeric(14,4),
+  ADD COLUMN IF NOT EXISTS valor_costo numeric(20,2),
+  ADD COLUMN IF NOT EXISTS costo_importado boolean;
+-- Recuperar el costo histórico de aperturas ya importadas desde su comprobante.
+UPDATE public.inventario_movimientos m
+SET costo_importado = true, costo_unitario = (f.datos->>'costo')::numeric,
+  valor_costo = round((f.datos->>'stock')::numeric * (f.datos->>'costo')::numeric,2)
+FROM public.importaciones_excel_filas f
+WHERE f.clinica_id=m.clinica_id AND f.tipo='productos' AND f.movimiento_inicial_id=m.id
+  AND m.costo_importado IS NULL;
+UPDATE public.inventario_movimientos m SET costo_importado = true
+FROM public.importaciones_excel_filas f
+WHERE f.clinica_id=m.clinica_id AND f.tipo='movimientos' AND f.registro_id=m.id AND m.costo_importado IS NULL;
 
 -- Destinos de la carga: catálogos, movimientos y saldos pendientes al migrar.
 ALTER TABLE public.importaciones_excel_filas DROP CONSTRAINT IF EXISTS importaciones_excel_filas_tipo_check;
@@ -221,12 +245,17 @@ DECLARE
   v_clase text;
   v_cantidad numeric;
   v_costo numeric;
+  v_costo_total numeric;
+  v_sku text;
+  v_skus jsonb := '{}';
+  v_documental boolean;
   v_guardado numeric;
   v_minimo_guardado numeric;
   v_precio_guardado numeric;
   v_costo_guardado numeric;
   v_fecha date;
   v_stock numeric;
+  v_promedio numeric;
   v_prod jsonb;
   v_cantidad_productos integer;
   v_registro bigint;
@@ -272,6 +301,12 @@ DECLARE
   v_finanzas integer := 0;
   v_productos integer := 0;
   v_movimientos integer := 0;
+  v_valor_apertura numeric := 0;
+  v_valor_entradas numeric := 0;
+  v_valor_salidas numeric := 0;
+  v_productos_sin_costo integer := 0;
+  v_entradas_sin_costo integer := 0;
+  v_salidas_sin_costo integer := 0;
   v_ingresos numeric := 0;
   v_egresos numeric := 0;
   v_doc text;
@@ -357,6 +392,21 @@ BEGIN
       v_cantidad := NULL;
       v_fecha := public._excel_fecha(v_d->>'fecha','La fecha',v_tipo IN ('finanzas','movimientos','cxc','cxp','facturas','diario'));
       v_clase := v_d->>'clase';
+      v_documental := false;
+      IF v_tipo IN ('productos','movimientos') THEN
+        v_sku := public._excel_texto(v_d->>'sku','El SKU',100);
+        v_cantidad := CASE WHEN v_tipo = 'productos' THEN coalesce(public._excel_numero(v_d->>'stock','El stock inicial',3),0)
+          ELSE public._excel_numero(v_d->>'cantidad','La cantidad',3,true) END;
+        v_costo := public._excel_numero(v_d->>'costo','El costo unitario',4);
+        v_costo_total := public._excel_numero(v_d->>'costo_total','El costo total',2);
+        IF v_costo IS NULL AND v_costo_total IS NOT NULL AND v_cantidad > 0 THEN
+          v_costo := public._excel_numero(trim_scale(round(v_costo_total / v_cantidad,4))::text,'El costo unitario calculado',4);
+        END IF;
+        IF v_costo_total IS NOT NULL AND v_costo_total <> round(v_cantidad*coalesce(v_costo,0),2) THEN
+          RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'El costo total no coincide con la cantidad por el costo unitario a cuatro decimales.';
+        END IF;
+        v_costo_total := coalesce(v_costo_total,round(v_cantidad*v_costo,2));
+      END IF;
 
       IF v_tipo = 'finanzas' THEN
         v_clave := lower(public._excel_texto(v_d->>'id_origen','el ID de origen',120,true));
@@ -387,8 +437,6 @@ BEGIN
         v_clave := lower(v_nombre);
         v_categoria := coalesce(v_d->>'categoria','general');
         v_metodo := coalesce(v_d->>'unidad','unidad');
-        v_cantidad := coalesce(public._excel_numero(v_d->>'stock','El stock inicial',3),0);
-        v_costo := public._excel_numero(v_d->>'costo','El costo',4);
         IF v_categoria NOT IN ('medicamento','material','equipo','insumo','papeleria','general') OR
           v_metodo NOT IN ('unidad','caja','frasco','ampolla','tableta','rollo','litro','ml','par','paquete') THEN
           RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'Categoría o unidad de inventario inválida.';
@@ -530,18 +578,43 @@ BEGIN
         v_d := jsonb_build_object('nombre',v_nombre,'documento',v_doc,'fecha',v_fecha,'vencimiento',v_venc,'saldo',v_cantidad);
         v_detalle := CASE v_tipo WHEN 'cxc' THEN 'Por cobrar · ' ELSE 'Por pagar · ' END || v_nombre || ' · ' || v_doc || ' · C$ ' || v_cantidad;
       ELSE
-        IF v_clinica->>'tipo' = 'empresa_medica' THEN
+        v_documental := v_d @> '{"documental":true}';
+        v_metodo := public._excel_texto(v_d->>'unidad','La unidad del movimiento',70);
+        IF v_clinica->>'tipo' = 'empresa_medica' AND NOT v_documental THEN
           RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'En empresa privada registra las entradas y salidas desde Compras, Ventas o Inventario para conservar los lotes.';
+        END IF;
+        IF v_documental AND v_clinica->>'tipo' IS DISTINCT FROM 'empresa_medica' THEN
+          RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'El Kardex documental se registra solo en empresas privadas.';
+        END IF;
+        IF v_documental AND v_costo_total IS NULL THEN
+          RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'Al Kardex le falta el costo unitario o el costo total documentado.';
         END IF;
         v_clave := lower(public._excel_texto(v_d->>'id_origen','el ID de origen',120,true));
         v_nombre := public._excel_texto(v_d->>'producto','el nombre del producto',150,true);
-        v_cantidad := public._excel_numero(v_d->>'cantidad','La cantidad',3,true);
         IF v_clase IS NULL OR v_clase NOT IN ('entrada','salida') THEN
           RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'El tipo debe ser entrada o salida.';
         END IF;
         v_d := jsonb_build_object('producto',lower(v_nombre),'fecha',v_fecha,'clase',v_clase,'cantidad',v_cantidad,
           'motivo',public._excel_texto(v_d->>'motivo','El motivo',230));
-        v_detalle := v_clase || ' · ' || v_nombre || ' · ' || v_cantidad || ' · ' || v_fecha;
+        v_detalle := v_clase || ' · ' || v_nombre || ' · ' || v_cantidad || coalesce(' ' || v_metodo,'') || ' · ' || v_fecha;
+        IF v_metodo IS NOT NULL THEN v_d := v_d || jsonb_build_object('unidad',v_metodo); END IF;
+        IF v_costo IS NOT NULL THEN v_d := v_d || jsonb_build_object('costo',v_costo); END IF;
+        IF v_documental THEN
+          v_d := v_d || jsonb_build_object('documental',true);
+          v_detalle := 'Kardex documental · ' || v_detalle;
+        END IF;
+      END IF;
+      IF v_tipo IN ('productos','movimientos') THEN
+        IF v_sku IS NOT NULL THEN
+          v_d := v_d || jsonb_build_object('sku',v_sku);
+          v_detalle := v_detalle || ' · SKU ' || v_sku;
+        END IF;
+        IF v_costo_total IS NOT NULL THEN
+          v_d := v_d || jsonb_build_object('costo_total',v_costo_total);
+          v_detalle := v_detalle || ' · costo total C$ ' || v_costo_total;
+        ELSE
+          v_detalle := v_detalle || ' · sin costo documentado';
+        END IF;
       END IF;
 
       v_previa := v_mapa_claves->(v_tipo || ':' || v_clave);
@@ -551,7 +624,9 @@ BEGIN
         WHERE a.clinica_id = p_clinica AND a.tipo = v_tipo AND a.clave = v_clave;
       END IF;
       IF v_previa IS NOT NULL THEN
-        IF v_previa->'datos' IS DISTINCT FROM v_d THEN
+        -- Los comprobantes antiguos de productos conservan cantidad y costo, sin el total derivado.
+        IF v_previa->'datos' IS DISTINCT FROM v_d AND NOT
+          (v_tipo = 'productos' AND v_previa->'datos' = v_d - 'costo_total' AND v_costo IS NOT NULL) THEN
           RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'El mismo ID de origen o nombre de producto tiene datos diferentes.';
         END IF;
         v_estado := 'duplicada';
@@ -565,15 +640,20 @@ BEGIN
           RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'Hay un registro en Finanzas con la misma referencia. Comprueba que el movimiento no exista.';
         END IF;
 
-        IF v_tipo IN ('productos','movimientos') THEN
+        IF v_tipo IN ('productos','movimientos') AND NOT v_documental THEN
           v_producto_clave := lower(v_nombre);
+          IF v_tipo = 'productos' AND v_sku IS NOT NULL AND
+            (v_skus ? lower(v_sku) OR EXISTS (SELECT 1 FROM public.inventario i
+              WHERE i.clinica_id = p_clinica AND lower(btrim(i.sku)) = lower(v_sku))) THEN
+            RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'El SKU ' || v_sku || ' ya identifica un producto en el catálogo o en esta carga.';
+          END IF;
           v_prod := v_mapa_productos->v_producto_clave;
           IF v_prod IS NULL THEN
             IF p_confirmar THEN
               PERFORM 1 FROM public.inventario i WHERE i.clinica_id = p_clinica AND lower(btrim(i.nombre)) = v_producto_clave
                 ORDER BY i.id FOR UPDATE;
             END IF;
-            SELECT count(*), jsonb_agg(jsonb_build_object('id',i.id,'stock',coalesce(i.stock_actual,0)))->0
+            SELECT count(*), jsonb_agg(jsonb_build_object('stock',coalesce(i.stock_actual,0),'costo',i.costo_unitario,'sku',i.sku,'unidad',i.unidad))->0
               INTO v_cantidad_productos, v_prod
             FROM public.inventario i WHERE i.clinica_id = p_clinica AND lower(btrim(i.nombre)) = v_producto_clave;
             IF v_cantidad_productos > 1 THEN
@@ -581,10 +661,18 @@ BEGIN
             END IF;
           END IF;
           IF v_tipo = 'productos' AND v_prod IS NOT NULL THEN
-            RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'El producto ya existe. Para ajustar su stock utiliza una hoja de movimientos.';
+            RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'El producto ya existe. Existencia actual: ' || (v_prod->>'stock')
+              || ', costo unitario: ' || coalesce(v_prod->>'costo','sin documentar') || '. La apertura del archivo declara '
+              || v_cantidad || ' unidades a ' || coalesce(v_costo::text,'costo sin documentar') || '.';
           END IF;
           IF v_tipo = 'movimientos' AND v_prod IS NULL THEN
             RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'El producto no existe en el catálogo ni en esta carga.';
+          END IF;
+          IF v_tipo = 'movimientos' AND v_sku IS NOT NULL AND lower(btrim(v_prod->>'sku')) IS DISTINCT FROM lower(v_sku) THEN
+            RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'El SKU de este movimiento no coincide con el del producto ' || v_nombre || '.';
+          END IF;
+          IF v_tipo = 'movimientos' AND v_metodo IS NOT NULL AND lower(v_metodo) <> coalesce(lower(v_prod->>'unidad'),'unidad') THEN
+            RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'La unidad del movimiento no coincide con la del producto ' || v_nombre || '.';
           END IF;
           v_stock := coalesce((v_prod->>'stock')::numeric,0) + CASE WHEN v_clase = 'salida' THEN -v_cantidad ELSE v_cantidad END;
           IF v_stock < 0 OR v_stock >= 1000000000 THEN
@@ -593,9 +681,25 @@ BEGIN
           IF v_tipo = 'movimientos' AND v_fecha < (v_prod->>'apertura')::date THEN
             RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'El movimiento tiene una fecha anterior a la apertura del producto en esta carga.';
           END IF;
+          IF v_tipo = 'productos' OR (v_clase = 'entrada' AND (v_prod->>'stock')::numeric = 0) THEN
+            v_promedio := v_costo;
+          ELSIF v_clase = 'entrada' THEN
+            -- Si alguna existencia carece de costo, su valor permanece pendiente.
+            v_promedio := round(((v_prod->>'stock')::numeric * (v_prod->>'costo')::numeric + v_cantidad*v_costo) / v_stock,4);
+          ELSE
+            v_promedio := (v_prod->>'costo')::numeric;
+          END IF;
           v_mapa_productos := jsonb_set(v_mapa_productos,ARRAY[v_producto_clave],jsonb_build_object('stock',v_stock,
+            'costo',v_promedio,
+            'sku',CASE WHEN v_tipo='productos' THEN v_sku ELSE v_prod->>'sku' END,
+            'unidad',CASE WHEN v_tipo='productos' THEN v_metodo ELSE v_prod->>'unidad' END,
             'apertura',CASE WHEN v_tipo = 'productos' AND v_cantidad > 0 THEN v_fecha ELSE (v_prod->>'apertura')::date END));
-          IF v_tipo = 'movimientos' THEN v_detalle := v_detalle || ' · saldo ' || v_stock; END IF;
+          IF v_tipo = 'productos' AND v_sku IS NOT NULL THEN
+            v_skus := v_skus || jsonb_build_object(lower(v_sku),v_nombre);
+          END IF;
+          IF v_tipo = 'movimientos' THEN
+            v_detalle := v_detalle || ' · saldo ' || v_stock || coalesce(' · costo promedio C$ ' || v_promedio,' · costo promedio pendiente');
+          END IF;
         END IF;
         IF v_tipo IN ('proveedores','clientes') THEN
           IF v_tipo = 'proveedores' AND EXISTS (SELECT 1 FROM public.proveedores x
@@ -638,6 +742,7 @@ BEGIN
         END IF;
         v_mapa_claves := jsonb_set(v_mapa_claves,ARRAY[v_tipo || ':' || v_clave],jsonb_build_object('datos',v_d));
         v_plan := v_plan || jsonb_build_array(jsonb_build_object('n',v_fila.n,'tipo',v_tipo,'clave',v_clave,'datos',v_d)
+          || CASE WHEN v_tipo = 'movimientos' AND NOT v_documental THEN jsonb_build_object('promedio',v_promedio) ELSE '{}'::jsonb END
           || CASE WHEN v_tipo = 'diario' THEN jsonb_build_object('lineas_fuente',v_lineas,'origenes',v_origenes_diario) ELSE '{}'::jsonb END);
         v_nuevas := v_nuevas + 1;
         IF v_tipo = 'finanzas' THEN
@@ -645,7 +750,10 @@ BEGIN
           IF v_clase = 'ingreso' THEN v_ingresos := v_ingresos + v_cantidad;
           ELSE v_egresos := v_egresos + v_cantidad;
           END IF;
-        ELSIF v_tipo = 'productos' THEN v_productos := v_productos + 1;
+        ELSIF v_tipo = 'productos' THEN
+          v_productos := v_productos + 1;
+          v_valor_apertura := v_valor_apertura + coalesce(v_costo_total,0);
+          IF v_costo IS NULL THEN v_productos_sin_costo := v_productos_sin_costo + 1; END IF;
         ELSIF v_tipo = 'proveedores' THEN v_proveedores := v_proveedores + 1;
         ELSIF v_tipo = 'clientes' THEN v_clientes := v_clientes + 1;
         ELSIF v_tipo = 'facturas' THEN v_facturas := v_facturas + 1;
@@ -656,7 +764,15 @@ BEGIN
           v_total_haber := v_total_haber + v_iva;
         ELSIF v_tipo = 'cxc' THEN v_cxc := v_cxc + 1; v_por_cobrar := v_por_cobrar + v_cantidad;
         ELSIF v_tipo = 'cxp' THEN v_cxp := v_cxp + 1; v_por_pagar := v_por_pagar + v_cantidad;
-        ELSE v_movimientos := v_movimientos + 1;
+        ELSE
+          v_movimientos := v_movimientos + 1;
+          IF v_clase = 'entrada' THEN
+            v_valor_entradas := v_valor_entradas + coalesce(v_costo_total,0);
+            IF v_costo_total IS NULL THEN v_entradas_sin_costo := v_entradas_sin_costo + 1; END IF;
+          ELSE
+            v_valor_salidas := v_valor_salidas + coalesce(v_costo_total,0);
+            IF v_costo_total IS NULL THEN v_salidas_sin_costo := v_salidas_sin_costo + 1; END IF;
+          END IF;
         END IF;
       END IF;
     EXCEPTION WHEN data_exception THEN
@@ -743,6 +859,8 @@ BEGIN
 
   v_resumen := jsonb_build_object('nuevas',v_nuevas,'duplicadas',v_duplicadas,'errores',v_errores,
     'finanzas',v_finanzas,'productos',v_productos,'movimientos',v_movimientos,'ingresos',v_ingresos,'egresos',v_egresos,
+    'valor_inventario_inicial',v_valor_apertura,'productos_sin_costo',v_productos_sin_costo,
+    'valor_entradas',v_valor_entradas,'valor_salidas',v_valor_salidas,'entradas_sin_costo',v_entradas_sin_costo,'salidas_sin_costo',v_salidas_sin_costo,
     'proveedores',v_proveedores,'clientes',v_clientes,'facturas',v_facturas,'cxc',v_cxc,'cxp',v_cxp,'por_cobrar',v_por_cobrar,'por_pagar',v_por_pagar,
     'asientos',v_asientos,'debe',v_total_debe,'haber',v_total_haber);
   IF v_controles IS NOT NULL AND v_errores=0 THEN
@@ -769,9 +887,9 @@ BEGIN
           RAISE EXCEPTION 'El monto no conserva su precisión en la base de datos. Se canceló la carga.';
         END IF;
       ELSIF v_tipo = 'productos' THEN
-        INSERT INTO public.inventario (clinica_id,nombre,categoria,unidad,stock_actual,stock_minimo,costo_unitario,precio_unitario,descripcion,fecha_vencimiento)
+        INSERT INTO public.inventario (clinica_id,nombre,categoria,unidad,stock_actual,stock_minimo,costo_unitario,precio_unitario,descripcion,fecha_vencimiento,sku)
         VALUES (p_clinica,v_d->>'nombre',v_d->>'categoria',v_d->>'unidad',(v_d->>'stock')::numeric,(v_d->>'minimo')::numeric,
-          (v_d->>'costo')::numeric,(v_d->>'precio')::numeric,v_d->>'descripcion',(v_d->>'vencimiento')::date)
+          (v_d->>'costo')::numeric,(v_d->>'precio')::numeric,v_d->>'descripcion',(v_d->>'vencimiento')::date,v_d->>'sku')
         RETURNING id,stock_actual,stock_minimo,precio_unitario,costo_unitario
         INTO v_registro,v_guardado,v_minimo_guardado,v_precio_guardado,v_costo_guardado;
         IF v_guardado IS DISTINCT FROM (v_d->>'stock')::numeric OR
@@ -781,8 +899,9 @@ BEGIN
           RAISE EXCEPTION 'El stock o los importes de un producto no conservan su precisión. Se canceló la carga.';
         END IF;
         IF (v_d->>'stock')::numeric > 0 THEN
-          INSERT INTO public.inventario_movimientos (clinica_id,inventario_id,tipo,cantidad,motivo,fecha)
-          VALUES (p_clinica,v_registro,'entrada',(v_d->>'stock')::numeric,'Excel · Existencia inicial',(v_d->>'fecha')::date)
+          INSERT INTO public.inventario_movimientos (clinica_id,inventario_id,tipo,cantidad,motivo,fecha,costo_unitario,valor_costo,costo_importado)
+          VALUES (p_clinica,v_registro,'entrada',(v_d->>'stock')::numeric,'Excel · Existencia inicial',(v_d->>'fecha')::date,
+            (v_d->>'costo')::numeric,(v_d->>'costo_total')::numeric,true)
           RETURNING id,cantidad INTO v_movimiento,v_guardado;
           IF v_guardado IS DISTINCT FROM (v_d->>'stock')::numeric THEN
             RAISE EXCEPTION 'La cantidad inicial no conserva su precisión en el historial. Se canceló la carga.';
@@ -839,20 +958,22 @@ BEGIN
         IF v_guardado IS DISTINCT FROM (v_d->>'saldo')::numeric THEN
           RAISE EXCEPTION 'Un saldo con proveedor no conserva su precisión. Se canceló la carga.';
         END IF;
+      ELSIF v_d @> '{"documental":true}' THEN
+        v_registro := NULL;
       ELSE
         v_cantidad := (v_d->>'cantidad')::numeric;
         SELECT coalesce(i.stock_actual,0) INTO STRICT v_stock FROM public.inventario i
           WHERE i.clinica_id = p_clinica AND lower(btrim(i.nombre)) = v_d->>'producto';
         v_stock := v_stock + CASE WHEN v_d->>'clase' = 'entrada' THEN v_cantidad ELSE -v_cantidad END;
-        UPDATE public.inventario i SET stock_actual = coalesce(i.stock_actual,0) +
-          CASE WHEN v_d->>'clase' = 'entrada' THEN v_cantidad ELSE -v_cantidad END
+        UPDATE public.inventario i SET stock_actual = v_stock, costo_unitario = (v_fila.fila->>'promedio')::numeric
         WHERE i.clinica_id = p_clinica AND lower(btrim(i.nombre)) = v_d->>'producto'
-        RETURNING id,stock_actual INTO STRICT v_registro,v_guardado;
-        IF v_guardado IS DISTINCT FROM v_stock THEN
-          RAISE EXCEPTION 'La existencia final no conserva su precisión en el catálogo. Se canceló la carga.';
+        RETURNING id,stock_actual,costo_unitario INTO STRICT v_registro,v_guardado,v_costo_guardado;
+        IF v_guardado IS DISTINCT FROM v_stock OR v_costo_guardado IS DISTINCT FROM (v_fila.fila->>'promedio')::numeric THEN
+          RAISE EXCEPTION 'La existencia final o su costo promedio no conservan su precisión en el catálogo. Se canceló la carga.';
         END IF;
-        INSERT INTO public.inventario_movimientos (clinica_id,inventario_id,tipo,cantidad,motivo,fecha)
-        VALUES (p_clinica,v_registro,v_d->>'clase',v_cantidad,'Excel · ' || coalesce(v_d->>'motivo',v_clave),(v_d->>'fecha')::date)
+        INSERT INTO public.inventario_movimientos (clinica_id,inventario_id,tipo,cantidad,motivo,fecha,costo_unitario,valor_costo,costo_importado)
+        VALUES (p_clinica,v_registro,v_d->>'clase',v_cantidad,'Excel · ' || coalesce(v_d->>'motivo',v_clave),(v_d->>'fecha')::date,
+          (v_d->>'costo')::numeric,(v_d->>'costo_total')::numeric,true)
         RETURNING id,cantidad INTO v_registro,v_guardado;
         IF v_guardado IS DISTINCT FROM v_cantidad THEN
           RAISE EXCEPTION 'La cantidad del movimiento no conserva su precisión. Se canceló la carga.';
@@ -899,4 +1020,6 @@ COMMIT;
 
 SELECT to_regprocedure('public.importar_excel(bigint,jsonb,boolean,text)') AS funcion_importar_excel;
 SELECT to_regclass('public.libro_diario') AS libro_diario,
-  to_regprocedure('public.balanza_libro_diario(bigint,date,date)') AS balanza;
+  to_regprocedure('public.balanza_libro_diario(bigint,date,date)') AS balanza,
+  EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='inventario_movimientos' AND column_name='valor_costo') AS inventario_valorizado;

@@ -101,6 +101,87 @@ async function verificarBase(db) {
   assert.equal((await db.query('SELECT * FROM importaciones_excel_filas')).rows.length,4);
   await assert.rejects(db.query('DELETE FROM importaciones_excel'),/permission denied/);
   await db.exec('RESET ROLE');
+  // Simula los datos dejados por la migración original y aplica la actualización completa.
+  await db.exec("UPDATE importaciones_excel_filas SET datos=datos-'costo_total' WHERE tipo='productos'");
+  await db.exec('UPDATE inventario_movimientos SET valor_costo=null,costo_unitario=null,costo_importado=null');
+  await db.exec(fs.readFileSync(path.join(raiz,'migracion_importar_excel.sql'),'utf8'));
+  const anteriores = (await db.query('SELECT tipo,costo_importado,valor_costo FROM inventario_movimientos ORDER BY id')).rows;
+  assert.deepEqual(anteriores.map(x=>[x.tipo,x.costo_importado,x.valor_costo]),[['entrada',true,'46.33'],['salida',true,null]]);
+  assert.equal((await importar(db,[producto],true)).resumen.duplicadas,1);
+}
+
+async function verificarInventarioValorizado(db) {
+  // Mantener el inventario de las otras pruebas, incluyendo sus comprobantes previos.
+  await db.exec('BEGIN');
+  try {
+    const altas = [
+      destino('productos',2,{sku:'001-A',nombre:'Reactivo',stock:3,costo_total:10,fecha:'2026-10-01'}),
+      destino('productos',3,{nombre:'Pendiente de compra',stock:0}),
+      destino('productos',4,{nombre:'Muestra',stock:2,costo:0,fecha:'2026-10-01'})
+    ];
+    const mov = (fila,datos) => destino('movimientos',fila,{
+      producto:'Reactivo',id_origen:'K-' + fila,fecha:'2026-10-02',...datos
+    });
+    const movimientos = [mov(5,{clase:'entrada',cantidad:2.5,costo:1.2345,sku:'001-a',unidad:'unidad'}),
+      mov(6,{clase:'salida',cantidad:1,costo_total:2.87}),mov(7,{clase:'salida',cantidad:1})];
+    const filas = [...altas,...movimientos];
+    const erroneas = [
+      {...altas[0].datos,costo:3,costo_total:10},
+      {...altas[0].datos,stock:0,costo_total:1},
+      {...altas[0].datos,stock:1000,costo_total:0.01},
+      {...altas[0].datos,stock:3,costo_total:10.001},
+      {...altas[0].datos,sku:'001-a',nombre:'Otro reactivo'}
+    ];
+    for (const datos of erroneas) {
+      const resultado = await importar(db,[altas[0],destino('productos',9,datos)],true);
+      assert.equal(resultado.resumen.errores,1,JSON.stringify(resultado.filas));
+      assert.equal(resultado.lote,null);
+    }
+    const resultado = await importar(db,filas,true);
+    assert.equal(resultado.resumen.errores,0,JSON.stringify(resultado.filas));
+    const r = resultado.resumen;
+    assert.deepEqual([r.valor_inventario_inicial,r.productos_sin_costo,r.valor_entradas,r.valor_salidas,
+      r.entradas_sin_costo,r.salidas_sin_costo,r.ingresos,r.egresos],[10,1,3.09,2.87,0,1,0,0]);
+    const existente = (await db.query("SELECT * FROM inventario WHERE sku='001-A'")).rows[0];
+    assert.deepEqual([existente.nombre,existente.costo_unitario,existente.stock_actual],['Reactivo','2.3793','3.500']);
+    const valores = (await db.query('SELECT tipo,costo_unitario,valor_costo,costo_importado FROM inventario_movimientos WHERE inventario_id=$1 ORDER BY id',[existente.id])).rows;
+    assert.deepEqual(valores.map(x=>[x.tipo,x.costo_unitario,x.valor_costo,x.costo_importado]),[
+      ['entrada','3.3333','10.00',true],['entrada','1.2345','3.09',true],['salida','2.8700','2.87',true],['salida',null,null,true]
+    ]);
+    const reintento = await importar(db,filas,true);
+    assert.equal(reintento.resumen.duplicadas,6);
+    assert.equal(reintento.resumen.valor_inventario_inicial,0);
+    assert.equal(reintento.resumen.valor_entradas,0);
+    assert.match((await importar(db,[destino('productos',8,{nombre:'Otro reactivo',sku:'001-a'})])).filas[0].error,/SKU/);
+    assert.match((await importar(db,[mov(9,{sku:'inexistente',clase:'salida',cantidad:1,costo:1})],true)).filas[0].error,/SKU.*no coincide/);
+    assert.match((await importar(db,[mov(9,{unidad:'caja',clase:'salida',cantidad:1,costo:1})],true)).filas[0].error,/unidad.*no coincide/);
+    const sinCosto = mov(10,{producto:'Pendiente de compra',clase:'entrada',cantidad:15});
+    const conCosto = mov(11,{producto:'Pendiente de compra',clase:'entrada',cantidad:1,costo:9.75});
+    assert.equal((await importar(db,[sinCosto,conCosto],true)).resumen.entradas_sin_costo,1);
+    assert.equal((await db.query("SELECT costo_unitario FROM inventario WHERE nombre='Pendiente de compra'")).rows[0].costo_unitario,null);
+
+    const kardex = mov(8,{producto:'Artículo histórico',sku:'001-H',unidad:'caja de 12',cantidad:2,clase:'salida',costo_total:25.99,documental:true});
+    assert.match((await importar(db,[kardex])).filas[0].error,/solo en empresas/);
+    await db.exec("SET test.uid='c0000000-0000-0000-0000-000000000003'");
+    const kardexIncompleto = {...kardex,datos:{...kardex.datos,costo_total:null}};
+    assert.match((await importar(db,[kardexIncompleto],true,10)).filas[0].error,/falta el costo/);
+    const sinMarca = {...kardex,datos:{...kardex.datos,documental:false}};
+    assert.match((await importar(db,[sinMarca],true,10)).filas[0].error,/conservar los lotes/);
+    const guardado = await importar(db,[kardex],true,10);
+    assert.equal(guardado.resumen.valor_salidas,25.99,JSON.stringify(guardado.filas));
+    const recibo = (await db.query("SELECT registro_id,datos FROM importaciones_excel_filas WHERE clinica_id=10 AND clave='k-8'")).rows[0];
+    assert.deepEqual([recibo.registro_id,recibo.datos.costo,recibo.datos.costo_total,recibo.datos.documental],[null,12.995,25.99,true]);
+    assert.equal(recibo.datos.sku,'001-H');
+    assert.equal(recibo.datos.unidad,'caja de 12');
+    assert.equal((await importar(db,[kardex],true,10)).resumen.duplicadas,1);
+    assert.equal((await db.query('SELECT id FROM inventario_movimientos WHERE clinica_id=10')).rows.length,0);
+    assert.equal((await db.query('SELECT id FROM inventario WHERE clinica_id=10')).rows.length,0);
+    assert.equal((await db.query('SELECT id FROM finanzas WHERE clinica_id=10')).rows.length,0);
+    assert.equal((await db.query('SELECT id FROM libro_diario WHERE clinica_id=10')).rows.length,0);
+    assert.equal((await importar(db,[altas[0]],true,10)).resumen.productos,1,'Cada empresa tiene su propio catálogo de SKU');
+  } finally {
+    await db.exec('ROLLBACK');
+  }
 }
 
 // Migración de una empresa: proveedores, clientes y saldos pendientes.
@@ -412,6 +493,51 @@ async function verificarPantalla(db) {
       [{archivo:'IVA.xlsx',original:'504b'}]);
     await assert.rejects(db.query("SELECT archivar_respaldo_fiscal(9,'IVA.xlsx','UEs=')"));
     await db.exec("RESET ROLE");
+    await pagina.evaluate(() => { ExcelImportacion.cerrar(); ExcelImportacion.abrir(); });
+    const inventario = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(inventario,XLSX.utils.aoa_to_sheet([
+      ['SKU','Descripción de producto','Stock','Valor total al costo','Moneda','Fecha de corte'],
+      [{t:'n',v:12,z:'0000'},'Hisopos',3,20,'NIO'],
+      ['0013','Pinzas',3,15,'C$','2026-08-31'],
+      [null,'TOTAL GENERAL',6,35]
+    ]),'Existencias');
+    const nuevoKardex = 'ID;Fecha;Artículo;Unidades de entrada;Unidades de salida;Costo unitario entradas;Costo total salidas;Unidad;SKU\r\n' +
+      'H-9;2026-08-12;Hisopos;0;2;;9.60;caja;0012\r\n' +
+      'H-8;2026-08-10;Hisopos;3;0;5;;caja;0012';
+    await pagina.locator('#excel-archivos').setInputFiles([
+      {name:'Existencias.xlsx',mimeType:'application/octet-stream',buffer:Buffer.from(XLSX.write(inventario,{type:'array',bookType:'xlsx'}))},
+      {name:'Kardex.csv',mimeType:'text/csv',buffer:Buffer.from(nuevoKardex)}
+    ]);
+    const botonConfirmar = pagina.locator('#excel-confirmar');
+    await botonConfirmar.waitFor();
+    assert.match(await pagina.locator('#excel-resultados').innerText(),/Inventario de apertura valorizado: C\$ 35/);
+    assert.match(await pagina.locator('#excel-resultados').innerText(),/Salidas valorizadas: C\$ 9.6/);
+    assert.match(await pagina.locator('#excel-resultados').innerText(),/Entradas valorizadas: C\$ 15/);
+    await pagina.locator('#excel-fecha-apertura').fill('2026-09-30');
+    assert.equal(await botonConfirmar.isHidden(),true);
+    await pagina.locator('#excel-revisar').click();
+    await botonConfirmar.waitFor();
+    assert.match(await pagina.locator('#excel-resultados').innerText(),/1 apertura\(s\).*2026-09-30/);
+    await botonConfirmar.click();
+    await pagina.getByRole('status').filter({hasText:'Importación guardada'}).waitFor();
+    const nuevos = await db.query(`SELECT datos->>'sku' sku,datos->>'fecha' fecha,datos->>'costo' costo
+      FROM importaciones_excel_filas WHERE archivo='Existencias.xlsx' ORDER BY sku`);
+    assert.deepEqual(nuevos.rows.map(r => [r.sku,r.fecha,Number(r.costo)]),[
+      ['0012','2026-09-30',6.6667],['0013','2026-08-31',5]]);
+    assert.deepEqual((await db.query(`SELECT registro_id,datos->>'documental' documental,datos->>'sku' sku
+      FROM importaciones_excel_filas WHERE archivo='Kardex.csv'`)).rows,Array(2).fill({registro_id:null,documental:'true',sku:'0012'}));
+    assert.equal(Number((await db.query("SELECT stock_actual FROM inventario WHERE sku='0012'")).rows[0].stock_actual),3);
+    for (const [contenido,motivo] of [
+      ['Artículo;Stock;Costo unitario;Costo total\r\nGasas;2;10;21',/coincidir al centavo/],
+      ['Artículo;Stock;Costo total\r\nGasas;2;20\r\nTotal;2;21',/al pie de la hoja/],
+      ['Artículo;Stock;Costo unitario;Moneda\r\nGasas;2;10;USD',/Moneda del costo/],
+      ['Artículo;Stock;Costo unitario (USD)\r\nGasas;2;10',/Importes de inventario en C\$/],
+      ['Artículo;Fecha;Entradas;Salidas;Costo total entradas;Costo total salidas\r\nGasas;2026-08-10;2;0;10;9',/contradicen el movimiento/]
+    ]) {
+      await pagina.locator('#excel-archivos').setInputFiles({name:'Inventario-erroneo.csv',mimeType:'text/csv',buffer:Buffer.from(contenido)});
+      await pagina.getByText(motivo).first().waitFor({state:'attached'});
+      assert.equal(await botonConfirmar.isHidden(),true);
+    }
     await pagina.evaluate(() => {ExcelImportacion.cerrar(); LibroDiario.abrir();});
     await pagina.locator('#libro-diario-pdf').waitFor();
     assert.match(await pagina.locator('#libro-diario-resultados').textContent(),/001-01.*Caja.*1,000\.01/s);
@@ -436,6 +562,7 @@ async function verificarPantalla(db) {
   const db = await crearBase();
   try {
     await verificarBase(db);
+    await verificarInventarioValorizado(db);
     await verificarMigracion(db);
     await verificarPantalla(db);
     console.log('OK: Importación de Excel: validación, idempotencia, RLS, transacción, migración de empresa, reconocimiento automático y pantalla verificadas.');

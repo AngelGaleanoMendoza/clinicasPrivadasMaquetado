@@ -38,6 +38,16 @@ async function descargarReportesZip(boton) {
     if(String(clinica) !== String(currentClinicaId)) throw new Error('Cambió el establecimiento activo.');
     const tablas = Object.fromEntries(resultados.filter(r => !r.advertencia).map(r => [r.tabla,r.filas]));
     const informes = _armarReportesZip(tablas,modulos,corte,empresa);
+    if (modulos.includes('inventario')) {
+      try {
+        const auxiliar=await BorradorDiario.auxiliarInventario(clinica,'0001-01-01',corte);
+        if (auxiliar.length) informes.push({titulo:'Auxiliar de inventario importado',
+          secciones:[BorradorDiario.mostrarInventario(auxiliar,_tablaReporteZip,true)]});
+      } catch (error) {
+        // Los establecimientos que aún no instalaron el importador conservan sus reportes.
+        if (!['42P01','PGRST205'].includes(error.code)) throw error;
+      }
+    }
     if(modulos.includes('contabilidad'))
       informes.push(...LibroDiario.informes(await LibroDiario.obtener(clinica,'0001-01-01',corte)));
     const archivos = informes.map(({titulo,secciones}) => {
@@ -121,27 +131,20 @@ function _armarReportesZip(tablas, modulos, corte, empresa) {
   }
   const productos = nombres('inventario');
   const proveedores = nombres('proveedores');
-  if(modulos.includes('inventario')) {
+  if(modulos.includes('inventario') || modulos.includes('contabilidad')) {
     const lotes = registros('inventario_lotes','fecha_ingreso').map(fromLote);
-    const existencias = (tablas.inventario || []).map(fromInv);
-    const lotesPorProducto = new Map();
-    for(const lote of lotes) {
-      if(!lotesPorProducto.has(lote.invId)) lotesPorProducto.set(lote.invId,[]);
-      lotesPorProducto.get(lote.invId).push(lote);
-    }
-    const valores = existencias.map(p => _valorInventario({inv:[p],lotes:lotesPorProducto.get(p.id)||[]}).total);
-    const valorTotal = _valorInventario({inv:existencias,lotes}).total;
-    const ajuste = _r2(valorTotal - valores.reduce((total,valor)=>total+valor,0));
-    informe('Existencias de inventario',
-      tabla('Catálogo al corte',['Producto','Unidad','Existencia','Costo unitario base','Valor a costo','Vencimiento'],
-        existencias.map((p,i) => [p.nombre,p.unidad,p.stock,p.costo == null ? '—' : fmtC(p.costo),
-          p.costo == null && !lotesPorProducto.has(p.id) ? 'Sin costo' : fmtC(valores[i]),fecha(p.fechaVenc)])),
-      tabla('Valoración',['Concepto','Monto'],[
-        ...(ajuste ? [['Ajuste de redondeo de líneas',fmtC(ajuste)]] : []),
-        ['Valor total a costo',fmtC(valorTotal)]
-      ]));
-    informe('Movimientos de inventario',tabla('Entradas y salidas',['Fecha','Producto','Tipo','Cantidad','Motivo'],
-      registros('inventario_movimientos').map(m => [fecha(m.fecha),porNombre(productos,m.inventario_id),m.tipo,m.cantidad,m.motivo])));
+    const secciones = _tablasValorInventario({inv:(tablas.inventario || []).map(fromInv), lotes});
+    informe('Existencias de inventario', ...secciones.map(s => tabla(s.titulo, s.columnas, s.filas)));
+  }
+  if(modulos.includes('inventario')) {
+    const movimientos = registros('inventario_movimientos').map(fromMov);
+    informe('Movimientos de inventario', _resumenCostoSalidas(movimientos.filter(m => m.tipo === 'salida')),
+      tabla('Entradas y salidas',['Fecha','Producto','Tipo','Cantidad','Costo unitario documentado','Costo documentado','Motivo'],
+        movimientos.map(m => {
+          const valor = _costoMovimientoDocumentado(m);
+          return [fecha(m.fecha), porNombre(productos,m.invId), m.tipo, m.cantidad, _fmtCostoUnitario(m.costoUnitario),
+            valor == null ? 'Pendiente' : fmtC(valor), m.motivo];
+        })));
   }
   const compras = registros('compras').map(r => fromCompra({...r,compra_pagos:(r.compra_pagos || []).filter(p=>p.fecha <= corte)}));
   const operaciones = rs => rs.filter(r => !r.saldoInicial);
@@ -185,10 +188,13 @@ function _armarReportesZip(tablas, modulos, corte, empresa) {
         ['Otros ingresos',fmtC(resultados.totOtros)],
         ['Costo de inventario utilizado o vendido',fmtC(resultados.costoVentas)],
         ['Gastos del período',fmtC(resultados.totGastos)],
-        ['Resultado neto',fmtC(resultados.neta)]
+        ['Resultado neto',fmtC(resultados.neta)],
+        ...(resultados.salidasSinCosto ? [['Salidas pendientes de valorar (resultado provisional)', resultados.salidasSinCosto]] : []),
+        ...(resultados.salidasPorClasificar ? [['Salidas por clasificar (resultado provisional)', resultados.salidasPorClasificar]] : [])
       ]));
       informe('Balance general',tabla('Balance al corte',['Concepto','Monto'],[
-        ['Efectivo',fmtC(balance.efectivo)],['Inventario',fmtC(balance.inventario.total)],
+        ['Efectivo',fmtC(balance.efectivo)],[balance.productosSinCosto ? 'Inventario (valor conocido)' : 'Inventario',fmtC(balance.inventario.total)],
+        ...(balance.productosSinCosto ? [['Productos con existencias pendientes de valorar', balance.productosSinCosto]] : []),
         ['Cuentas por cobrar',fmtC(balance.cxc)],['IVA a favor',fmtC(balance.ivaFavor)],['Activos',fmtC(balance.activos)],
         ['Cuentas por pagar',fmtC(balance.cxp)],['IVA por pagar',fmtC(balance.ivaPorPagar)],['Pasivos',fmtC(balance.pasivos)],
         ['Capital',fmtC(balance.capital)],['Resultados acumulados',fmtC(balance.resultados)],['Patrimonio',fmtC(balance.patrimonio)]

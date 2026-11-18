@@ -394,7 +394,7 @@ const toM   = x => ({
 const fromN   = r => ({ id:r.id, pacienteId:r.paciente_id, mascotaId:r.mascota_id||null, citaId:r.cita_id||null, tipo:r.tipo, fecha:r.fecha, titulo:r.titulo, contenido:r.contenido, signos:r.signos||null, estado:r.estado||'finalizada', profesionalId:r.profesional_id||null, profesionalNombre:r.profesional_nombre||'', profesionalEspecialidad:r.profesional_especialidad||'', profesionalFirmaUrl:r.profesional_firma_url||null, profesionalCodigo:r.profesional_codigo||'', plantillaId:r.plantilla_id||null, plantillaValores:r.plantilla_valores&&typeof r.plantilla_valores==='object'?r.plantilla_valores:null });
 const toN     = x => ({ paciente_id:x.pacienteId||null, mascota_id:x.mascotaId||null, cita_id:x.citaId||null, tipo:x.tipo||'evolucion', fecha:x.fecha||hoy(), titulo:x.titulo||null, contenido:x.contenido, signos:x.signos||null, estado:x.estado||'finalizada', profesional_id:x.profesionalId||null, profesional_nombre:x.profesionalNombre||null, profesional_especialidad:x.profesionalEspecialidad||null, profesional_firma_url:x.profesionalFirmaUrl||null, plantilla_id:x.plantillaId||null, ...('profesionalCodigo' in x ? { profesional_codigo:x.profesionalCodigo||null } : {}), ...('plantillaValores' in x ? { plantilla_valores:x.plantillaValores||null } : {}), clinica_id:currentClinicaId });
 const fromPlantillaNota = r => ({ id:r.id, nombre:r.nombre, tipo:r.tipo_nota||'evolucion', contenido:r.contenido_modelo||'', campos:Array.isArray(r.campos)?r.campos:[], archivoNombre:r.archivo_nombre||'', archivoUrl:r.archivo_url||null, activa:r.activa!==false, formato:/\.docx$/i.test(r.archivo_nombre||'')?'docx':'texto' });
-const fromInv = r => ({ id:r.id, nombre:r.nombre, categoria:r.categoria||'general', unidad:r.unidad||'unidad', stock:Number(r.stock_actual||0), stockMin:Number(r.stock_minimo||0), precio:r.precio_unitario!=null?Number(r.precio_unitario):null, costo:r.costo_unitario!=null?Number(r.costo_unitario):null, descripcion:r.descripcion||null, codigoMinsa:r.codigo_minsa||null, fechaVenc:r.fecha_vencimiento||null, alertaMeses:r.alerta_meses_antes!=null?Number(r.alerta_meses_antes):1 });
+const fromInv = r => ({ id:r.id, nombre:r.nombre, sku:r.sku||'', categoria:r.categoria||'general', unidad:r.unidad||'unidad', stock:Number(r.stock_actual||0), stockMin:Number(r.stock_minimo||0), precio:r.precio_unitario!=null?Number(r.precio_unitario):null, costo:r.costo_unitario!=null?Number(r.costo_unitario):null, descripcion:r.descripcion||null, codigoMinsa:r.codigo_minsa||null, fechaVenc:r.fecha_vencimiento||null, alertaMeses:r.alerta_meses_antes!=null?Number(r.alerta_meses_antes):1 });
 const toInv   = x => ({ nombre:x.nombre, categoria:x.categoria||'general', unidad:x.unidad||'unidad', stock_actual:Number(x.stock||0), stock_minimo:Number(x.stockMin||0), precio_unitario:x.precio||null, descripcion:x.descripcion||null, clinica_id:currentClinicaId, codigo_minsa:x.codigoMinsa||null, fecha_vencimiento:x.fechaVenc||null, alerta_meses_antes:Number(x.alertaMeses||1) });
 const fromProv    = r => ({ id:r.id, nombre:r.nombre||'', identificacion:r.identificacion||'', contacto:r.contacto||'', telefono:r.telefono||'', email:r.email||'', direccion:r.direccion||'', notas:r.notas||'', activo:r.activo!==false });
 const fromCompra  = r => ({ id:r.id, proveedorId:r.proveedor_id||null, fecha:r.fecha, numeroFactura:r.numero_factura||'', metodoPago:r.metodo_pago||'efectivo',
@@ -419,7 +419,9 @@ const fromVenta   = r => ({ id:r.id, clienteId:r.cliente_id||null, numero:r.nume
     precio:Number(i.precio_unitario||0), costo:Number(i.costo_unitario||0), subtotal:Number(i.subtotal||0) })),
   cobros:(r.venta_cobros||[]).map(p => ({ id:p.id, fecha:p.fecha, monto:Number(p.monto||0), metodoPago:p.metodo_pago||'efectivo', referencia:p.referencia||'', finanzasId:p.finanzas_id||null, creadoPor:p.creado_por||'' }))
     .sort((a, b) => (a.fecha||'').localeCompare(b.fecha||'') || a.id - b.id) });
-const fromMov     = r => ({ id:r.id, invId:r.inventario_id, tipo:r.tipo, cantidad:Number(r.cantidad), motivo:r.motivo||null, fecha:r.fecha, referencia:r.referencia||null, notas:r.notas||null });
+const fromMov     = r => ({ id:r.id, invId:r.inventario_id, tipo:r.tipo, cantidad:Number(r.cantidad), motivo:r.motivo||null, fecha:r.fecha, referencia:r.referencia||null, notas:r.notas||null,
+  costoUnitario:r.costo_unitario == null ? null : Number(r.costo_unitario), valorCosto:r.valor_costo == null ? null : Number(r.valor_costo),
+  costoImportado:r.costo_importado === true });
 const fromFin     = r => ({ id:r.id, tipo:r.tipo, categoria:r.categoria||'general', descripcion:r.descripcion, monto:Number(r.monto), fecha:r.fecha, metodoPago:r.metodo_pago||'efectivo', referencia:r.referencia||null, facturaId:r.factura_id||null, citaId:r.cita_id||null, pacienteId:r.paciente_id||null, invMovId:r.inventario_mov_id||null, creadoPor:r.creado_por||null });
 const fromProcClin = r => ({
   id:r.id, pacienteId:r.paciente_id, citaId:r.cita_id||null,
@@ -547,7 +549,7 @@ async function loadAll() {
     C.mov = rmov.error ? [] : (rmov.data||[]).map(fromMov);
     C.fin = rfin.error ? [] : (rfin.data||[]).map(fromFin);
     const rawFact = rfact.error ? [] : (rfact.data||[]);
-    _topeDatos = { fin: !!rfin.error, fact: rawFact.length >= 500 };
+    _topeDatos = { fin: !!rfin.error, mov: !!rmov.error, fact: rawFact.length >= 500 };
     C.fact = rawFact.map(r => fromFact(r));
     C.factItems = rawFact.flatMap(r => (r.factura_items||[]).map(fromFactItem));
     // Sin migracion_balance_reparto.sql la tabla no existe: el balance lo avisa
@@ -574,7 +576,7 @@ async function loadAll() {
       const [rcli, rven, rlot] = await Promise.all([
         sb.from('clientes_comerciales').select('*').eq('clinica_id', currentClinicaId).order('nombre'),
         sb.from('ventas').select('*, venta_items(*), venta_cobros(*)').eq('clinica_id', currentClinicaId).order('fecha', {ascending:false}).order('id', {ascending:false}).limit(1000),
-        sb.from('inventario_lotes').select('*').eq('clinica_id', currentClinicaId).order('fecha_ingreso').order('id'),
+        consultarPaginas(() => sb.from('inventario_lotes').select('*').eq('clinica_id', clinicaCarga).order('fecha_ingreso').order('id')),
       ]);
       _contabilidadDisponible = !rcli.error && !rven.error && !rlot.error;
       C.cliCom = rcli.error ? [] : (rcli.data||[]).map(fromCliCom);
@@ -11617,7 +11619,10 @@ function renderProductos(filtro) {
   const empty = document.getElementById('inv-empty');
   let items = C.inv;
   if(invCatFiltro) items = items.filter(p=>p.categoria===invCatFiltro);
-  if(search) { const q=search.toLowerCase(); items=items.filter(p=>p.nombre.toLowerCase().includes(q)||(p.descripcion||'').toLowerCase().includes(q)||(p.codigoMinsa||'').includes(q)); }
+  if(search) {
+    const q=search.trim().toLowerCase();
+    items=items.filter(p=>[p.nombre,p.descripcion,p.sku,p.codigoMinsa].some(s=>(s||'').toLowerCase().includes(q)));
+  }
   if(!items.length){ el.innerHTML=''; empty.style.display='block'; return; }
   empty.style.display='none';
   const catIcon = c=>({medicamento:'💊',material:'🩺',equipo:'🔬',insumo:'🧹',papeleria:'📄',general:'📦'}[c]||'📦');
@@ -11633,7 +11638,7 @@ function renderProductos(filtro) {
     return `<div class="inv-item${vs==='vencido'?' inv-item-vencido':vs==='alerta'?' inv-item-alerta':''}">
       <div class="inv-item-icon">${catIcon(p.categoria)}</div>
       <div class="inv-item-info">
-        <div class="inv-item-name">${escAttr(p.nombre)}${p.codigoMinsa?` <span class="inv-item-minsa">${escAttr(p.codigoMinsa)}</span>`:''}</div>
+        <div class="inv-item-name">${escAttr(p.nombre)}${p.sku?` <span class="inv-item-minsa">SKU ${escAttr(p.sku)}</span>`:''}${p.codigoMinsa?` <span class="inv-item-minsa">${escAttr(p.codigoMinsa)}</span>`:''}</div>
         <div class="inv-item-sub">${escAttr(p.unidad)}${p.costo!=null?' · costo '+fmtC(p.costo):''}${p.precio!=null?' · venta '+fmtC(p.precio):''}${p.costo!=null&&p.precio>0?` · <span class="${p.precio<p.costo?'inv-margen-neg':'inv-margen'}">margen ${_pctMargen(p.costo,p.precio)}</span>`:''}${p.descripcion?' · '+escAttr(p.descripcion):''}${esEmpresaMedica()?_resumenLotesProducto(p):''}</div>
         ${vencBadge}
       </div>
@@ -11777,6 +11782,11 @@ function renderReportesInv(){
       <div class="stat-card"><div class="stat-icon si-blue">🔄</div><div class="stat-info"><h3>${movsFiltro.length}</h3><p>Movimientos</p></div></div>
       <div class="stat-card"><div class="stat-icon si-red">⚠️</div><div class="stat-info"><h3>${C.inv.filter(p=>p.stock<=p.stockMin&&p.stockMin>0).length}</h3><p>Bajo stock ahora</p></div></div>
     </div>
+    <div class="card" style="margin-bottom:14px">
+      <h3>Inventario a costo · ${formatFecha(hoy())}</h3>
+      ${_htmlValorInventario(true)}
+    </div>
+    ${_resumenCostoSalidas(salidas)}
     ${topProds.length?`<div class="card" style="margin-bottom:14px">
       <div class="card-header"><h3>🏆 Productos con más movimiento</h3></div>
       <div style="display:flex;flex-direction:column;gap:8px">
@@ -12973,13 +12983,38 @@ function setContPeriodo(p) { contPeriodo = p; renderContabilidad(); }
 // una venta ya cuenta como venta, el pago de una compra se vuelve costo cuando
 // el producto se vende, y el pago del IVA salda un impuesto cobrado a terceros.
 const _FIN_FUERA_RESULTADOS = ['ventas','compras','pago_iva'];
-// Clínicas (Contabilidad reducida): el costo es lo que salió del inventario
-// (consumo, despacho, mermas) al costo promedio actual de cada producto. La
-// anulación de una compra no es consumo.
+function _destinoSalidaInventario(motivo) {
+  const texto = String(motivo ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().trim().replace(/^excel\s*·\s*/, '').replace(/\s+/g, ' ');
+  if(/^(?:traslado|transferencia)\b/.test(texto)) return 'Traslado';
+  if(/^devolucion\b/.test(texto)) return 'Devolución';
+  if(/^anulacion\b/.test(texto)) return 'Anulación';
+  if(/^(?:merma|mermas)$/.test(texto)) return 'Merma';
+  if(/^(?:venta|costo de ventas?)$/.test(texto)) return 'Costo de venta';
+  if(/^(?:consumo(?: interno| clinico| en consulta)?|uso (?:interno|clinico|en consulta))$/.test(texto)) return 'Consumo';
+  return 'Por clasificar';
+}
+// Las salidas importadas conservan su costo histórico. En las salidas
+// operativas antiguas se mantiene el cálculo al costo promedio del producto.
 function _costoInventarioUsado(r, datos = C) {
   const costos = new Map(datos.inv.map(p => [p.id,p.costo]));
-  return _r2(datos.mov.filter(m => m.tipo === 'salida' && _enRango(m.fecha, r) && !/^Anulación de compra/.test(m.motivo || ''))
-    .reduce((s, m) => s + m.cantidad * (costos.get(m.invId) || 0), 0));
+  let total = 0, pendientes = 0, porClasificar = 0;
+  for(const m of datos.mov) {
+    if(m.tipo !== 'salida' || !_enRango(m.fecha, r) || /^Anulación de compra/.test(m.motivo || '')) continue;
+    if(m.costoImportado) {
+      const destino = _destinoSalidaInventario(m.motivo);
+      if(['Traslado','Devolución','Anulación'].includes(destino)) continue;
+      if(!['Consumo','Costo de venta'].includes(destino)) {
+        porClasificar++;
+        continue;
+      }
+    }
+    const base = costos.get(m.invId);
+    const valor = _costoMovimientoDocumentado(m) ?? (!m.costoImportado && base != null ? m.cantidad * base : null);
+    if(valor == null) pendientes++;
+    else total += valor;
+  }
+  return {total:_r2(total), pendientes, porClasificar};
 }
 // Empresa médica: ventas − costo de cada lote = utilidad bruta, más otros
 // ingresos y menos gastos de Finanzas. Clínica: los ingresos son los de
@@ -12988,7 +13023,8 @@ function _estadoResultados(r = _rangoCont(), datos = C, empresa = esEmpresaMedic
   // Un saldo inicial importado es lo que se debía al migrar, no una venta del período.
   const ventas = empresa ? datos.ventas.filter(v => v.estado !== 'anulada' && !v.saldoInicial && _enRango(v.fecha, r)) : [];
   const ingresosVentas = _r2(ventas.reduce((s, v) => s + v.subtotal, 0));
-  const costoVentas = empresa ? _r2(ventas.reduce((s, v) => s + _costoVenta(v), 0)) : _costoInventarioUsado(r,datos);
+  const consumo = empresa ? null : _costoInventarioUsado(r,datos);
+  const costoVentas = empresa ? _r2(ventas.reduce((s, v) => s + _costoVenta(v), 0)) : consumo.total;
   const fin = datos.fin.filter(f => _enRango(f.fecha, r) && !_FIN_FUERA_RESULTADOS.includes(f.categoria));
   const agrupar = tipo => {
     const g = {};
@@ -13000,18 +13036,82 @@ function _estadoResultados(r = _rangoCont(), datos = C, empresa = esEmpresaMedic
   const totGastos = _r2(gastos.reduce((s, x) => s + x.monto, 0));
   const base = empresa ? ingresosVentas : totOtros;
   const bruta = _r2(base - costoVentas);
-  return { empresa, ventas, ingresosVentas, costoVentas, bruta, margen:base ? bruta / base * 100 : null,
+  return { empresa, ventas, ingresosVentas, costoVentas, salidasSinCosto:consumo?.pendientes || 0,
+    salidasPorClasificar:consumo?.porClasificar || 0, bruta, margen:base ? bruta / base * 100 : null,
     otrosIngresos, totOtros, gastos, totGastos, neta:_r2(ingresosVentas + totOtros - costoVentas - totGastos),
     ivaVentas:_r2(ventas.reduce((s, v) => s + v.iva, 0)) };
 }
-// Inventario a costo: cada lote a su costo y lo que no tiene lote al costo promedio.
-function _valorInventario(datos = C) {
-  let lotes = 0, sinLote = 0;
-  datos.inv.forEach(p => {
-    lotes += datos.lotes.filter(l => l.invId === p.id).reduce((s, l) => s + l.disponible * l.costo, 0);
-    sinLote += _stockSinLote(p, datos.lotes) * (p.costo || 0);
+// Cada lote conserva su costo. La existencia sin lote toma el costo base del producto.
+function _productosValorados(datos = C) {
+  const lotesPorProducto = new Map();
+  for(const lote of datos.lotes) {
+    if(!lotesPorProducto.has(lote.invId)) lotesPorProducto.set(lote.invId, []);
+    lotesPorProducto.get(lote.invId).push(lote);
+  }
+  return datos.inv.map(producto => {
+    const lotes = lotesPorProducto.get(producto.id) || [];
+    const cantidadSinLote = _stockSinLote(producto, lotes);
+    const valorLotes = lotes.reduce((s, l) => s + l.disponible * l.costo, 0);
+    const valorSinLote = cantidadSinLote * (producto.costo ?? 0);
+    const sinCosto = producto.costo == null ? cantidadSinLote : 0;
+    return {producto, valorLotes, valorSinLote, sinCosto, valor:valorLotes + valorSinLote};
   });
+}
+function _valorInventario(datos = C, productos = _productosValorados(datos)) {
+  const lotes = productos.reduce((s, p) => s + p.valorLotes, 0);
+  const sinLote = productos.reduce((s, p) => s + p.valorSinLote, 0);
   return { total:_r2(lotes + sinLote), lotes:_r2(lotes), sinLote:_r2(sinLote) };
+}
+const _fmtCostoUnitario = n => n == null ? '—' : 'C$ ' + n.toLocaleString('es-NI', {minimumFractionDigits:2, maximumFractionDigits:4});
+function _costoMovimientoDocumentado(m) {
+  return m.valorCosto ?? (m.costoUnitario == null ? null : _r2(m.cantidad * m.costoUnitario));
+}
+function _resumenCostoSalidas(salidas) {
+  if(!salidas.length) return '';
+  const importes = salidas.map(_costoMovimientoDocumentado).filter(v => v != null);
+  const pendientes = salidas.length - importes.length;
+  return `<p>Costo documentado de salidas del período: <strong>${importes.length ? fmtC(_r2(importes.reduce((s, valor) => s + valor, 0))) : 'Pendiente'}</strong> · Movimientos sin costo documentado: ${pendientes}.</p>`;
+}
+function _tablasValorInventario(datos = C) {
+  const productos = _productosValorados(datos);
+  const total = _valorInventario(datos, productos).total;
+  const ajuste = _r2(total - productos.reduce((s, p) => s + _r2(p.valor), 0));
+  const grupos = new Map();
+  const filas = [];
+  let pendientes = 0;
+  for(const {producto:p, sinCosto, valor} of productos) {
+    const clave = JSON.stringify([p.categoria, p.unidad]);
+    const grupo = grupos.get(clave) || {categoria:p.categoria, unidad:p.unidad, stock:0, sinCosto:0, valor:0};
+    grupo.stock += p.stock;
+    grupo.sinCosto += sinCosto;
+    grupo.valor += valor;
+    grupos.set(clave, grupo);
+    if(sinCosto > 0) pendientes++;
+    filas.push([p.sku ? p.sku + ' · ' + p.nombre : p.nombre, p.categoria, _cant(p.stock) + ' ' + p.unidad,
+      _fmtCostoUnitario(p.costo), _cant(sinCosto), sinCosto > 0 && sinCosto === p.stock ? 'Pendiente' : fmtC(_r2(valor)),
+      p.fechaVenc ? formatFecha(p.fechaVenc) : '—']);
+  }
+  const resumen = [
+    [pendientes ? 'Valor conocido a costo' : 'Valor total a costo', fmtC(total)],
+    ['Productos con existencias pendientes de valorar', pendientes]
+  ];
+  if(ajuste) resumen.push(['Ajuste de redondeo de líneas', fmtC(ajuste)]);
+  return [
+    {titulo:'Valoración de existencias', columnas:['Concepto','Resultado'], filas:resumen},
+    {titulo:'Existencias por categoría y unidad', columnas:['Categoría','Unidad','Existencia','Cantidad sin costo','Valor conocido'],
+      filas:[...grupos.values()].map(g => [g.categoria, g.unidad, _cant(g.stock), _cant(g.sinCosto), fmtC(_r2(g.valor))])},
+    {titulo:'Detalle por producto', columnas:['Producto','Categoría','Existencia','Costo unitario base','Cantidad sin costo','Valor conocido','Vencimiento'], filas}
+  ];
+}
+function _htmlValorInventario(plegable = false) {
+  return _tablasValorInventario().map(({titulo, columnas, filas}, indice) => {
+    const tabla = `<div class="table-wrap"><table class="compra-detalle-tabla" aria-label="${escAttr(titulo)}"><thead><tr>${
+      columnas.map(texto => `<th scope="col">${escAttr(texto)}</th>`).join('')}</tr></thead><tbody>${
+      filas.map(f => `<tr>${f.map(texto => `<td>${escAttr(texto)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+    return plegable && indice > 0
+      ? `<details class="cg-tabla"><summary>${escAttr(titulo)}</summary>${tabla}</details>`
+      : `<h4>${escAttr(titulo)}</h4>${tabla}`;
+  }).join('');
 }
 // Balance general al día de hoy. El capital es la cifra que hace cuadrar:
 // lo que el negocio ya tenía al empezar a registrar (efectivo, inventario) más
@@ -13019,7 +13119,9 @@ function _valorInventario(datos = C) {
 function _balanceGeneral(datos = C, empresa = esEmpresaMedica()) {
   const efectivo = _r2(datos.fin.reduce((s, f) => s + (f.tipo === 'ingreso' ? f.monto : -f.monto), 0));
   const cxc = _r2(datos.ventas.reduce((s, v) => s + _saldoVenta(v), 0));
-  const inventario = _valorInventario(datos);
+  const productosValorados = _productosValorados(datos);
+  const inventario = _valorInventario(datos, productosValorados);
+  const productosSinCosto = productosValorados.filter(p => p.sinCosto > 0).length;
   const ivaVentas = _r2(datos.ventas.filter(v => v.estado !== 'anulada').reduce((s, v) => s + v.iva, 0));
   const ivaCompras = _r2(datos.comp.filter(c => c.estado !== 'anulada').reduce((s, c) => s + c.iva, 0));
   const ivaPagado = _r2(datos.fin.filter(f => f.tipo === 'egreso' && f.categoria === 'pago_iva').reduce((s, f) => s + f.monto, 0));
@@ -13030,7 +13132,7 @@ function _balanceGeneral(datos = C, empresa = esEmpresaMedica()) {
   const pasivos = _r2(cxp + ivaPorPagar);
   const resultados = _estadoResultados({ desde:'', hasta:'' },datos,empresa).neta;
   const capital = _r2(activos - pasivos - resultados);
-  return { efectivo, cxc, inventario, ivaVentas, ivaCompras, ivaPagado, ivaFavor, ivaPorPagar, cxp, activos, pasivos,
+  return { efectivo, cxc, inventario, productosSinCosto, ivaVentas, ivaCompras, ivaPagado, ivaFavor, ivaPorPagar, cxp, activos, pasivos,
     resultados, capital, patrimonio:_r2(resultados + capital) };
 }
 function _serieMensual(n = 12) {
@@ -13819,7 +13921,7 @@ function renderEstadoResultados() {
       ${_filaEstado('Total otros ingresos', er.totOtros, 'er-suma')}` : `
       ${er.otrosIngresos.length ? `<div class="er-grupo">Ingresos</div>${er.otrosIngresos.map(x => _filaEstado(x.label, x.monto, 'er-detalle')).join('')}` : ''}
       ${_filaEstado('Total ingresos', er.totOtros, 'er-suma')}
-      ${_filaEstado('(−) Costo de lo usado del inventario', -er.costoVentas, 'er-resta', 'salidas al costo promedio')}
+      ${_filaEstado('(−) Costo de lo usado del inventario', -er.costoVentas, 'er-resta', 'salidas del período')}
       ${_filaEstado('Utilidad bruta', er.bruta, 'er-subtotal', _textoMargen(er))}`}
       ${er.gastos.length ? `<div class="er-grupo">(−) Gastos de operación</div>${er.gastos.map(x => _filaEstado(x.label, -x.monto, 'er-detalle')).join('')}` : ''}
       ${_filaEstado('Total gastos', -er.totGastos, 'er-suma')}
@@ -13827,14 +13929,19 @@ function renderEstadoResultados() {
     </div>
     <p class="text-light cont-nota">${er.empresa
       ? 'Las ventas salen de Contabilidad; los otros ingresos y los gastos, de Finanzas. No entran aquí los cobros de ventas (ya son ventas), los pagos de compras (el producto se vuelve costo cuando se vende) ni el pago del IVA.'
-      : 'Los ingresos y los gastos salen de Finanzas; el costo, de las salidas del inventario al costo promedio de cada producto. No entran aquí los pagos de compras (el producto se vuelve costo cuando se usa) ni el pago del IVA.'}${_avisosTopeCont(er)}</p>
+      : _notaCostoUsado(er)}${_avisosTopeCont(er)}</p>
   </div>`;
 }
 function _textoMargen(er) { return er.margen != null ? 'margen ' + (Math.round(er.margen * 10) / 10).toLocaleString('es-NI') + ' %' : ''; }
 // Las consultas traen un máximo de filas: si se alcanza, los totales largos quedan cortos.
 function _avisosTopeCont(er) {
   return (_topeDatos.fin ? ' ⚠️ No se pudo cargar el historial de Finanzas. Revisa la conexión antes de usar los totales.' : '')
-    + (!er.empresa && C.mov.length >= 500 ? ' ⚠️ Inventario trae solo los 500 movimientos más recientes: el costo de períodos largos puede quedar corto.' : '');
+    + (!er.empresa && _topeDatos.mov ? ' ⚠️ Falta el historial de movimientos de inventario.' : '');
+}
+function _notaCostoUsado(er) {
+  return 'El costo incluye las salidas importadas con uso o venta identificados y costo documentado. Las salidas operativas antiguas se estiman al costo promedio del producto.'
+    + (er.salidasSinCosto || er.salidasPorClasificar
+      ? ` Resultado provisional. Salidas pendientes de valorar: ${er.salidasSinCosto}. Salidas por clasificar: ${er.salidasPorClasificar}.` : '');
 }
 function renderBalanceGeneral() {
   const b = _balanceGeneral();
@@ -13868,6 +13975,7 @@ function renderBalanceGeneral() {
       </div>
     </div>
     <p class="bg-cuadre${cuadra ? '' : ' bg-descuadre'}">${cuadra ? '✅ Activos = Pasivos + Patrimonio' : '⚠️ El balance no cuadra'}</p>
+    ${b.productosSinCosto ? `<p>Valoración provisional. Productos con existencias pendientes de valorar: ${b.productosSinCosto}.</p>` : ''}
     <p class="text-light cont-nota"><strong>Capital y saldos iniciales</strong> es lo que el negocio ya tenía antes de registrar en el sistema (efectivo, inventario anterior) más lo que el dueño aportó o retiró. Se calcula para que el balance cuadre. Para que el efectivo sea real, anota en Finanzas el saldo con que empezaste y anota el pago del IVA a la DGI con la categoría «Pago de IVA».${_topeDatos.fin ? ' ⚠️ No se pudo cargar el historial de Finanzas. Revisa la conexión antes de usar el balance.' : ''}</p>
   </div>`;
 }
@@ -13954,7 +14062,7 @@ function _imprimirEstadoResultadosClinica(er) {
       ${_pdfFilaEstado('(−) Total gastos de operación', -er.totGastos, _PDF_SUB)}
       ${_pdfFilaEstado('Utilidad neta del período', er.neta, _PDF_TOT)}
     </tbody></table>
-    <p style="font-size:11px;color:#64748B;margin-top:10px">Ingresos y gastos según Finanzas. El costo del inventario usado son las salidas del período al costo promedio de cada producto. Los pagos de compras y el pago del IVA no son gasto del período.</p>`;
+    <p style="font-size:11px;color:#64748B;margin-top:10px">Ingresos y gastos según Finanzas. ${_notaCostoUsado(er)}</p>`;
   return pdfAbrir('Estado de resultados', body);
 }
 function imprimirBalanceGeneral() {
@@ -13970,10 +14078,11 @@ function imprimirBalanceGeneral() {
     <table><tbody>
       ${_pdfFilaEstado('Efectivo y bancos', b.efectivo)}
       ${esEmpresaMedica() ? _pdfFilaEstado('Cuentas por cobrar a clientes', b.cxc) : ''}
-      ${_pdfFilaEstado('Inventario (a costo)', b.inventario.total)}
+      ${_pdfFilaEstado(b.productosSinCosto ? 'Inventario (valor conocido)' : 'Inventario (a costo)', b.inventario.total)}
       ${b.ivaFavor ? _pdfFilaEstado('IVA a favor (crédito fiscal)', b.ivaFavor) : ''}
       ${_pdfFilaEstado('Total activos', b.activos, _PDF_TOT)}
     </tbody></table>
+    ${b.productosSinCosto ? `<p>Productos con existencias pendientes de valorar: ${b.productosSinCosto}.</p>` : ''}
     <div class="section-title">Pasivos</div>
     <table><tbody>
       ${_pdfFilaEstado('Cuentas por pagar a proveedores', b.cxp)}
@@ -19285,6 +19394,10 @@ function imprimirReporteInventario() {
       <div class="kpi orange"><div class="kpi-val">${totSalMes}</div><div class="kpi-lbl">Salidas este mes</div></div>
       <div class="kpi red"><div class="kpi-val">${bajoStock.length}</div><div class="kpi-lbl">Bajo stock / sin stock (${sinStock.length})</div></div>
     </div>
+
+    <div class="section-title">Inventario a costo al ${formatFecha(hoy())}</div>
+    ${_htmlValorInventario()}
+    ${_resumenCostoSalidas(movMes.filter(m => m.tipo === 'salida'))}
 
     <div class="section-title">📊 Resumen anual ${yrActual}</div>
     <div style="margin-bottom:20px;display:flex;gap:20px">

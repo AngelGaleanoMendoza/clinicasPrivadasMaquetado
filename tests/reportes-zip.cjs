@@ -67,6 +67,11 @@ const origen = 'http://localhost:38638/';
         lineas:[['17 nov 2026','AP-01','001','Caja','Apertura','—','C$ 20.00','C$ 0.00'],
           ['17 nov 2026','AP-01','300','Capital','Apertura','—','C$ 0.00','C$ 20.00']]
       });
+      BorradorDiario.auxiliarInventario = async (clinica,desde,hasta) => {
+        if (clinica!==1 || !['0001-01-01','2026-01-01'].includes(desde) || hasta!==hoy()) throw new Error('Corte incorrecto');
+        return [{fecha:'2026-10-01',producto:'Guantes',cantidad:2,unidad:'caja',clase:'salida',documental:true,
+          motivo:'Consumo interno',importe:850n,fuente:'Kardex.xlsx · Hoja 1 · fila 5'}];
+      };
       _notificarReportesRespaldo = async (b,f) => {
         prueba.notificaciones.push([b.clinica.id,f]);
         await new Promise(resolver => { prueba.terminarCorreo = resolver; });
@@ -89,6 +94,36 @@ const origen = 'http://localhost:38638/';
     assert.doesNotMatch(informes.find(x=>x.titulo==='Finanzas').secciones.join(''),/Movimiento futuro/);
     assert.match(informes.find(x=>x.titulo==='Compras y cuentas por pagar').secciones.join(''),/50[.,]00/);
     assert.match(informes.find(x=>x.titulo==='Existencias de inventario').secciones.join(''),/Valor total a costo<\/td><td>C\$ 20[.,]00/);
+    const inventarioImportado = await pagina.evaluate(() => {
+      const inventario = [
+        {id:1,sku:'A-001',nombre:'Reactivo <A>',categoria:'insumo',unidad:'frasco',stock_actual:10,costo_unitario:null},
+        {id:2,sku:'A-002',nombre:'Reactivo B',categoria:'insumo',unidad:'ml',stock_actual:20,costo_unitario:0.125},
+        {id:3,nombre:'Reactivo donado',categoria:'insumo',unidad:'frasco',stock_actual:1,costo_unitario:0}
+      ];
+      const inventario_lotes = [{inventario_id:1,fecha_ingreso:hoy(),cantidad_disponible:4,costo_unitario:3}];
+      const motivos = ['Consumo interno','Venta','Traslado a sucursal','Devolución','Despacho','Uso en consulta','Merma','Anulación de compra'];
+      const inventario_movimientos = motivos.map((motivo,i) => ({inventario_id:2,tipo:'salida',fecha:hoy(),motivo:'Excel · ' + motivo,cantidad:2,
+        costo_importado:true,costo_unitario:i < 5 ? 4.275 : null, valor_costo:i < 5 ? 8.55 : null}));
+      const reportes = _armarReportesZip({inventario, inventario_lotes, inventario_movimientos},['inventario','contabilidad'],hoy(),false);
+      const datosAnteriores = {inv:C.inv, lotes:C.lotes, mov:C.mov};
+      Object.assign(C,{inv:inventario.map(fromInv), lotes:inventario_lotes.map(fromLote), mov:inventario_movimientos.map(fromMov)});
+      renderReportesInv();
+      const pantalla = document.getElementById('rep-inv-content');
+      const grupos = [...pantalla.querySelectorAll('[aria-label="Existencias por categoría y unidad"] tbody tr')]
+        .map(tr => [...tr.cells].map(td => td.textContent));
+      const texto = pantalla.textContent;
+      Object.assign(C,datosAnteriores);
+      return {grupos, texto, informes:Object.fromEntries(reportes.map(r => [r.titulo,r.secciones.join('')]))};
+    });
+    assert.deepEqual(inventarioImportado.grupos.map(f => f.slice(0,4)), [['insumo','frasco','11','6'], ['insumo','ml','20','0']]);
+    assert.match(inventarioImportado.texto, /A-001 · Reactivo <A>/);
+    assert.match(inventarioImportado.informes['Existencias de inventario'], /A-001 · Reactivo &lt;A&gt;/);
+    assert.match(inventarioImportado.informes['Existencias de inventario'], /Valor conocido a costo<\/td><td>C\$ 14[.,]50/);
+    assert.match(inventarioImportado.informes['Balance general'], /Inventario \(valor conocido\)<\/td><td>C\$ 14[.,]50/);
+    assert.match(inventarioImportado.informes['Estado de resultados'], /Costo de inventario utilizado o vendido<\/td><td>C\$ 17[.,]10/);
+    assert.match(inventarioImportado.informes['Estado de resultados'], /Salidas pendientes de valorar \(resultado provisional\)<\/td><td>1/);
+    assert.match(inventarioImportado.informes['Estado de resultados'], /Salidas por clasificar \(resultado provisional\)<\/td><td>2/);
+    assert.match(inventarioImportado.informes['Movimientos de inventario'], /Movimientos sin costo documentado: 3/);
     const aperturas = await pagina.evaluate(() => aperturas);
     const resumen = aperturas.find(x=>x.titulo==='Contabilidad').secciones.join('');
     assert.match(resumen,/Compras vigentes<\/td><td>C\$ 60[.,]00/);
@@ -99,6 +134,18 @@ const origen = 'http://localhost:38638/';
     assert.doesNotMatch(venta[0],/Apertura-C/);
     assert.match(venta[1],/Apertura-C/);
     assert.doesNotMatch(aperturas.find(x=>x.titulo==='Ganancia por producto').secciones.join(''),/Ignorar apertura/);
+    await pagina.evaluate(()=>LibroDiario.abrir(null,true));
+    await pagina.locator('#libro-diario-pdf:visible').waitFor();
+    await pagina.locator('#libro-diario-resultados summary').click();
+    assert.match(await pagina.locator('#libro-diario-resultados').innerText(),/Kardex.xlsx · Hoja 1 · fila 5/);
+    for (const width of [360,430,1280]) {
+      await pagina.setViewportSize({width,height:800});
+      const modal=await pagina.locator('#modal-libro-diario .modal').boundingBox();
+      assert.ok(modal.x>=0 && modal.x+modal.width<=width+1);
+      assert.ok(await pagina.locator('#libro-diario-resultados').evaluate(e=>e.scrollWidth<=e.clientWidth+1));
+    }
+    await pagina.evaluate(()=>LibroDiario.cerrar());
+    await pagina.setViewportSize({width:390,height:800});
     const archivo = pagina.waitForEvent('download',{timeout:90000});
     await pagina.locator('#export-reportes-zip button').click();
     const desc = await archivo;
@@ -108,7 +155,8 @@ const origen = 'http://localhost:38638/';
       const zip = await JSZip.loadAsync(new Uint8Array(data),{checkCRC32:true});
       return Promise.all(Object.values(zip.files).map(async f => [f.name,(await f.async('string')).slice(0,5)]));
     },[...bytes]);
-    assert.equal(entradas.length,informes.length+2);
+    assert.equal(entradas.length,informes.length+3);
+    assert.ok(entradas.some(([nombre])=>nombre==='Auxiliar-de-inventario-importado.pdf'));
     assert.ok(entradas.some(([nombre])=>nombre==='Balanza-de-comprobacion.pdf'));
     assert.ok(entradas.some(([nombre])=>nombre==='Libro-diario.pdf'));
     assert.ok(entradas.every(([n,f])=>n.endsWith('.pdf')&&f==='%PDF-'));
