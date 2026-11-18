@@ -13074,7 +13074,7 @@ const _TABS_CONT = ['resumen','ventas','cobrar','clientes','resultados','balance
 // se queda con resumen, resultados, balance y reportes.
 const _TABS_SOLO_EMPRESA = ['ventas','cobrar','clientes'];
 const _tabsContDisponibles = () => esEmpresaMedica() ? _TABS_CONT : _TABS_CONT.filter(t => !_TABS_SOLO_EMPRESA.includes(t));
-const _NOTA_CONT_CLINICA = '<p class="cont-modo-nota">Versión para clínicas: resultados, balance y reportes con los datos de Finanzas e Inventario. Ventas a clientes, cobros y lotes son de las empresas médicas.</p>';
+const _NOTA_CONT_CLINICA = '<p class="cont-modo-nota">Versión para clínicas: resultados, balance y reportes con los datos de Finanzas e Inventario. Ventas a clientes, cobros y lotes son de las empresas privadas.</p>';
 function renderContabilidad() {
   if(!document.getElementById('view-contabilidad')) return;
   const btnExcel = document.getElementById('btn-cont-excel');
