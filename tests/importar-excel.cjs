@@ -27,6 +27,16 @@ async function crearBase() {
       descripcion text,fecha_vencimiento date);
     CREATE TABLE inventario_movimientos(id bigserial PRIMARY KEY,clinica_id bigint,inventario_id bigint REFERENCES inventario(id),
       tipo text,cantidad numeric(12,3),motivo text,fecha date);
+    CREATE TABLE proveedores(id bigserial PRIMARY KEY,clinica_id bigint,nombre text NOT NULL,identificacion text,contacto text,
+      telefono text,email text,direccion text,notas text,activo boolean DEFAULT true);
+    CREATE TABLE clientes_comerciales(id bigserial PRIMARY KEY,clinica_id bigint,nombre text NOT NULL,identificacion text,contacto text,
+      telefono text,email text,direccion text,dias_credito integer NOT NULL DEFAULT 30,notas text,activo boolean DEFAULT true);
+    CREATE TABLE ventas(id bigserial PRIMARY KEY,clinica_id bigint,cliente_id bigint REFERENCES clientes_comerciales(id),numero text NOT NULL,
+      fecha date,subtotal numeric(14,2),iva_pct numeric(5,2),iva numeric(14,2),total numeric(14,2),condicion text,vencimiento date,
+      estado text,notas text,creado_por text,UNIQUE(clinica_id,numero));
+    CREATE TABLE compras(id bigserial PRIMARY KEY,clinica_id bigint,proveedor_id bigint REFERENCES proveedores(id),fecha date,numero_factura text,
+      metodo_pago text,subtotal numeric(14,2),iva numeric(14,2),iva_pct numeric(5,2),total numeric(14,2),condicion text,vencimiento date,
+      estado text DEFAULT 'registrada',notas text,creado_por text);
     INSERT INTO clinicas VALUES (9,'clinica',null),(10,'empresa_medica',null);
     INSERT INTO profiles VALUES
       ('c0000000-0000-0000-0000-000000000001','admin@example.com',9,'Admin','medico_admin','["finanzas","inventario"]'),
@@ -89,6 +99,44 @@ async function verificarBase(db) {
   await db.exec('RESET ROLE');
 }
 
+// Migración de una empresa: proveedores, clientes y saldos pendientes.
+async function verificarMigracion(db) {
+  await db.exec("SET test.uid='c0000000-0000-0000-0000-000000000003'");
+  const prov = destino('proveedores',2,{nombre:'Distribuidora Norte',identificacion:'J0310000001',telefono:'8888 0000'});
+  const cli = destino('clientes',2,{nombre:'Clínica Sur',dias_credito:45});
+  const cxc = destino('cxc',2,{nombre:'clínica sur',documento:'F-100',fecha:'2026-10-01',saldo:1500.5});
+  const cxc2 = destino('cxc',3,{nombre:'Clínica Sur',documento:'F-101',fecha:'2026-10-10',vencimiento:'2026-11-30',saldo:200});
+  const cxp = destino('cxp',2,{nombre:'Distribuidora Norte',documento:'P-77',fecha:'2026-10-05',saldo:800});
+  const huerfana = destino('cxp',3,{nombre:'Nadie',documento:'X-1',fecha:'2026-10-05',saldo:1});
+  const sola = await importar(db,[huerfana],false,10);
+  assert.match(sola.filas[0].error,/no existe en el sistema ni en esta carga/,'Un saldo necesita su proveedor');
+  const venceAntes = await importar(db,[prov,{...cxp,datos:{...cxp.datos,vencimiento:'2026-09-01'}}],false,10);
+  assert.match(venceAntes.filas[1].error,/vencimiento no puede ser antes/);
+
+  const filas = [cxc,cxp,prov,cli,cxc2];
+  const previa = await importar(db,filas,false,10);
+  assert.equal(previa.resumen.errores,0,JSON.stringify(previa.filas));
+  assert.deepEqual([previa.resumen.nuevas,previa.resumen.proveedores,previa.resumen.clientes,previa.resumen.cxc,previa.resumen.cxp],[5,1,1,2,1]);
+  assert.equal(Number(previa.resumen.por_cobrar),1700.5);
+  assert.equal(Number(previa.resumen.por_pagar),800);
+  const guardada = await importar(db,filas,true,10,previa.revision);
+  assert.ok(guardada.lote,'Se guardó la migración');
+  assert.deepEqual((await db.query("SELECT numero,total::text,vencimiento::text,condicion,saldo_inicial,cliente_id IS NOT NULL AS con_cliente FROM ventas ORDER BY numero")).rows,
+    [{numero:'SI-F-100',total:'1500.50',vencimiento:'2026-11-15',condicion:'credito',saldo_inicial:true,con_cliente:true},
+     {numero:'SI-F-101',total:'200.00',vencimiento:'2026-11-30',condicion:'credito',saldo_inicial:true,con_cliente:true}],
+    'Sin vencimiento, se usan los 45 días de crédito del cliente');
+  assert.deepEqual((await db.query("SELECT numero_factura,total::text,vencimiento::text,saldo_inicial,proveedor_id IS NOT NULL AS con_prov FROM compras")).rows,
+    [{numero_factura:'P-77',total:'800.00',vencimiento:'2026-11-04',saldo_inicial:true,con_prov:true}]);
+  assert.deepEqual((await db.query('SELECT nombre,dias_credito FROM clientes_comerciales')).rows,[{nombre:'Clínica Sur',dias_credito:45}]);
+  assert.deepEqual((await db.query('SELECT nombre,identificacion,telefono FROM proveedores')).rows,[{nombre:'Distribuidora Norte',identificacion:'J0310000001',telefono:'8888 0000'}]);
+  assert.equal((await importar(db,filas,true,10)).resumen.duplicadas,5,'Volver a importar el mismo archivo no duplica nada');
+  await db.exec("INSERT INTO proveedores (clinica_id,nombre) VALUES (10,'Laboratorio Manual')");
+  assert.match((await importar(db,[destino('proveedores',5,{nombre:' laboratorio manual '})],false,10)).filas[0].error,/Ya existe un proveedor/);
+  await db.exec("SET test.uid='c0000000-0000-0000-0000-000000000001'");
+  await assert.rejects(importar(db,[cli],false,9),/permiso/,'Sin Contabilidad no se importan clientes');
+  assert.match((await importar(db,[destino('proveedores',2,{nombre:'Proveedor de clínica'})],false,9)).filas[0].detalle,/Proveedor · Proveedor de clínica/);
+}
+
 async function verificarPantalla(db) {
   const navegador = await chromium.launch(process.env.PLAYWRIGHT_CHROMIUM
     ? {executablePath:process.env.PLAYWRIGHT_CHROMIUM} : {channel:'msedge'});
@@ -112,8 +160,11 @@ async function verificarPantalla(db) {
           limit(){return recibosPrueba(null);},range(){return recibosPrueba(this.id);}
         })};
         const consultarPaginas=fn=>fn().range();
-        const currentClinicaId=9,currentClinica={nombre:'Clínica de prueba'},currentUser={id:'u1'},currentView='finanzas';
-        const toast=()=>{},hasPermiso=()=>true,esEmpresaMedica=()=>false,loadAll=async()=>{},renderFinanzas=()=>{};
+        let currentClinicaId=9,currentClinica={nombre:'Clínica de prueba'},currentUser={id:'u1'},currentView='finanzas',__empresa=false;
+        window.__usar=(id,empresa,nombre)=>{currentClinicaId=id;__empresa=empresa;currentClinica={nombre};};
+        const toast=()=>{},hasPermiso=()=>true,esEmpresaMedica=()=>__empresa,loadAll=async()=>{},renderFinanzas=()=>{},renderView=()=>{};
+        const hoy=()=>'2026-11-18';
+        const _categoriasFin=t=>t==='egreso'?[{id:'alquiler',label:'Alquiler'},{id:'general',label:'General'}]:[{id:'consulta',label:'Consulta'},{id:'general',label:'General'}];
         const escAttr=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         const fmtC=x=>'C$ '+x;
         const openModalOverlay=id=>document.getElementById(id).classList.add('open');
@@ -177,6 +228,96 @@ async function verificarPantalla(db) {
     await pagina.locator('#excel-revisar').click();
     await pagina.locator('#excel-confirmar').waitFor();
     assert.match(await pagina.locator('#excel-resultados').innerText(), /Ingresos C\$ 25/);
+
+    // ── Reconocimiento automático y lectura de valores de hojas reales ──
+    const det = await pagina.evaluate(() => {
+      __usar(10,true,'Empresa de prueba');
+      const P = ExcelImportacion._probar;
+      const hoja = (nombre, filas) => P.detectar({nombre, archivo:'migracion.xlsx', encabezado:1, tipo:'', mapa:{}, fijos:{},
+        filas:filas.map((f,i)=>({numero:i+1, celdas:f.map(v=>v==null?undefined:{valor:v})}))});
+      const res = h => ({tipo:h.tipo, encabezado:h.encabezado, mapa:h.mapa, fijos:h.fijos, deteccion:h.deteccion});
+      const r = {
+        prov:res(hoja('Proveedores',[['Nombre','RUC','Teléfono'],['A','J1','1']])),
+        cli:res(hoja('Hoja1',[['Cliente','RUC','Teléfono','Días de crédito'],['A','J1','1',30]])),
+        dudosa:res(hoja('Hoja2',[['Nombre','RUC'],['A','J1']])),
+        cxc:res(hoja('Cartera',[['Cartera al 31 de octubre'],['Cliente','Factura','Fecha','Vence','Saldo'],['A','F1','2026-10-01','2026-11-01',5]])),
+        gastos:res(hoja('Gastos',[['Fecha','Concepto','Monto','Categoría'],['2026-11-01','Luz',5,'Servicios']])),
+        libro:res(hoja('Libro',[['Fecha','Concepto','Ingresos','Egresos'],['2026-11-01','Luz','',5]])),
+        inv:res(hoja('Inventario',[['Código','Descripción','Unidad','Existencia','Costo','Precio'],['A1','Gasas','caja',3,1,2]])),
+        nada:res(hoja('Notas',[['Hola','Mundo'],['a','b']]))
+      };
+      const valor = (f, ...a) => { try { return f(...a); } catch (e) { return 'error: ' + e.message; } };
+      r.decimales = [valor(P.decimal,{valor:'C$ 1,250.50'},2),valor(P.decimal,{valor:'1.250,50'},2),valor(P.decimal,{valor:15.333333},4),
+        valor(P.decimal,{valor:'1,250'},2),valor(P.decimal,{valor:'(300)'},2,true),valor(P.decimal,{valor:'-5'},2)];
+      r.fechas = [valor(P.fecha,{valor:'13/11/26'}),valor(P.fecha,{valor:46339.75}),valor(P.fecha,{valor:'2026/11/5'}),valor(P.fecha,{valor:'31/02/2026'})];
+      const libro = hoja('Libro',[['Fecha','Concepto','Ingresos','Egresos','Categoría'],['2026-11-01','Papelería','',50,'Oficina']]);
+      r.libroFila = P.normalizar(libro, libro.filas[1]).datos;
+      __usar(9,false,'Clínica de prueba');
+      r.clinicaTipos = P.tiposDisponibles();
+      return r;
+    });
+    assert.equal(det.prov.tipo,'proveedores','El nombre de la hoja decide entre proveedores y clientes');
+    assert.equal(det.cli.tipo,'clientes');
+    assert.equal(det.cli.mapa.dias_credito,3);
+    assert.deepEqual([det.dudosa.tipo,det.dudosa.deteccion.estado,det.dudosa.deteccion.opciones.sort()],['','dudosa',['clientes','proveedores']],'Sin pistas, pregunta');
+    assert.deepEqual([det.cxc.tipo,det.cxc.encabezado],['cxc',2],'Encuentra la fila de encabezados debajo del título');
+    assert.deepEqual(det.cxc.mapa,{nombre:0,documento:1,fecha:2,vencimiento:3,saldo:4});
+    assert.deepEqual([det.gastos.tipo,det.gastos.fijos],['finanzas',{clase:'egreso'}],'Una hoja «Gastos» son gastos');
+    assert.deepEqual([det.libro.tipo,det.libro.mapa.monto_ingreso,det.libro.mapa.monto_egreso],['finanzas',2,3]);
+    assert.deepEqual([det.inv.tipo,det.inv.mapa.nombre,det.inv.mapa.stock],['productos',1,3]);
+    assert.equal(det.nada.deteccion.estado,'ninguna');
+    assert.deepEqual(det.decimales,[1250.5,1250.5,15.3333,'error: El número 1,250 es ambiguo: escribe el separador decimal (1250.00 o 1.25).',-300,'error: No se admiten valores negativos.']);
+    assert.deepEqual(det.fechas,['2026-11-13','2026-11-13','2026-11-05','error: Usa una fecha válida en formato AAAA-MM-DD o DD/MM/AAAA.']);
+    assert.deepEqual(det.libroFila,{fecha:'2026-11-01',descripcion:'Papelería (Oficina)',categoria:'general',monto:50,clase:'egreso'});
+    assert.deepEqual(det.clinicaTipos,['finanzas','productos','movimientos','proveedores','cxp'],'Clientes y cobros solo en una empresa');
+
+    // ── Migración completa de una empresa: se sube el libro y se reconoce solo ──
+    await db.exec("SET test.uid='c0000000-0000-0000-0000-000000000003'");
+    await pagina.evaluate(() => { ExcelImportacion.cerrar(); __usar(10,true,'Empresa de prueba'); ExcelImportacion.abrir(); });
+    const libro = XLSX.utils.book_new();
+    const agregar = (nombre, filas) => XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet(filas), nombre);
+    agregar('Proveedores',[['Proveedor','RUC','Teléfono','Contacto'],['Droguería Central','J0311',22221111,'Ana']]);
+    agregar('Clientes',[['Cliente','RUC','Días de crédito'],['Hospital Uno','J0399',60]]);
+    agregar('Inventario',[['Código','Descripción','Unidad','Existencia','Costo unitario','Precio de venta'],
+      ['A1','Guantes M','Cajas',10,'C$ 120.50',{t:'n',v:180.75,f:'E2*1.5'}],['','TOTAL','',10,'','']]);
+    agregar('Por cobrar',[['Cartera al 31/10/2026'],['Cliente','Factura','Fecha','Vence','Saldo'],['Hospital Uno','F-900','15/10/2026','14/12/2026','1,500.00']]);
+    agregar('Por pagar',[['Proveedor','Factura','Fecha','Saldo'],['Droguería Central','DC-55','2026-10-20',650]]);
+    agregar('Gastos',[['Fecha','Concepto','Monto','Categoría'],['2026-11-02','Alquiler local',500,'Alquiler'],['2026-11-03','Papelería',35.5,'Oficina']]);
+    await pagina.locator('#excel-archivos').setInputFiles({name:'migracion-empresa.xlsx',
+      mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:Buffer.from(XLSX.write(libro,{type:'array',bookType:'xlsx'}))});
+    await pagina.locator('#excel-confirmar').waitFor().catch(async error => {
+      throw new Error(await pagina.locator('#excel-estado').innerText() + '\n' + await pagina.locator('#excel-resultados').innerText(),{cause:error});
+    });
+    assert.equal(await pagina.locator('.excel-hoja-lista').count(),6,'Las seis hojas se reconocieron sin tocar nada');
+    assert.equal(await pagina.locator('.excel-detectado').count(),6);
+    const resumen = await pagina.locator('#excel-resultados .excel-totales').innerText();
+    assert.match(resumen,/^7 nuevas/);
+    assert.match(resumen,/Gastos C\$ 535.5/);
+    assert.match(resumen,/por cobrar: C\$ 1500/);
+    assert.match(resumen,/por pagar: C\$ 650/);
+    assert.match(resumen,/totales o vacías que no se importan: 1/);
+    assert.match(await pagina.locator('#excel-estado').innerText(),/Se reconocieron 6 hoja\(s\)/);
+    for (const ancho of [360,1280]) {
+      await pagina.setViewportSize({width:ancho,height:800});
+      await pagina.waitForTimeout(400);   // la ventana se acomoda con una animación al cambiar de ancho
+      const ancha = await pagina.locator('.excel-modal').evaluate(n => [...n.querySelectorAll('*')].filter(e => e.getBoundingClientRect().right > n.getBoundingClientRect().left + n.clientWidth + 1)
+        .map(e => e.tagName + '.' + e.className).slice(0,6));
+      assert.deepEqual(ancha,[],`Cabe en ${ancho}px`);
+      assert.equal(await pagina.locator('.excel-modal').evaluate(n => n.scrollWidth <= n.clientWidth + 1),true,`Cabe en ${ancho}px`);
+      if (process.env.EXCEL_SCREENSHOT_DIR) await pagina.screenshot({path:path.join(process.env.EXCEL_SCREENSHOT_DIR,`excel-migracion-${ancho}.png`),fullPage:true});
+    }
+    await pagina.locator('#excel-confirmar').click();
+    await pagina.getByRole('status').filter({hasText:'Importación guardada'}).waitFor();
+    assert.deepEqual((await db.query("SELECT nombre,unidad,stock_actual::text,costo_unitario::text,precio_unitario::text FROM inventario WHERE clinica_id=10")).rows,
+      [{nombre:'Guantes M',unidad:'caja',stock_actual:'10.000',costo_unitario:'120.5000',precio_unitario:'180.75'}],'Precio calculado con fórmula, unidad «Cajas» y costo con C$');
+    assert.equal((await db.query("SELECT count(*)::int AS n FROM inventario_movimientos m JOIN inventario i ON i.id=m.inventario_id WHERE i.clinica_id=10")).rows[0].n,1);
+    assert.deepEqual((await db.query("SELECT telefono FROM proveedores WHERE nombre='Droguería Central'")).rows,[{telefono:'22221111'}]);
+    assert.deepEqual((await db.query("SELECT dias_credito FROM clientes_comerciales WHERE nombre='Hospital Uno'")).rows,[{dias_credito:60}]);
+    assert.deepEqual((await db.query("SELECT total::text,vencimiento::text FROM ventas WHERE numero='SI-F-900'")).rows,[{total:'1500.00',vencimiento:'2026-12-14'}]);
+    assert.deepEqual((await db.query("SELECT total::text FROM compras WHERE numero_factura='DC-55'")).rows,[{total:'650.00'}]);
+    assert.deepEqual((await db.query("SELECT categoria,descripcion,monto::text FROM finanzas WHERE clinica_id=10 ORDER BY fecha")).rows,
+      [{categoria:'alquiler',descripcion:'Alquiler local',monto:'500.00'},{categoria:'general',descripcion:'Papelería (Oficina)',monto:'35.50'}]);
+    await db.exec("SET test.uid='c0000000-0000-0000-0000-000000000001'");
   } finally {
     await navegador.close();
   }
@@ -186,8 +327,9 @@ async function verificarPantalla(db) {
   const db = await crearBase();
   try {
     await verificarBase(db);
+    await verificarMigracion(db);
     await verificarPantalla(db);
-    console.log('Importación de Excel: validación, idempotencia, RLS, transacción y pantalla verificadas.');
+    console.log('OK: Importación de Excel: validación, idempotencia, RLS, transacción, migración de empresa, reconocimiento automático y pantalla verificadas.');
   } finally {
     await db.close();
   }

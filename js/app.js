@@ -401,6 +401,9 @@ const fromCompra  = r => ({ id:r.id, proveedorId:r.proveedor_id||null, fecha:r.f
   total:Number(r.total||0), subtotal:r.subtotal!=null?Number(r.subtotal):Number(r.total||0), iva:Number(r.iva||0), ivaPct:Number(r.iva_pct||0),
   condicion:r.condicion||'contado', vencimiento:r.vencimiento||null,
   estado:r.estado||'registrada', notas:r.notas||'', finanzasId:r.finanzas_id||null, creadoPor:r.creado_por||'',
+  // Saldo que se debía al migrar (importado de Excel): se paga como cualquier
+  // compra al crédito, pero no es una compra del período.
+  saldoInicial:r.saldo_inicial===true,
   items:(r.compra_items||[]).map(i => ({ id:i.id, invId:i.inventario_id||null, lote:i.lote||'', descripcion:i.descripcion||'', cantidad:Number(i.cantidad||0), costo:Number(i.costo_unitario||0), subtotal:Number(i.subtotal||0) })),
   pagos:(r.compra_pagos||[]).map(p => ({ id:p.id, fecha:p.fecha, monto:Number(p.monto||0), metodoPago:p.metodo_pago||'efectivo', referencia:p.referencia||'', finanzasId:p.finanzas_id||null, creadoPor:p.creado_por||'' }))
     .sort((a, b) => (a.fecha||'').localeCompare(b.fecha||'') || a.id - b.id) });
@@ -409,6 +412,9 @@ const fromLote    = r => ({ id:r.id, invId:r.inventario_id, proveedorId:r.provee
   inicial:Number(r.cantidad_inicial||0), disponible:Number(r.cantidad_disponible||0), costo:Number(r.costo_unitario||0) });
 const fromVenta   = r => ({ id:r.id, clienteId:r.cliente_id||null, numero:r.numero||'', fecha:r.fecha, subtotal:Number(r.subtotal||0), ivaPct:Number(r.iva_pct||0), iva:Number(r.iva||0),
   total:Number(r.total||0), condicion:r.condicion||'contado', vencimiento:r.vencimiento||null, estado:r.estado||'registrada', notas:r.notas||'', creadoPor:r.creado_por||'',
+  // Lo que un cliente debía al migrar (importado de Excel): se cobra como
+  // cualquier venta al crédito, pero no es una venta del período.
+  saldoInicial:r.saldo_inicial===true,
   items:(r.venta_items||[]).map(i => ({ id:i.id, invId:i.inventario_id||null, loteId:i.lote_id||null, lote:i.lote||'', descripcion:i.descripcion||'', cantidad:Number(i.cantidad||0),
     precio:Number(i.precio_unitario||0), costo:Number(i.costo_unitario||0), subtotal:Number(i.subtotal||0) })),
   cobros:(r.venta_cobros||[]).map(p => ({ id:p.id, fecha:p.fecha, monto:Number(p.monto||0), metodoPago:p.metodo_pago||'efectivo', referencia:p.referencia||'', finanzasId:p.finanzas_id||null, creadoPor:p.creado_por||'' }))
@@ -3194,7 +3200,7 @@ function renderDashboardEmpresa() {
       ${verInv ? `
       <div class="stat-card"><div class="stat-icon si-orange">📦</div><div class="stat-info"><h3>${bajos.length}</h3><p>Productos por reponer</p></div></div>` : ''}
       ${hasPermiso('contabilidad') ? (() => {
-        const vMes = C.ventas.filter(v => v.estado !== 'anulada' && (v.fecha || '').startsWith(mes));
+        const vMes = C.ventas.filter(v => v.estado !== 'anulada' && !v.saldoInicial && (v.fecha || '').startsWith(mes));
         const porCobrar = C.ventas.reduce((s, v) => s + _saldoVenta(v), 0);
         return `
       <div class="stat-card stat-card-link" onclick="navigate('contabilidad')"><div class="stat-icon si-blue">🧾</div><div class="stat-info"><h3>${fmtC(vMes.reduce((s, v) => s + v.subtotal, 0))}</h3><p>Ventas del mes sin IVA (${vMes.length})</p></div></div>
@@ -12110,9 +12116,10 @@ function renderProveedores() {
     return;
   }
   el.innerHTML = lista.map(p => {
-    const compras = C.comp.filter(c => c.proveedorId === p.id && c.estado !== 'anulada');
+    const delProv = C.comp.filter(c => c.proveedorId === p.id && c.estado !== 'anulada');
+    const compras = delProv.filter(c => !c.saldoInicial);
     const total = compras.reduce((s, c) => s + c.total, 0);
-    const debe = compras.reduce((s, c) => s + _saldoCompra(c), 0);
+    const debe = delProv.reduce((s, c) => s + _saldoCompra(c), 0);
     const ultima = compras.map(c => c.fecha).sort().pop();
     return `<div class="prov-item${p.activo ? '' : ' prov-inactivo'}">
       <div class="prov-item-info">
@@ -12248,7 +12255,7 @@ function renderCompras() {
     const saldo = _saldoCompra(c);
     return `<div class="compra-item${c.estado === 'anulada' ? ' compra-anulada' : ''}" onclick="verCompra(${c.id})">
       <div class="compra-item-info">
-        <div class="compra-item-titulo">${escAttr(_nombreProveedor(c.proveedorId))} ${_tagPagoCompra(c)}</div>
+        <div class="compra-item-titulo">${escAttr(_nombreProveedor(c.proveedorId))} ${_tagPagoCompra(c)}${c.saldoInicial ? ' <span class="tag tag-gray">Saldo inicial</span>' : ''}</div>
         <div class="compra-item-sub">${formatFecha(c.fecha)}${c.numeroFactura ? ' · Fact. ' + escAttr(c.numeroFactura) : ''} · ${c.items.length} producto${c.items.length === 1 ? '' : 's'}${c.iva ? ' · con IVA' : ''}${c.condicion === 'credito' ? ' · crédito' + (c.vencimiento ? ' hasta ' + formatFecha(c.vencimiento) : '') : ''}</div>
       </div>
       <div class="compra-item-montos"><strong class="compra-item-total">${fmtC(c.total)}</strong>${saldo ? `<span class="compra-item-saldo">falta ${fmtC(saldo)}</span>` : ''}</div>
@@ -12264,7 +12271,8 @@ function _comprasFiltradas() {
   if(comprasPeriodo === 'por_pagar') return C.comp.filter(c => deProv(c) && _saldoCompra(c) > 0)
     .sort((a, b) => (a.vencimiento || '9999').localeCompare(b.vencimiento || '9999'));
   const { desde, hasta } = _rangoCompras();
-  return C.comp.filter(c => deProv(c) && (!desde || (c.fecha >= desde && c.fecha <= hasta)));
+  // Los saldos iniciales importados no son compras del período: solo salen en «Por pagar».
+  return C.comp.filter(c => deProv(c) && !c.saldoInicial && (!desde || (c.fecha >= desde && c.fecha <= hasta)));
 }
 
 // ── Nueva compra ──
@@ -12857,7 +12865,8 @@ function _costoInventarioUsado(r, datos = C) {
 // ingresos y menos gastos de Finanzas. Clínica: los ingresos son los de
 // Finanzas y el costo, lo usado del inventario.
 function _estadoResultados(r = _rangoCont(), datos = C, empresa = esEmpresaMedica()) {
-  const ventas = empresa ? datos.ventas.filter(v => v.estado !== 'anulada' && _enRango(v.fecha, r)) : [];
+  // Un saldo inicial importado es lo que se debía al migrar, no una venta del período.
+  const ventas = empresa ? datos.ventas.filter(v => v.estado !== 'anulada' && !v.saldoInicial && _enRango(v.fecha, r)) : [];
   const ingresosVentas = _r2(ventas.reduce((s, v) => s + v.subtotal, 0));
   const costoVentas = empresa ? _r2(ventas.reduce((s, v) => s + _costoVenta(v), 0)) : _costoInventarioUsado(r,datos);
   const fin = datos.fin.filter(f => _enRango(f.fecha, r) && !_FIN_FUERA_RESULTADOS.includes(f.categoria));
@@ -12914,7 +12923,7 @@ function _serieMensual(n = 12) {
     return { mes, ventas:er.totOtros, utilidad:er.neta, n:null };
   });
   return meses.map(mes => {
-    const vs = C.ventas.filter(v => v.estado !== 'anulada' && (v.fecha || '').startsWith(mes));
+    const vs = C.ventas.filter(v => v.estado !== 'anulada' && !v.saldoInicial && (v.fecha || '').startsWith(mes));
     const ventas = _r2(vs.reduce((s, v) => s + v.subtotal, 0));
     return { mes, ventas, utilidad:_r2(ventas - vs.reduce((s, v) => s + _costoVenta(v), 0)), n:vs.length };
   });
@@ -12949,7 +12958,7 @@ const _NOTA_CONT_CLINICA = '<p class="cont-modo-nota">Versión para clínicas: r
 function renderContabilidad() {
   if(!document.getElementById('view-contabilidad')) return;
   const btnExcel = document.getElementById('btn-cont-excel');
-  if(btnExcel) btnExcel.hidden = !hasPermiso('inventario') && !hasPermiso('finanzas');
+  if(btnExcel) btnExcel.hidden = !['inventario','finanzas','contabilidad'].some(hasPermiso);
   const empresa = esEmpresaMedica();
   // La tabla de ventas solo se carga en una empresa: su aviso de migración no aplica a una clínica.
   document.getElementById('cont-aviso').innerHTML = !empresa ? _NOTA_CONT_CLINICA : _contabilidadDisponible ? '' : _AVISO_MIGRACION_CONTABILIDAD;
@@ -13142,7 +13151,7 @@ function _ventasFiltradas() {
   if(ventasFiltro === 'por_cobrar') return C.ventas.filter(v => deCli(v) && _saldoVenta(v) > 0).sort((a, b) => _venceVenta(a).localeCompare(_venceVenta(b)));
   if(ventasFiltro === 'vencidas') return C.ventas.filter(v => deCli(v) && _estadoCobroVenta(v) === 'vencida' && v.estado !== 'anulada').sort((a, b) => _venceVenta(a).localeCompare(_venceVenta(b)));
   const r = _rangoCont();
-  return C.ventas.filter(v => deCli(v) && _enRango(v.fecha, r));
+  return C.ventas.filter(v => deCli(v) && !v.saldoInicial && _enRango(v.fecha, r));
 }
 function _llenarSelectClientes(sel, actual, primera) {
   sel.innerHTML = primera + [...C.cliCom].filter(c => c.activo || String(c.id) === actual).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
@@ -13177,7 +13186,7 @@ function _htmlVentaItem(v) {
   const dias = _diasVencida(v);
   return `<div class="compra-item${v.estado === 'anulada' ? ' compra-anulada' : ''}" onclick="verVenta(${v.id})">
     <div class="compra-item-info">
-      <div class="compra-item-titulo">${escAttr(v.numero)} · ${escAttr(_nombreCliente(v.clienteId))} ${_tagCobroVenta(v)}</div>
+      <div class="compra-item-titulo">${escAttr(v.numero)} · ${escAttr(_nombreCliente(v.clienteId))} ${_tagCobroVenta(v)}${v.saldoInicial ? ' <span class="tag tag-gray">Saldo inicial</span>' : ''}</div>
       <div class="compra-item-sub">${formatFecha(v.fecha)} · ${v.items.length} línea${v.items.length === 1 ? '' : 's'}${v.iva ? ' · IVA ' + v.ivaPct.toLocaleString('es-NI') + ' %' : ''}${v.condicion === 'credito' ? ' · crédito' + (v.vencimiento ? ' hasta ' + formatFecha(v.vencimiento) : '') : ' · contado'}${dias ? ` · <span class="compra-vencido">${dias} día${dias === 1 ? '' : 's'} vencida</span>` : ''}</div>
     </div>
     <div class="compra-item-montos"><strong class="compra-item-total">${fmtC(v.total)}</strong>${saldo ? `<span class="compra-item-saldo">falta cobrar ${fmtC(saldo)}</span>` : ''}</div>
@@ -13262,7 +13271,9 @@ function _montosVenta() {
   return { subtotal, iva, pct, total:_r2(subtotal + iva) };
 }
 function _siguienteNumeroVenta() {
-  return C.ventas.reduce((m, v) => Math.max(m, parseInt(String(v.numero).replace(/\D/g, ''), 10) || 0), 0) + 1;
+  // Solo cuentan los números propios (V-000123): los saldos importados llevan
+  // el documento del sistema anterior (SI-…) y no deben mover la secuencia.
+  return C.ventas.reduce((m, v) => /^V-\d+$/.test(v.numero) ? Math.max(m, Number(v.numero.slice(2))) : m, 0) + 1;
 }
 const _formatoNumeroVenta = n => 'V-' + String(n).padStart(6, '0');
 
@@ -13528,7 +13539,8 @@ function verVenta(id) {
         <tr><td colspan="4">Total</td><td>${fmtC(v.total)}</td></tr>
         ${v.estado !== 'anulada' ? `<tr><td colspan="4">Cobrado</td><td>${fmtC(_cobradoVenta(v))}</td></tr><tr class="compra-saldo"><td colspan="4">Falta cobrar</td><td>${fmtC(saldo)}</td></tr>` : ''}
       </tfoot></table></div>
-    <p class="text-light venta-ganancia-det">Costo de lo vendido ${fmtC(costo)} · ganancia ${fmtC(v.subtotal - costo)} (${_pctMargen(costo, v.subtotal)})</p>
+    ${v.saldoInicial ? '<p class="text-light venta-ganancia-det">Saldo inicial importado: lo que el cliente debía al empezar a usar el sistema. Se cobra como cualquier venta al crédito, pero no cuenta como venta del período.</p>'
+      : `<p class="text-light venta-ganancia-det">Costo de lo vendido ${fmtC(costo)} · ganancia ${fmtC(v.subtotal - costo)} (${_pctMargen(costo, v.subtotal)})</p>`}
     ${v.cobros.length ? `<div class="lumi-sub" style="margin:14px 0 6px">Cobros</div>
       <div class="compra-pagos">${v.cobros.map(p => `<div><span>${formatFecha(p.fecha)} · ${escAttr(_METODOS_PAGO[p.metodoPago] || p.metodoPago)}${p.referencia ? ' · ' + escAttr(p.referencia) : ''}</span><strong>${fmtC(p.monto)}</strong></div>`).join('')}</div>` : ''}
     ${v.notas ? `<p class="text-light" style="margin-top:10px">📝 ${escAttr(v.notas)}</p>` : ''}
@@ -13860,7 +13872,7 @@ function imprimirBalanceGeneral() {
   return pdfAbrir('Balance general', body);
 }
 function imprimirReporteVentas() {
-  const lista = contTab === 'ventas' ? _ventasFiltradas() : C.ventas.filter(v => _enRango(v.fecha, _rangoCont()));
+  const lista = contTab === 'ventas' ? _ventasFiltradas() : C.ventas.filter(v => !v.saldoInicial && _enRango(v.fecha, _rangoCont()));
   const vig = lista.filter(v => v.estado !== 'anulada');
   const suma = k => _r2(vig.reduce((s, v) => s + (typeof k === 'function' ? k(v) : v[k]), 0));
   const cli = contTab === 'ventas' ? document.getElementById('ventas-cliente')?.value : '';
@@ -13959,7 +13971,7 @@ function imprimirReporteIva() {
   const meses = {};
   const mes = f => (f || '').slice(0, 7);
   const de = k => (meses[k] ||= { ventas:0, ivaVentas:0, compras:0, ivaCompras:0, pagado:0 });
-  C.ventas.filter(v => v.estado !== 'anulada' && _enRango(v.fecha, r)).forEach(v => { const x = de(mes(v.fecha)); x.ventas += v.subtotal; x.ivaVentas += v.iva; });
+  C.ventas.filter(v => v.estado !== 'anulada' && !v.saldoInicial && _enRango(v.fecha, r)).forEach(v => { const x = de(mes(v.fecha)); x.ventas += v.subtotal; x.ivaVentas += v.iva; });
   C.comp.filter(c => c.estado !== 'anulada' && _enRango(c.fecha, r)).forEach(c => { const x = de(mes(c.fecha)); x.compras += c.subtotal; x.ivaCompras += c.iva; });
   C.fin.filter(f => f.tipo === 'egreso' && f.categoria === 'pago_iva' && _enRango(f.fecha, r)).forEach(f => { de(mes(f.fecha)).pagado += f.monto; });
   const filas = Object.entries(meses).sort((a, b) => a[0].localeCompare(b[0]));

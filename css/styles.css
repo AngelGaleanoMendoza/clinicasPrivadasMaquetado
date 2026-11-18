@@ -539,6 +539,14 @@ body.dark .balance-pct{background:#0F172A}
 .excel-modal details{margin-top:14px;font-size:13px}
 .excel-modal summary{cursor:pointer}
 .excel-recibo{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-top:8px}
+.excel-hoja-lista{border-color:rgba(16,185,129,.45)}
+.excel-modal p.excel-detectado{margin:6px 0 0;font-weight:700;color:#15803D}
+body.dark .excel-modal p.excel-detectado{color:#6EE7B7}
+.excel-modal p.excel-aviso{margin:6px 0 0;font-weight:600;color:#B45309}
+body.dark .excel-modal p.excel-aviso{color:#FCD34D}
+.excel-modal details.excel-columnas{margin-top:10px}
+.excel-modal details.excel-columnas summary{font-weight:600}
+.excel-modal p.excel-ayuda{font-size:12px}
 @media(max-width:600px){
   .excel-tabla table{min-width:0;table-layout:fixed}
   .excel-tabla th,.excel-tabla td{padding:6px 4px}

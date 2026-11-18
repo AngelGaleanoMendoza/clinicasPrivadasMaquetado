@@ -32,7 +32,10 @@ function leerLibroExcel(buffer, nombre) {
     const filas = new Map();
     for (const [direccion, celda] of Object.entries(hoja)) {
       if (direccion.startsWith('!') || !celda) continue;
-      const invalida = celda.t === 'e' || !!celda.f || !!celda.F ||
+      // Una fórmula de Excel trae guardado su resultado: se usa ese valor (los
+      // libros de una empresa suelen tener totales y precios calculados). Un
+      // error (#¡VALOR!, #N/A) o una fórmula escrita en un CSV no se aceptan.
+      const invalida = celda.t === 'e' || (!!celda.f && celda.v == null) ||
         (extension === 'csv' && typeof celda.v === 'string' && /^\s*=/.test(celda.v));
       if (!invalida && (celda.v == null || String(celda.v).trim() === '')) continue;
       const {r, c} = XLSX.utils.decode_cell(direccion);
