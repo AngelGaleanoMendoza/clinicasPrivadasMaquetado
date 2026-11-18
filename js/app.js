@@ -1096,7 +1096,7 @@ function renderPendientesSesion() {
           <div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #FDE68A;border-radius:10px;padding:12px 14px">
             <span style="font-size:20px;flex-shrink:0">${d.icono||'📋'}</span>
             <div style="flex:1;min-width:0">
-              <div style="font-weight:700;font-size:13px;color:#0F172A">${d.titulo}</div>
+              <div style="font-weight:700;font-size:13px;color:#0F172A">${escAttr(d.titulo)}</div>
               <div style="font-size:11px;color:#B45309;margin-top:2px">Guardado: ${d.ts||''} · Por: ${d.usuario||''}</div>
             </div>
             <div style="display:flex;gap:6px;flex-shrink:0">
@@ -1261,7 +1261,10 @@ async function entrarConPerfil(profile) {
   }
 
   // Resetear bloqueo en login exitoso (fire-and-forget)
-  if(profile.id) sb.from('profiles').update({ intentos_fallidos: 0, bloqueado: false }).eq('id', profile.id);
+  // supabase-js no envía la consulta hasta que se le pide el resultado: sin
+  // .then() este reinicio nunca llegaba y los intentos fallidos se acumulaban.
+  if(profile.id) sb.from('profiles').update({ intentos_fallidos: 0, bloqueado: false }).eq('id', profile.id)
+    .then(({ error }) => { if(error) console.warn('No se pudo reiniciar el contador de intentos:', error.message); });
 
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').classList.add('visible');
@@ -1337,21 +1340,28 @@ function shakeLogin() {
 // con toISOString, en Nicaragua a partir de las 18:00 ya era «mañana».
 function fechaLocal(d = new Date()) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
 function hoy() { return fechaLocal(); }
-function escAttr(s) { return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// `??` y no `||`: con `||` un 0 (stock, cantidad) desaparecía al escaparlo.
+function escAttr(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// Un texto como argumento de un onclick="…" en línea. escAttr solo no basta:
+// el navegador decodifica &#39; antes de ejecutar el JS, así que un nombre como
+// O'Malley rompía el clic y uno malicioso podía ejecutar código.
+function _jsArg(s) { return escAttr(JSON.stringify(String(s ?? ''))); }
 function formatFecha(f) {
   if(!f) return '—';
   const d = new Date(f+'T12:00:00');
   return d.toLocaleDateString('es-ES',{day:'2-digit',month:'short',year:'numeric'});
 }
 function calcEdad(fn) {
-  if(!fn) return '—';
-  const h=new Date(), n=new Date(fn); let e=h.getFullYear()-n.getFullYear();
-  if(h.getMonth()<n.getMonth()||(h.getMonth()===n.getMonth()&&h.getDate()<n.getDate()))e--;
-  return e+' años';
+  const e = _getEdadNum(fn);
+  return e == null ? '—' : e+' años';
 }
+// La fecha de nacimiento se lee a mediodía local: 'AAAA-MM-DD' solo se toma
+// como UTC y, en Nicaragua (UTC−6), la edad cambiaba un día antes del cumpleaños.
 function _getEdadNum(fn) {
   if(!fn) return null;
-  const h=new Date(), n=new Date(fn); let e=h.getFullYear()-n.getFullYear();
+  const h=new Date(), n=new Date(String(fn).slice(0,10)+'T12:00:00');
+  if(isNaN(n)) return null;
+  let e=h.getFullYear()-n.getFullYear();
   if(h.getMonth()<n.getMonth()||(h.getMonth()===n.getMonth()&&h.getDate()<n.getDate()))e--;
   return e;
 }
@@ -1359,7 +1369,7 @@ function ini(a,b){ return ((a||'')[0]||'').toUpperCase()+((b||'')[0]||'').toUppe
 function colAvatar(id) { const c=['#2563EB','#06B6D4','#10B981','#F59E0B','#8B5CF6','#EF4444','#0891B2','#4F46E5']; return c[id%c.length]; }
 function estadoTag(e) {
   const m={activo:'tag-green',inactivo:'tag-gray',pendiente:'tag-orange',confirmada:'tag-cyan',completada:'tag-green',cancelada:'tag-red',no_asistio:'tag-red',activa:'tag-green',finalizada:'tag-gray',suspendida:'tag-red'};
-  return `<span class="tag ${m[e]||'tag-gray'}">${ESTADO_CITA_LABEL[e]||e}</span>`;
+  return `<span class="tag ${m[e]||'tag-gray'}">${escAttr(ESTADO_CITA_LABEL[e]||e)}</span>`;
 }
 
 // Quién lleva agenda. Recepción o administración pueden trabajar sin tener
@@ -2799,10 +2809,18 @@ function renderCalendar(containerId, interactive) {
   });
 }
 
+// El mismo día en el mes siguiente o anterior, sin pasarse del último día:
+// del 31 de enero, «›» lleva al 28 (o 29) de febrero, no al 3 de marzo.
+function _mismoDiaOtroMes(fecha, dir) {
+  const d = new Date(fecha+'T12:00:00'), dia = d.getDate();
+  d.setDate(1);
+  d.setMonth(d.getMonth()+dir);
+  d.setDate(Math.min(dia, new Date(d.getFullYear(), d.getMonth()+1, 0).getDate()));
+  return fechaLocal(d);
+}
 function calNav(dir,c,inter){
-  const d=new Date(selCalDate+'T12:00:00');
   if(dir===0) selCalDate=hoy();
-  else d.setMonth(d.getMonth()+dir), selCalDate=fechaLocal(d);
+  else selCalDate=_mismoDiaOtroMes(selCalDate, dir);
   renderCalendar(c,inter);
   if(inter) renderCalDayCitas(selCalDate);
 }
@@ -2823,11 +2841,11 @@ function renderCalDayCitas(date){
       const p=_sujetoCita(c);
       const esCompletada=c.estado==='completada';
       const esCancelada=c.estado==='cancelada';
-      return `<div class="cita-item ${c.estado}" style="gap:10px;flex-wrap:wrap">
+      return `<div class="cita-item ${escAttr(c.estado)}" style="gap:10px;flex-wrap:wrap">
       <div class="cita-time">${c.hora}</div>
       <div style="flex:1;min-width:0">
-        <div class="cita-paciente">${p?p.titulo:'Desconocido'}</div>
-        <div class="cita-motivo">${c.motivo}${c.tipo?` · <span class="tag tag-cyan" style="font-size:10px">${c.tipo}</span>`:''}</div>
+        <div class="cita-paciente">${p?escAttr(p.titulo):'Desconocido'}</div>
+        <div class="cita-motivo">${escAttr(c.motivo)}${c.tipo?` · <span class="tag tag-cyan" style="font-size:10px">${escAttr(c.tipo)}</span>`:''}</div>
       </div>
       ${esCompletada ? '<span class="acudio-badge">✅ Atendido</span>' : estadoTag(c.estado)}
       <div class="actions-cell" style="gap:6px;flex-wrap:wrap">
@@ -2883,7 +2901,9 @@ function renderDashboard(){
   // llenábamos para borrarla acto seguido.
   if(esEmpresaMedica() && !isSuperAdmin()) return reescribir(renderDashboardEmpresa);
   renderPendientesSesion();
-  if(modoFarmacia) return reescribir(renderDashboardFarmacia);
+  // El aviso de borradores pendientes se pinta después de reescribir la vista:
+  // antes se pintaba en la vista vieja y en farmacia nunca se veía.
+  if(modoFarmacia) { reescribir(renderDashboardFarmacia); return renderPendientesSesion(); }
   if(isSuperAdmin()) return reescribir(renderDashboardSA);
   if(vista?.dataset.reescrito) { vista.innerHTML = _dashboardOriginal; delete vista.dataset.reescrito; renderPendientesSesion(); }
   renderNavQuickGrid(currentView);
@@ -2959,8 +2979,8 @@ function renderDashboardSA() {
                 <div class="sa-agenda-time">${c.hora}</div>
                 <div class="patient-avatar" style="background:${colAvatar(c.pacienteId||0)};width:30px;height:30px;font-size:11px;flex-shrink:0">${p?p.iniciales:'?'}</div>
                 <div style="flex:1;min-width:0">
-                  <div class="sa-agenda-name">${p?p.titulo:'Desconocido'}</div>
-                  <div class="sa-agenda-sub">${c.motivo} · <span style="color:${c.estado==='completada'?'#15803D':c.estado==='cancelada'?'#e53e3e':'#d69e2e'}">${c.estado}</span></div>
+                  <div class="sa-agenda-name">${p?escAttr(p.titulo):'Desconocido'}</div>
+                  <div class="sa-agenda-sub">${escAttr(c.motivo)} · <span style="color:${c.estado==='completada'?'#15803D':c.estado==='cancelada'?'#e53e3e':'#d69e2e'}">${escAttr(c.estado)}</span></div>
                 </div>
                 ${_citaAbierta(c)?`<button class="btn btn-sm" style="background:var(--success);color:#fff;padding:3px 8px;font-size:11px;flex-shrink:0" onclick="event.stopPropagation();marcarCitaCompletada(${c.id})">✅</button>`:''}
               </div>`;
@@ -2985,8 +3005,8 @@ function renderDashboardSA() {
               return `<div class="sa-staff-card">
                 <div class="patient-avatar" style="background:${colAvatar(u.id)};width:32px;height:32px;font-size:12px;flex-shrink:0">${ini(u.nombre,'')}</div>
                 <div style="flex:1;min-width:0">
-                  <div class="sa-staff-name">${u.nombre}</div>
-                  <div class="sa-staff-sub">${rLabel} · ${atend} atend. · ${pend} pend.</div>
+                  <div class="sa-staff-name">${escAttr(u.nombre)}</div>
+                  <div class="sa-staff-sub">${escAttr(rLabel)} · ${atend} atend. · ${pend} pend.</div>
                   <div class="sa-bar"><div class="sa-bar-fill" style="width:${pct}%"></div></div>
                 </div>
                 <span style="font-size:11px;font-weight:800;color:var(--primary);flex-shrink:0">${pct}%</span>
@@ -3005,7 +3025,7 @@ function renderDashboardSA() {
             <div class="sa-fin-row" style="background:var(--primary-light)"><span class="sa-fin-lbl" style="color:var(--primary)">📊 Balance</span><span class="sa-fin-val" style="color:var(--primary)">${fmtC(ingresosH-egresosH)}</span></div>
             ${C.inv.filter(p=>p.stock<=0||p.stock<=p.stockMin).slice(0,3).map(p=>`
             <div class="sa-fin-row" style="background:#FEF2F2">
-              <span class="sa-fin-lbl" style="color:#e53e3e">⚠️ ${p.nombre.slice(0,18)}</span>
+              <span class="sa-fin-lbl" style="color:#e53e3e">⚠️ ${escAttr(p.nombre.slice(0,18))}</span>
               <span class="sa-fin-val" style="color:#e53e3e">${p.stock<=0?'Sin stock':'Bajo'}</span>
             </div>`).join('')}
           </div>
@@ -3038,10 +3058,10 @@ function renderDashboardSA() {
             <div class="sa-rec-item" onclick="navigate('paciente-detalle',${p.id})">
               <div class="patient-avatar" style="background:${colAvatar(p.id)};width:28px;height:28px;font-size:10px;flex-shrink:0">${ini(p.nombre,p.apellidos)}</div>
               <div style="flex:1;min-width:0">
-                <div class="sa-rec-name">${p.nombre} ${p.apellidos}</div>
+                <div class="sa-rec-name">${escAttr(p.nombre+' '+p.apellidos)}</div>
                 <div class="sa-rec-sub">${formatFecha(p.fechaRegistro)}</div>
               </div>
-              <span class="tag ${p.estado==='activo'?'tag-green':'tag-gray'}" style="font-size:10px;flex-shrink:0">${p.estado}</span>
+              <span class="tag ${p.estado==='activo'?'tag-green':'tag-gray'}" style="font-size:10px;flex-shrink:0">${escAttr(p.estado)}</span>
             </div>`).join('')}
           </div>
         </div>
@@ -3111,8 +3131,8 @@ function renderDashboardClinica(){
       <div class="dia-time">${c.hora}</div>
       <div class="patient-avatar" style="background:${colAvatar(c.pacienteId||0)};width:36px;height:36px;font-size:12px;flex-shrink:0">${p?p.iniciales:'?'}</div>
       <div class="dia-info">
-        <div class="dia-name">${p?p.titulo:'Desconocido'}</div>
-        <div class="dia-sub">${c.motivo}${edad?' · '+edad:''}</div>
+        <div class="dia-name">${p?escAttr(p.titulo):'Desconocido'}</div>
+        <div class="dia-sub">${escAttr(c.motivo)}${edad?' · '+escAttr(edad):''}</div>
       </div>
       ${estadoTag(c.estado)}
       ${_citaAbierta(c)?`<button class="btn btn-sm" style="background:linear-gradient(135deg,var(--success),#059669);color:#fff;flex-shrink:0" onclick="event.stopPropagation();marcarCitaCompletada(${c.id})" title="Marcar que acudió">✅</button>`:''}
@@ -3149,8 +3169,8 @@ function renderDashboardPorUsuario() {
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
               <div class="patient-avatar" style="background:${colAvatar(u.id)};width:38px;height:38px;font-size:13px;flex-shrink:0">${ini(u.nombre,'')}</div>
               <div style="min-width:0">
-                <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.nombre}</div>
-                <div style="font-size:11px;color:var(--text-light)">${rolLabel}</div>
+                <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escAttr(u.nombre)}</div>
+                <div style="font-size:11px;color:var(--text-light)">${escAttr(rolLabel)}</div>
               </div>
             </div>
             <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px">
@@ -3247,7 +3267,7 @@ function renderDashboardFarmacia() {
 
   const view = document.getElementById('view-dashboard');
   view.innerHTML = `
-    <div id="panel-pendientes-sesion-farma" style="margin-bottom:18px"></div>
+    <div id="panel-pendientes-sesion" style="display:none;margin-bottom:18px"></div>
     <div class="nav-quick-grid" id="nav-quick-grid"></div>
     <div class="stats-grid" style="margin-bottom:18px">
       <div class="stat-card"><div class="stat-icon si-green">💰</div><div class="stat-info"><h3>${fmtC(totalIng)}</h3><p>Ingresos de Hoy</p></div></div>
@@ -3264,8 +3284,8 @@ function renderDashboardFarmacia() {
           <div class="search-result-item" style="cursor:default">
             <div style="font-size:20px;flex-shrink:0">💊</div>
             <div style="flex:1;min-width:0">
-              <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${(v.descripcion||'').replace('Venta farmacia: ','')}</div>
-              <div class="text-light">${v.metodoPago||'—'} · ${formatFecha(v.fecha)}</div>
+              <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escAttr((v.descripcion||'').replace('Venta farmacia: ',''))}</div>
+              <div class="text-light">${escAttr(v.metodoPago||'—')} · ${formatFecha(v.fecha)}</div>
             </div>
             <span style="font-weight:700;color:#15803D;flex-shrink:0">${fmtC(v.monto)}</span>
           </div>`).join('')}</div>`
@@ -3280,8 +3300,8 @@ function renderDashboardFarmacia() {
           return `<div class="search-result-item" style="cursor:default">
             <span class="tag tag-green" style="flex-shrink:0;font-size:13px">📥 +${m.cantidad}</span>
             <div style="flex:1;min-width:0">
-              <div style="font-weight:600;font-size:13px">${prod?.nombre||'—'}</div>
-              <div class="text-light">${prod?.unidad||''} · ${m.motivo||'entrada'}</div>
+              <div style="font-weight:600;font-size:13px">${escAttr(prod?.nombre||'—')}</div>
+              <div class="text-light">${escAttr(prod?.unidad||'')} · ${escAttr(m.motivo||'entrada')}</div>
             </div>
             <span style="font-size:11px;color:var(--text-light);flex-shrink:0">Stock: ${prod?.stock||0}</span>
           </div>`;}).join('')}</div>`
@@ -3297,8 +3317,8 @@ function renderDashboardFarmacia() {
           <div class="search-result-item" style="cursor:default">
             <div style="font-size:18px;flex-shrink:0">${v.tipo==='ingreso'?'💰':'📤'}</div>
             <div style="flex:1;min-width:0">
-              <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${v.descripcion||v.categoria}</div>
-              <div class="text-light">${v.metodoPago||'—'} · ${v.categoria}</div>
+              <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escAttr(v.descripcion||v.categoria)}</div>
+              <div class="text-light">${escAttr(v.metodoPago||'—')} · ${escAttr(v.categoria)}</div>
             </div>
             <span style="font-weight:700;color:${v.tipo==='ingreso'?'#15803D':'#e53e3e'};flex-shrink:0">${v.tipo==='ingreso'?'+':'−'}${fmtC(v.monto)}</span>
           </div>`).join('')}</div>`
@@ -3317,8 +3337,8 @@ function renderDashboardFarmacia() {
             <div class="search-result-item" style="cursor:default">
               <span class="tag ${p.stock<=0?'tag-red':'tag-orange'}" style="flex-shrink:0">${p.stock<=0?'Sin stock':'Stock bajo'}</span>
               <div style="flex:1;min-width:0">
-                <div style="font-weight:600;font-size:13px">${p.nombre}</div>
-                <div class="text-light">${p.unidad} · Mín: ${p.stockMin}</div>
+                <div style="font-weight:600;font-size:13px">${escAttr(p.nombre)}</div>
+                <div class="text-light">${escAttr(p.unidad)} · Mín: ${p.stockMin}</div>
               </div>
               <span style="font-weight:700;flex-shrink:0;color:${p.stock<=0?'#e53e3e':'#d69e2e'}">${p.stock}</span>
             </div>`).join('')}</div>`;
@@ -3347,10 +3367,10 @@ function renderRecientes() {
       <div class="search-result-item" onclick="navigate('paciente-detalle',${p.id})">
         <div class="patient-avatar" style="background:${colAvatar(p.id)};flex-shrink:0">${ini(p.nombre,p.apellidos)}</div>
         <div style="flex:1;min-width:0">
-          <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.nombre} ${p.apellidos}</div>
-          <div class="text-light">${formatFecha(p.fechaRegistro)} · ${p.telefono||'Sin tel.'}</div>
+          <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escAttr(p.nombre+' '+p.apellidos)}</div>
+          <div class="text-light">${formatFecha(p.fechaRegistro)} · ${escAttr(p.telefono||'Sin tel.')}</div>
         </div>
-        <span class="tag ${p.estado==='activo'?'tag-green':'tag-gray'}" style="flex-shrink:0">${p.estado}</span>
+        <span class="tag ${p.estado==='activo'?'tag-green':'tag-gray'}" style="flex-shrink:0">${escAttr(p.estado)}</span>
       </div>`).join('') : empty('👥<br><small>Sin pacientes aún</small>');
 
   } else if(recTab === 'citas') {
@@ -3360,8 +3380,8 @@ function renderRecientes() {
       return `<div class="search-result-item" style="cursor:default">
         <div style="min-width:70px;font-size:12px;font-weight:700;color:var(--primary)">${formatHora12(c.hora)}</div>
         <div style="flex:1;min-width:0">
-          <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p?p.titulo:'—'}</div>
-          <div class="text-light">${formatFecha(c.fecha)} · ${c.motivo}</div>
+          <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p?escAttr(p.titulo):'—'}</div>
+          <div class="text-light">${formatFecha(c.fecha)} · ${escAttr(c.motivo)}</div>
         </div>
         ${estadoTag(c.estado)}
       </div>`;}).join('') : empty('📅<br><small>Sin citas aún</small>');
@@ -3373,10 +3393,10 @@ function renderRecientes() {
       return `<div class="search-result-item" style="cursor:default">
         <div style="font-size:22px;flex-shrink:0">💊</div>
         <div style="flex:1;min-width:0">
-          <div style="font-weight:700;font-size:13px">${m.nombre}</div>
-          <div class="text-light">${p?escAttr(p.titulo):'—'} · ${m.dosis} ${m.frecuencia}</div>
+          <div style="font-weight:700;font-size:13px">${escAttr(m.nombre)}</div>
+          <div class="text-light">${p?escAttr(p.titulo):'—'} · ${escAttr(m.dosis)} ${escAttr(m.frecuencia)}</div>
         </div>
-        <span class="tag ${m.estado==='activa'?'tag-green':m.estado==='suspendida'?'tag-red':'tag-gray'}" style="flex-shrink:0">${m.estado}</span>
+        <span class="tag ${m.estado==='activa'?'tag-green':m.estado==='suspendida'?'tag-red':'tag-gray'}" style="flex-shrink:0">${escAttr(m.estado)}</span>
       </div>`;}).join('') : empty('💊<br><small>Sin medicaciones aún</small>');
 
   } else {
@@ -3386,16 +3406,32 @@ function renderRecientes() {
       return `<div class="search-result-item" style="cursor:default">
         <span class="inv-badge-${m.tipo}" style="flex-shrink:0">${m.tipo==='entrada'?'📥':'📤'}</span>
         <div style="flex:1;min-width:0">
-          <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p?p.nombre:'—'}</div>
-          <div class="text-light">${formatFecha(m.fecha)} · Cant: ${m.cantidad} ${p?p.unidad:''}</div>
+          <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p?escAttr(p.nombre):'—'}</div>
+          <div class="text-light">${formatFecha(m.fecha)} · Cant: ${m.cantidad} ${p?escAttr(p.unidad):''}</div>
         </div>
-        <span style="font-size:12px;color:var(--text-light);flex-shrink:0">${m.motivo||''}</span>
+        <span style="font-size:12px;color:var(--text-light);flex-shrink:0">${escAttr(m.motivo||'')}</span>
       </div>`;}).join('') : empty('📦<br><small>Sin movimientos aún</small>');
   }
 }
 
 // ════════════════════ NÚMERO DE EXPEDIENTE ════════════════════
+// El siguiente número es el mayor que ya existe + 1, consultado en la base.
+// Contar los expedientes daba un número repetido en cuanto se borraba uno
+// (había 001, 002, 003; se borra el 002 y el siguiente volvía a ser 003).
+async function _siguienteExpediente() {
+  const initials = (currentClinica?.codigo||currentClinica?.nombre||'EXP').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,4);
+  const {data, error} = await consultarPaginas(() => sb.from('pacientes').select('expediente')
+    .eq('clinica_id', currentClinicaId).not('expediente','is',null).order('id'));
+  const existentes = error ? C.p.map(p => p.expediente) : (data||[]).map(r => r.expediente);
+  const patron = new RegExp('^' + initials + '-(\\d+)$');
+  const mayor = existentes.reduce((m, e) => { const x = patron.exec(e || ''); return x ? Math.max(m, Number(x[1])) : m; }, 0);
+  return `${initials}-${String(mayor + 1).padStart(3,'0')}`;
+}
+
 function getExpedienteNum(pid) {
+  // El número guardado manda: es el mismo que sale en los impresos.
+  const guardado = C.p.find(x => x.id === pid)?.expediente;
+  if(guardado) return guardado;
   const codigo = (currentClinica?.codigo || currentClinica?.nombre || 'EXP').toUpperCase().replace(/[^A-Z0-9]/g,'');
   const initials = codigo.slice(0, 4);
   const year = new Date().getFullYear();
@@ -3534,19 +3570,22 @@ async function guardarPaciente(irExpediente=false, irCita=false){
     if(duplicado){ _unlockSubmit('paciente',null); toast(`Ya existe un paciente con esa identificación: ${duplicado.nombre} ${duplicado.apellidos}`,'error'); return; }
   }
   const identificacion = idValor ? idTipo + ': ' + idValor : '';
-  const obj={nombre,apellidos,identificacion,fechaNac:fechaNacVal,sexo:document.getElementById('p-sexo').value,sangre:document.getElementById('p-sangre').value,telefono:document.getElementById('p-telefono').value.trim(),email:document.getElementById('p-email').value.trim(),direccion:document.getElementById('p-direccion').value.trim(),alergias:document.getElementById('p-alergias').value.trim(),estado:document.getElementById('p-estado').value,emergencia:document.getElementById('p-emergencia').value.trim(),observaciones:document.getElementById('p-observaciones').value.trim(),fechaRegistro:hoy(),fotoUrl:currentFotoUrl};
+  const obj={nombre,apellidos,identificacion,fechaNac:fechaNacVal,sexo:document.getElementById('p-sexo').value,sangre:document.getElementById('p-sangre').value,telefono:document.getElementById('p-telefono').value.trim(),email:document.getElementById('p-email').value.trim(),direccion:document.getElementById('p-direccion').value.trim(),alergias:document.getElementById('p-alergias').value.trim(),estado:document.getElementById('p-estado').value,emergencia:document.getElementById('p-emergencia').value.trim(),observaciones:document.getElementById('p-observaciones').value.trim(),
+    // Al editar se conserva la fecha en que se registró: antes pasaba a ser la de hoy.
+    fechaRegistro:editingId ? (C.p.find(p=>p.id===editingId)?.fechaRegistro || hoy()) : hoy(),fotoUrl:currentFotoUrl};
   setLoading(true);
   let err, savedId=editingId;
   if(editingId){ const r=await sb.from('pacientes').update(toP(obj)).eq('id',editingId); err=r.error; }
   else { const r=await sb.from('pacientes').insert([toP(obj)]).select('id').single(); err=r.error; if(!err) savedId=r.data.id; }
   if(err){ setLoading(false); _unlockSubmit('paciente',null); toast('Error: '+err.message,'error'); return; }
   if(!editingId && savedId) {
-    const initials = (currentClinica?.codigo||currentClinica?.nombre||'EXP').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,4);
-    const year = new Date().getFullYear();
-    const seq = C.p.filter(p=>p.expediente).length + 1;
-    const numExp = `${initials}-${String(seq).padStart(3,'0')}`;
-    await sb.from('pacientes').update({expediente:numExp}).eq('id',savedId);
-    await sb.from('expediente').upsert([{ paciente_id:savedId, clinica_id:currentClinicaId }], {onConflict:'paciente_id,clinica_id', ignoreDuplicates:true });
+    const numExp = await _siguienteExpediente();
+    const [rNum, rExp] = await Promise.all([
+      sb.from('pacientes').update({expediente:numExp}).eq('id',savedId),
+      sb.from('expediente').upsert([{ paciente_id:savedId, clinica_id:currentClinicaId }], {onConflict:'paciente_id,clinica_id', ignoreDuplicates:true }),
+    ]);
+    // El paciente ya quedó guardado: se avisa en vez de ocultar el fallo.
+    if(rNum.error || rExp.error) toast('Paciente registrado, pero no se pudo crear su expediente: '+(rNum.error||rExp.error).message+'. Asígnalo desde Expedientes.','warning');
   }
   if(pendingFotoFile && savedId){
     try{ const url=await subirFotoPaciente(pendingFotoFile,savedId); await sb.from('pacientes').update({foto_url:url}).eq('id',savedId); pendingFotoFile=null; }
@@ -3641,13 +3680,13 @@ function renderDetalleP(pid){
     <div class="patient-detail-header">
       ${p.fotoUrl?`<img src="${p.fotoUrl}" class="patient-detail-avatar" style="object-fit:cover;border:3px solid rgba(255,255,255,.4)" alt="foto">`:`<div class="patient-detail-avatar" style="background:${colAvatar(p.id)}">${ini(p.nombre,p.apellidos)}</div>`}
       <div class="patient-detail-info">
-        <h2>${p.nombre} ${p.apellidos}</h2>
-        <div style="margin-bottom:6px"><code style="background:rgba(255,255,255,.2);color:#fff;padding:2px 10px;border-radius:6px;font-size:12px;font-weight:700;letter-spacing:.5px">Exp. ${getExpedienteNum(p.id)}</code></div>
+        <h2>${escAttr(p.nombre+' '+p.apellidos)}</h2>
+        <div style="margin-bottom:6px"><code style="background:rgba(255,255,255,.2);color:#fff;padding:2px 10px;border-radius:6px;font-size:12px;font-weight:700;letter-spacing:.5px">Exp. ${escAttr(getExpedienteNum(p.id))}</code></div>
         <div class="meta">
           <span>🎂 ${calcEdad(p.fechaNac)}</span>
-          ${p.sexo?`<span>${p.sexo==='M'?'♂ Masculino':p.sexo==='F'?'♀ Femenino':p.sexo}</span>`:''}
-          ${p.sangre?`<span>🩸 ${p.sangre}</span>`:''}
-          ${p.telefono?`<span>📞 ${p.telefono}</span>`:''}
+          ${p.sexo?`<span>${p.sexo==='M'?'♂ Masculino':p.sexo==='F'?'♀ Femenino':escAttr(p.sexo)}</span>`:''}
+          ${p.sangre?`<span>🩸 ${escAttr(p.sangre)}</span>`:''}
+          ${p.telefono?`<span>📞 ${escAttr(p.telefono)}</span>`:''}
         </div>
       </div>
       <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
@@ -3661,13 +3700,13 @@ function renderDetalleP(pid){
   document.getElementById('tab-info').innerHTML=`
     <div class="grid-2">
       <div class="card"><h3 style="margin-bottom:14px;font-size:14px">📋 Datos Personales</h3>
-        <table style="width:100%">${[['N° Expediente',`<code style="background:var(--primary-light);color:var(--primary);padding:2px 8px;border-radius:6px;font-size:12px;font-weight:700">${getExpedienteNum(p.id)}</code>`],['Identificación',p.identificacion||'—'],['Fecha Nacimiento',p.fechaNac?`${formatFecha(p.fechaNac)} <span class="tag tag-cyan" style="font-size:10px;margin-left:4px">${calcEdad(p.fechaNac)}</span>`:'—'],['Dirección',p.direccion||'—'],['Emergencia',p.emergencia||'—'],['Registro',formatFecha(p.fechaRegistro)]].map(([k,v])=>`<tr><td class="text-light" style="padding:6px 0;width:140px">${k}</td><td style="padding:6px 0;font-weight:600;font-size:13px">${v}</td></tr>`).join('')}</table>
+        <table style="width:100%">${[['N° Expediente',`<code style="background:var(--primary-light);color:var(--primary);padding:2px 8px;border-radius:6px;font-size:12px;font-weight:700">${escAttr(getExpedienteNum(p.id))}</code>`],['Identificación',escAttr(p.identificacion||'—')],['Fecha Nacimiento',p.fechaNac?`${formatFecha(p.fechaNac)} <span class="tag tag-cyan" style="font-size:10px;margin-left:4px">${calcEdad(p.fechaNac)}</span>`:'—'],['Dirección',escAttr(p.direccion||'—')],['Emergencia',escAttr(p.emergencia||'—')],['Registro',formatFecha(p.fechaRegistro)]].map(([k,v])=>`<tr><td class="text-light" style="padding:6px 0;width:140px">${k}</td><td style="padding:6px 0;font-weight:600;font-size:13px">${v}</td></tr>`).join('')}</table>
       </div>
       <div class="card"><h3 style="margin-bottom:14px;font-size:14px">🏥 Datos Clínicos</h3>
-        <p class="text-light" style="margin-bottom:8px">Alergias: <strong style="color:var(--text)">${p.alergias||'Ninguna conocida'}</strong></p>
-        <p class="text-light" style="margin-bottom:8px">Tipo de Sangre: <strong style="color:var(--text)">${p.sangre||'Desconocido'}</strong></p>
+        <p class="text-light" style="margin-bottom:8px">Alergias: <strong style="color:var(--text)">${escAttr(p.alergias||'Ninguna conocida')}</strong></p>
+        <p class="text-light" style="margin-bottom:8px">Tipo de Sangre: <strong style="color:var(--text)">${escAttr(p.sangre||'Desconocido')}</strong></p>
         <p class="text-light">Estado: ${estadoTag(p.estado||'activo')}</p>
-        ${p.observaciones?`<div class="mt-16"><p class="text-light" style="margin-bottom:6px">Observaciones:</p><div style="font-size:13px;line-height:1.7;background:var(--bg);padding:10px 12px;border-radius:8px">${p.observaciones}</div></div>`:''}
+        ${p.observaciones?`<div class="mt-16"><p class="text-light" style="margin-bottom:6px">Observaciones:</p><div style="font-size:13px;line-height:1.7;background:var(--bg);padding:10px 12px;border-radius:8px;white-space:pre-wrap">${escAttr(p.observaciones)}</div></div>`:''}
       </div>
     </div>
     <div class="grid-2" style="margin-top:16px">
@@ -3683,14 +3722,14 @@ function renderDetalleP(pid){
       const esComp=c.estado==='completada', esCanc=c.estado==='cancelada';
       const MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
       const [,mm,dd]=c.fecha.split('-');
-      return `<div class="cita-item ${c.estado}" style="gap:10px;flex-wrap:wrap">
+      return `<div class="cita-item ${escAttr(c.estado)}" style="gap:10px;flex-wrap:wrap">
         <div style="width:38px;flex-shrink:0;text-align:center;background:var(--primary-light);border-radius:8px;padding:5px 2px">
           <div style="font-size:13px;font-weight:800;color:var(--primary);line-height:1">${dd}</div>
           <div style="font-size:10px;color:var(--primary);text-transform:uppercase;font-weight:600">${MESES[parseInt(mm)-1]}</div>
         </div>
         <div style="flex:1;min-width:0">
-          <div class="cita-paciente">${c.hora} · ${c.motivo}</div>
-          ${c.tipo?`<div class="cita-motivo"><span class="tag tag-cyan" style="font-size:10px">${c.tipo}</span></div>`:''}
+          <div class="cita-paciente">${c.hora} · ${escAttr(c.motivo)}</div>
+          ${c.tipo?`<div class="cita-motivo"><span class="tag tag-cyan" style="font-size:10px">${escAttr(c.tipo)}</span></div>`:''}
         </div>
         ${esComp?'<span class="acudio-badge">✅ Atendido</span>':estadoTag(c.estado)}
         <div class="actions-cell" style="gap:6px;flex-wrap:wrap">
@@ -3702,7 +3741,7 @@ function renderDetalleP(pid){
 
   document.getElementById('tab-meds-p').innerHTML=`<div class="card">
     <div class="card-header doc-header"><h3>💊 Medicaciones</h3><div style="display:flex;gap:8px;flex-wrap:wrap">${meds.length?`<button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirRecetaPaciente(${p.id})">🖨️ Receta</button><button class="btn btn-sm btn-descarga" onclick="descargarDocumento(()=>imprimirRecetaPaciente(${p.id}))" title="Descargar receta en PDF">⬇️ Receta</button>`:''}<button class="btn btn-primary btn-sm" onclick="openModalMedP(${p.id})">+ Nueva</button></div></div>
-    ${meds.length?meds.map(m=>`<div class="med-item"><span style="font-size:22px">💊</span><div class="med-info" style="flex:1"><h4>${m.nombre}</h4><div class="med-dosis">${m.dosis} — ${m.frecuencia} (${m.via})</div><p>${m.inicio?`Del ${formatFecha(m.inicio)} al ${m.fin?formatFecha(m.fin):'indefinido'}`:''}${m.indicaciones?' · '+m.indicaciones:''}</p><small style="color:var(--primary)">${m.prescriptorNombre?'Prescrito por '+escAttr(m.prescriptorNombre):'Receta anterior sin médico asignado'}</small></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">${estadoTag(m.estado)}<div class="actions-cell"><button class="btn btn-secondary btn-sm" onclick="imprimirReceta(${m.id})" title="Imprimir esta receta">🖨️</button><button class="btn btn-secondary btn-sm" onclick="descargarDocumento(()=>imprimirReceta(${m.id}))" title="Descargar esta receta en PDF" aria-label="Descargar esta receta en PDF">⬇️</button><button class="btn btn-secondary btn-sm" onclick="openModalMedicacion(${m.id})">✏️</button><button class="btn btn-danger btn-sm" onclick="eliminarMedicacion(${m.id})">🗑️</button></div></div></div>`).join(''):'<div class="empty-state"><div class="empty-icon">💊</div><p>Sin medicaciones</p></div>'}
+    ${meds.length?meds.map(m=>`<div class="med-item"><span style="font-size:22px">💊</span><div class="med-info" style="flex:1"><h4>${escAttr(m.nombre)}</h4><div class="med-dosis">${escAttr(m.dosis)} — ${escAttr(m.frecuencia)} (${escAttr(m.via)})</div><p>${m.inicio?`Del ${formatFecha(m.inicio)} al ${m.fin?formatFecha(m.fin):'indefinido'}`:''}${m.indicaciones?' · '+escAttr(m.indicaciones):''}</p><small style="color:var(--primary)">${m.prescriptorNombre?'Prescrito por '+escAttr(m.prescriptorNombre):'Receta anterior sin médico asignado'}</small></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">${estadoTag(m.estado)}<div class="actions-cell"><button class="btn btn-secondary btn-sm" onclick="imprimirReceta(${m.id})" title="Imprimir esta receta">🖨️</button><button class="btn btn-secondary btn-sm" onclick="descargarDocumento(()=>imprimirReceta(${m.id}))" title="Descargar esta receta en PDF" aria-label="Descargar esta receta en PDF">⬇️</button><button class="btn btn-secondary btn-sm" onclick="openModalMedicacion(${m.id})">✏️</button><button class="btn btn-danger btn-sm" onclick="eliminarMedicacion(${m.id})">🗑️</button></div></div></div>`).join(''):'<div class="empty-state"><div class="empty-icon">💊</div><p>Sin medicaciones</p></div>'}
   </div>`;
 
   document.getElementById('tab-notas-p').innerHTML=`<div class="card">
@@ -3745,14 +3784,14 @@ function renderDetalleP(pid){
       <div class="vitales-grid">
         <div class="vital-card"><div class="v-val">${pesoActual||'—'}</div><div class="v-lbl">Peso kg</div></div>
         <div class="vital-card"><div class="v-val">${tallaActual||'—'}</div><div class="v-lbl">Talla cm</div></div>
-        <div class="vital-card"><div class="v-val">${presionActual||'—'}</div><div class="v-lbl">Presión</div></div>
+        <div class="vital-card"><div class="v-val">${escAttr(presionActual||'—')}</div><div class="v-lbl">Presión</div></div>
         <div class="vital-card"><div class="v-val">${temperaturaActual?temperaturaActual+'°':'—'}</div><div class="v-lbl">Temp.</div></div>
         ${imc?`<div class="vital-card"><div class="v-val">${imc}</div><div class="v-lbl">IMC</div></div>`:''}
       </div>
       <div class="form-grid" style="margin-top:12px">
         <div class="form-group"><label>Peso (kg)</label><input type="number" id="exp-peso" value="${pesoActual||''}" placeholder="70.0" step="0.1"></div>
         <div class="form-group"><label>Talla (cm)</label><input type="number" id="exp-talla" value="${tallaActual||''}" placeholder="170"></div>
-        <div class="form-group"><label>Presión Arterial</label><input type="text" id="exp-presion" value="${presionActual||''}" placeholder="120/80 mmHg"></div>
+        <div class="form-group"><label>Presión Arterial</label><input type="text" id="exp-presion" value="${escAttr(presionActual||'')}" placeholder="120/80 mmHg"></div>
         <div class="form-group"><label>Temperatura (°C)</label><input type="number" id="exp-temperatura" value="${temperaturaActual||''}" placeholder="36.5" step="0.1"></div>
       </div>
       ${ultimaMedicion?`<p class="text-light" style="font-size:11px;margin-top:8px">Última medición: ${formatFecha(ultimaMedicion.fecha)}${ultimaMedicion.citaId?' · vinculada a la cita #'+ultimaMedicion.citaId:''}</p>`:''}
@@ -3761,7 +3800,7 @@ function renderDetalleP(pid){
     <div class="exp-section">
       <div class="exp-section-title">👤 Datos Socioeconómicos</div>
       <div class="form-grid">
-        <div class="form-group"><label>Ocupación</label><input type="text" id="exp-ocupacion" value="${exp.ocupacion||''}" placeholder="Empleado, estudiante..."></div>
+        <div class="form-group"><label>Ocupación</label><input type="text" id="exp-ocupacion" value="${escAttr(exp.ocupacion||'')}" placeholder="Empleado, estudiante..."></div>
         <div class="form-group"><label>Estado Civil</label><select id="exp-estadoCivil">
           <option value="">—</option>
           ${['soltero','casado','divorciado','viudo','union libre'].map(v=>`<option value="${v}" ${exp.estadoCivil===v?'selected':''}>${v}</option>`).join('')}
@@ -3781,9 +3820,9 @@ function renderDetalleP(pid){
     <div class="exp-section">
       <div class="exp-section-title">🏥 Antecedentes Clínicos</div>
       <div class="form-grid cols-1">
-        <div class="form-group"><label>Enfermedades Crónicas</label><textarea id="exp-enfermedadesCronicas" placeholder="Hipertensión, diabetes tipo 2, asma...">${exp.enfermedadesCronicas||''}</textarea></div>
-        <div class="form-group"><label>Cirugías Previas</label><textarea id="exp-cirugias" placeholder="Apendicectomía 2018, cesárea...">${exp.cirugias||''}</textarea></div>
-        <div class="form-group"><label>Antecedentes Familiares</label><textarea id="exp-antecedentesFamiliares" placeholder="Padre: HTA, diabetes. Madre: cáncer...">${exp.antecedentesFamiliares||''}</textarea></div>
+        <div class="form-group"><label>Enfermedades Crónicas</label><textarea id="exp-enfermedadesCronicas" placeholder="Hipertensión, diabetes tipo 2, asma...">${escAttr(exp.enfermedadesCronicas||'')}</textarea></div>
+        <div class="form-group"><label>Cirugías Previas</label><textarea id="exp-cirugias" placeholder="Apendicectomía 2018, cesárea...">${escAttr(exp.cirugias||'')}</textarea></div>
+        <div class="form-group"><label>Antecedentes Familiares</label><textarea id="exp-antecedentesFamiliares" placeholder="Padre: HTA, diabetes. Madre: cáncer...">${escAttr(exp.antecedentesFamiliares||'')}</textarea></div>
       </div>
     </div>
 
@@ -3792,11 +3831,11 @@ function renderDetalleP(pid){
       <div class="form-grid cols-1">
         <div class="form-group"><label>Alergias conocidas (del perfil del paciente)</label>
           <div style="padding:10px 14px;background:${p.alergias?'#FEF2F2':'var(--bg)'};border:1.5px solid ${p.alergias?'#FECACA':'var(--border)'};border-radius:10px;font-size:13px;color:${p.alergias?'#DC2626':'var(--text-light)'}">
-            ${p.alergias?'⚠️ '+p.alergias:'Sin alergias registradas — edita el perfil del paciente para agregar'}
+            ${p.alergias?'⚠️ '+escAttr(p.alergias):'Sin alergias registradas — edita el perfil del paciente para agregar'}
           </div>
         </div>
-        <div class="form-group"><label>Esquema de Vacunas</label><textarea id="exp-vacunas" placeholder="COVID-19 ✓, Influenza ✓, Hepatitis B ✓...">${exp.vacunas||''}</textarea></div>
-        <div class="form-group"><label>Observaciones Médicas Adicionales</label><textarea id="exp-observacionesMedicas" placeholder="Notas del médico sobre el expediente...">${exp.observacionesMedicas||''}</textarea></div>
+        <div class="form-group"><label>Esquema de Vacunas</label><textarea id="exp-vacunas" placeholder="COVID-19 ✓, Influenza ✓, Hepatitis B ✓...">${escAttr(exp.vacunas||'')}</textarea></div>
+        <div class="form-group"><label>Observaciones Médicas Adicionales</label><textarea id="exp-observacionesMedicas" placeholder="Notas del médico sobre el expediente...">${escAttr(exp.observacionesMedicas||'')}</textarea></div>
       </div>
     </div>
 
@@ -3860,18 +3899,18 @@ function imprimirExpedienteCompleto(pid) {
 
   // ── DATOS DEL PACIENTE ──
   const secPaciente = sec('👤','Datos del Paciente','#1e40af') + tbl(
-    row('N° Expediente',`<strong>${p.expediente||getExpedienteNum(p.id)}</strong>`) +
-    row('Nombre completo',`<strong>${p.nombre} ${p.apellidos}</strong>`) +
-    row('Identificación', p.identificacion) +
+    row('N° Expediente',`<strong>${escAttr(p.expediente||getExpedienteNum(p.id))}</strong>`) +
+    row('Nombre completo',`<strong>${escAttr(p.nombre+' '+p.apellidos)}</strong>`) +
+    row('Identificación', p.identificacion && escAttr(p.identificacion)) +
     row('Fecha de nacimiento', p.fechaNac ? formatFecha(p.fechaNac)+(edad?' ('+edad+' años)':'') : null) +
-    row('Sexo', p.sexo==='M'?'Masculino':p.sexo==='F'?'Femenino':p.sexo) +
-    row('Tipo de sangre', p.tipoSangre||p.sangre) +
-    row('Teléfono', p.telefono) +
-    row('Email', p.email) +
-    row('Dirección', p.direccion) +
-    row('Contacto de emergencia', p.emergencia||p.contactoEmergencia) +
-    row('Alergias', p.alergias ? '⚠️ '+p.alergias : 'Ninguna conocida')
-  ) + (p.observaciones ? `<div style="margin-top:8px;padding:10px 12px;background:#eff6ff;border-left:3px solid #1e40af;border-radius:4px;font-size:12px">${p.observaciones}</div>` : '');
+    row('Sexo', p.sexo==='M'?'Masculino':p.sexo==='F'?'Femenino':(p.sexo && escAttr(p.sexo))) +
+    row('Tipo de sangre', (p.tipoSangre||p.sangre) && escAttr(p.tipoSangre||p.sangre)) +
+    row('Teléfono', p.telefono && escAttr(p.telefono)) +
+    row('Email', p.email && escAttr(p.email)) +
+    row('Dirección', p.direccion && escAttr(p.direccion)) +
+    row('Contacto de emergencia', (p.emergencia||p.contactoEmergencia) && escAttr(p.emergencia||p.contactoEmergencia)) +
+    row('Alergias', p.alergias ? '⚠️ '+escAttr(p.alergias) : 'Ninguna conocida')
+  ) + (p.observaciones ? `<div style="margin-top:8px;padding:10px 12px;background:#eff6ff;border-left:3px solid #1e40af;border-radius:4px;font-size:12px;white-space:pre-wrap">${escAttr(p.observaciones)}</div>` : '');
 
   // ── SIGNOS VITALES + ANTECEDENTES ──
   const secExp = sec('🩺','Expediente Médico','#0f766e') +
@@ -3879,21 +3918,21 @@ function imprimirExpedienteCompleto(pid) {
     <div style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap">
       ${exp.peso?`<div style="flex:1;min-width:80px;text-align:center;padding:10px;border:1.5px solid #e2e8f0;border-radius:8px"><div style="font-size:20px;font-weight:800;color:#0f172a">${exp.peso}</div><div style="font-size:10px;color:#64748b">kg · Peso</div></div>`:''}
       ${exp.talla?`<div style="flex:1;min-width:80px;text-align:center;padding:10px;border:1.5px solid #e2e8f0;border-radius:8px"><div style="font-size:20px;font-weight:800;color:#0f172a">${exp.talla}</div><div style="font-size:10px;color:#64748b">cm · Talla</div></div>`:''}
-      ${exp.presion?`<div style="flex:1;min-width:80px;text-align:center;padding:10px;border:1.5px solid #e2e8f0;border-radius:8px"><div style="font-size:20px;font-weight:800;color:#0f172a">${exp.presion}</div><div style="font-size:10px;color:#64748b">Presión</div></div>`:''}
+      ${exp.presion?`<div style="flex:1;min-width:80px;text-align:center;padding:10px;border:1.5px solid #e2e8f0;border-radius:8px"><div style="font-size:20px;font-weight:800;color:#0f172a">${escAttr(exp.presion)}</div><div style="font-size:10px;color:#64748b">Presión</div></div>`:''}
       ${exp.temperatura?`<div style="flex:1;min-width:80px;text-align:center;padding:10px;border:1.5px solid #e2e8f0;border-radius:8px"><div style="font-size:20px;font-weight:800;color:#0f172a">${exp.temperatura}°</div><div style="font-size:10px;color:#64748b">Temperatura</div></div>`:''}
       ${imc?`<div style="flex:1;min-width:80px;text-align:center;padding:10px;border:1.5px solid #e2e8f0;border-radius:8px"><div style="font-size:20px;font-weight:800;color:#0f172a">${imc}</div><div style="font-size:10px;color:#64748b">IMC</div></div>`:''}
     </div>` : '') +
     tbl(
-      row('Ocupación', exp.ocupacion) +
-      row('Estado civil', exp.estadoCivil) +
-      row('Tabaco', exp.tabaco) +
-      row('Alcohol', exp.alcohol) +
-      row('Actividad física', exp.actividadFisica) +
-      row('Enfermedades crónicas', exp.enfermedadesCronicas) +
-      row('Cirugías previas', exp.cirugias) +
-      row('Antecedentes familiares', exp.antecedentesFamiliares) +
-      row('Vacunas', exp.vacunas) +
-      row('Observaciones médicas', exp.observacionesMedicas||exp.observaciones)
+      row('Ocupación', exp.ocupacion && escAttr(exp.ocupacion)) +
+      row('Estado civil', exp.estadoCivil && escAttr(exp.estadoCivil)) +
+      row('Tabaco', exp.tabaco && escAttr(exp.tabaco)) +
+      row('Alcohol', exp.alcohol && escAttr(exp.alcohol)) +
+      row('Actividad física', exp.actividadFisica && escAttr(exp.actividadFisica)) +
+      row('Enfermedades crónicas', exp.enfermedadesCronicas && escAttr(exp.enfermedadesCronicas)) +
+      row('Cirugías previas', exp.cirugias && escAttr(exp.cirugias)) +
+      row('Antecedentes familiares', exp.antecedentesFamiliares && escAttr(exp.antecedentesFamiliares)) +
+      row('Vacunas', exp.vacunas && escAttr(exp.vacunas)) +
+      row('Observaciones médicas', (exp.observacionesMedicas||exp.observaciones) && escAttr(exp.observacionesMedicas||exp.observaciones))
     );
 
   // ── CITAS ──
@@ -3909,9 +3948,9 @@ function imprimirExpedienteCompleto(pid) {
       <tbody>${citas.map(c=>`<tr style="border-bottom:1px solid #f1f5f9">
         <td style="padding:7px 10px">${formatFecha(c.fecha)}</td>
         <td style="padding:7px 10px">${c.hora||'—'}</td>
-        <td style="padding:7px 10px">${c.motivo||'—'}</td>
-        <td style="padding:7px 10px">${c.tipo||'consulta'}</td>
-        <td style="padding:7px 10px">${c.estado||'—'}</td>
+        <td style="padding:7px 10px">${escAttr(c.motivo||'—')}</td>
+        <td style="padding:7px 10px">${escAttr(c.tipo||'consulta')}</td>
+        <td style="padding:7px 10px">${escAttr(c.estado||'—')}</td>
       </tr>`).join('')}</tbody>
     </table>` : '';
 
@@ -3926,11 +3965,11 @@ function imprimirExpedienteCompleto(pid) {
         <th style="padding:7px 10px;text-align:left;border-bottom:2px solid #e2e8f0">Estado</th>
       </tr></thead>
       <tbody>${meds.map(m=>`<tr style="border-bottom:1px solid #f1f5f9">
-        <td style="padding:7px 10px;font-weight:600">${m.nombre}</td>
-        <td style="padding:7px 10px">${m.dosis||'—'}</td>
-        <td style="padding:7px 10px">${m.frecuencia||'—'}</td>
-        <td style="padding:7px 10px">${m.via||'—'}</td>
-        <td style="padding:7px 10px">${m.estado||'—'}</td>
+        <td style="padding:7px 10px;font-weight:600">${escAttr(m.nombre)}</td>
+        <td style="padding:7px 10px">${escAttr(m.dosis||'—')}</td>
+        <td style="padding:7px 10px">${escAttr(m.frecuencia||'—')}</td>
+        <td style="padding:7px 10px">${escAttr(m.via||'—')}</td>
+        <td style="padding:7px 10px">${escAttr(m.estado||'—')}</td>
       </tr>`).join('')}</tbody>
     </table>` : '';
 
@@ -3939,10 +3978,10 @@ function imprimirExpedienteCompleto(pid) {
     otrasNotas.map(n=>`
       <div style="border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px;margin-bottom:10px;break-inside:avoid">
         <div style="display:flex;justify-content:space-between;margin-bottom:6px;align-items:baseline">
-          <strong style="font-size:13px">${n.titulo||'—'}</strong>
-          <span style="font-size:11px;color:#64748b">${formatFecha(n.fecha)} · ${n.tipo||'nota'}</span>
+          <strong style="font-size:13px">${escAttr(n.titulo||'—')}</strong>
+          <span style="font-size:11px;color:#64748b">${formatFecha(n.fecha)} · ${escAttr(n.tipo||'nota')}</span>
         </div>
-        <p style="font-size:12px;color:#374151;margin:0;white-space:pre-wrap;line-height:1.7">${n.contenido||''}</p>
+        <p style="font-size:12px;color:#374151;margin:0;white-space:pre-wrap;line-height:1.7">${escAttr(n.contenido||'')}</p>
       </div>`).join('') : '';
 
   // ── EXAMEN VISUAL ──
@@ -3982,7 +4021,7 @@ function imprimirExpedienteCompleto(pid) {
       return `
         <div style="border:1px solid #ede9fe;border-radius:10px;padding:16px;margin-bottom:14px;background:#faf5ff;break-inside:avoid">
           <div style="font-weight:700;font-size:13px;color:#6d28d9;margin-bottom:12px;padding-bottom:8px;border-bottom:1.5px solid #ede9fe">
-            👁️ ${ev.titulo||'Examen Visual'} — ${formatFecha(ev.fecha)}
+            👁️ ${escAttr(ev.titulo||'Examen Visual')} — ${formatFecha(ev.fecha)}
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 20px">
             ${blk('LENSOMETRÍA (anteojos actuales)')}
@@ -4050,8 +4089,8 @@ function citaBuscarPac(q) {
       ).slice(0, 10);
   if(!matches.length) {
     sug.innerHTML =
-      '<div style="padding:8px 14px;font-size:12px;color:var(--text-light);border-bottom:1px solid var(--border)">Sin resultados para "'+q+'"</div>'
-      + '<div style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;background:var(--primary-light);border-radius:0 0 10px 10px" onmousedown="nuevoPacienteParaCita(\''+q.replace(/'/g,"\\'")+'\')">'
+      '<div style="padding:8px 14px;font-size:12px;color:var(--text-light);border-bottom:1px solid var(--border)">Sin resultados para "'+escAttr(q)+'"</div>'
+      + '<div style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;background:var(--primary-light);border-radius:0 0 10px 10px" onmousedown="nuevoPacienteParaCita('+_jsArg(q)+')">'
       + '<span style="font-size:20px;flex-shrink:0">➕</span>'
       + '<div><div style="font-size:13px;font-weight:700;color:var(--primary)">Registrar como nuevo paciente</div>'
       + '<div style="font-size:11px;color:var(--primary);opacity:.8">Crea el expediente y abre la cita automáticamente</div></div></div>';
@@ -4059,11 +4098,11 @@ function citaBuscarPac(q) {
     return;
   }
   sug.innerHTML = matches.map(p =>
-    '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s" onmouseenter="this.style.background=\'var(--primary-light)\'" onmouseleave="this.style.background=\'\'" onmousedown="abrirCitaDesdeVista('+p.id+',\''+((p.nombre+' '+p.apellidos).replace(/'/g,"\\'"))+'\')">'
+    '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s" onmouseenter="this.style.background=\'var(--primary-light)\'" onmouseleave="this.style.background=\'\'" onmousedown="abrirCitaDesdeVista('+p.id+','+_jsArg(p.nombre+' '+p.apellidos)+')">'
     + '<div style="width:32px;height:32px;border-radius:50%;background:'+colAvatar(p.id)+';display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;flex-shrink:0">'+ini(p.nombre,p.apellidos)+'</div>'
     + '<div style="flex:1;min-width:0">'
-    +   '<div style="font-size:13px;font-weight:600;color:var(--text)">'+p.nombre+' '+p.apellidos+'</div>'
-    +   '<div style="font-size:11px;color:var(--text-light)"><span style="color:var(--primary);font-weight:600">'+getExpedienteNum(p.id)+'</span>'+(p.identificacion?' · '+p.identificacion:'')+(p.telefono?' · '+p.telefono:'')+'</div>'
+    +   '<div style="font-size:13px;font-weight:600;color:var(--text)">'+escAttr(p.nombre+' '+p.apellidos)+'</div>'
+    +   '<div style="font-size:11px;color:var(--text-light)"><span style="color:var(--primary);font-weight:600">'+escAttr(getExpedienteNum(p.id))+'</span>'+(p.identificacion?' · '+escAttr(p.identificacion):'')+(p.telefono?' · '+escAttr(p.telefono):'')+'</div>'
     + '</div>'
     + '<span style="font-size:11px;font-weight:700;color:var(--primary);background:var(--primary-light);padding:2px 10px;border-radius:20px;flex-shrink:0;white-space:nowrap">+ Citar</span>'
     + '</div>'
@@ -4126,11 +4165,11 @@ function renderCitasParaFecha(fecha) {
     const p = _sujetoCita(c);
     const esCompletada = c.estado==='completada';
     const esCancelada  = c.estado==='cancelada';
-    return `<div class="cita-item ${c.estado}" style="gap:10px;flex-wrap:wrap">
+    return `<div class="cita-item ${escAttr(c.estado)}" style="gap:10px;flex-wrap:wrap">
       <div class="cita-time">${c.hora}</div>
       <div style="flex:1;min-width:0">
-        <div class="cita-paciente">${p?p.titulo:'Desconocido'}</div>
-        <div class="cita-motivo">${c.motivo}${c.tipo?` · <span class="tag tag-cyan" style="font-size:10px">${c.tipo}</span>`:''}</div>
+        <div class="cita-paciente">${p?escAttr(p.titulo):'Desconocido'}</div>
+        <div class="cita-motivo">${escAttr(c.motivo)}${c.tipo?` · <span class="tag tag-cyan" style="font-size:10px">${escAttr(c.tipo)}</span>`:''}</div>
       </div>
       ${esCompletada ? '<span class="acudio-badge">✅ Atendido</span>' : estadoTag(c.estado)}
       <div class="actions-cell" style="gap:6px;flex-wrap:wrap">
@@ -4165,15 +4204,15 @@ function renderCitas(){
     const esComp = c.estado==='completada';
     const [,mm,dd] = c.fecha.split('-');
     const search = ((p?p.titulo:'')+' '+c.motivo+' '+c.fecha).toLowerCase();
-    return `<div class="cita-historial-item" data-search="${search}" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)">
+    return `<div class="cita-historial-item" data-search="${escAttr(search)}" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)">
       <div style="width:36px;flex-shrink:0;text-align:center;background:var(--primary-light);border-radius:8px;padding:5px 2px">
         <div style="font-size:13px;font-weight:800;color:var(--primary);line-height:1">${dd}</div>
         <div style="font-size:10px;color:var(--primary);text-transform:uppercase;font-weight:600">${MESES[parseInt(mm)-1]}</div>
       </div>
       <div class="patient-avatar" style="background:${colAvatar(c.pacienteId||0)};width:32px;height:32px;font-size:11px;flex-shrink:0">${p?p.iniciales:'?'}</div>
       <div style="flex:1;min-width:0">
-        <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p?p.titulo:'Desconocido'}</div>
-        <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.motivo||'—'}</div>
+        <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p?escAttr(p.titulo):'Desconocido'}</div>
+        <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escAttr(c.motivo||'—')}</div>
       </div>
       ${esComp?'<span class="acudio-badge" style="flex-shrink:0">✅</span>':`<span style="flex-shrink:0">${estadoTag(c.estado)}</span>`}
       <div class="actions-cell" style="flex-shrink:0;gap:3px;flex-wrap:nowrap">
@@ -4294,7 +4333,7 @@ function _filterMasSugEn(sugId, q, onPick) {
   }
   sug.innerHTML = matches.map(m => {
     const dueno = C.cli.find(c => c.id === m.clienteId);
-    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseenter="this.style.background='var(--primary-light)'" onmouseleave="this.style.background=''" onmousedown="${onPick}(${m.id},'${escAttr(m.nombre)}')">
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseenter="this.style.background='var(--primary-light)'" onmouseleave="this.style.background=''" onmousedown="${onPick}(${m.id},${_jsArg(m.nombre)})">
       <div style="width:32px;height:32px;border-radius:50%;background:${colAvatar(m.id)};display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;flex-shrink:0">${especieIcon(m.especie)}</div>
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:600;color:var(--text)">${escAttr(m.nombre)}</div>
@@ -4324,8 +4363,8 @@ function fillMedicoSelect(selId, selectedId) {
   const baja = selectedId && !medicos.some(m => m.id == selectedId)
     ? C.prof.find(p => p.id == selectedId) : null;
   sel.innerHTML = '<option value="">Sin asignar</option>' +
-    medicos.map(m=>`<option value="${m.id}">${m.icono||'👨‍⚕️'} ${m.nombre}</option>`).join('') +
-    (baja ? `<option value="${baja.id}">${baja.icono||'👨‍⚕️'} ${baja.nombre} (sin agenda)</option>` : '');
+    medicos.map(m=>`<option value="${m.id}">${escAttr(m.icono||'👨‍⚕️')} ${escAttr(m.nombre)}</option>`).join('') +
+    (baja ? `<option value="${baja.id}">${escAttr(baja.icono||'👨‍⚕️')} ${escAttr(baja.nombre)} (sin agenda)</option>` : '');
   if (selectedId) sel.value = selectedId;
   else if (['medico','medico_admin','admin','optometrista','oftalmologo','dermatologo'].includes(currentUser?.key)) sel.value = currentUser.id;
 }
@@ -4463,7 +4502,9 @@ function openModalCita(id){
   document.getElementById('modal-cita-title').textContent=id?'✏️ Editar Cita':'📅 Nueva Cita';
   fillSelect('c-paciente');
   document.getElementById('c-mascota').value=''; document.getElementById('c-mas-txt').value='';
-  fillMedicoSelect('c-medico');
+  // Al editar se pasa el médico de la cita: si ya no lleva agenda se ofrece
+  // igual, en vez de quedar «Sin asignar» y perderse al guardar.
+  fillMedicoSelect('c-medico', id ? C.c.find(x => x.id === id)?.medicoId : undefined);
   const fechaEl = document.getElementById('c-fecha');
   fechaEl.value = hoy();
   fechaEl.min   = hoy();
@@ -4649,15 +4690,15 @@ function registrarAcudidoPaciente(pid){
   const nombre=p?p.nombre+' '+p.apellidos:'El paciente';
   const citasHoy=C.c.filter(c=>c.pacienteId===pid&&c.fecha===h&&_citaAbierta(c));
   if(!citasHoy.length){
-    toast(`${p?.nombre||'El paciente'} no tiene citas pendientes hoy`,'info');
+    toast(`${escAttr(p?.nombre||'El paciente')} no tiene citas pendientes hoy`,'info');
     return;
   }
   if(citasHoy.length===1){ marcarCitaCompletada(citasHoy[0].id); return; }
   document.getElementById('acudio-picker-title').textContent=`✅ Citas de ${p?.nombre||'Paciente'} hoy`;
   document.getElementById('acudio-picker-lista').innerHTML=citasHoy.map(c=>`
-    <div class="cita-item ${c.estado}" style="cursor:pointer;margin-bottom:8px" onclick="closeModal('modal-acudio-picker');marcarCitaCompletada(${c.id})">
+    <div class="cita-item ${escAttr(c.estado)}" style="cursor:pointer;margin-bottom:8px" onclick="closeModal('modal-acudio-picker');marcarCitaCompletada(${c.id})">
       <div class="cita-time">${c.hora}</div>
-      <div class="cita-info"><div class="cita-paciente">${c.motivo}</div><div class="cita-motivo">${c.tipo}</div></div>
+      <div class="cita-info"><div class="cita-paciente">${escAttr(c.motivo)}</div><div class="cita-motivo">${escAttr(c.tipo)}</div></div>
       ${estadoTag(c.estado)}
       <span style="color:var(--success);font-size:20px;flex-shrink:0">✅</span>
     </div>`).join('');
@@ -4667,7 +4708,7 @@ function registrarAcudidoPaciente(pid){
 async function marcarCitaCompletada(id){
   const c=C.c.find(x=>x.id===id); if(!c) return;
   const p=_sujetoCita(c);
-  const nombre=p?p.titulo:'el paciente';
+  const nombre=escAttr(p?p.titulo:'el paciente');
   const ok=await customConfirm({icon:'✅',title:'Confirmar asistencia',msg:`¿Confirmar que <strong>${nombre}</strong> acudió a la cita correctamente?`,okText:'Confirmar asistencia',danger:false});
   if(!ok) return;
   setLoading(true);
@@ -4727,8 +4768,8 @@ function renderMedicaciones(){
       </div>
       <div class="patient-avatar" style="background:${colAvatar(x.mascotaId||x.pacienteId||0)};width:32px;height:32px;font-size:11px;flex-shrink:0">${p?p.iniciales:'?'}</div>
       <div style="flex:1;min-width:0">
-        <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.nombre}</div>
-        <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p?escAttr(p.titulo):'Desconocido'} · ${x.frecuencia}</div>
+        <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escAttr(x.nombre)}</div>
+        <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p?escAttr(p.titulo):'Desconocido'} · ${escAttr(x.frecuencia)}</div>
         <div style="font-size:10.5px;color:var(--primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.prescriptorNombre?'Dr(a). '+escAttr(x.prescriptorNombre):'Receta anterior sin médico asignado'}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
@@ -4756,6 +4797,13 @@ function parseDosisStr(d) {
   if(m) {
     const num = m[1];
     const raw = m[2].toLowerCase().trim();
+    // Una dosis por peso («50 mg/kg», «10-15mg/kg») NO es la dosis a dar:
+    // tomarla como «50 mg» recetaba la referencia por kilo como dosis total.
+    // Se deja la cantidad vacía para que el profesional la calcule y la escriba.
+    if(/\/\s*kg/.test(raw) || raw.startsWith('-')) {
+      const unidad = raw.replace(/^-[\d.]+\s*/, '');
+      return {qty:'', unit:unidad.startsWith('ml') ? 'ml' : 'mg'};
+    }
     if(raw.startsWith('tab')) return {qty:num, unit:'tableta(s)'};
     if(raw.startsWith('cap') || raw.startsWith('cáp')) return {qty:num, unit:'cápsula(s)'};
     if(raw === 'mg' || raw.startsWith('mg/')) return {qty:num, unit:'mg'};
@@ -4962,7 +5010,7 @@ function renderMedItems() {
     +     '<div id="mi-sug-'+i+'" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--primary);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:400;max-height:200px;overflow-y:auto;margin-top:4px"></div>'
     +   '</div>'
     +   '<div class="form-group"><label>Dosificación *</label><div style="display:flex;gap:8px">'
-    +     '<input type="number" id="mi-dosis-qty-'+i+'" value="'+(item.dosisQty||1)+'" min="0.25" step="0.25" style="width:80px;flex-shrink:0" oninput="medItems['+i+'].dosisQty=this.value">'
+    +     '<input type="number" id="mi-dosis-qty-'+i+'" value="'+(item.dosisQty ?? 1)+'" min="0.25" step="0.25" style="width:80px;flex-shrink:0" oninput="medItems['+i+'].dosisQty=this.value">'
     +     '<select id="mi-dosis-unit-'+i+'" style="flex:1" onchange="medItems['+i+'].dosisUnit=this.value">'+DOSIS_UNIDADES.map(u=>'<option value="'+u+'"'+((item.dosisUnit||'tableta(s)')===u?' selected':'')+'>'+u+'</option>').join('')+'</select>'
     +   '</div></div>'
     +   '<div class="form-group"><label>Frecuencia *</label><select id="mi-freq-'+i+'" onchange="medItems['+i+'].frecuencia=this.value">'
@@ -5058,6 +5106,10 @@ async function guardarMedicacion() {
   const prescriptor = editingMedId ? null : _prescriptorSeleccionado();
   if(!editingMedId && !prescriptor) { toast('Selecciona el médico que emite la receta','error'); return; }
   const buildDosis = item => ((item.dosisQty||'1') + ' ' + (item.dosisUnit||'tableta(s)')).trim();
+  // Un medicamento con nombre pero sin dosis no se descarta en silencio: la
+  // dosis por kilo del catálogo deja la cantidad vacía a propósito.
+  const sinDosis = medItems.find(item => item.nombre && !String(item.dosisQty ?? '').trim());
+  if(sinDosis) { toast(`Escribe la dosis de ${sinDosis.nombre}${sinDosis.mgkg ? ` (referencia: ${sinDosis.mgkg} mg/kg)` : ''}`,'error'); return; }
   if(editingMedId) {
     const anterior = C.m.find(x => x.id === editingMedId);
     const valid = medItems.filter(item => item.nombre && item.dosisQty && item.frecuencia);
@@ -5069,8 +5121,10 @@ async function guardarMedicacion() {
     let error = null;
     for(const item of valid) {
       const fila=toM({...base,nombre:item.nombre,dosis:buildDosis(item),frecuencia:item.frecuencia,via:item.via,indicaciones:item.indicaciones});
-      const r=item.id ? await sb.from('medicaciones').update(fila).eq('id',item.id) : await sb.from('medicaciones').insert(fila);
+      const r=item.id ? await sb.from('medicaciones').update(fila).eq('id',item.id) : await sb.from('medicaciones').insert(fila).select('id').single();
       if(r.error){error=r.error;break;}
+      // Si un renglón posterior falla y se vuelve a guardar, este ya no se inserta dos veces.
+      if(!item.id && r.data?.id) item.id = r.data.id;
     }
     if(!error) {
       const conservar=new Set(valid.map(x=>x.id).filter(Boolean));
@@ -5170,7 +5224,7 @@ function _timelineNotasHTML(notas) {
 
 function _notaItemHTML(n) {
   return `<div class="timeline-item">
-    <div class="timeline-date">${formatFecha(n.fecha)} · <span class="tag tag-blue" style="font-size:10px">${NOTA_TIPO_ICON[n.tipo]||'📝'} ${notaTipoLabel(n.tipo)}</span> ${notaEstadoTag(n)}</div>
+    <div class="timeline-date">${formatFecha(n.fecha)} · <span class="tag tag-blue" style="font-size:10px">${NOTA_TIPO_ICON[n.tipo]||'📝'} ${escAttr(notaTipoLabel(n.tipo))}</span> ${notaEstadoTag(n)}</div>
     <div class="timeline-content">
       ${n.titulo?`<strong style="display:block;margin-bottom:5px">${escAttr(n.titulo)}</strong>`:''}
       ${n.profesionalNombre?`<div style="font-size:11px;color:var(--primary);font-weight:600;margin-bottom:5px">🩺 ${escAttr(n.profesionalNombre)}${n.profesionalCodigo?' · '+_etiquetaCodigoMedico(true)+' '+escAttr(n.profesionalCodigo):''}${n.profesionalEspecialidad?' · '+escAttr(n.profesionalEspecialidad):''}</div>`:''}
@@ -5211,7 +5265,7 @@ function renderNotas(){
   // Badge de clínica
   const badgeEl = document.getElementById('notas-clinic-badge-container');
   if(badgeEl && currentClinica) {
-    badgeEl.innerHTML = `<span class="notas-clinic-badge">🏥 ${currentClinica.nombre}</span>`;
+    badgeEl.innerHTML = `<span class="notas-clinic-badge">🏥 ${escAttr(currentClinica.nombre)}</span>`;
   }
 
   const el=document.getElementById('tabla-notas'), empty=document.getElementById('notas-empty');
@@ -5232,10 +5286,10 @@ function renderNotas(){
       <div class="patient-avatar" style="background:${colAvatar(n.mascotaId||n.pacienteId||0)};width:32px;height:32px;font-size:11px;flex-shrink:0">${p?p.iniciales:'?'}</div>
       <div style="flex:1;min-width:0">
         <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p?escAttr(p.titulo):'Desconocido'}</div>
-        <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${n.titulo||prev}${n.profesionalNombre?' · '+escAttr(n.profesionalNombre):''}</div>
+        <div style="font-size:11px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escAttr(n.titulo||prev)}${n.profesionalNombre?' · '+escAttr(n.profesionalNombre):''}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
-        <div><span class="tag tag-blue" style="font-size:10px">${tipoIcon} ${notaTipoLabel(n.tipo)}</span> ${notaEstadoTag(n)}</div>
+        <div><span class="tag tag-blue" style="font-size:10px">${tipoIcon} ${escAttr(notaTipoLabel(n.tipo))}</span> ${notaEstadoTag(n)}</div>
         <div class="actions-cell" style="gap:3px;flex-wrap:nowrap">
           ${n.estado!=='borrador'?`<button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff" onclick="imprimirNota(${n.id})" title="Imprimir nota">🖨️</button><button class="btn btn-sm btn-descarga" onclick="descargarDocumento(()=>imprimirNota(${n.id}))" title="Descargar nota en PDF" aria-label="Descargar nota en PDF">⬇️</button>`:''}
           <button class="btn btn-secondary btn-sm" onclick="verNota(${n.id})">👁️</button>
@@ -5407,10 +5461,16 @@ async function _guardarComoBorradorEncadenado(previa, snap) {
     : 'Tu cuenta no tiene una clínica asignada. Contacta al Super Admin.' };
 
   const sobrescribir = previa?.estado === 'borrador';
+  // toN pone en null lo que no recibe: sin estos campos el borrador perdía el
+  // médico que ya se había elegido y su plantilla.
+  const profesional = _profesionalNotaSeleccionado(previa);
   const payload = toN({
     pacienteId: snap.pacienteId, mascotaId: snap.mascotaId, citaId: snap.citaId, tipo: snap.tipo,
     fecha: snap.fecha, titulo: snap.titulo, contenido: snap.contenido, signos: snap.signos,
-    estado: 'borrador'
+    estado: 'borrador',
+    profesionalId:profesional?.id||null, profesionalNombre:profesional?.nombre||'', profesionalEspecialidad:profesional?.especialidad||'',
+    profesionalFirmaUrl:profesional?.firmaUrl||null, profesionalCodigo:profesional?.codigo||'',
+    plantillaId:_plantillaNotaActiva?.id||previa?.plantillaId||null
   });
   const { error } = sobrescribir
     ? await sb.from('notas').update(payload).eq('id', previa.id)
@@ -5563,7 +5623,7 @@ function _signosChipsHTML(signos) {
   const chips = _signosActivos()
     .filter(sv => !(esVeterinaria() && sv.k === 'cc'))
     .filter(sv => signos[sv.k] != null && String(signos[sv.k]).trim() !== '')
-    .map(sv => `<div class="sv-chip"><div class="sv-chip-val">${signos[sv.k]}</div><div class="sv-chip-lbl">${sv.lbl}${sv.uni?' · '+sv.uni:''}</div></div>`);
+    .map(sv => `<div class="sv-chip"><div class="sv-chip-val">${escAttr(signos[sv.k])}</div><div class="sv-chip-lbl">${sv.lbl}${sv.uni?' · '+sv.uni:''}</div></div>`);
   if(!chips.length) return '';
   const imc = _imcDeSignos(signos);
   if(imc) chips.push(`<div class="sv-chip"><div class="sv-chip-val">${imc.valor}</div><div class="sv-chip-lbl">${imc.lbl||'IMC'} · ${imc.cat}</div></div>`);
@@ -5595,7 +5655,7 @@ function _signosPrintHTML(signos) {
   return '<div class="section-title">&#129658; Signos vitales</div>'
     + '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">'
     + items.map(i => '<div style="flex:0 0 auto;min-width:84px;text-align:center;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px">'
-        + '<div style="font-size:17px;font-weight:800;color:#0f172a">'+i.val+'</div>'
+        + '<div style="font-size:17px;font-weight:800;color:#0f172a">'+escAttr(i.val)+'</div>'
         + '<div style="font-size:10px;color:#64748b;margin-top:2px">'+i.lbl+'</div></div>').join('')
     + '</div>';
 }
@@ -8315,12 +8375,12 @@ function verNota(id){
   const conMachote=!!(n.plantillaId && n.plantillaValores && n.tipo!=='examen_visual');
   document.getElementById('ver-nota-title').textContent=`📝 ${n.titulo||'Nota Clínica'}`;
   document.getElementById('ver-nota-content').innerHTML=`
-    <div style="margin-bottom:14px"><span class="tag tag-blue">${notaTipoLabel(n.tipo)}</span> ${notaEstadoTag(n)}<span style="margin-left:8px;font-size:12px;color:var(--text-light)">${formatFecha(n.fecha)}</span></div>
+    <div style="margin-bottom:14px"><span class="tag tag-blue">${escAttr(notaTipoLabel(n.tipo))}</span> ${notaEstadoTag(n)}<span style="margin-left:8px;font-size:12px;color:var(--text-light)">${formatFecha(n.fecha)}</span></div>
     ${p?`<p class="text-light" style="margin-bottom:12px">${esVeterinaria()?'Mascota':'Paciente'}: <strong style="color:var(--text)">${escAttr(p.titulo)}</strong>${p.subtitulo?` <span style="font-size:12px">(${escAttr(p.subtitulo)})</span>`:''}</p>`:''}
     ${n.profesionalNombre?`<p class="text-light" style="margin-bottom:12px">Atendido por: <strong style="color:var(--text)">${escAttr(n.profesionalNombre)}</strong>${n.profesionalCodigo?' · '+_etiquetaCodigoMedico(true)+' '+escAttr(n.profesionalCodigo):''}${n.profesionalEspecialidad?' · '+escAttr(n.profesionalEspecialidad):''}</p>`:''}
-    ${n.titulo?`<h3 style="margin-bottom:12px">${n.titulo}</h3>`:''}
+    ${n.titulo?`<h3 style="margin-bottom:12px">${escAttr(n.titulo)}</h3>`:''}
     ${_signosChipsHTML(n.signos)}
-    ${conMachote?'<div class="nota-documento-barra" style="margin-bottom:8px"><small>Documento tal como se imprime</small><button type="button" class="btn btn-secondary btn-sm" onclick="_dxAlternarTamanoReal(\'ver-nota-doc\',this)">🔍 Tamaño real</button></div><div id="ver-nota-doc" class="dx-marco"><div class="dx-cargando">⏳ Cargando el documento…</div></div>':(n.contenido?`<div style="white-space:pre-wrap;line-height:1.8;font-size:14px;background:var(--bg);padding:16px;border-radius:10px;border:1px solid var(--border)">${n.contenido}</div>`:'')}`;
+    ${conMachote?'<div class="nota-documento-barra" style="margin-bottom:8px"><small>Documento tal como se imprime</small><button type="button" class="btn btn-secondary btn-sm" onclick="_dxAlternarTamanoReal(\'ver-nota-doc\',this)">🔍 Tamaño real</button></div><div id="ver-nota-doc" class="dx-marco"><div class="dx-cargando">⏳ Cargando el documento…</div></div>':(n.contenido?`<div style="white-space:pre-wrap;line-height:1.8;font-size:14px;background:var(--bg);padding:16px;border-radius:10px;border:1px solid var(--border)">${escAttr(n.contenido)}</div>`:'')}`;
   document.querySelector('#modal-ver-nota > .modal')?.classList.toggle('modal-documento', conMachote);
   document.getElementById('modal-ver-nota').classList.add('open');
   if(conMachote) _pintarNotaMachoteEnVista(n);
@@ -8470,33 +8530,33 @@ function imprimirNota(id, sinMachote=false) {
   const ini2 = (a,b) => ((a||'')[0]||'').toUpperCase()+((b||'')[0]||'').toUpperCase();
   if(n.tipo === 'examen_visual') { imprimirExamenVisual(n, p, cfg, fmtF, ini2); return; }
   const tipoTxt = (n.tipo||'').replace(/_/g,' ').toUpperCase();
-  const body = '<div class="badge-tipo" style="background:'+tipoColor+'">📝 '+tipoTxt+'</div>'
-    + (n.titulo?'<div style="font-size:20px;font-weight:900;color:#0F172A;margin-bottom:6px">'+n.titulo+'</div>':'')
+  const body = '<div class="badge-tipo" style="background:'+tipoColor+'">📝 '+escAttr(tipoTxt)+'</div>'
+    + (n.titulo?'<div style="font-size:20px;font-weight:900;color:#0F172A;margin-bottom:6px">'+escAttr(n.titulo)+'</div>':'')
     + '<div class="patient-box" style="margin-bottom:20px">'
-    +   '<div class="patient-av">'+(p?ini2(p.nombre,p.apellidos):'?')+'</div>'
+    +   '<div class="patient-av">'+(p?escAttr(ini2(p.nombre,p.apellidos)):'?')+'</div>'
     +   '<div style="flex:1">'
-    +     '<div class="patient-name">'+(p?p.nombre+' '+p.apellidos:'Paciente no registrado')+'</div>'
+    +     '<div class="patient-name">'+(p?escAttr(p.nombre+' '+p.apellidos):'Paciente no registrado')+'</div>'
     +     '<div class="patient-meta">'
-    +       (p?.identificacion?'<span>&#128266; '+p.identificacion+'</span>':'')
+    +       (p?.identificacion?'<span>&#128266; '+escAttr(p.identificacion)+'</span>':'')
     +       (p?.fechaNac?'<span>&#127874; '+calcEdad(p.fechaNac)+'</span>':'')
-    +       (p?.sexo?'<span>'+(p.sexo==='M'?'&#9794; Masculino':p.sexo==='F'?'&#9792; Femenino':p.sexo)+'</span>':'')
-    +       (p?.telefono?'<span>&#128222; '+p.telefono+'</span>':'')
+    +       (p?.sexo?'<span>'+(p.sexo==='M'?'&#9794; Masculino':p.sexo==='F'?'&#9792; Femenino':escAttr(p.sexo))+'</span>':'')
+    +       (p?.telefono?'<span>&#128222; '+escAttr(p.telefono)+'</span>':'')
     +     '</div>'
-    +     (p?.alergias?'<div style="margin-top:6px;background:#FEF2F2;border:1px solid #FECACA;border-radius:6px;padding:5px 10px;font-size:11px;color:#DC2626;font-weight:600">&#9888; Alergias: '+p.alergias+'</div>':'')
+    +     (p?.alergias?'<div style="margin-top:6px;background:#FEF2F2;border:1px solid #FECACA;border-radius:6px;padding:5px 10px;font-size:11px;color:#DC2626;font-weight:600">&#9888; Alergias: '+escAttr(p.alergias)+'</div>':'')
     +   '</div>'
     + '</div>'
     + '<div class="section-title">&#128203; Datos de la nota</div>'
     + '<table><tbody>'
-    +   '<tr><td style="width:130px;font-weight:700;color:#475569">Fecha</td><td>'+fmtF(n.fecha)+'</td><td style="width:130px;font-weight:700;color:#475569">Tipo</td><td><span class="tag tag-blue">'+n.tipo+'</span></td></tr>'
+    +   '<tr><td style="width:130px;font-weight:700;color:#475569">Fecha</td><td>'+fmtF(n.fecha)+'</td><td style="width:130px;font-weight:700;color:#475569">Tipo</td><td><span class="tag tag-blue">'+escAttr(n.tipo)+'</span></td></tr>'
     +   '<tr><td style="font-weight:700;color:#475569">N&deg; Nota</td><td>NC-'+n.id+'</td><td style="font-weight:700;color:#475569">Profesional</td><td>'+escAttr(profesionalNombre)+(conCodigo?'<br><span style="font-size:11px;color:#64748B">'+_etiquetaCodigoMedico(true)+' '+escAttr(n.profesionalCodigo)+'</span>':'')+'</td></tr>'
     + '</tbody></table>'
     + _signosPrintHTML(n.signos)
     + (n.contenido ? '<div class="section-title">&#128203; Contenido de la nota</div>'
-        + '<div class="note-box" style="border-left-color:'+tipoColor+'"><div class="note-body">'+n.contenido+'</div></div>' : '')
+        + '<div class="note-box" style="border-left-color:'+tipoColor+'"><div class="note-body">'+escAttr(n.contenido)+'</div></div>' : '')
     + '<div class="sig-wrap"><div class="sig-box">'+_firmaImgUrlHTML(profesionalFirma,46)+'<div class="sig-line"></div>'
     +   '<div class="sig-name">'+escAttr(profesionalNombre)+'</div>'
     +   (profesionalEspecialidad?'<div class="sig-role">'+escAttr(profesionalEspecialidad)+'</div>':'')
-    +   (conCodigo?'<div class="sig-role">'+_etiquetaCodigoMedico(true)+' '+escAttr(n.profesionalCodigo)+'</div>':(cfg.registro?'<div class="sig-role">Reg. Med. '+cfg.registro+'</div>':''))
+    +   (conCodigo?'<div class="sig-role">'+_etiquetaCodigoMedico(true)+' '+escAttr(n.profesionalCodigo)+'</div>':(cfg.registro?'<div class="sig-role">Reg. Med. '+escAttr(cfg.registro)+'</div>':''))
     + '</div></div>';
   pdfAbrir('Nota Clínica — '+(n.titulo||n.tipo), body, cfg);
 }
@@ -9558,7 +9618,7 @@ async function renderRedClinica(cl) {
     if(!acceso) actual.innerHTML = `<div class="balance-aviso">🛠️ Falta ejecutar <strong>migracion_acceso_red.sql</strong> en Supabase. Hasta entonces la restricción no se aplica.</div>`;
     else if(!acceso.ip) actual.innerHTML = `<div class="balance-aviso">⚠️ La base no está recibiendo la IP de las conexiones: la restricción <strong>no se aplicaría</strong>. No registres IPs hasta resolverlo.</div>`;
     else actual.innerHTML = `<span>IP desde la que estás ahora: <code>${escAttr(acceso.ip)}</code></span>
-      <button type="button" class="btn btn-secondary btn-sm" onclick="agregarIpRed('${escAttr(acceso.ip)}')">+ Añadir esta red</button>`;
+      <button type="button" class="btn btn-secondary btn-sm" onclick="agregarIpRed(${_jsArg(acceso.ip)})">+ Añadir esta red</button>`;
   }
 
   // Quién intentó entrar desde fuera: cuando el proveedor cambia la IP de la
@@ -9580,7 +9640,7 @@ async function renderRedClinica(cl) {
     [...porIp.values()].map(g => `<div class="red-bloqueo">
       <div><code>${escAttr(g.ip||'IP desconocida')}</code>
         <small>${escAttr([...g.nombres].join(', '))} · ${g.veces} vez${g.veces!==1?'es':''} · último ${formatFecha(String(g.ultima).slice(0,10))}</small></div>
-      ${g.ip ? `<button type="button" class="btn btn-secondary btn-sm" onclick="agregarIpRed('${escAttr(g.ip)}')">Permitir esta IP</button>` : ''}
+      ${g.ip ? `<button type="button" class="btn btn-secondary btn-sm" onclick="agregarIpRed(${_jsArg(g.ip)})">Permitir esta IP</button>` : ''}
     </div>`).join('');
 }
 
@@ -9901,12 +9961,12 @@ function renderAtendidos(fecha) {
   }
   lista.innerHTML = citas.map(c => {
     const p = C.p.find(x => x.id === c.pacienteId);
-    return `<div class="atendido-item ${c.estado}">
+    return `<div class="atendido-item ${escAttr(c.estado)}">
       <div class="atendido-time">${c.hora}</div>
       <div class="patient-avatar" style="background:${colAvatar(c.pacienteId||0)};width:38px;height:38px;font-size:13px;flex-shrink:0">${p?ini(p.nombre,p.apellidos):'?'}</div>
       <div class="atendido-info">
         <div class="atendido-name">${p?p.nombre+' '+p.apellidos:'Desconocido'}</div>
-        <div class="atendido-sub">${c.motivo} · <span class="tag tag-cyan" style="font-size:10px;padding:2px 7px">${c.tipo}</span></div>
+        <div class="atendido-sub">${escAttr(c.motivo)} · <span class="tag tag-cyan" style="font-size:10px;padding:2px 7px">${c.tipo}</span></div>
       </div>
       ${estadoTag(c.estado)}
       <div class="actions-cell">
@@ -9969,7 +10029,7 @@ function verResumenCita(citaId) {
         <div class="rc-field"><span>Hora</span><strong>${c.hora}</strong></div>
         <div class="rc-field"><span>Tipo de consulta</span><strong>${c.tipo}</strong></div>
         <div class="rc-field"><span>Estado</span><strong>${estadoIcon} ${c.estado}</strong></div>
-        ${(currentClinica?.tipo !== 'optica' && c.motivo) ? `<div class="rc-field full"><span>Motivo de Consulta</span><strong>${c.motivo}</strong></div>` : ''}
+        ${(currentClinica?.tipo !== 'optica' && c.motivo) ? `<div class="rc-field full"><span>Motivo de Consulta</span><strong>${escAttr(c.motivo)}</strong></div>` : ''}
         ${c.notas?`<div class="rc-field full"><span>Observaciones / Indicaciones de la cita</span><strong style="white-space:pre-wrap;font-weight:500">${c.notas}</strong></div>`:''}
       </div>
     </div>
@@ -10680,7 +10740,7 @@ function buscarPacienteEnModal(q) {
   el.innerHTML = matches.map(p => `
     <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--card);border-radius:8px;margin-bottom:6px;border:1.5px solid var(--primary)">
       <div>
-        <div style="font-weight:700;font-size:13px">${p.nombre} ${p.apellidos}</div>
+        <div style="font-weight:700;font-size:13px">${escAttr(p.nombre+' '+p.apellidos)}</div>
         <div style="font-size:11px;color:var(--text-light)">${p.identificacion||''} · ${calcEdad(p.fechaNac)}</div>
       </div>
       <button onclick="closeModal('modal-paciente');navigate('paciente-detalle',${p.id})" class="btn btn-secondary btn-sm">Ver expediente</button>
@@ -10706,7 +10766,7 @@ function globalSearch(q){
     return;
   }
   const r=C.p.filter(p=>`${p.nombre} ${p.apellidos} ${p.identificacion||''} ${p.telefono||''}`.toLowerCase().includes(t)).slice(0,6);
-  dd.innerHTML=r.length?r.map(p=>`<div class="search-result-item" onclick="selectSearchResult(${p.id})"><div class="patient-avatar" style="background:${colAvatar(p.id)};width:30px;height:30px;font-size:11px">${ini(p.nombre,p.apellidos)}</div><div><div style="font-weight:600;font-size:13px">${p.nombre} ${p.apellidos}</div><div class="text-light">${p.identificacion||''} ${p.telefono||''}</div></div></div>`).join(''):'<p style="padding:12px 16px;color:var(--text-light);font-size:13px">Sin resultados</p>';
+  dd.innerHTML=r.length?r.map(p=>`<div class="search-result-item" onclick="selectSearchResult(${p.id})"><div class="patient-avatar" style="background:${colAvatar(p.id)};width:30px;height:30px;font-size:11px">${escAttr(ini(p.nombre,p.apellidos))}</div><div><div style="font-weight:600;font-size:13px">${escAttr(p.nombre+' '+p.apellidos)}</div><div class="text-light">${escAttr(p.identificacion||'')} ${escAttr(p.telefono||'')}</div></div></div>`).join(''):'<p style="padding:12px 16px;color:var(--text-light);font-size:13px">Sin resultados</p>';
   dd.style.display='block';
 }
 function selectSearchResult(id){ document.getElementById('global-search').value=''; document.getElementById('search-dropdown').style.display='none'; navigate('paciente-detalle',id); }
@@ -10758,8 +10818,8 @@ function filterPacSug(q, prefix) {
   if(!matches.length) {
     if(prefix === 'c' && q2.length >= 1) {
       sug.innerHTML =
-        '<div style="padding:8px 14px;font-size:12px;color:var(--text-light);border-bottom:1px solid var(--border)">Sin resultados para "'+q+'"</div>'
-        + '<div style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;background:var(--primary-light);border-radius:0 0 10px 10px" onmousedown="nuevoPacienteParaCita(\''+q.replace(/'/g,"\\'")+'\')">'
+        '<div style="padding:8px 14px;font-size:12px;color:var(--text-light);border-bottom:1px solid var(--border)">Sin resultados para "'+escAttr(q)+'"</div>'
+        + '<div style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;background:var(--primary-light);border-radius:0 0 10px 10px" onmousedown="nuevoPacienteParaCita('+_jsArg(q)+')">'
         + '<span style="font-size:20px;flex-shrink:0">➕</span>'
         + '<div><div style="font-size:13px;font-weight:700;color:var(--primary)">Registrar como nuevo paciente</div>'
         + '<div style="font-size:11px;color:var(--primary);opacity:.8">Crea el expediente y abre la cita automáticamente</div></div>'
@@ -10771,10 +10831,10 @@ function filterPacSug(q, prefix) {
     return;
   }
   sug.innerHTML = matches.map(p =>
-    '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s" onmouseenter="this.style.background=\'var(--primary-light)\'" onmouseleave="this.style.background=\'\'" onmousedown="selectPac(\''+prefix+'\','+p.id+',\''+((p.nombre+' '+p.apellidos).replace(/'/g,'\\\''))+'\')">'
-    + '<div style="width:32px;height:32px;border-radius:50%;background:'+colAvatar(p.id)+';display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;flex-shrink:0">'+ini(p.nombre,p.apellidos)+'</div>'
-    + '<div><div style="font-size:13px;font-weight:600;color:var(--text)">'+p.nombre+' '+p.apellidos+'</div>'
-    + '<div style="font-size:11px;color:var(--text-light)"><span style="color:var(--primary);font-weight:600">'+getExpedienteNum(p.id)+'</span>'+(p.identificacion?' · '+p.identificacion:'')+(p.telefono?' · '+p.telefono:'')+'</div></div>'
+    '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s" onmouseenter="this.style.background=\'var(--primary-light)\'" onmouseleave="this.style.background=\'\'" onmousedown="selectPac('+_jsArg(prefix)+','+p.id+','+_jsArg(p.nombre+' '+p.apellidos)+')">'
+    + '<div style="width:32px;height:32px;border-radius:50%;background:'+colAvatar(p.id)+';display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;flex-shrink:0">'+escAttr(ini(p.nombre,p.apellidos))+'</div>'
+    + '<div><div style="font-size:13px;font-weight:600;color:var(--text)">'+escAttr(p.nombre+' '+p.apellidos)+'</div>'
+    + '<div style="font-size:11px;color:var(--text-light)"><span style="color:var(--primary);font-weight:600">'+escAttr(getExpedienteNum(p.id))+'</span>'+(p.identificacion?' · '+escAttr(p.identificacion):'')+(p.telefono?' · '+escAttr(p.telefono):'')+'</div></div>'
     + '</div>'
   ).join('');
   sug.style.display = 'block';
@@ -11295,9 +11355,8 @@ function renderAgendaCalendar(containerId, citaCount, profId) {
 }
 
 function agendaCalNav(dir, profId) {
-  const d=new Date(selAgendasDate+'T12:00:00');
   if(dir===0) selAgendasDate=hoy();
-  else d.setMonth(d.getMonth()+dir), selAgendasDate=fechaLocal(d);
+  else selAgendasDate=_mismoDiaOtroMes(selAgendasDate, dir);
   renderAgendasRight();
 }
 
@@ -11325,11 +11384,11 @@ function renderAgendaDayCitas(containerId, citas, profId) {
   const libres = Math.max(0, totalSlots - ocupadas);
   el.innerHTML = citas.map(c=>{
     const p=_sujetoCita(c);
-    return `<div class="agenda-slot ${c.estado}" onclick="verResumenCita(${c.id})">
+    return `<div class="agenda-slot ${escAttr(c.estado)}" onclick="verResumenCita(${c.id})">
       <div style="font-size:12px;font-weight:800;color:var(--primary);min-width:68px;white-space:nowrap">${formatHora12(c.hora||'')}</div>
       <div style="flex:1;min-width:0">
         <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p?p.titulo:'Paciente'}</div>
-        <div style="font-size:11px;color:var(--text-light);margin-top:2px">${c.motivo}</div>
+        <div style="font-size:11px;color:var(--text-light);margin-top:2px">${escAttr(c.motivo)}</div>
       </div>
       ${estadoTag(c.estado)}
     </div>`;
@@ -11842,7 +11901,7 @@ async function guardarProducto(){
 
 async function eliminarProducto(id){
   const p=C.inv.find(x=>x.id===id);
-  const ok=await customConfirm({icon:'📦',title:'Eliminar producto',msg:`¿Eliminar <strong>${p?.nombre}</strong>?<br><br>También se eliminarán todos sus movimientos de inventario.`,okText:'Eliminar'});
+  const ok=await customConfirm({icon:'📦',title:'Eliminar producto',msg:`¿Eliminar <strong>${escAttr(p?.nombre)}</strong>?<br><br>También se eliminarán todos sus movimientos de inventario.`,okText:'Eliminar'});
   if(!ok) return;
   setLoading(true);
   const{error}=await sb.from('inventario').delete().eq('id',id);
@@ -14971,7 +15030,7 @@ function renderCatalogoDerma(filtro) {
         <span style="flex-shrink:0;color:var(--text-light);font-size:11px">${g.abierto?'▲':'▼'}</span>
       </button>
       ${g.abierto ? `<div style="padding:6px">${g.dxs.map(d => `
-        <button type="button" onclick="elegirDxDerma('${escAttr(d).replace(/'/g,"\\'")}')" style="display:block;width:100%;text-align:left;padding:9px 12px;background:none;border:none;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;color:var(--text);min-height:40px"
+        <button type="button" onclick="elegirDxDerma(${_jsArg(d)})" style="display:block;width:100%;text-align:left;padding:9px 12px;background:none;border:none;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;color:var(--text);min-height:40px"
           onmouseover="this.style.background='var(--primary-light)'" onmouseout="this.style.background='none'">${escAttr(d)}</button>`).join('')}</div>` : ''}
     </div>`).join('');
 }
@@ -15006,7 +15065,7 @@ function mostrarSugerenciasDx(query) {
     if(!dxs.length){ el.style.display='none'; return; }
     el.style.display = 'block';
     el.innerHTML = dxs.map(d =>
-      `<div onmousedown="seleccionarDx('${d.label.replace(/'/g,"\\'")}')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:2px" onmouseover="this.style.background='var(--primary-light)'" onmouseout="this.style.background=''">
+      `<div onmousedown="seleccionarDx(${_jsArg(d.label)})" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:2px" onmouseover="this.style.background='var(--primary-light)'" onmouseout="this.style.background=''">
         <span style="font-weight:600;font-size:13px">\u{1FA79} ${escAttr(d.label)}</span>
         <span style="font-size:11px;color:var(--text-light)">${escAttr(d.cat)}</span>
       </div>`
@@ -15018,7 +15077,7 @@ function mostrarSugerenciasDx(query) {
     if(!procs.length){ el.style.display='none'; return; }
     el.style.display = 'block';
     el.innerHTML = procs.map(p =>
-      `<div onmousedown="seleccionarDx('${p.label.replace(/'/g,"\\'")}')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:2px" onmouseover="this.style.background='var(--primary-light)'" onmouseout="this.style.background=''">
+      `<div onmousedown="seleccionarDx(${_jsArg(p.label)})" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:2px" onmouseover="this.style.background='var(--primary-light)'" onmouseout="this.style.background=''">
         <span style="font-weight:600;font-size:13px">🦷 ${p.label}</span>
         <span style="font-size:11px;color:var(--text-light)">${p.cat}</span>
       </div>`
@@ -15030,7 +15089,7 @@ function mostrarSugerenciasDx(query) {
   el.style.display = 'block';
   el.innerHTML = dxs.map(dx =>
     `<div style="padding:10px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border);transition:background .15s;display:flex;align-items:center;gap:8px"
-      onmousedown="seleccionarDx('${dx.replace(/'/g,"\\'")}')">
+      onmousedown="seleccionarDx(${_jsArg(dx)})">
       <span style="font-size:16px">🩺</span>
       <span>${dx}</span>
     </div>`
@@ -16118,7 +16177,7 @@ function _armarDocumentoPdf(titulo, body, cfg={}) {
   cfg = {...getClinicaConfig(), ...cfg};
   return {
     titulo,
-    html:`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>${titulo}</title>
+    html:`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>${escAttr(titulo)}</title>
     <style>${PDF_CSS}</style></head><body>
     <div class="page">${pdfHeader(cfg)}${body}${pdfFooter(cfg)}</div>
     </body></html>`,
@@ -19418,7 +19477,7 @@ function renderConfigCategorias() {
       <div class="cats-fin-lista">
         ${fabrica.map(c=>`<span class="cats-fin-chip fija" title="De fábrica">${c.icon||'🏷️'} ${escAttr(c.label)}</span>`).join('')}
         ${propias.map(c=>`<span class="cats-fin-chip propia">${c.icon||'🏷️'} ${escAttr(c.label)}
-          <button type="button" onclick="quitarCategoriaFin('${tipo}','${escAttr(c.id)}')" title="Quitar" aria-label="Quitar ${escAttr(c.label)}">✕</button></span>`).join('')}
+          <button type="button" onclick="quitarCategoriaFin('${tipo}',${_jsArg(c.id)})" title="Quitar" aria-label="Quitar ${escAttr(c.label)}">✕</button></span>`).join('')}
       </div>
       <div class="cats-fin-add">
         <input type="text" id="cat-nueva-${tipo}" maxlength="30" placeholder="Añadir categoría de ${tipo==='ingreso'?'ingreso':'gasto'}…"
@@ -20169,7 +20228,7 @@ function openModalFactura(citaId=null, pacienteId=null) {
   document.getElementById('fact-notas').value = '';
   const sel = document.getElementById('fact-paciente');
   sel.innerHTML = '<option value="">Consumidor Final</option>' +
-    C.p.map(p=>`<option value="${p.id}"${p.id==pacienteId?' selected':''}>${p.nombre} ${p.apellidos}</option>`).join('');
+    C.p.map(p=>`<option value="${p.id}"${p.id==pacienteId?' selected':''}>${escAttr(p.nombre+' '+p.apellidos)}</option>`).join('');
   renderFacturaItemsUI();
   calcFacturaTotals();
   document.getElementById('modal-factura').classList.add('open');
@@ -21142,10 +21201,7 @@ let expSearchTerm = '';
 
 async function generarExpediente(pid) {
   if(!currentClinicaId) return;
-  const initials = (currentClinica?.codigo||currentClinica?.nombre||'EXP').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,4);
-  const year = new Date().getFullYear();
-  const seq = C.p.filter(p=>p.expediente).length + 1;
-  const numExp = `${initials}-${String(seq).padStart(3,'0')}`;
+  const numExp = await _siguienteExpediente();
   const { error } = await sb.from('pacientes').update({expediente:numExp}).eq('id',pid);
   if(error){ toast('Error al asignar: '+error.message,'error'); return; }
   await loadAll(); renderExpedientes();
@@ -21184,7 +21240,7 @@ function filtrarExpedientes(q) {
             : `<button class="btn btn-sm btn-secondary" onclick="generarExpediente(${p.id})" style="padding:3px 10px;font-size:11px">Asignar N°</button>`
           }</td>
           <td>
-            <div style="font-weight:600">${p.nombre} ${p.apellidos}</div>
+            <div style="font-weight:600">${escAttr(p.nombre+' '+p.apellidos)}</div>
             <div style="font-size:12px;color:var(--text-light)">${p.telefono||'Sin teléfono'}</div>
           </td>
           <td>${edad !== '—' ? edad + ' años' : '—'}</td>
@@ -21268,7 +21324,7 @@ function renderExpedienteHistorialPDF(pacienteId) {
       <tbody>${citas.map(c=>`<tr style="border-bottom:1px solid #f1f5f9">
         <td style="padding:7px 10px">${formatFecha(c.fecha)} ${c.hora||''}</td>
         <td style="padding:7px 10px">${c.tipo||'consulta'}</td>
-        <td style="padding:7px 10px">${c.motivo||'—'}</td>
+        <td style="padding:7px 10px">${escAttr(c.motivo||'—')}</td>
         <td style="padding:7px 10px">${c.estado||'—'}</td>
       </tr>`).join('')}</tbody>
     </table>` : '';
@@ -22359,7 +22415,7 @@ function _pintarMascotas() {
   const chips = document.getElementById('mascotas-chips');
   if(chips) chips.innerHTML = especies.length
     ? `<span class="chip${!_filtroEspecie?' active':''}" onclick="setFiltroEspecie('')">Todas</span>`
-      + especies.map(e => `<span class="chip${_filtroEspecie===e?' active':''}" onclick="setFiltroEspecie('${escAttr(e)}')">${especieIcon(e)} ${escAttr(e)}</span>`).join('')
+      + especies.map(e => `<span class="chip${_filtroEspecie===e?' active':''}" onclick="setFiltroEspecie(${_jsArg(e)})">${especieIcon(e)} ${escAttr(e)}</span>`).join('')
     : '';
 
   const cnt = document.getElementById('mascotas-count');
@@ -22659,7 +22715,7 @@ function renderDetalleMascota(mid) {
       const [,mm,dd] = c.fecha.split('-');
       const MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
       const veterinario = C.prof.find(pr => pr.id === c.medicoId);
-      return `<div class="cita-item ${c.estado}" style="gap:10px;flex-wrap:wrap">
+      return `<div class="cita-item ${escAttr(c.estado)}" style="gap:10px;flex-wrap:wrap">
         <div style="width:38px;flex-shrink:0;text-align:center;background:var(--primary-light);border-radius:8px;padding:5px 2px">
           <div style="font-size:13px;font-weight:800;color:var(--primary);line-height:1">${dd}</div>
           <div style="font-size:10px;color:var(--primary);text-transform:uppercase;font-weight:600">${MESES[parseInt(mm)-1]}</div>
@@ -22905,7 +22961,7 @@ function _citaBloqueHTML(c, rango, paso, colIdx, carril, carriles) {
   const s = _sujetoCita(c);
   const solapada = carriles > 1 ? ' solapada' : '';
   const noClinico = _esServicioNoClinico(c.tipo) ? ' no-clinico' : '';
-  return `<div class="cal-ev ${c.estado}${solapada}${noClinico}"
+  return `<div class="cal-ev ${escAttr(c.estado)}${solapada}${noClinico}"
     style="grid-column:${colIdx + 2};grid-row:${fila} / span ${filas};--carril:${carril};--carriles:${carriles}"
     onclick="verResumenCita(${c.id})" title="${escAttr((s?s.titulo+' · ':'') + (c.motivo||''))}">
     <div class="cal-ev-hora">${formatHora12(c.hora)}</div>
@@ -23084,7 +23140,7 @@ function _semanaListaHTML(dias, citas) {
       <div class="wk-dia-tit">${DOW[i]} ${formatFecha(f)}</div>
       ${delDia.map(c => {
         const s = _sujetoCita(c);
-        return `<div class="cita-item ${c.estado}" style="gap:10px" onclick="verResumenCita(${c.id})">
+        return `<div class="cita-item ${escAttr(c.estado)}" style="gap:10px" onclick="verResumenCita(${c.id})">
           <div class="cita-time">${formatHora12(c.hora)}</div>
           <div style="flex:1;min-width:0">
             <div class="cita-paciente">${escAttr(s?s.titulo:'Cita')}</div>
@@ -23142,7 +23198,7 @@ function cancelarCita(id) {
     `${formatFecha(c.fecha)} a las <strong>${formatHora12(c.hora)}</strong>${s?` · ${escAttr(s.titulo)}`:''}`;
   document.getElementById('cc-motivo').value = '';
   document.getElementById('cc-motivos').innerHTML = MOTIVOS_CANCELACION
-    .map(m => `<span class="chip" onclick="document.getElementById('cc-motivo').value='${escAttr(m)}'">${escAttr(m)}</span>`).join('');
+    .map(m => `<span class="chip" onclick="document.getElementById('cc-motivo').value=${_jsArg(m)}">${escAttr(m)}</span>`).join('');
   openModalOverlay('modal-cancelar-cita');
 }
 
