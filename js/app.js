@@ -8119,7 +8119,7 @@ async function _guardarMachoteConFormato(nombre, tipo, { comoCopia=false } = {})
     aplicarPlantillaNota(nueva.id, null, true);
     if(soloTexto) toast('Machote guardado solo como texto: falta ejecutar migracion_machotes_formato.sql en Supabase para conservar tablas y gráficas', 'warning');
     else if(avisoVersion) toast('Machote guardado.' + avisoVersion, 'warning');
-    else toast(!editando ? 'Machote con formato guardado ✅' : comoCopia ? `Copia «${nombre}» guardada ✅` : 'Machote actualizado ✅');
+    else toast(!editando ? 'Machote con formato guardado ✅' : comoCopia ? `Copia «${escAttr(nombre)}» guardada ✅` : 'Machote actualizado ✅');
   } catch(e) {
     if(subidas.length) try { await sb.storage.from(STORAGE_BUCKET).remove(subidas); } catch(_) {}
     const msg = String(e?.message || e || '');
@@ -19383,7 +19383,7 @@ async function migrarUsuariosAAuth() {
   if(log) { log.style.display = 'block'; log.innerHTML = ''; }
 
   const addLog = (msg, ok=true) => {
-    if(log) log.innerHTML += `<div style="color:${ok?'#10B981':'#EF4444'}">${msg}</div>`;
+    if(log) log.innerHTML += `<div style="color:${ok?'#10B981':'#EF4444'}">${escAttr(msg)}</div>`;
   };
 
   let migrados = 0, errores = 0, desalineados = 0;
