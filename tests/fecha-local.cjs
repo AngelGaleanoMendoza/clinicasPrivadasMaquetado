@@ -27,9 +27,9 @@ global.Date=RealDate;
 assert.equal(fechaLocal(new Date(2026,0,5)),'2026-01-05','Rellena mes y día con cero');
 assert.equal(fechaLocal(new Date('2026-03-10T12:00:00')),'2026-03-10');
 
-// Ninguna cuenta de días vuelve a pasar por UTC (salvo las dos que parten de
-// una fecha leída como UTC, en el vencimiento del inventario).
+// Ninguna cuenta de días vuelve a pasar por UTC: la alerta de vencimiento del
+// inventario también se calcula ya en hora local (_fechaAlertaVenc).
 const restos=source.split('\n').filter(l=>/toISOString\(\)\.split\('T'\)\[0\]/.test(l));
-assert.equal(restos.length,2,'Quedan cuentas de fecha en UTC:\n'+restos.join('\n'));
+assert.equal(restos.length,0,'Quedan cuentas de fecha en UTC:\n'+restos.join('\n'));
 assert(restos.every(l=>/alerta|alertStr/i.test(l)),'Solo las de la alerta de vencimiento');
 console.log('OK: hoy() en hora local de la clínica, de noche, de madrugada, fin de año, y sin fechas de día en UTC.');

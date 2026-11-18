@@ -45,6 +45,7 @@ const preambulo=`
   const CATEGORIA_PAGO_PROFESIONAL='pago_profesionales';
   let finTab='balance', finPeriodo='mes';
   ${extraer('navigate')}
+  ${extraer('puedeAbrirFarmacia')}
   const pdfAbrir=(titulo,body)=>__pdf.push({titulo,body});
   const descargarDocumento=fn=>fn();
   const formatFecha=f=>f;
