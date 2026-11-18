@@ -81,10 +81,11 @@ const LibroDiario = (() => {
     }
   }
 
-  function abrir() {
+  function abrir(anio) {
     if(!hasPermiso('contabilidad') || !_exigeClinica()) return;
-    el('hasta').value = hoy();
-    el('desde').value = hoy().slice(0,4)+'-01-01';
+    const year = /^\d{4}$/.test(anio) ? String(anio) : hoy().slice(0,4);
+    el('hasta').value = year === hoy().slice(0,4) ? hoy() : year+'-12-31';
+    el('desde').value = year+'-01-01';
     openModalOverlay(idModal);
     void consultar();
   }

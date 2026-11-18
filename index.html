@@ -977,10 +977,26 @@
             <button class="tab"        id="tab-fin-gastos"        onclick="switchFinTab('gastos')">📤 Gastos</button>
             <button class="tab"        id="tab-fin-transacciones" onclick="switchFinTab('transacciones')">🔄 Transacciones</button>
             <button class="tab"        id="tab-fin-facturas"      onclick="switchFinTab('facturas')" data-doc="plural">🧾 Facturas</button>
+            <button class="tab" id="tab-fin-caja" hidden onclick="switchFinTab('caja')">Caja</button>
             <button class="tab"        id="tab-fin-balance"       onclick="switchFinTab('balance')">⚖️ Balance</button>
           </div>
         </div>
 
+        <section id="fin-panel-caja" class="card" style="display:none">
+          <div class="card-header">
+            <h3>Caja e ingresos iniciales</h3>
+            <label>Año <select id="caja-anio" onchange="CajaEmpresa.mostrar()"></select></label>
+            <label>Agrupar por <select id="caja-periodo" onchange="CajaEmpresa.mostrar()">
+              <option value="mes">Mes</option><option value="semana">Semana</option><option value="dia">Día</option>
+            </select></label>
+          </div>
+          <div class="card-body">
+            <p id="caja-estado" role="status"></p>
+            <div id="caja-datos"></div>
+            <button class="btn btn-secondary btn-sm" id="caja-libros" onclick="CajaEmpresa.abrirLibros()">Diario y balanza de comprobación</button>
+            <button class="btn btn-secondary btn-sm" id="caja-expediente" onclick="ExcelImportacion.abrir()">Expediente y auxiliares</button>
+          </div>
+        </section>
         <!-- Panel Resumen -->
         <div id="fin-panel-resumen">
           <div class="stats-grid" id="fin-stats" style="margin-bottom:18px"></div>
@@ -3240,10 +3256,11 @@
     </div>
   </section>
 </div>
-<script src="js/app.js?v=20261118b" defer></script>
+<script src="js/app.js?v=20261118caja" defer></script>
 <script src="js/reportes-zip.js?v=20261118diario" defer></script>
-<script src="js/importar-excel.js?v=20261118expediente" defer></script>
-<script src="js/libro-diario.js?v=20261118diario" defer></script>
+<script src="js/importar-excel.js?v=20261118caja" defer></script>
+<script src="js/libro-diario.js?v=20261118caja" defer></script>
+<script src="js/caja-empresa.js?v=20261118" defer></script>
 <div class="modal-overlay" id="modal-libro-diario">
   <section class="modal modal-lg libro-diario" role="dialog" aria-modal="true" aria-labelledby="libro-diario-titulo">
     <h2 id="libro-diario-titulo">Libro diario y balanza de comprobación</h2>

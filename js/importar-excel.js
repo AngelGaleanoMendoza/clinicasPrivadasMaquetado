@@ -241,7 +241,7 @@ const ExcelImportacion = (() => {
         if (archivo.size > 5 * 1024 * 1024) throw new Error('Supera el máximo de 5 MB por archivo.');
         const hojas = await leerArchivo(archivo);
         const clasificadas = hojas.map(h => detectar({...h, archivo:archivo.name, encabezado:h.filas[0]?.numero, tipo:'', mapa:{}, fijos:{}}));
-        if (clasificadas.some(h => h.fiscal)) e.respaldos.push(archivo);
+        if (clasificadas.some(h => h.fiscal || h.control || h.tipo === 'diario')) e.respaldos.push(archivo);
         e.hojas.push(...clasificadas);
       } catch (error) {
         errores.push(archivo.name + ' · ' + error.message);
@@ -941,17 +941,22 @@ const ExcelImportacion = (() => {
     }
   }
 
+  async function originalFiscal(clinica,id) {
+    const {data,error} = await sb.from('expediente_fiscal_excel').select('contenido').eq('clinica_id',clinica).eq('id',id).single();
+    if (error) throw error;
+    const hex = data.contenido.slice(2);
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.slice(i*2,i*2+2),16);
+    return bytes;
+  }
+
   async function descargarOriginal(indice) {
     const e = estado;
     const doc = e?.documentos[indice];
     if (!doc || !activo(e)) return;
     try {
-      const {data,error} = await sb.from('expediente_fiscal_excel').select('contenido').eq('clinica_id',e.clinica).eq('id',doc.id).single();
+      const bytes = await originalFiscal(e.clinica,doc.id);
       if (!activo(e)) return;
-      if (error) throw error;
-      const hex = data.contenido.slice(2);
-      const bytes = new Uint8Array(hex.length / 2);
-      for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.slice(i*2,i*2+2),16);
       descargar(bytes, doc.archivo.split('/').pop(), 'application/octet-stream');
     } catch (error) { if (activo(e)) mensaje('No se pudo descargar el original. ' + error.message,true); }
   }
@@ -987,7 +992,7 @@ const ExcelImportacion = (() => {
     descargar(JSON.stringify({...lote, filas:data}, null, 2), 'importacion-' + lote.id + '.json', 'application/json');
   }
 
-  return {abrir,cerrar,cargar,cambiar,plantilla,historial,comprobante,archivar,descargarOriginal,
+  return {abrir,cerrar,cargar,cambiar,plantilla,historial,comprobante,archivar,descargarOriginal,leerArchivo,originalFiscal,
     revisar:() => estado && solicitar(estado,false),
     confirmar:() => estado && solicitar(estado,true),
     // Para pruebas: el reconocimiento y la lectura de valores sin interfaz.

@@ -19706,8 +19706,12 @@ function switchFinTab(tab) {
     toast('El balance solo está disponible para el médico administrativo o el administrador de la empresa','warning');
     tab = 'resumen';
   }
+  const accesoCaja = esEmpresaMedica() && puedeVerBalance() && hasPermiso('finanzas');
+  document.getElementById('tab-fin-caja').hidden = !accesoCaja;
+  if (tab === 'caja' && !accesoCaja) tab = 'resumen';
+  document.getElementById('fin-periodo-chips').style.display = tab === 'caja' ? 'none' : '';
   finTab = tab;
-  ['resumen','ingresos','gastos','transacciones','facturas','balance'].forEach(t => {
+  ['resumen','ingresos','gastos','transacciones','facturas','balance','caja'].forEach(t => {
     const p = document.getElementById('fin-panel-'+t);
     const b = document.getElementById('tab-fin-'+t);
     if(p) p.style.display = t===tab ? 'block' : 'none';
@@ -19715,6 +19719,7 @@ function switchFinTab(tab) {
   });
   const btnPdf = document.getElementById('btn-pdf-resumen-fin');
   if(btnPdf) btnPdf.style.display = tab === 'resumen' ? '' : 'none';
+  if(tab==='caja') CajaEmpresa.cargar();
   if(tab==='resumen') renderResumenFinanzas();
   else if(tab==='ingresos') renderIngresosFinanzas();
   else if(tab==='gastos') renderGastosFinanzas();
