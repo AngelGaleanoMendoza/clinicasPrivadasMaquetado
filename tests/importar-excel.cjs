@@ -34,6 +34,10 @@ async function crearBase() {
     CREATE TABLE ventas(id bigserial PRIMARY KEY,clinica_id bigint,cliente_id bigint REFERENCES clientes_comerciales(id),numero text NOT NULL,
       fecha date,subtotal numeric(14,2),iva_pct numeric(5,2),iva numeric(14,2),total numeric(14,2),condicion text,vencimiento date,
       estado text,notas text,creado_por text,UNIQUE(clinica_id,numero));
+    CREATE TABLE venta_items(id bigserial PRIMARY KEY,venta_id bigint REFERENCES ventas(id),clinica_id bigint,descripcion text,
+      cantidad numeric(14,3),precio_unitario numeric(14,4),costo_unitario numeric(14,4),subtotal numeric(14,2));
+    CREATE TABLE venta_cobros(id bigserial PRIMARY KEY,venta_id bigint REFERENCES ventas(id),clinica_id bigint,fecha date,monto numeric(14,2),
+      metodo_pago text,referencia text,creado_por text);
     CREATE TABLE compras(id bigserial PRIMARY KEY,clinica_id bigint,proveedor_id bigint REFERENCES proveedores(id),fecha date,numero_factura text,
       metodo_pago text,subtotal numeric(14,2),iva numeric(14,2),iva_pct numeric(5,2),total numeric(14,2),condicion text,vencimiento date,
       estado text DEFAULT 'registrada',notas text,creado_por text);
@@ -130,6 +134,18 @@ async function verificarMigracion(db) {
   assert.deepEqual((await db.query('SELECT nombre,dias_credito FROM clientes_comerciales')).rows,[{nombre:'Clínica Sur',dias_credito:45}]);
   assert.deepEqual((await db.query('SELECT nombre,identificacion,telefono FROM proveedores')).rows,[{nombre:'Distribuidora Norte',identificacion:'J0310000001',telefono:'8888 0000'}]);
   assert.equal((await importar(db,filas,true,10)).resumen.duplicadas,5,'Volver a importar el mismo archivo no duplica nada');
+  const factura = destino('facturas',2,{nombre:'Clínica Sur',documento:'H-01',fecha:'2026-10-01',fecha_pago:'2026-10-03',
+    iva_pct:15,total_factura:57.50,lineas:[{descripcion:'Gasas',cantidad:2,precio:25,costo:12}]});
+  const mala = {...factura,datos:{...factura.datos,total_factura:58}};
+  assert.match((await importar(db,[mala],false,10)).filas[0].error,/no coincide/);
+  const repetidaEnApertura = {...factura,datos:{...factura.datos,documento:'F-100'}};
+  assert.match((await importar(db,[repetidaEnApertura],false,10)).filas[0].error,/Ya hay una venta o un saldo/);
+  assert.equal((await importar(db,[factura],true,10)).resumen.facturas,1);
+  assert.equal((await importar(db,[factura],true,10)).resumen.duplicadas,1);
+  assert.deepEqual((await db.query("SELECT total::text,iva::text,saldo_inicial FROM ventas WHERE numero='H-01'")).rows,
+    [{total:'57.50',iva:'7.50',saldo_inicial:false}]);
+  assert.equal((await db.query("SELECT monto::text FROM venta_cobros")).rows[0].monto,'57.50');
+  assert.equal((await db.query("SELECT count(*)::int AS n FROM finanzas WHERE clinica_id=10")).rows[0].n,0);
   await db.exec("INSERT INTO proveedores (clinica_id,nombre) VALUES (10,'Laboratorio Manual')");
   assert.match((await importar(db,[destino('proveedores',5,{nombre:' laboratorio manual '})],false,10)).filas[0].error,/Ya existe un proveedor/);
   await db.exec("SET test.uid='c0000000-0000-0000-0000-000000000001'");
@@ -150,14 +166,22 @@ async function verificarPantalla(db) {
       data:(await (id ? db.query('SELECT * FROM importaciones_excel_filas WHERE lote_id=$1 ORDER BY ordinal',[id])
         : db.query('SELECT * FROM importaciones_excel ORDER BY creado_en DESC'))).rows
     }));
+    await pagina.exposeFunction('leerDiarioPrueba', async (clinica,desde,hasta,balanza) => ({
+      data:(await db.query(balanza ? 'SELECT * FROM balanza_libro_diario($1,$2,$3)'
+        : 'SELECT id,fecha::text,documento,lineas FROM libro_diario WHERE clinica_id=$1 AND fecha BETWEEN $2 AND $3',
+        [clinica,desde,hasta])).rows
+    }));
     await pagina.route('**/*', async ruta => {
       const url = new URL(ruta.request().url());
       if (url.origin !== 'http://app.test') return ruta.abort();
       if (url.pathname === '/') return ruta.fulfill({contentType:'text/html; charset=utf-8',body:html});
       if (url.pathname === '/js/app.js') return ruta.fulfill({contentType:'text/javascript',body:`
-        const sb={rpc:(_,args)=>importarPrueba(args),from:()=>({
+        const sb={rpc:(nombre,args)=>nombre==='balanza_libro_diario' ? {order(){return this;},
+          range:()=>leerDiarioPrueba(args.p_clinica,args.p_desde,args.p_hasta,true)} : importarPrueba(args),from:tabla=>({
           id:null,select(){return this;},eq(k,v){if(k==='lote_id') this.id=v;return this;},order(){return this;},
-          limit(){return recibosPrueba(null);},range(){return recibosPrueba(this.id);}
+          gte(k,v){this.desde=v;return this;},lte(k,v){this.hasta=v;return this;},
+          limit(){return recibosPrueba(null);},range(){return tabla==='libro_diario'
+            ? leerDiarioPrueba(currentClinicaId,this.desde,this.hasta,false) : recibosPrueba(this.id);}
         })};
         const consultarPaginas=fn=>fn().range();
         let currentClinicaId=9,currentClinica={nombre:'Clínica de prueba'},currentUser={id:'u1'},currentView='finanzas',__empresa=false;
@@ -167,6 +191,7 @@ async function verificarPantalla(db) {
         const _categoriasFin=t=>t==='egreso'?[{id:'alquiler',label:'Alquiler'},{id:'general',label:'General'}]:[{id:'consulta',label:'Consulta'},{id:'general',label:'General'}];
         const escAttr=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         const fmtC=x=>'C$ '+x;
+        const formatFecha=f=>f, _exigeClinica=()=>true;
         const openModalOverlay=id=>document.getElementById(id).classList.add('open');
         const closeModal=id=>document.getElementById(id).classList.remove('open');
       `});
@@ -269,7 +294,7 @@ async function verificarPantalla(db) {
     assert.deepEqual(det.decimales,[1250.5,1250.5,15.3333,'error: El número 1,250 es ambiguo: escribe el separador decimal (1250.00 o 1.25).',-300,'error: No se admiten valores negativos.']);
     assert.deepEqual(det.fechas,['2026-11-13','2026-11-13','2026-11-05','error: Usa una fecha válida en formato AAAA-MM-DD o DD/MM/AAAA.']);
     assert.deepEqual(det.libroFila,{fecha:'2026-11-01',descripcion:'Papelería (Oficina)',categoria:'general',monto:50,clase:'egreso'});
-    assert.deepEqual(det.clinicaTipos,['finanzas','productos','movimientos','proveedores','cxp'],'Clientes y cobros solo en una empresa');
+    assert.deepEqual(det.clinicaTipos,['diario','finanzas','productos','movimientos','proveedores','cxp'],'Diario está disponible al tener Contabilidad, también en clínicas');
 
     // ── Migración completa de una empresa: se sube el libro y se reconoce solo ──
     await db.exec("SET test.uid='c0000000-0000-0000-0000-000000000003'");
@@ -283,20 +308,29 @@ async function verificarPantalla(db) {
     agregar('Por cobrar',[['Cartera al 31/10/2026'],['Cliente','Factura','Fecha','Vence','Saldo'],['Hospital Uno','F-900','15/10/2026','14/12/2026','1,500.00']]);
     agregar('Por pagar',[['Proveedor','Factura','Fecha','Saldo'],['Droguería Central','DC-55','2026-10-20',650]]);
     agregar('Gastos',[['Fecha','Concepto','Monto','Categoría'],['2026-11-02','Alquiler local',500,'Alquiler'],['2026-11-03','Papelería',35.5,'Oficina']]);
+    agregar('Facturas de venta',[['Número de factura','Cliente','Fecha de emisión','Descripción de la línea','Cantidad','Precio unitario sin IVA',
+      'Costo unitario histórico','IVA % de la factura','Total de la factura','Vencimiento'],
+      ['H-02','Hospital Uno','2026-10-20','Guantes',2,20,10,'15%',57.5,'2026-11-30'],
+      ['H-02','Hospital Uno','2026-10-20','Mascarillas',1,10,5,'15%',57.5,'2026-11-30']]);
+    agregar('Libro diario',[['Número de asiento','Fecha contable','Código de cuenta','Nombre de cuenta','Debe','Haber','Concepto'],
+      ['AP-01','2026-10-01','001-01','Caja',1000.01,'','Apertura'],
+      ['AP-01','2026-10-01','300-01','Capital','',1000.01,'Apertura']]);
     await pagina.locator('#excel-archivos').setInputFiles({name:'migracion-empresa.xlsx',
       mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:Buffer.from(XLSX.write(libro,{type:'array',bookType:'xlsx'}))});
     await pagina.locator('#excel-confirmar').waitFor().catch(async error => {
       throw new Error(await pagina.locator('#excel-estado').innerText() + '\n' + await pagina.locator('#excel-resultados').innerText(),{cause:error});
     });
-    assert.equal(await pagina.locator('.excel-hoja-lista').count(),6,'Las seis hojas se reconocieron sin tocar nada');
-    assert.equal(await pagina.locator('.excel-detectado').count(),6);
+    assert.equal(await pagina.locator('.excel-hoja-lista').count(),8,'Las ocho hojas se reconocieron sin tocar nada');
+    assert.equal(await pagina.locator('.excel-detectado').count(),8);
     const resumen = await pagina.locator('#excel-resultados .excel-totales').innerText();
-    assert.match(resumen,/^7 nuevas/);
+    assert.match(resumen,/^9 nuevas/);
+    assert.match(resumen,/1 asiento\(s\).*Debe.*Haber/);
+    assert.match(resumen,/1 factura\(s\) histórica/);
     assert.match(resumen,/Gastos C\$ 535.5/);
     assert.match(resumen,/por cobrar: C\$ 1500/);
     assert.match(resumen,/por pagar: C\$ 650/);
     assert.match(resumen,/totales o vacías que no se importan: 1/);
-    assert.match(await pagina.locator('#excel-estado').innerText(),/Se reconocieron 6 hoja\(s\)/);
+    assert.match(await pagina.locator('#excel-estado').innerText(),/Se reconocieron 8 hoja\(s\)/);
     for (const ancho of [360,1280]) {
       await pagina.setViewportSize({width:ancho,height:800});
       await pagina.waitForTimeout(400);   // la ventana se acomoda con una animación al cambiar de ancho
@@ -314,6 +348,36 @@ async function verificarPantalla(db) {
     assert.deepEqual((await db.query("SELECT telefono FROM proveedores WHERE nombre='Droguería Central'")).rows,[{telefono:'22221111'}]);
     assert.deepEqual((await db.query("SELECT dias_credito FROM clientes_comerciales WHERE nombre='Hospital Uno'")).rows,[{dias_credito:60}]);
     assert.deepEqual((await db.query("SELECT total::text,vencimiento::text FROM ventas WHERE numero='SI-F-900'")).rows,[{total:'1500.00',vencimiento:'2026-12-14'}]);
+    assert.deepEqual((await db.query("SELECT i.descripcion,i.subtotal::text FROM venta_items i JOIN ventas v ON v.id=i.venta_id WHERE v.numero='H-02' ORDER BY i.descripcion")).rows,
+      [{descripcion:'Guantes',subtotal:'40.00'},{descripcion:'Mascarillas',subtotal:'10.00'}]);
+    const asiento = (await db.query("SELECT * FROM libro_diario WHERE documento='AP-01'")).rows[0];
+    assert.equal(asiento.debe,'1000.01');
+    assert.equal(asiento.haber,'1000.01');
+    assert.equal(asiento.lineas[0].cuenta,'001-01');
+    assert.equal(asiento.lineas[1].origen.fila,3);
+    const balanza = (await db.query("SELECT codigo,apertura,debe,haber,saldo FROM balanza_libro_diario(10,'2026-11-01','2026-11-30')")).rows;
+    assert.deepEqual(balanza,[
+      {codigo:'001-01',apertura:'1000.01',debe:'0',haber:'0',saldo:'1000.01'},
+      {codigo:'300-01',apertura:'-1000.01',debe:'0',haber:'0',saldo:'-1000.01'}
+    ]);
+    const lineas = [{cuenta:'001-01',nombre_cuenta:'Caja',debe:40.01},{cuenta:'300-01',nombre_cuenta:'Capital',haber:40}];
+    const descuadrado = destino('diario',2,{documento:'A-02',fecha:'2026-10-02',lineas});
+    assert.match((await importar(db,[descuadrado],true,10)).filas[0].error,/Asiento descuadrado/);
+    assert.equal((await db.query("SELECT count(*)::int AS n FROM libro_diario")).rows[0].n,1);
+    lineas[1].haber = 40.01;
+    lineas[0].nombre_cuenta = 'Otra cuenta';
+    assert.match((await importar(db,[descuadrado],false,10)).filas[0].error,/nombres de cuenta diferentes/);
+    await pagina.evaluate(() => {ExcelImportacion.cerrar(); LibroDiario.abrir();});
+    await pagina.locator('#libro-diario-pdf').waitFor();
+    assert.match(await pagina.locator('#libro-diario-resultados').textContent(),/001-01.*Caja.*1,000\.01/s);
+    for(const ancho of [360,430,1280]) {
+      await pagina.setViewportSize({width:ancho,height:800});
+      const ajusta = await pagina.locator('.libro-diario').evaluate(n=>n.scrollWidth <= n.clientWidth + 1);
+      assert.equal(ajusta,true,`El modal del diario cabe a ${ancho}px`);
+    }
+    await db.exec("SET ROLE authenticated; SET test.uid='c0000000-0000-0000-0000-000000000001'");
+    assert.equal((await db.query("SELECT * FROM libro_diario")).rows.length,0);
+    await db.exec("RESET ROLE; SET test.uid='c0000000-0000-0000-0000-000000000003'");
     assert.deepEqual((await db.query("SELECT total::text FROM compras WHERE numero_factura='DC-55'")).rows,[{total:'650.00'}]);
     assert.deepEqual((await db.query("SELECT categoria,descripcion,monto::text FROM finanzas WHERE clinica_id=10 ORDER BY fecha")).rows,
       [{categoria:'alquiler',descripcion:'Alquiler local',monto:'500.00'},{categoria:'general',descripcion:'Papelería (Oficina)',monto:'35.50'}]);

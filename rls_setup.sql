@@ -625,6 +625,16 @@ END $$;
 -- Comprobantes de Excel. Las escrituras se realizan mediante importar_excel.
 DO $$
 BEGIN
+  IF to_regclass('public.libro_diario') IS NOT NULL THEN
+    ALTER TABLE public.libro_diario ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.libro_diario_cuentas ENABLE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS libro_diario_leer ON public.libro_diario;
+    CREATE POLICY libro_diario_leer ON public.libro_diario FOR SELECT TO authenticated
+      USING ('contabilidad' = ANY(public.modulos_importacion_excel(clinica_id)));
+    DROP POLICY IF EXISTS libro_diario_cuentas_leer ON public.libro_diario_cuentas;
+    CREATE POLICY libro_diario_cuentas_leer ON public.libro_diario_cuentas FOR SELECT TO authenticated
+      USING ('contabilidad' = ANY(public.modulos_importacion_excel(clinica_id)));
+  END IF;
   IF to_regclass('public.importaciones_excel_filas') IS NOT NULL THEN
     ALTER TABLE public.importaciones_excel ENABLE ROW LEVEL SECURITY;
     ALTER TABLE public.importaciones_excel_filas ENABLE ROW LEVEL SECURITY;

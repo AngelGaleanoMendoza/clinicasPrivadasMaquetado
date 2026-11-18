@@ -32,11 +32,14 @@ async function descargarReportesZip(boton) {
   try {
     const grupos = empresa && modulos.includes('contabilidad') ? [...modulos,'empresa'] : modulos;
     const fuentes = new Set(grupos.flatMap(g => _fuentesReportesZip[g]));
+    if(empresa && modulos.includes('inventario')) fuentes.add('inventario_lotes');
     const consultas = BACKUP_TABLAS.filter(d => fuentes.has(d.tabla));
     const resultados = await Promise.all(consultas.map(def => _consultarTablaBackup(def,clinica)));
     if(String(clinica) !== String(currentClinicaId)) throw new Error('Cambió el establecimiento activo.');
     const tablas = Object.fromEntries(resultados.filter(r => !r.advertencia).map(r => [r.tabla,r.filas]));
     const informes = _armarReportesZip(tablas,modulos,corte,empresa);
+    if(modulos.includes('contabilidad'))
+      informes.push(...LibroDiario.informes(await LibroDiario.obtener(clinica,'0001-01-01',corte)));
     const archivos = informes.map(({titulo,secciones}) => {
       const aviso = resultados.some(r => r.advertencia)
         ? '<p>Las fuentes opcionales sin habilitar se indican en cada reporte.</p>' : '';
@@ -119,36 +122,58 @@ function _armarReportesZip(tablas, modulos, corte, empresa) {
   const productos = nombres('inventario');
   const proveedores = nombres('proveedores');
   if(modulos.includes('inventario')) {
-    informe('Existencias de inventario',tabla('Catálogo al corte',['Producto','Categoría','Unidad','Existencia','Mínimo','Vencimiento'],
-      (tablas.inventario || []).map(p => [p.nombre,p.categoria,p.unidad,p.stock_actual,p.stock_minimo,fecha(p.fecha_vencimiento)])));
+    const lotes = registros('inventario_lotes','fecha_ingreso').map(fromLote);
+    const existencias = (tablas.inventario || []).map(fromInv);
+    const lotesPorProducto = new Map();
+    for(const lote of lotes) {
+      if(!lotesPorProducto.has(lote.invId)) lotesPorProducto.set(lote.invId,[]);
+      lotesPorProducto.get(lote.invId).push(lote);
+    }
+    const valores = existencias.map(p => _valorInventario({inv:[p],lotes:lotesPorProducto.get(p.id)||[]}).total);
+    const valorTotal = _valorInventario({inv:existencias,lotes}).total;
+    const ajuste = _r2(valorTotal - valores.reduce((total,valor)=>total+valor,0));
+    informe('Existencias de inventario',
+      tabla('Catálogo al corte',['Producto','Unidad','Existencia','Costo unitario base','Valor a costo','Vencimiento'],
+        existencias.map((p,i) => [p.nombre,p.unidad,p.stock,p.costo == null ? '—' : fmtC(p.costo),
+          p.costo == null && !lotesPorProducto.has(p.id) ? 'Sin costo' : fmtC(valores[i]),fecha(p.fechaVenc)])),
+      tabla('Valoración',['Concepto','Monto'],[
+        ...(ajuste ? [['Ajuste de redondeo de líneas',fmtC(ajuste)]] : []),
+        ['Valor total a costo',fmtC(valorTotal)]
+      ]));
     informe('Movimientos de inventario',tabla('Entradas y salidas',['Fecha','Producto','Tipo','Cantidad','Motivo'],
       registros('inventario_movimientos').map(m => [fecha(m.fecha),porNombre(productos,m.inventario_id),m.tipo,m.cantidad,m.motivo])));
   }
   const compras = registros('compras').map(r => fromCompra({...r,compra_pagos:(r.compra_pagos || []).filter(p=>p.fecha <= corte)}));
+  const operaciones = rs => rs.filter(r => !r.saldoInicial);
+  const vigentes = rs => rs.filter(r => r.estado !== 'anulada');
+  const saldosIniciales = (rs,saldo) => rs.filter(r => r.saldoInicial && saldo(r) > 0);
   if(modulos.includes('inventario') || modulos.includes('contabilidad')) {
     informe('Compras y cuentas por pagar',
-      tablas.compras ? tabla('Compras',['Fecha','Proveedor','Documento','Estado','Total','Pendiente'],compras.map(c =>
+      tablas.compras ? tabla('Compras',['Fecha','Proveedor','Documento','Estado','Total','Pendiente'],operaciones(compras).map(c =>
         [fecha(c.fecha),porNombre(proveedores,c.proveedorId),c.numeroFactura,c.estado,fmtC(c.total),fmtC(_saldoCompra(c))]))
         : '<p>El módulo de Compras aún no está habilitado.</p>',
+      ...(tablas.compras ? [tabla('Saldos de apertura por pagar',['Fecha','Proveedor','Documento','Pendiente'],
+        saldosIniciales(compras,_saldoCompra).map(c => [fecha(c.fecha),porNombre(proveedores,c.proveedorId),c.numeroFactura,fmtC(_saldoCompra(c))]))] : []),
       tabla('Proveedores',['Nombre','Identificación','Estado'],(tablas.proveedores || []).map(p =>
         [p.nombre,p.identificacion,p.activo === false ? 'Inactivo' : 'Activo'])));
   }
   if(modulos.includes('contabilidad')) {
     const ventas = registros('ventas').map(r => fromVenta({...r,venta_cobros:(r.venta_cobros || []).filter(p=>p.fecha <= corte)}));
     const clientes = nombres('clientes_comerciales');
-    const vigentes = rs => rs.filter(r=>r.estado !== 'anulada');
+    const comprasOperativas = vigentes(operaciones(compras));
+    const ventasOperativas = vigentes(operaciones(ventas));
     const documentos = vigentes(registros('facturas'));
     informe('Contabilidad',
       tabla('Resumen de documentos y saldos',['Concepto','Monto'],[
         ['Documentos de cobro vigentes',fmtC(suma(documentos,'total'))],
-        ['Compras vigentes',tablas.compras ? fmtC(suma(vigentes(compras),'total')) : 'Sin módulo'],
+        ['Compras vigentes',tablas.compras ? fmtC(suma(comprasOperativas,'total')) : 'Sin módulo'],
         ['Cuentas por pagar',tablas.compras ? fmtC(compras.reduce((n,c)=>n+_saldoCompra(c),0)) : 'Sin módulo'],
         ...(tablas.ventas ? [
-          ['Ventas comerciales vigentes',fmtC(suma(vigentes(ventas),'total'))],
+          ['Ventas comerciales vigentes',fmtC(suma(ventasOperativas,'total'))],
           ['Cuentas comerciales por cobrar',fmtC(ventas.reduce((n,v)=>n+_saldoVenta(v),0))],
-          ['IVA en ventas comerciales',fmtC(suma(vigentes(ventas),'iva'))]
+          ['IVA en ventas comerciales',fmtC(suma(ventasOperativas,'iva'))]
         ] : []),
-        ['IVA en compras',tablas.compras ? fmtC(suma(vigentes(compras),'iva')) : 'Sin módulo']
+        ['IVA en compras',tablas.compras ? fmtC(suma(comprasOperativas,'iva')) : 'Sin módulo']
       ]));
     if(!empresa || tablas.ventas) {
       const datos = {fin:finanzas.map(fromFin),inv:(tablas.inventario || []).map(fromInv),comp:compras,ventas,
@@ -171,9 +196,11 @@ function _armarReportesZip(tablas, modulos, corte, empresa) {
     }
     if(tablas.ventas) {
       informe('Ventas y cuentas por cobrar',tabla('Ventas comerciales',
-        ['Fecha','Cliente','Documento','Estado','Total','Pendiente'],ventas.map(v =>
-          [fecha(v.fecha),porNombre(clientes,v.clienteId),v.numero,v.estado,fmtC(v.total),fmtC(_saldoVenta(v))])));
-      const items = vigentes(ventas).flatMap(v => v.items);
+        ['Fecha','Cliente','Documento','Estado','Total','Pendiente'],operaciones(ventas).map(v =>
+          [fecha(v.fecha),porNombre(clientes,v.clienteId),v.numero,v.estado,fmtC(v.total),fmtC(_saldoVenta(v))])),
+        tabla('Saldos de apertura por cobrar',['Fecha','Cliente','Documento','Pendiente'],saldosIniciales(ventas,_saldoVenta).map(v =>
+          [fecha(v.fecha),porNombre(clientes,v.clienteId),v.numero,fmtC(_saldoVenta(v))])));
+      const items = ventasOperativas.flatMap(v => v.items);
       informe('Ganancia por producto',tabla('Utilidad bruta de las ventas vigentes',['Producto','Utilidad'],
         conciliacion(items,i => productos.get(i.invId) || i.descripcion || 'Producto sin nombre',
           i => i.subtotal - i.cantidad*i.costo)));

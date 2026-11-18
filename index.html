@@ -22,7 +22,7 @@
 <!-- Lectura local de machotes. El archivo se procesa en el navegador antes de
      guardarlo; Mammoth extrae DOCX y PDF.js se carga al elegir un PDF. -->
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js" defer></script>
-<link rel="stylesheet" href="css/styles.css?v=20261118b">
+<link rel="stylesheet" href="css/styles.css?v=20261118diario">
 </head>
 <body>
 <script>
@@ -1080,6 +1080,7 @@
             <h3>📒 Contabilidad</h3>
             <div class="doc-acciones">
               <button class="btn btn-secondary btn-sm" id="btn-cont-excel" onclick="ExcelImportacion.abrir()" hidden>Importar Excel</button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="LibroDiario.abrir()">Libro diario y balanza</button>
               <button class="btn btn-secondary btn-sm" id="btn-cont-cliente" onclick="abrirClienteCom()">+ Cliente</button>
               <button class="btn btn-primary btn-sm" id="btn-cont-venta" onclick="abrirNuevaVenta()">+ Nueva venta</button>
             </div>
@@ -3233,8 +3234,26 @@
   </section>
 </div>
 <script src="js/app.js?v=20261118b" defer></script>
-<script src="js/reportes-zip.js?v=20261118b" defer></script>
-<script src="js/importar-excel.js?v=20261118b" defer></script>
+<script src="js/reportes-zip.js?v=20261118diario" defer></script>
+<script src="js/importar-excel.js?v=20261118diario" defer></script>
+<script src="js/libro-diario.js?v=20261118diario" defer></script>
+<div class="modal-overlay" id="modal-libro-diario">
+  <section class="modal modal-lg libro-diario" role="dialog" aria-modal="true" aria-labelledby="libro-diario-titulo">
+    <h2 id="libro-diario-titulo">Libro diario y balanza de comprobación</h2>
+    <form class="libro-diario-filtros" onsubmit="event.preventDefault(); LibroDiario.consultar()">
+      <label>Desde<input type="date" id="libro-diario-desde" required></label>
+      <label>Hasta<input type="date" id="libro-diario-hasta" required></label>
+      <button type="submit" class="btn btn-primary">Consultar</button>
+    </form>
+    <p class="text-light">La balanza se calcula con los asientos importados, incluido el asiento de apertura.</p>
+    <p id="libro-diario-estado" role="status"></p>
+    <div id="libro-diario-resultados"></div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" onclick="LibroDiario.cerrar()">Cerrar</button>
+      <button type="button" class="btn btn-primary" id="libro-diario-pdf" onclick="descargarDocumento(LibroDiario.pdf)" hidden>Descargar PDF</button>
+    </div>
+  </section>
+</div>
 </body>
 </html>
 

@@ -539,6 +539,14 @@ body.dark .balance-pct{background:#0F172A}
 .excel-modal details{margin-top:14px;font-size:13px}
 .excel-modal summary{cursor:pointer}
 .excel-recibo{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-top:8px}
+.libro-diario-filtros{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin-bottom:12px}
+.libro-diario-filtros label{display:grid;gap:4px;font-size:13px;min-width:0}
+.libro-diario-filtros input{min-width:0;max-width:100%;padding:7px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text)}
+.libro-diario h3{margin:16px 0 8px}
+.libro-diario p{font-size:13px}
+.libro-diario .excel-tabla table{min-width:580px;table-layout:auto}
+.libro-diario .excel-tabla th{width:auto}
+.libro-diario [hidden]{display:none!important}
 .excel-hoja-lista{border-color:rgba(16,185,129,.45)}
 .excel-modal p.excel-detectado{margin:6px 0 0;font-weight:700;color:#15803D}
 body.dark .excel-modal p.excel-detectado{color:#6EE7B7}

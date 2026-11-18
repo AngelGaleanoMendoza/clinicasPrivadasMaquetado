@@ -60,6 +60,13 @@ const origen = 'http://localhost:38638/';
         prueba.consultas.push([d.tabla,clinica]);
         return {tabla:d.tabla,filas:tablas[d.tabla] || []};
       };
+      LibroDiario.obtener = async () => ({
+        cuentas:[['001','Caja','C$ 0.00','C$ 20.00','C$ 0.00','C$ 20.00'],
+          ['300','Capital','C$ 0.00','C$ 0.00','C$ 20.00','C$ -20.00'],
+          ['','Totales','C$ 0.00','C$ 20.00','C$ 20.00','C$ 0.00']],
+        lineas:[['17 nov 2026','AP-01','001','Caja','Apertura','—','C$ 20.00','C$ 0.00'],
+          ['17 nov 2026','AP-01','300','Capital','Apertura','—','C$ 0.00','C$ 20.00']]
+      });
       _notificarReportesRespaldo = async (b,f) => {
         prueba.notificaciones.push([b.clinica.id,f]);
         await new Promise(resolver => { prueba.terminarCorreo = resolver; });
@@ -69,12 +76,29 @@ const origen = 'http://localhost:38638/';
       document.getElementById('app').classList.add('visible');
       document.getElementById('view-exportar').classList.add('active');
       window.informes = _armarReportesZip(tablas,['actividad','finanzas','inventario','contabilidad'],hoy(),false);
+      window.aperturas = _armarReportesZip({...tablas,
+        compras:[...tablas.compras,{fecha:'2026-11-01',numero_factura:'Apertura-P',condicion:'credito',total:600,saldo_inicial:true}],
+        ventas:[
+          {fecha:'2026-11-01',numero:'Apertura-C',total:700,saldo_inicial:true,venta_items:[{descripcion:'Ignorar apertura',cantidad:1,subtotal:700}]},
+          {fecha:'2026-11-02',numero:'Venta-100',total:100,subtotal:100}
+        ]},['contabilidad'],hoy(),true);
     });
     const informes = await pagina.evaluate(() => informes);
     assert.equal(informes.length,9);
     assert.match(informes.find(x=>x.titulo==='Finanzas').secciones.join(''),/80[.,]25/);
     assert.doesNotMatch(informes.find(x=>x.titulo==='Finanzas').secciones.join(''),/Movimiento futuro/);
     assert.match(informes.find(x=>x.titulo==='Compras y cuentas por pagar').secciones.join(''),/50[.,]00/);
+    assert.match(informes.find(x=>x.titulo==='Existencias de inventario').secciones.join(''),/Valor total a costo<\/td><td>C\$ 20[.,]00/);
+    const aperturas = await pagina.evaluate(() => aperturas);
+    const resumen = aperturas.find(x=>x.titulo==='Contabilidad').secciones.join('');
+    assert.match(resumen,/Compras vigentes<\/td><td>C\$ 60[.,]00/);
+    assert.match(resumen,/Cuentas por pagar<\/td><td>C\$ 650[.,]00/);
+    assert.match(resumen,/Ventas comerciales vigentes<\/td><td>C\$ 100[.,]00/);
+    assert.match(resumen,/Cuentas comerciales por cobrar<\/td><td>C\$ 800[.,]00/);
+    const venta = aperturas.find(x=>x.titulo==='Ventas y cuentas por cobrar').secciones;
+    assert.doesNotMatch(venta[0],/Apertura-C/);
+    assert.match(venta[1],/Apertura-C/);
+    assert.doesNotMatch(aperturas.find(x=>x.titulo==='Ganancia por producto').secciones.join(''),/Ignorar apertura/);
     const archivo = pagina.waitForEvent('download',{timeout:90000});
     await pagina.locator('#export-reportes-zip button').click();
     const desc = await archivo;
@@ -84,7 +108,9 @@ const origen = 'http://localhost:38638/';
       const zip = await JSZip.loadAsync(new Uint8Array(data),{checkCRC32:true});
       return Promise.all(Object.values(zip.files).map(async f => [f.name,(await f.async('string')).slice(0,5)]));
     },[...bytes]);
-    assert.equal(entradas.length,informes.length);
+    assert.equal(entradas.length,informes.length+2);
+    assert.ok(entradas.some(([nombre])=>nombre==='Balanza-de-comprobacion.pdf'));
+    assert.ok(entradas.some(([nombre])=>nombre==='Libro-diario.pdf'));
     assert.ok(entradas.every(([n,f])=>n.endsWith('.pdf')&&f==='%PDF-'));
     assert.deepEqual(await pagina.evaluate(() => prueba.notificaciones),[[1,'zip']]);
     const presentacion = await pagina.evaluate(() => {
@@ -93,8 +119,8 @@ const origen = 'http://localhost:38638/';
     });
     assert.deepEqual(presentacion.cargas,[true,false]);
     assert.equal(presentacion.visible,false);
-    assert.deepEqual(presentacion.marcos,informes.map(()=>['0',true]));
-    for(const i of informes.keys()) assert.ok(presentacion.progreso.some(p=>p.startsWith(`Reporte ${i+1} de ${informes.length}`)));
+    assert.deepEqual(presentacion.marcos,entradas.map(()=>['0',true]));
+    for(const i of entradas.keys()) assert.ok(presentacion.progreso.some(p=>p.startsWith(`Reporte ${i+1} de ${entradas.length}`)));
     await pagina.evaluate(() => prueba.terminarCorreo());
     assert.ok((await pagina.evaluate(()=>prueba.consultas)).every(([,c])=>c===1));
     if(process.env.REPORTES_LIB_DIR) fs.writeFileSync(path.join(process.env.REPORTES_LIB_DIR,'reportes-prueba.zip'),bytes);

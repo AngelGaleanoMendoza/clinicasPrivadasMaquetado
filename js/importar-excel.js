@@ -3,6 +3,16 @@ const ExcelImportacion = (() => {
   // Cada destino: [id, rótulo, obligatorio, encabezados con que suele aparecer].
   // «obligatorio» 2 = se exige, pero el sistema puede completarlo (ver faltantes()).
   const TIPOS = {
+    diario:{permiso:'contabilidad', titulo:'Asientos del libro diario', pista:'diario|asientos|comprobantes contables', campos:[
+      ['documento','Número de asiento',1,'asiento|numero asiento|id asiento|comprobante|partida|no partida'],
+      ['fecha','Fecha contable',1,'fecha|fecha asiento'],
+      ['cuenta','Código de cuenta',1,'codigo cuenta|codigo contable|codigo|cuenta contable'],
+      ['nombre_cuenta','Nombre de cuenta',1,'nombre cuenta|nombre de la cuenta|cuenta|denominacion'],
+      ['debe','Debe',1,'debito|debitos|cargo|debe c'],
+      ['haber','Haber',1,'credito|creditos|abono|haber c'],
+      ['descripcion','Concepto',0,'descripcion|detalle|glosa|observaciones'],
+      ['referencia','Referencia documental',0,'referencia|factura|documento origen']
+    ]},
     finanzas:{permiso:'finanzas', titulo:'Ingresos y gastos', pista:'caja|finanzas|ingresos|egresos|gastos|libro diario|bancos|banco|flujo', campos:[
       ['id_origen','ID de origen',0,'id externo|id|folio|correlativo|no|n|num'],
       ['fecha','Fecha',1,'fecha de pago|fecha del movimiento|dia|fecha de registro'],
@@ -54,6 +64,19 @@ const ExcelImportacion = (() => {
       ['dias_credito','Días de crédito',0,'dias de credito|plazo|plazo de credito|dias credito|credito dias|dias'],
       ['notas','Notas',0,'notas|observaciones|comentarios']
     ]},
+    facturas:{permiso:'contabilidad', soloEmpresa:true, titulo:'Facturas históricas de venta', pista:'facturas|facturas de venta|ventas historicas|detalle de facturas', campos:[
+      ['documento','Número de factura',1,'factura|no factura|numero de factura|folio'],
+      ['nombre','Cliente',1,'cliente|nombre del cliente|razon social'],
+      ['fecha','Fecha de emisión',1,'fecha|fecha de factura|fecha emision'],
+      ['descripcion','Descripción de la línea',1,'descripcion|detalle|producto|servicio|concepto'],
+      ['cantidad','Cantidad',1,'unidades|cant'],
+      ['precio_linea','Precio unitario sin IVA',1,'precio unitario|precio'],
+      ['costo_linea','Costo unitario histórico',1,'costo unitario|costo'],
+      ['iva_pct','IVA % de la factura',1,'iva pct|porcentaje iva|tasa iva'],
+      ['total_factura','Total de la factura',1,'total factura|total documento'],
+      ['vencimiento','Vencimiento',0,'fecha de vencimiento|vence'],
+      ['fecha_pago','Fecha de cobro completo',0,'fecha de cobro|fecha pago|fecha de pago']
+    ]},
     cxc:{permiso:'contabilidad', soloEmpresa:true, titulo:'Saldos pendientes de clientes (por cobrar)', pista:'cuentas por cobrar|por cobrar|cxc|cartera|saldos de clientes|cobrar|antiguedad de saldos', campos:[
       ['nombre','Cliente',1,'cliente|nombre del cliente|razon social'],
       ['documento','N.º de documento',1,'documento|factura|no factura|numero de factura|n factura|no documento|folio'],
@@ -71,11 +94,13 @@ const ExcelImportacion = (() => {
   };
   // Lo que debe tener una hoja, como mínimo, para reconocerla sin preguntar.
   const NUCLEO = {
+    diario:m => ['documento','fecha','cuenta','nombre_cuenta','debe','haber'].every(k => m[k] != null),
     finanzas:m => m.fecha != null && m.descripcion != null && (m.monto != null || m.monto_ingreso != null || m.monto_egreso != null),
     productos:m => m.nombre != null && ['stock','costo','precio','unidad'].some(k => m[k] != null),
     movimientos:m => m.producto != null && m.fecha != null && m.cantidad != null,
     proveedores:m => m.nombre != null && ['identificacion','telefono','contacto','email','direccion'].some(k => m[k] != null),
     clientes:m => m.nombre != null && ['identificacion','telefono','contacto','email','direccion','dias_credito'].some(k => m[k] != null),
+    facturas:m => ['documento','nombre','fecha','descripcion','cantidad','precio_linea','costo_linea','iva_pct','total_factura'].every(k => m[k] != null),
     cxc:m => ['nombre','documento','fecha','saldo'].every(k => m[k] != null),
     cxp:m => ['nombre','documento','fecha','saldo'].every(k => m[k] != null)
   };
@@ -291,7 +316,15 @@ const ExcelImportacion = (() => {
     if (hoja.error || !hoja.filas.length) return hoja;
     const texto = normal(hoja.nombre + ' ' + hoja.archivo.replace(/\.[^.]+$/, ''));
     const porTipo = {};
+    let facturaIncompleta = false;
+    let diarioIncompleto = false;
     for (const fila of hoja.filas.slice(0, 15)) {
+      const camposDiario = mapear('diario',fila.celdas).mapa;
+      if (camposDiario.cuenta != null && camposDiario.debe != null && camposDiario.haber != null &&
+          !NUCLEO.diario(camposDiario)) diarioIncompleto = true;
+      const camposFactura = mapear('facturas',fila.celdas).mapa;
+      if (camposFactura.documento != null && camposFactura.nombre != null && camposFactura.descripcion != null &&
+          camposFactura.precio_linea != null && !NUCLEO.facturas(camposFactura)) facturaIncompleta = true;
       for (const tipo of tiposDisponibles()) {
         const {mapa, puntos} = mapear(tipo, fila.celdas);
         if (!NUCLEO[tipo](mapa)) continue;
@@ -299,13 +332,27 @@ const ExcelImportacion = (() => {
         if (!porTipo[tipo] || total > porTipo[tipo].total) porTipo[tipo] = {tipo, total, fila:fila.numero, mapa};
       }
     }
+    if (porTipo.diario) {
+      const {fila,mapa} = porTipo.diario;
+      return Object.assign(hoja,{tipo:'diario',encabezado:fila,mapa,
+        deteccion:{estado:'reconocida',columnas:Object.keys(mapa).length}});
+    }
+    if (diarioIncompleto) {
+      hoja.deteccion = tiposDisponibles().includes('diario') ? {estado:'dudosa',opciones:['diario']} : {estado:'ninguna'};
+      return hoja;
+    }
+    if (facturaIncompleta && !porTipo.facturas) {
+      hoja.deteccion = {estado:'dudosa', opciones:tiposDisponibles().includes('facturas') ? ['facturas'] : []};
+      if (!hoja.deteccion.opciones.length) hoja.deteccion = {estado:'ninguna'};
+      return hoja;
+    }
     const orden = Object.values(porTipo).sort((a, b) => b.total - a.total);
     if (!orden.length) { hoja.deteccion = {estado:'ninguna'}; return hoja; }
     if (orden[1] && orden[0].total - orden[1].total < 1) {
       hoja.deteccion = {estado:'dudosa', opciones:orden.filter(o => orden[0].total - o.total < 1).map(o => o.tipo)};
       return hoja;
     }
-    const mejor = orden[0];
+    const mejor = porTipo.facturas || orden[0];
     hoja.tipo = mejor.tipo;
     hoja.encabezado = mejor.fila;
     hoja.mapa = mejor.mapa;
@@ -364,7 +411,8 @@ const ExcelImportacion = (() => {
         <strong>${titulo}</strong>
         ${avisoDeteccion(h)}
         <div class="excel-grid">
-          <label>Destino<select data-campo="tipo"><option value="">Omitir hoja</option>${opciones}</select></label>
+          <label>Destino<select data-campo="tipo"><option value="">Destino sin identificar</option>
+          <option value="omitir" ${h.omitida ? 'selected' : ''}>Omitir esta hoja</option>${opciones}</select></label>
           ${h.tipo ? `<label>Fila de encabezados<input type="number" min="1" max="2000" value="${h.encabezado}" data-campo="encabezado"></label>` : ''}
         </div>
         ${h.tipo ? `<details class="excel-columnas"${falta.length ? ' open' : ''}><summary>Columnas${falta.length ? ` · <span class="excel-error">falta: ${escAttr(falta.join(', '))}</span>` : ' asignadas'}</summary>
@@ -386,6 +434,8 @@ const ExcelImportacion = (() => {
       movimientos:'Usa entrada o salida. Escribe el nombre del producto tal como aparece en el catálogo.',
       proveedores:'Los proveedores que ya existen con el mismo nombre se señalan para no duplicarlos.',
       clientes:'Sin días de crédito se usan 30. Los clientes que ya existen con el mismo nombre se señalan.',
+      facturas:'Usa una fila por línea y repite el número, cliente, fecha, IVA y total de factura. Incluye la fecha de cobro completo o el vencimiento si está pendiente. El inventario y los ingresos históricos se migran por separado.',
+      diario:'Repite el número y la fecha por cada línea. El asiento se registra si su Debe y Haber coinciden al centavo. Para saldos de apertura usa el asiento de apertura del archivo.',
       cxc:'Cada fila es una factura pendiente de un cliente. Queda en Por cobrar y no cuenta como venta del período.',
       cxp:'Cada fila es una factura pendiente con un proveedor. Queda en Por pagar y no mueve el inventario.'
     })[tipo];
@@ -408,7 +458,10 @@ const ExcelImportacion = (() => {
       el('hojas').querySelector(`[data-hoja="${tarjeta.dataset.hoja}"] [data-mapa="${id}"]`)?.focus();
       return;
     }
-    if (control.dataset.campo === 'tipo') hoja.tipo = control.value;
+    if (control.dataset.campo === 'tipo') {
+      hoja.omitida = control.value === 'omitir';
+      hoja.tipo = hoja.omitida ? '' : control.value;
+    }
     else if (control.dataset.campo === 'encabezado') hoja.encabezado = Number(control.value);
     else return;
     autocompletar(hoja);
@@ -429,13 +482,16 @@ const ExcelImportacion = (() => {
   }
 
   // Montos tal como vienen en hojas reales: «C$ 1,250.50», «1.250,50», 15.333333 (fórmulas).
-  function decimal(celda, precision, negativo = false) {
+  function decimal(celda, precision, negativo = false, exacto = false) {
     const valor = texto(celda);
     if (!valor) return null;
+    const formato = String(celda.texto || valor);
+    if (/US\$|USD|EUR|GTQ|€|£/i.test(formato))
+      throw new Error('El archivo indica otra moneda. Los importes deben venir en córdobas (C$).');
     let numero;
     if (typeof celda.valor === 'number') numero = celda.valor;
     else {
-      let t = valor.replace(/^(c\$|us\$|usd|nio|cs|\$)\s*/i, '').replace(/\s+/g, '');
+      let t = valor.replace(/^(c\$|nio|cs|\$)\s*/i, '').replace(/\s+/g, '');
       const signo = /^\(.*\)$/.test(t) || t.startsWith('-') ? -1 : 1;
       t = t.replace(/^\(|\)$/g, '').replace(/^-/, '');
       if (/^\d{1,3},\d{3}$/.test(t)) throw new Error('El número ' + valor + ' es ambiguo: escribe el separador decimal (1250.00 o 1.25).');
@@ -448,6 +504,8 @@ const ExcelImportacion = (() => {
     if (!Number.isFinite(numero) || Math.abs(numero) >= 1e9) throw new Error('El número está fuera del rango permitido.');
     if (numero < 0 && !negativo) throw new Error('No se admiten valores negativos.');
     const factor = 10 ** precision;
+    if (exacto && Math.abs(numero - Math.round(numero * factor) / factor) > Number.EPSILON * Math.max(1,Math.abs(numero)))
+      throw new Error('El importe tiene más de dos decimales.');
     return Math.round(numero * factor) / factor;
   }
 
@@ -487,8 +545,9 @@ const ExcelImportacion = (() => {
     return {id:cat.id};
   }
 
-  const DECIMALES = {monto:2, monto_ingreso:2, monto_egreso:2, costo:4, precio:2, stock:3, minimo:3, cantidad:3, saldo:2, dias_credito:0};
-  const TEXTO_CON_FORMATO = ['id_origen','referencia','documento','identificacion','telefono'];
+  const DECIMALES = {debe:2, haber:2, monto:2, monto_ingreso:2, monto_egreso:2, costo:4, precio:2, stock:3, minimo:3, cantidad:3, saldo:2, dias_credito:0,
+    precio_linea:4,costo_linea:4,iva_pct:2,total_factura:2};
+  const TEXTO_CON_FORMATO = ['id_origen','referencia','documento','identificacion','telefono','cuenta'];
 
   function normalizar(hoja, fila) {
     const datos = {};
@@ -497,8 +556,10 @@ const ExcelImportacion = (() => {
       const celda = fila.celdas[hoja.mapa[id]];
       try {
         let valor;
-        if (['fecha','vencimiento'].includes(id)) valor = fecha(celda, hoja.fecha1904);
-        else if (id in DECIMALES) valor = decimal(celda, DECIMALES[id], hoja.tipo === 'finanzas' && id === 'monto');
+        if (['fecha','vencimiento','fecha_pago'].includes(id)) valor = fecha(celda, hoja.fecha1904);
+        else if (id === 'iva_pct' && (typeof celda?.valor === 'number' && String(celda.texto).endsWith('%') || typeof celda?.valor === 'string' && celda.valor.trim().endsWith('%')))
+          valor = decimal({valor:typeof celda.valor === 'number' ? celda.valor*100 : celda.valor.trim().slice(0,-1)},2);
+        else if (id in DECIMALES) valor = decimal(celda, DECIMALES[id], hoja.tipo === 'finanzas' && id === 'monto', hoja.tipo === 'diario');
         else valor = texto(celda, TEXTO_CON_FORMATO.includes(id));
         if (valor !== null && valor !== '') datos[id] = valor;
       } catch (error) {
@@ -506,6 +567,11 @@ const ExcelImportacion = (() => {
       }
     }
     const t = hoja.tipo;
+    if (t === 'diario') {
+      datos.debe ??= 0;
+      datos.haber ??= 0;
+      if ((datos.debe > 0) === (datos.haber > 0)) throw new Error('Cada línea debe tener un importe en Debe o en Haber.');
+    }
     if (t === 'finanzas' || t === 'movimientos') {
       if (datos.clase != null) {
         const clase = CLASES[t][normal(datos.clase)];
@@ -559,13 +625,20 @@ const ExcelImportacion = (() => {
   // Filas que no son datos: totales al pie y filas sin nada en las columnas asignadas.
   function filaIgnorable(hoja, fila) {
     const columnas = Object.values(hoja.mapa);
+    if (columnas.some(i => fila.celdas[i]?.invalida)) return false;
+    if (hoja.tipo === 'diario' && hoja.mapa.documento != null && texto(fila.celdas[hoja.mapa.documento])) return false;
     const valores = columnas.map(i => fila.celdas[i]).filter(c => c && !c.invalida && String(c.valor ?? '').trim() !== '');
     if (!valores.length) return true;
     return columnas.some(i => typeof fila.celdas[i]?.valor === 'string' && TOTALES.has(normal(fila.celdas[i].valor)));
   }
 
   function preparar() {
-    const filas = [], errores = [], vistas = {};
+    const filas = [], vistas = {};
+    const errores = estado.hojas.filter(h => h.error || (!h.tipo && !h.omitida && h.filas.length))
+      .map(h => ({archivo:h.archivo,hoja:h.nombre,fila:h.encabezado,
+        error:h.error || 'No se identificó el destino de la hoja. Selecciona el destino o indica que se puede omitir.'}));
+    const facturas = new Map();
+    const asientos = new Map();
     let ignoradas = 0;
     for (const h of estado.hojas.filter(h => h.tipo)) {
       const origen = {archivo:h.archivo, hoja:h.nombre, fila:h.encabezado};
@@ -586,7 +659,36 @@ const ExcelImportacion = (() => {
             vistas[base] = (vistas[base] || 0) + 1;
             r.datos.id_origen = 'auto-' + huella(base) + '-' + vistas[base];
           }
-          filas.push(r);
+          if (r.tipo === 'diario') {
+            const {documento,fecha,...datos} = r.datos;
+            const clave = fecha + '|' + documento.toLowerCase();
+            const linea = {...datos,origen:{archivo:r.archivo,hoja:r.hoja,fila:r.fila}};
+            const asiento = asientos.get(clave);
+            if (asiento) {
+              if (asiento.hoja !== h)
+                throw new Error('El asiento ' + documento + ' aparece en otra hoja de la carga.');
+              asiento.registro.datos.lineas.push(linea);
+            }
+            else {
+              r.datos = {documento,fecha,lineas:[linea]};
+              asientos.set(clave,{hoja:h,registro:r});
+              filas.push(r);
+            }
+          } else if (r.tipo === 'facturas') {
+            const {descripcion,cantidad,precio_linea,costo_linea,...cabecera} = r.datos;
+            const clave = cabecera.documento.toLowerCase();
+            const existente = facturas.get(clave);
+            const linea = {descripcion,cantidad,precio:precio_linea,costo:costo_linea};
+            if (existente) {
+              if (JSON.stringify(existente.cabecera) !== JSON.stringify(cabecera))
+                throw new Error('La cabecera no coincide con las demás líneas de la factura ' + cabecera.documento + '.');
+              existente.r.datos.lineas.push(linea);
+            } else {
+              r.datos = {...cabecera,lineas:[linea]};
+              facturas.set(clave,{r,cabecera});
+              filas.push(r);
+            }
+          } else filas.push(r);
         }
         catch (error) { errores.push({...origen, fila:fila.numero, error:error.message}); }
       }
@@ -596,13 +698,15 @@ const ExcelImportacion = (() => {
   }
 
   function resultados(entradas, resumen = null) {
-    const omitidas = estado.hojas.filter(h => !h.tipo && h.filas.length).length;
+    const omitidas = estado.hojas.filter(h => h.omitida).length;
     const partes = resumen ? [
       resumen.productos && resumen.productos + ' producto(s)', resumen.proveedores && resumen.proveedores + ' proveedor(es)',
       resumen.clientes && resumen.clientes + ' cliente(s)', resumen.movimientos && resumen.movimientos + ' movimiento(s)',
       resumen.finanzas && `${resumen.finanzas} movimiento(s) de caja · Ingresos ${fmtC(resumen.ingresos)} · Gastos ${fmtC(resumen.egresos)}`,
       resumen.cxc && `${resumen.cxc} saldo(s) por cobrar: ${fmtC(resumen.por_cobrar)}`,
-      resumen.cxp && `${resumen.cxp} saldo(s) por pagar: ${fmtC(resumen.por_pagar)}`
+      resumen.cxp && `${resumen.cxp} saldo(s) por pagar: ${fmtC(resumen.por_pagar)}`,
+      resumen.facturas && `${resumen.facturas} factura(s) histórica(s)`,
+      resumen.asientos && `${resumen.asientos} asiento(s) · Debe ${fmtC(resumen.debe)} · Haber ${fmtC(resumen.haber)}`
     ].filter(Boolean) : [];
     const montos = resumen ? `<p class="excel-totales">${resumen.nuevas} nuevas · ${resumen.duplicadas} ya registradas · ${resumen.errores} con errores
       ${partes.length ? '<br>' + partes.map(escAttr).join('<br>') : ''}
