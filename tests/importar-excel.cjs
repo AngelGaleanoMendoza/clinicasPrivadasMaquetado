@@ -166,6 +166,13 @@ async function verificarPantalla(db) {
       data:(await (id ? db.query('SELECT * FROM importaciones_excel_filas WHERE lote_id=$1 ORDER BY ordinal',[id])
         : db.query('SELECT * FROM importaciones_excel ORDER BY creado_en DESC'))).rows
     }));
+    await pagina.exposeFunction('archivarPrueba', async ({p_clinica,p_archivo,p_base64}) => {
+      await db.query('SELECT archivar_respaldo_fiscal($1,$2,$3)',[p_clinica,p_archivo,p_base64]);
+      return {error:null};
+    });
+    await pagina.exposeFunction('expedientePrueba', async clinica => ({
+      data:(await db.query('SELECT id,archivo FROM expediente_fiscal_excel WHERE clinica_id=$1',[clinica])).rows
+    }));
     await pagina.exposeFunction('leerDiarioPrueba', async (clinica,desde,hasta,balanza) => ({
       data:(await db.query(balanza ? 'SELECT * FROM balanza_libro_diario($1,$2,$3)'
         : 'SELECT id,fecha::text,documento,lineas FROM libro_diario WHERE clinica_id=$1 AND fecha BETWEEN $2 AND $3',
@@ -176,11 +183,11 @@ async function verificarPantalla(db) {
       if (url.origin !== 'http://app.test') return ruta.abort();
       if (url.pathname === '/') return ruta.fulfill({contentType:'text/html; charset=utf-8',body:html});
       if (url.pathname === '/js/app.js') return ruta.fulfill({contentType:'text/javascript',body:`
-        const sb={rpc:(nombre,args)=>nombre==='balanza_libro_diario' ? {order(){return this;},
+        const sb={rpc:(nombre,args)=>nombre==='archivar_respaldo_fiscal' ? archivarPrueba(args) : nombre==='balanza_libro_diario' ? {order(){return this;},
           range:()=>leerDiarioPrueba(args.p_clinica,args.p_desde,args.p_hasta,true)} : importarPrueba(args),from:tabla=>({
           id:null,select(){return this;},eq(k,v){if(k==='lote_id') this.id=v;return this;},order(){return this;},
           gte(k,v){this.desde=v;return this;},lte(k,v){this.hasta=v;return this;},
-          limit(){return recibosPrueba(null);},range(){return tabla==='libro_diario'
+          not(){this.conciliacion=true;return this;},limit(){return this.conciliacion ? {data:[]} : recibosPrueba(null);},range(){return tabla==='expediente_fiscal_excel' ? expedientePrueba(currentClinicaId) : tabla==='libro_diario'
             ? leerDiarioPrueba(currentClinicaId,this.desde,this.hasta,false) : recibosPrueba(this.id);}
         })};
         const consultarPaginas=fn=>fn().range();
@@ -299,6 +306,23 @@ async function verificarPantalla(db) {
     // ── Migración completa de una empresa: se sube el libro y se reconoce solo ──
     await db.exec("SET test.uid='c0000000-0000-0000-0000-000000000003'");
     await pagina.evaluate(() => { ExcelImportacion.cerrar(); __usar(10,true,'Empresa de prueba'); ExcelImportacion.abrir(); });
+    const fiscal = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(fiscal,XLSX.utils.aoa_to_sheet([
+      ['RUC','DESCRIPCION DEL PAGO','INGRESOS SIN IMPUESTOS','VALOR IVA TRASLADADO Y/O AUTOTRASLADADO'],
+      ['J01','Compra',100,15]]),'IVA');
+    const fiscalAntiguo = {...ingreso,archivo:'1. IVA Ene26 MEDICSA V2.xlsx'};
+    assert.match((await importar(db,[fiscalAntiguo],true,10)).filas[0].error,/respaldo en el expediente/);
+    const original = Buffer.from(XLSX.write(fiscal,{type:'array',bookType:'xlsx'}));
+    await pagina.locator('#excel-archivos').setInputFiles({name:'IVA de prueba.xlsx',mimeType:'application/octet-stream',buffer:original});
+    await pagina.locator('#excel-archivar').waitFor();
+    assert.equal(await pagina.locator('#excel-confirmar').isHidden(),true);
+    assert.equal(await pagina.locator('#excel-hojas select').count(),0);
+    await pagina.locator('#excel-archivar').click();
+    await pagina.waitForFunction(()=>document.querySelector('#excel-situacion').textContent.includes('Migración pendiente'));
+    assert.equal((await db.query("SELECT encode(contenido,'hex') bytes FROM expediente_fiscal_excel WHERE clinica_id=10")).rows[0].bytes,original.toString('hex'));
+    assert.equal((await db.query('SELECT count(*)::int AS n FROM finanzas WHERE clinica_id=10')).rows[0].n,0);
+    await pagina.evaluate(()=>{ExcelImportacion.cerrar(); ExcelImportacion.abrir();});
+    await pagina.waitForFunction(()=>document.querySelector('#excel-situacion').textContent.includes('Migración pendiente'));
     const libro = XLSX.utils.book_new();
     const agregar = (nombre, filas) => XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet(filas), nombre);
     agregar('Proveedores',[['Proveedor','RUC','Teléfono','Contacto'],['Droguería Central','J0311',22221111,'Ana']]);
@@ -315,6 +339,9 @@ async function verificarPantalla(db) {
     agregar('Libro diario',[['Número de asiento','Fecha contable','Código de cuenta','Nombre de cuenta','Debe','Haber','Concepto'],
       ['AP-01','2026-10-01','001-01','Caja',1000.01,'','Apertura'],
       ['AP-01','2026-10-01','300-01','Capital','',1000.01,'Apertura']]);
+    agregar('Balanza',[['Código','Cuenta','Saldo inicial','Debe','Haber','Saldo final'],
+      ['001-01','Caja',0,1000.01,0,1000.01],['300-01','Capital',0,0,1000.01,-1000.01]]);
+    agregar('Auxiliar caja',[['Código','Referencia','Saldo final'],['001-01','Caja general',1000.01]]);
     await pagina.locator('#excel-archivos').setInputFiles({name:'migracion-empresa.xlsx',
       mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:Buffer.from(XLSX.write(libro,{type:'array',bookType:'xlsx'}))});
     await pagina.locator('#excel-confirmar').waitFor().catch(async error => {
@@ -367,6 +394,24 @@ async function verificarPantalla(db) {
     lineas[1].haber = 40.01;
     lineas[0].nombre_cuenta = 'Otra cuenta';
     assert.match((await importar(db,[descuadrado],false,10)).filas[0].error,/nombres de cuenta diferentes/);
+    lineas[0].nombre_cuenta = 'Caja';
+    const bal = [
+      destino('balanza',2,{cuenta:'001-01',nombre:'Caja',apertura:1000.01,debe:40.01,haber:0,saldo:1040.02}),
+      destino('balanza',3,{cuenta:'300-01',nombre:'Capital',apertura:-1000.01,debe:0,haber:40.01,saldo:-1040.02})];
+    const aux = destino('auxiliar',2,{cuenta:'001-01',saldo:1040.01});
+    await assert.rejects(importar(db,[descuadrado],true,10),/Migración pendiente/);
+    await assert.rejects(importar(db,[descuadrado,...bal,aux],true,10),/saldo del auxiliar/);
+    aux.datos.saldo = 1040.02;
+    assert.equal((await importar(db,[descuadrado,...bal,aux],false,10)).resumen.nuevas,1);
+    bal[0].datos.debe = 40;
+    await assert.rejects(importar(db,[descuadrado,...bal,aux],true,10),/movimientos del diario/);
+    assert.equal((await db.query('SELECT count(*)::int AS n FROM libro_diario')).rows[0].n,1);
+    await db.exec("SET ROLE authenticated");
+    for (let n=0;n<2;n++) await db.query("SELECT archivar_respaldo_fiscal(10,'IVA.xlsx','UEs=')");
+    assert.deepEqual((await db.query("SELECT archivo,encode(contenido,'hex') AS original FROM expediente_fiscal_excel WHERE archivo='IVA.xlsx'")).rows,
+      [{archivo:'IVA.xlsx',original:'504b'}]);
+    await assert.rejects(db.query("SELECT archivar_respaldo_fiscal(9,'IVA.xlsx','UEs=')"));
+    await db.exec("RESET ROLE");
     await pagina.evaluate(() => {ExcelImportacion.cerrar(); LibroDiario.abrir();});
     await pagina.locator('#libro-diario-pdf').waitFor();
     assert.match(await pagina.locator('#libro-diario-resultados').textContent(),/001-01.*Caja.*1,000\.01/s);

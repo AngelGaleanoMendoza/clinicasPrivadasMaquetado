@@ -3211,9 +3211,10 @@
     <h2 id="excel-titulo">Importar Excel</h2>
     <p id="excel-establecimiento"></p>
     <div class="excel-grid">
-      <label>Archivos .xlsx, .xls o .csv
-        <input type="file" id="excel-archivos" accept=".xlsx,.xls,.csv" multiple onchange="ExcelImportacion.cargar()">
+      <label>Excel y anexos del expediente
+        <input type="file" id="excel-archivos" accept=".xlsx,.xls,.csv,.pdf,.zip,.eml,.png,.jpg,.jpeg" multiple onchange="ExcelImportacion.cargar()">
       </label>
+      <label>Carpeta del expediente<input type="file" id="excel-carpeta" webkitdirectory multiple onchange="ExcelImportacion.cargar(true)"></label>
       <div class="excel-plantilla">
         <label>Plantilla CSV<select id="excel-plantilla"></select></label>
         <button type="button" class="btn btn-secondary btn-sm" onclick="ExcelImportacion.plantilla()">Descargar</button>
@@ -3222,12 +3223,18 @@
     <fieldset id="excel-hojas" class="excel-hojas" aria-label="Hojas del archivo" onchange="ExcelImportacion.cambiar(event)"></fieldset>
     <p id="excel-estado" role="status"></p>
     <div id="excel-resultados"></div>
+    <p id="excel-situacion"></p>
+    <details id="excel-expediente"><summary id="excel-expediente-resumen">Expediente fiscal</summary>
+      <p>Los originales quedan disponibles como respaldo de la empresa. Para importar los asientos, adjunta en la misma selección el diario, la balanza y los auxiliares al mismo corte. Usa saldos con signo acreedor negativo.</p>
+      <div id="excel-documentos"></div>
+    </details>
     <details id="excel-historial-toggle" ontoggle="ExcelImportacion.historial()">
       <summary>Historial y comprobantes</summary>
       <div id="excel-historial"></div>
     </details>
     <div class="modal-footer">
       <button type="button" id="excel-cerrar" class="btn btn-secondary" onclick="ExcelImportacion.cerrar()">Cerrar</button>
+      <button type="button" id="excel-archivar" class="btn btn-secondary" onclick="ExcelImportacion.archivar()" hidden>Guardar respaldos fiscales</button>
       <button type="button" id="excel-revisar" class="btn btn-secondary" onclick="ExcelImportacion.revisar()" disabled>Revisar filas</button>
       <button type="button" id="excel-confirmar" class="btn btn-primary" onclick="ExcelImportacion.confirmar()" hidden>Guardar importación</button>
     </div>
@@ -3235,7 +3242,7 @@
 </div>
 <script src="js/app.js?v=20261118b" defer></script>
 <script src="js/reportes-zip.js?v=20261118diario" defer></script>
-<script src="js/importar-excel.js?v=20261118diario" defer></script>
+<script src="js/importar-excel.js?v=20261118expediente" defer></script>
 <script src="js/libro-diario.js?v=20261118diario" defer></script>
 <div class="modal-overlay" id="modal-libro-diario">
   <section class="modal modal-lg libro-diario" role="dialog" aria-modal="true" aria-labelledby="libro-diario-titulo">

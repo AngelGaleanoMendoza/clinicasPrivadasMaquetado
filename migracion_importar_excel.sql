@@ -89,6 +89,32 @@ BEGIN
 END;
 $$;
 
+-- Originales del expediente fiscal. La clave de contenido hace reintentable la carga.
+CREATE TABLE IF NOT EXISTS public.expediente_fiscal_excel (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  clinica_id bigint NOT NULL REFERENCES public.clinicas(id) ON DELETE CASCADE,
+  archivo text NOT NULL CHECK (length(archivo) BETWEEN 1 AND 512),
+  contenido bytea NOT NULL CHECK (octet_length(contenido) BETWEEN 1 AND 20971520),
+  digest text GENERATED ALWAYS AS (encode(sha256(contenido),'hex')) STORED,
+  creado_en timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (clinica_id,archivo,digest)
+);
+ALTER TABLE public.expediente_fiscal_excel ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS expediente_contabilidad ON public.expediente_fiscal_excel;
+CREATE POLICY expediente_contabilidad ON public.expediente_fiscal_excel TO authenticated
+  USING ('contabilidad'=ANY(public.modulos_importacion_excel(clinica_id)))
+  WITH CHECK ('contabilidad'=ANY(public.modulos_importacion_excel(clinica_id)));
+REVOKE ALL ON public.expediente_fiscal_excel FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT(clinica_id,archivo,contenido) ON public.expediente_fiscal_excel TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.archivar_respaldo_fiscal(p_clinica bigint,p_archivo text,p_base64 text)
+RETURNS void LANGUAGE sql SECURITY INVOKER SET search_path='' AS $$
+  INSERT INTO public.expediente_fiscal_excel(clinica_id,archivo,contenido)
+  VALUES(p_clinica,p_archivo,decode(p_base64,'base64')) ON CONFLICT(clinica_id,archivo,digest) DO NOTHING
+$$;
+REVOKE ALL ON FUNCTION public.archivar_respaldo_fiscal(bigint,text,text) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.archivar_respaldo_fiscal(bigint,text,text) TO authenticated;
+
 ALTER TABLE public.importaciones_excel ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.importaciones_excel_filas ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS importaciones_excel_leer ON public.importaciones_excel;
@@ -253,6 +279,10 @@ DECLARE
   v_dias integer;
   v_ref bigint;
   v_entidad text;
+  v_controles jsonb;
+  v_diferencia record;
+  v_desde date;
+  v_hasta date;
   v_mapa_entidades jsonb := '{}';
   v_proveedores integer := 0;
   v_clientes integer := 0;
@@ -267,6 +297,14 @@ BEGIN
   END IF;
   IF jsonb_typeof(p_filas) IS DISTINCT FROM 'array' THEN
     RAISE EXCEPTION 'La carga debe contener una lista de filas.';
+  END IF;
+  IF pg_column_size(p_filas) > 6000000 THEN RAISE EXCEPTION 'La carga supera 6 MB.'; END IF;
+  SELECT jsonb_agg(x) INTO v_controles FROM jsonb_array_elements(p_filas) x
+    WHERE x->>'tipo' IN ('balanza','auxiliar');
+  IF v_controles IS NOT NULL THEN
+    SELECT coalesce(jsonb_agg(x ORDER BY n),'[]') INTO p_filas
+      FROM jsonb_array_elements(p_filas) WITH ORDINALITY t(x,n)
+      WHERE x->>'tipo' NOT IN ('balanza','auxiliar');
   END IF;
   IF jsonb_array_length(p_filas) NOT BETWEEN 1 AND 1000 OR pg_column_size(p_filas) > 3000000 THEN
     RAISE EXCEPTION 'La carga admite hasta 1,000 filas y 3 MB de datos asignados.';
@@ -310,6 +348,11 @@ BEGIN
       IF nullif(btrim(v_archivo),'') IS NULL OR nullif(btrim(v_hoja),'') IS NULL OR
         v_numero IS NULL OR v_numero NOT BETWEEN 1 AND 2000 OR jsonb_typeof(v_d) IS DISTINCT FROM 'object' THEN
         RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'Faltan el archivo, la hoja, la fila o sus valores.';
+      END IF;
+      -- Los clientes anteriores podían enviar estas plantillas DGI como datos operativos.
+      IF v_archivo ~* '^([0-9]+[ ._-]+)?(iva|retenciones|anticipo[ _-]+ir)[ ._-]' AND
+         v_archivo ~* 'medicsa([ ._-]|$)' THEN
+        RAISE EXCEPTION USING ERRCODE='22023', MESSAGE='Esta plantilla fiscal de Medicsa se guarda como respaldo en el expediente.';
       END IF;
       v_cantidad := NULL;
       v_fecha := public._excel_fecha(v_d->>'fecha','La fecha',v_tipo IN ('finanzas','movimientos','cxc','cxp','facturas','diario'));
@@ -626,11 +669,88 @@ BEGIN
         'registro_id',v_registro::text,'estado',v_estado,'error',v_error,'detalle',v_detalle,'lote',v_recibo));
   END LOOP;
 
+  IF v_errores = 0 AND (v_controles IS NOT NULL OR EXISTS (
+      SELECT 1 FROM jsonb_array_elements(p_filas) x WHERE x->>'tipo'='diario')) THEN
+    SELECT min((x->'datos'->>'fecha')::date),max((x->'datos'->>'fecha')::date) INTO v_desde,v_hasta
+      FROM jsonb_array_elements(p_filas) x WHERE x->>'tipo'='diario';
+    IF v_desde IS NULL OR NOT EXISTS (SELECT FROM jsonb_array_elements(v_controles) x WHERE x->>'tipo'='balanza')
+       OR NOT EXISTS (SELECT FROM jsonb_array_elements(v_controles) x WHERE x->>'tipo'='auxiliar') THEN
+      RAISE EXCEPTION 'Migración pendiente. Adjunta el diario, la balanza y los auxiliares del mismo período.';
+    END IF;
+    IF (SELECT count(DISTINCT x->'datos'->>'corte')>1 OR count(DISTINCT x->'datos'->>'desde')>1 OR
+            min((x->'datos'->>'corte')::date)<v_hasta OR min((x->'datos'->>'desde')::date)>v_desde
+        FROM jsonb_array_elements(v_controles) x) THEN
+      RAISE EXCEPTION 'Migración pendiente. Las fechas de los controles difieren o dejan asientos fuera del período.';
+    END IF;
+    SELECT coalesce(min((x->'datos'->>'desde')::date),v_desde),coalesce(max((x->'datos'->>'corte')::date),v_hasta)
+      INTO v_desde,v_hasta FROM jsonb_array_elements(v_controles) x;
+    -- Los saldos iniciales se contrastan con el libro ya registrado. Los movimientos
+    -- deben coincidir tanto con el diario aportado como con el resultado tras la carga.
+    FOR v_diferencia IN
+      WITH controles AS (
+        SELECT x->>'tipo' tipo, btrim(x->'datos'->>'cuenta') cuenta, x->'datos' d, n
+        FROM jsonb_array_elements(v_controles) WITH ORDINALITY t(x,n)
+      ), bal AS (
+        SELECT cuenta,count(*) n,min((d->>'apertura')::numeric) apertura,min((d->>'debe')::numeric) debe,
+          min((d->>'haber')::numeric) haber,min((d->>'saldo')::numeric) saldo,
+          bool_or(coalesce(d->>'nombre','') ~* '(caja|banco|inventario|por cobrar|por pagar|proveedores|clientes)') requiere_aux
+        FROM controles WHERE tipo='balanza' GROUP BY cuenta
+      ), detalle_aux AS (
+        SELECT cuenta,n,(d->>'saldo')::numeric saldo,(d->>'debe')::numeric debe,(d->>'haber')::numeric haber,
+          lag((d->>'saldo')::numeric) OVER (PARTITION BY cuenta ORDER BY n) anterior
+        FROM controles WHERE tipo='auxiliar'
+      ), aux AS (
+        SELECT cuenta,CASE WHEN count(debe)>0 THEN (array_agg(saldo ORDER BY n DESC))[1] ELSE sum(saldo) END saldo,
+          bool_and(saldo IS NOT NULL) AND (count(debe)=0 AND count(haber)=0 OR
+            count(debe)=count(*) AND count(haber)=count(*) AND bool_and(anterior IS NULL OR saldo=anterior+debe-haber)) completo,
+          sum(debe) debe,sum(haber) haber
+        FROM detalle_aux GROUP BY cuenta
+      ), mov AS (
+        SELECT btrim(l->>'cuenta') cuenta,bool_or(l->>'nombre_cuenta' ~* '(caja|banco|inventario|por cobrar|por pagar|proveedores|clientes)') requiere_aux,
+          sum(coalesce((l->>'debe')::numeric,0)) debe,
+          sum(coalesce((l->>'haber')::numeric,0)) haber
+        FROM jsonb_array_elements(p_filas) x CROSS JOIN LATERAL
+          jsonb_array_elements(x->'datos'->'lineas') l WHERE x->>'tipo'='diario' GROUP BY 1
+      ), nuevos AS (
+        SELECT l->>'cuenta' cuenta,sum((l->>'debe')::numeric) debe,sum((l->>'haber')::numeric) haber
+        FROM jsonb_array_elements(v_plan) x CROSS JOIN LATERAL jsonb_array_elements(x->'datos'->'lineas') l
+        WHERE x->>'tipo'='diario' GROUP BY 1
+      ), previo AS (
+        SELECT codigo cuenta,apertura::numeric,debe::numeric,haber::numeric,
+          nombre ~* '(caja|banco|inventario|por cobrar|por pagar|proveedores|clientes)' requiere_aux FROM public.balanza_libro_diario(p_clinica,v_desde,v_hasta)
+      ), cuentas AS (SELECT cuenta FROM bal UNION SELECT cuenta FROM aux UNION SELECT cuenta FROM mov UNION SELECT cuenta FROM previo)
+      SELECT c.cuenta,CASE
+        WHEN b.n IS DISTINCT FROM 1 THEN 'falta la cuenta en la balanza o está repetida'
+        WHEN b.apertura IS DISTINCT FROM coalesce(p.apertura,0) THEN 'el saldo inicial difiere del libro registrado'
+        WHEN b.debe IS DISTINCT FROM coalesce(m.debe,0) OR b.haber IS DISTINCT FROM coalesce(m.haber,0)
+          THEN 'los movimientos del diario difieren de la balanza'
+        WHEN b.debe <> coalesce(p.debe,0)+coalesce(n.debe,0) OR b.haber <> coalesce(p.haber,0)+coalesce(n.haber,0)
+          THEN 'el libro resultante difiere de la balanza'
+        WHEN b.saldo IS DISTINCT FROM b.apertura+b.debe-b.haber THEN 'el saldo final de la balanza difiere del calculado'
+        WHEN (b.requiere_aux OR m.requiere_aux OR p.requiere_aux) AND a.cuenta IS NULL THEN 'falta el auxiliar de esta cuenta'
+        WHEN a.debe IS NOT NULL AND (a.debe<>b.debe OR a.haber<>b.haber) THEN 'los movimientos del auxiliar difieren de la balanza'
+        WHEN a.cuenta IS NOT NULL AND (NOT a.completo OR a.saldo IS DISTINCT FROM b.saldo) THEN 'el saldo del auxiliar difiere de la balanza'
+      END motivo
+      FROM cuentas c LEFT JOIN bal b USING(cuenta) LEFT JOIN aux a USING(cuenta)
+      LEFT JOIN mov m USING(cuenta) LEFT JOIN nuevos n USING(cuenta) LEFT JOIN previo p USING(cuenta)
+      ORDER BY c.cuenta
+    LOOP
+      IF v_diferencia.motivo IS NOT NULL THEN
+        RAISE EXCEPTION 'Migración pendiente. Cuenta %: %.',v_diferencia.cuenta,v_diferencia.motivo;
+      END IF;
+    END LOOP;
+  END IF;
+
   v_resumen := jsonb_build_object('nuevas',v_nuevas,'duplicadas',v_duplicadas,'errores',v_errores,
     'finanzas',v_finanzas,'productos',v_productos,'movimientos',v_movimientos,'ingresos',v_ingresos,'egresos',v_egresos,
     'proveedores',v_proveedores,'clientes',v_clientes,'facturas',v_facturas,'cxc',v_cxc,'cxp',v_cxp,'por_cobrar',v_por_cobrar,'por_pagar',v_por_pagar,
     'asientos',v_asientos,'debe',v_total_debe,'haber',v_total_haber);
-  v_revision := md5(v_resultados::text || v_plan::text);
+  IF v_controles IS NOT NULL AND v_errores=0 THEN
+    v_resumen := v_resumen || jsonb_build_object('conciliacion',jsonb_build_object(
+      'desde',v_desde,'hasta',v_hasta,'fuentes',(SELECT jsonb_agg(DISTINCT jsonb_build_object(
+        'archivo',x->>'archivo','hoja',x->>'hoja','tipo',x->>'tipo')) FROM jsonb_array_elements(v_controles) x)));
+  END IF;
+  v_revision := md5(v_resultados::text || v_plan::text || coalesce(v_controles::text,''));
   v_cambio := p_confirmar AND p_revision IS NOT NULL AND p_revision <> v_revision AND v_nuevas > 0 AND v_errores = 0;
   IF p_confirmar AND NOT v_cambio AND v_errores = 0 AND v_nuevas > 0 THEN
     INSERT INTO public.importaciones_excel (clinica_id,usuario_id,modulos,resumen)

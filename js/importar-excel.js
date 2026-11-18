@@ -142,7 +142,8 @@ const ExcelImportacion = (() => {
       toast('Selecciona un establecimiento con acceso a Finanzas, Inventario o Contabilidad.', 'info');
       return;
     }
-    estado = {clinica:currentClinicaId, usuario:currentUser?.id, hojas:[], recibos:[], version:0};
+    estado = {clinica:currentClinicaId, usuario:currentUser?.id, hojas:[], recibos:[], respaldos:[], documentos:[], version:0};
+    el('carpeta').value = '';
     el('archivos').value = '';
     el('hojas').replaceChildren();
     el('establecimiento').textContent = (currentClinica?.nombre || 'Establecimiento activo') +
@@ -153,12 +154,18 @@ const ExcelImportacion = (() => {
     mensaje('');
     invalidar();
     openModalOverlay('modal-importar-excel');
+    el('expediente').hidden = !hasPermiso('contabilidad');
+    el('documentos').textContent = '';
+    el('expediente-resumen').textContent = 'Expediente fiscal';
+    el('situacion').textContent = '';
+    if (hasPermiso('contabilidad')) leerExpediente(estado);
     el('archivos').focus();
   }
 
   function cerrar() {
     if (estado?.ocupado === 'guardando') return;
     estado = null;
+    el('carpeta').value = '';
     el('archivos').value = '';
     el('hojas').replaceChildren();
     el('resultados').replaceChildren();
@@ -173,9 +180,11 @@ const ExcelImportacion = (() => {
 
   function controles() {
     const ocupado = !!estado.ocupado;
-    el('archivos').disabled = ocupado;
+    el('archivos').disabled = el('carpeta').disabled = ocupado;
+    el('archivar').hidden = !estado.respaldos.length || !hasPermiso('contabilidad');
+    el('archivar').disabled = ocupado;
     el('hojas').disabled = ocupado;
-    el('revisar').disabled = ocupado || !estado.hojas.some(h => h.tipo);
+    el('revisar').disabled = ocupado || !estado.hojas.some(h => h.tipo || h.control);
     el('confirmar').hidden = !estado.plan;
     el('confirmar').disabled = ocupado;
     el('cerrar').disabled = estado.ocupado === 'guardando';
@@ -205,15 +214,18 @@ const ExcelImportacion = (() => {
     });
   }
 
-  async function cargar() {
+  async function cargar(carpeta = false) {
     const e = estado;
     if (!activo(e) || e.ocupado) return;
-    const archivos = [...el('archivos').files];
+    const archivos = [...el(carpeta ? 'carpeta' : 'archivos').files].filter(f =>
+      !f.name.startsWith('~$') && (!carpeta || /\.(xlsx?|csv|pdf|zip|eml|png|jpe?g)$/i.test(f.name)));
+    el(carpeta ? 'archivos' : 'carpeta').value = '';
+    e.respaldos = [];
     e.hojas = [];
     invalidar();
     dibujarHojas();
-    if (archivos.length > 8 || archivos.reduce((n, f) => n + f.size, 0) > 20 * 1024 * 1024) {
-      mensaje('Selecciona hasta 8 archivos con un máximo conjunto de 20 MB.', true);
+    if (archivos.length > 200 || archivos.reduce((n, f) => n + f.size, 0) > 150 * 1024 * 1024) {
+      mensaje('Selecciona hasta 200 archivos con un máximo conjunto de 150 MB.', true);
       return;
     }
     recogerEstado(e, 'leyendo', 'Leyendo y reconociendo las hojas…');
@@ -221,15 +233,22 @@ const ExcelImportacion = (() => {
     for (const archivo of archivos) {
       if (!activo(e)) return;
       try {
+        if (/\.(pdf|zip|eml|png|jpe?g)$/i.test(archivo.name)) {
+          if (archivo.size > 20 * 1024 * 1024) throw new Error('El anexo supera 20 MB.');
+          e.respaldos.push(archivo);
+          continue;
+        }
         if (archivo.size > 5 * 1024 * 1024) throw new Error('Supera el máximo de 5 MB por archivo.');
         const hojas = await leerArchivo(archivo);
-        e.hojas.push(...hojas.map(h => detectar({...h, archivo:archivo.name, encabezado:h.filas[0]?.numero, tipo:'', mapa:{}, fijos:{}})));
+        const clasificadas = hojas.map(h => detectar({...h, archivo:archivo.name, encabezado:h.filas[0]?.numero, tipo:'', mapa:{}, fijos:{}}));
+        if (clasificadas.some(h => h.fiscal)) e.respaldos.push(archivo);
+        e.hojas.push(...clasificadas);
       } catch (error) {
         errores.push(archivo.name + ' · ' + error.message);
       }
     }
     if (!activo(e)) return;
-    if (errores.length) e.hojas = [];
+    if (errores.length) { e.hojas = []; e.respaldos = []; }
     e.ocupado = '';
     dibujarHojas();
     controles();
@@ -237,7 +256,10 @@ const ExcelImportacion = (() => {
     if (!archivos.length) { mensaje(''); return; }
     const reconocidas = e.hojas.filter(h => h.tipo);
     const pendientes = reconocidas.filter(h => faltantes(h).length);
-    if (!reconocidas.length) {
+    if (!reconocidas.length && (e.respaldos.length || e.hojas.some(h => h.control))) {
+      mensaje('Migración pendiente. Para conciliar, selecciona el libro diario, la balanza y los auxiliares del mismo período.' +
+        (e.respaldos.length ? ' Hay ' + e.respaldos.length + ' archivo(s) para guardar en el expediente.' : ''));
+    } else if (!reconocidas.length) {
       mensaje('No se reconoció el contenido de las hojas. Elige el destino de cada una.', true);
     } else if (pendientes.length) {
       mensaje('Se reconocieron ' + reconocidas.length + ' hoja(s). Completa los campos marcados y pulsa «Revisar filas».', true);
@@ -311,9 +333,53 @@ const ExcelImportacion = (() => {
     }
     return fijos;
   }
+  function clasificarExpediente(hoja) {
+    const filas = hoja.filas.slice(0, 40);
+    const campos = filas.map(f => f.celdas.map(c => normal(c?.valor)));
+    const fiscal = campos.some(c => c.includes('codigo de retencion') && c.includes('valor retenido') ||
+      c.some(v => v?.includes('valor iva trasladado')) && c.includes('ruc')) ||
+      campos.some(c => c.includes('base imponible para determinar el iva')) &&
+      campos.some(c => c.includes('base imponible para determinar pmd o anticipo'));
+    if (fiscal) { hoja.fiscal = true; return true; }
+
+    const claves = {
+      cuenta:['codigo de cuenta','codigo cuenta','codigo contable','cuenta contable','codigo','cuenta'],
+      nombre:['nombre de cuenta','nombre cuenta','nombre de la cuenta','descripcion de cuenta','cuenta'],
+      apertura:['apertura','saldo inicial','saldo anterior'],
+      debe:['debe','debitos','movimiento deudor','cargos'], haber:['haber','creditos','movimiento acreedor','abonos'],
+      desde:['fecha inicial','desde','inicio del periodo'],corte:['fecha de corte','fecha corte','hasta','fin del periodo'],
+      saldo:['saldo final','saldo al cierre','saldo pendiente','saldo','saldo contable']
+    };
+    const etiqueta = normal(hoja.nombre);
+    const nombre = normal(hoja.archivo);
+    const origen = /balanza|auxiliar|diario/.test(etiqueta) ? etiqueta : nombre;
+    for (const [i, c] of campos.entries()) {
+      const mapa = {};
+      for (const [id,alias] of Object.entries(claves)) {
+        const indice = alias.map(a => c.indexOf(a)).find(j => j >= 0);
+        if (indice !== undefined) mapa[id] = indice;
+      }
+      if (mapa.cuenta === mapa.nombre) delete mapa.nombre;
+      const balanza = ['cuenta','apertura','debe','haber','saldo'].every(k => mapa[k] != null);
+      const auxiliar = /auxiliar/.test(origen) && mapa.cuenta != null && mapa.saldo != null;
+      if (!balanza && !auxiliar) continue;
+      hoja.control = auxiliar ? 'auxiliar' : 'balanza';
+      hoja.mapa = mapa;
+      hoja.encabezado = filas[i].numero;
+      return true;
+    }
+    if (/\b(balanza|auxiliar|auxiliares)\b/.test(etiqueta) ||
+        hoja.nombre.match(/^(sheet|hoja)\s*\d+$/i) && /\b(balanza|auxiliar|auxiliares)\b/.test(nombre)) {
+      hoja.error = 'Faltan columnas de conciliación. Usa código de cuenta y saldo final para auxiliares. La balanza también requiere saldo inicial, Debe y Haber.';
+      return true;
+    }
+    return false;
+  }
+
   function detectar(hoja) {
     hoja.deteccion = null;
     if (hoja.error || !hoja.filas.length) return hoja;
+    if (clasificarExpediente(hoja)) return hoja;
     const texto = normal(hoja.nombre + ' ' + hoja.archivo.replace(/\.[^.]+$/, ''));
     const porTipo = {};
     let facturaIncompleta = false;
@@ -404,6 +470,7 @@ const ExcelImportacion = (() => {
       if (h.tipoDetectado === undefined) h.tipoDetectado = h.tipo;
       const titulo = escAttr(h.archivo) + ' · ' + escAttr(h.nombre) + (h.oculta ? ' (oculta)' : '');
       if (h.error || !h.filas.length) return `<section class="excel-hoja"><strong>${titulo}</strong><p>${escAttr(h.error || 'Hoja vacía')}</p></section>`;
+      if (h.fiscal || h.control) return `<section class="excel-hoja"><strong>${titulo}</strong><p>${h.fiscal ? 'Respaldo fiscal' : h.control === 'balanza' ? 'Balanza de comprobación' : 'Auxiliar contable'} · ${h.fiscal ? 'Disponible para el expediente' : 'Control de conciliación'}</p></section>`;
       const opciones = tiposDisponibles().map(t => `<option value="${t}" ${h.tipo === t ? 'selected' : ''}>${TIPOS[t].titulo}</option>`).join('');
       const columnas = cabecera(h);
       const falta = h.tipo ? faltantes(h) : [];
@@ -446,6 +513,7 @@ const ExcelImportacion = (() => {
     const tarjeta = control.closest('[data-hoja]');
     if (!tarjeta || !activo(estado)) return;
     const hoja = estado.hojas[Number(tarjeta.dataset.hoja)];
+    if (!hoja || hoja.fiscal || hoja.control) return;
     if (control.dataset.mapa) {
       const id = control.dataset.mapa;
       delete hoja.mapa[id];
@@ -634,7 +702,7 @@ const ExcelImportacion = (() => {
 
   function preparar() {
     const filas = [], vistas = {};
-    const errores = estado.hojas.filter(h => h.error || (!h.tipo && !h.omitida && h.filas.length))
+    const errores = estado.hojas.filter(h => h.error || (!h.tipo && !h.control && !h.fiscal && !h.omitida && h.filas.length))
       .map(h => ({archivo:h.archivo,hoja:h.nombre,fila:h.encabezado,
         error:h.error || 'No se identificó el destino de la hoja. Selecciona el destino o indica que se puede omitir.'}));
     const facturas = new Map();
@@ -694,12 +762,53 @@ const ExcelImportacion = (() => {
       }
       if (!datosHoja) errores.push({...origen, error:'La hoja no tiene datos después del encabezado.'});
     }
+    const controles = estado.hojas.filter(h => h.control);
+    if (asientos.size || controles.length || estado.hojas.some(h => h.fiscal) && filas.length) {
+      const faltan = [];
+      if (!asientos.size) faltan.push('libro diario');
+      if (!controles.some(h => h.control === 'balanza')) faltan.push('balanza');
+      if (!controles.some(h => h.control === 'auxiliar')) faltan.push('auxiliares');
+      if (faltan.length) errores.push({error:'Migración pendiente. Falta adjuntar: ' + faltan.join(', ') + '.'});
+    }
+    for (const h of controles) {
+      let cantidad = 0;
+      for (const f of h.filas.filter(f => f.numero > h.encabezado)) {
+        const origen = {archivo:h.archivo,hoja:h.nombre,fila:f.numero};
+        try {
+          const celda = k => f.celdas[h.mapa[k]];
+          const cuenta = texto(celda('cuenta'),true);
+          if (TOTALES.has(normal(cuenta)) || !cuenta && f.celdas.some(c => TOTALES.has(normal(c?.valor)))) continue;
+          if (!cuenta) throw new Error('Falta el código de cuenta.');
+          const datos = {cuenta,nombre:texto(celda('nombre'))};
+          for (const k of ['desde','corte']) {
+            if (h.mapa[k] != null) {
+              datos[k] = fecha(celda(k),h.fecha1904);
+              if (!datos[k]) throw new Error('Falta la fecha de ' + k + '.');
+            }
+          }
+          for (const k of h.control === 'balanza' ? ['apertura','debe','haber','saldo'] : ['saldo']) {
+            datos[k] = decimal(celda(k),2,['apertura','saldo'].includes(k),true);
+            if (datos[k] == null && ['debe','haber'].includes(k)) datos[k] = 0;
+            if (datos[k] == null) throw new Error('Falta el importe de ' + k + '.');
+          }
+          if (h.control === 'auxiliar' && (h.mapa.debe != null || h.mapa.haber != null)) {
+            if (h.mapa.debe == null || h.mapa.haber == null) throw new Error('El auxiliar de movimientos requiere Debe y Haber.');
+            datos.debe = decimal(celda('debe'),2,false,true) ?? 0;
+            datos.haber = decimal(celda('haber'),2,false,true) ?? 0;
+          }
+          filas.push({...origen,tipo:h.control,datos});
+          cantidad++;
+        } catch (error) { errores.push({...origen,error:error.message}); }
+      }
+      if (!cantidad) errores.push({archivo:h.archivo,hoja:h.nombre,error:'El control no contiene cuentas válidas.'});
+    }
     return {filas, errores, ignoradas};
   }
 
   function resultados(entradas, resumen = null) {
     const omitidas = estado.hojas.filter(h => h.omitida).length;
     const partes = resumen ? [
+      resumen.conciliacion && 'Diario, balanza y auxiliares conciliados del ' + resumen.conciliacion.desde + ' al ' + resumen.conciliacion.hasta,
       resumen.productos && resumen.productos + ' producto(s)', resumen.proveedores && resumen.proveedores + ' proveedor(es)',
       resumen.clientes && resumen.clientes + ' cliente(s)', resumen.movimientos && resumen.movimientos + ' movimiento(s)',
       resumen.finanzas && `${resumen.finanzas} movimiento(s) de caja · Ingresos ${fmtC(resumen.ingresos)} · Gastos ${fmtC(resumen.egresos)}`,
@@ -721,12 +830,13 @@ const ExcelImportacion = (() => {
   async function solicitar(e, confirmar, reconocidas = 0) {
     if (!activo(e) || e.ocupado) return;
     const version = e.version;
+    if (!confirmar) e.plan = null;
     const plan = confirmar ? e.plan : preparar();
     if (!plan) return;
     if (!confirmar) e.ignoradas = plan.ignoradas;
-    if (!confirmar && (plan.errores.length || !plan.filas.length || plan.filas.length > LIMITE)) {
+    if (!confirmar && (plan.errores.length || !plan.filas.length || plan.filas.filter(r => !['auxiliar','balanza'].includes(r.tipo)).length > LIMITE)) {
       resultados(plan.errores);
-      mensaje(plan.filas.length > LIMITE ? 'Divide la carga en grupos de hasta 1,000 filas.' : 'Corrige los errores de la revisión.', true);
+      mensaje(plan.filas.filter(r => !['auxiliar','balanza'].includes(r.tipo)).length > LIMITE ? 'Divide la carga en grupos de hasta 1,000 filas.' : 'Corrige los errores de la revisión.', true);
       return;
     }
     recogerEstado(e, confirmar ? 'guardando' : 'validando', confirmar ? 'Guardando la importación…' : 'Validando con el establecimiento…');
@@ -749,6 +859,7 @@ const ExcelImportacion = (() => {
         mensaje('Importación guardada. Comprobante ' + data.lote + '.');
         if (el('historial-toggle').open) await historial();
         else el('historial-toggle').open = true;
+        if (data.resumen.conciliacion) await leerExpediente(e);
         await loadAll();
         if (activo(e)) {
           if (currentView === 'finanzas') renderFinanzas();
@@ -779,6 +890,72 @@ const ExcelImportacion = (() => {
     descargar('﻿' + TIPOS[tipo].campos.map(([id]) => id).join(';') + '\r\n', tipo + '.csv', 'text/csv;charset=utf-8');
   }
 
+  async function leerExpediente(e) {
+    try {
+      const {data,error} = await consultarPaginas(() => sb.from('expediente_fiscal_excel')
+        .select('id,archivo,creado_en').eq('clinica_id',e.clinica).order('archivo').order('id'));
+      if (!activo(e)) return;
+      if (error) throw error;
+      e.documentos = data;
+      const libros = data.filter(doc => /\.(xlsx?|csv)$/i.test(doc.archivo)).length;
+      el('expediente-resumen').textContent = 'Expediente fiscal · ' + libros + ' Excel/CSV · ' + (data.length-libros) + ' anexos';
+      el('documentos').innerHTML = data.length ? data.map((doc,i) =>
+        `<div class="excel-recibo"><span>${escAttr(doc.archivo)}</span><button class="btn btn-secondary btn-sm" type="button" onclick="ExcelImportacion.descargarOriginal(${i})">Descargar original</button></div>`).join('') :
+        'El expediente todavía está vacío.';
+      const ultima = await sb.from('importaciones_excel').select('creado_en,resumen').eq('clinica_id',e.clinica)
+        .not('resumen->conciliacion','is',null).order('creado_en',{ascending:false}).limit(1);
+      if (!activo(e)) return;
+      if (ultima.error) throw ultima.error;
+      const periodo = ultima.data[0]?.resumen?.conciliacion;
+      el('situacion').textContent = periodo ? 'Último diario conciliado del ' + periodo.desde + ' al ' + periodo.hasta + '.' :
+        data.length ? 'Migración pendiente. Hay respaldo fiscal. Falta conciliar el libro diario, la balanza y los auxiliares.' : '';
+    } catch (error) {
+      if (activo(e)) el('situacion').textContent = 'No se pudo consultar el estado del expediente. Verifica migracion_importar_excel.sql en Supabase.';
+    }
+  }
+
+  async function archivar() {
+    const e = estado;
+    if (!activo(e) || e.ocupado || !e.respaldos.length || !hasPermiso('contabilidad')) return;
+    recogerEstado(e,'guardando','Guardando originales del expediente…');
+    try {
+      while (e.respaldos.length) {
+        const f = e.respaldos[0];
+        const contenido = await new Promise((resolve,reject) => {
+          const lector = new FileReader();
+          lector.onerror = () => reject(new Error('No se pudo leer ' + f.name));
+          lector.onload = () => resolve(lector.result.split(',')[1]);
+          lector.readAsDataURL(f);
+        });
+        if (!activo(e)) return;
+        const {error} = await sb.rpc('archivar_respaldo_fiscal',{p_clinica:e.clinica,p_archivo:f.webkitRelativePath || f.name,p_base64:contenido});
+        if (error) throw new Error(f.name + ' · ' + error.message);
+        e.respaldos.shift();
+        if (!activo(e)) return;
+      }
+      mensaje('Originales guardados en el expediente fiscal. La migración contable requiere diario, balanza y auxiliares conciliados.');
+    } catch (error) {
+      if (activo(e)) mensaje(error.message + ' · Pendientes de guardar: ' + e.respaldos.length,true);
+    } finally {
+      if (activo(e)) { e.ocupado = ''; controles(); await leerExpediente(e); }
+    }
+  }
+
+  async function descargarOriginal(indice) {
+    const e = estado;
+    const doc = e?.documentos[indice];
+    if (!doc || !activo(e)) return;
+    try {
+      const {data,error} = await sb.from('expediente_fiscal_excel').select('contenido').eq('clinica_id',e.clinica).eq('id',doc.id).single();
+      if (!activo(e)) return;
+      if (error) throw error;
+      const hex = data.contenido.slice(2);
+      const bytes = new Uint8Array(hex.length / 2);
+      for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.slice(i*2,i*2+2),16);
+      descargar(bytes, doc.archivo.split('/').pop(), 'application/octet-stream');
+    } catch (error) { if (activo(e)) mensaje('No se pudo descargar el original. ' + error.message,true); }
+  }
+
   async function historial() {
     const e = estado;
     if (!e || !activo(e) || !el('historial-toggle').open) return;
@@ -791,7 +968,7 @@ const ExcelImportacion = (() => {
       return;
     }
     e.recibos = data;
-    el('historial').innerHTML = data.map((l,i) => `<div class="excel-recibo"><span>${escAttr(new Date(l.creado_en).toLocaleString('es'))} · ${Number(l.resumen.nuevas)} filas</span>
+    el('historial').innerHTML = data.map((l,i) => `<div class="excel-recibo"><span>${escAttr(new Date(l.creado_en).toLocaleString('es'))} · ${Number(l.resumen.nuevas)} filas${l.resumen.conciliacion ? ' · Diario, balanza y auxiliares conciliados' : ''}</span>
       <button type="button" class="btn btn-secondary btn-sm" onclick="ExcelImportacion.comprobante(${i})">Descargar comprobante</button></div>`).join('')
       || 'Todavía no hay importaciones guardadas.';
   }
@@ -810,7 +987,7 @@ const ExcelImportacion = (() => {
     descargar(JSON.stringify({...lote, filas:data}, null, 2), 'importacion-' + lote.id + '.json', 'application/json');
   }
 
-  return {abrir,cerrar,cargar,cambiar,plantilla,historial,comprobante,
+  return {abrir,cerrar,cargar,cambiar,plantilla,historial,comprobante,archivar,descargarOriginal,
     revisar:() => estado && solicitar(estado,false),
     confirmar:() => estado && solicitar(estado,true),
     // Para pruebas: el reconocimiento y la lectura de valores sin interfaz.
