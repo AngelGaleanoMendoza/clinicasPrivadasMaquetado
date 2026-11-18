@@ -49,25 +49,38 @@ const LibroDiario = (() => {
     ];
   }
 
-  async function consultar() {
+  async function consultar(borrador=false) {
     const turno = ++consulta;
     const clinica = currentClinicaId;
     const desde = el('desde').value, hasta = el('hasta').value;
-    const botones = document.querySelectorAll('#'+idModal+' button[type="submit"]');
+    const controles = document.querySelectorAll('#'+idModal+' form button, #'+idModal+' form input');
     reporte = null;
     el('pdf').hidden = true;
+    controles.forEach(b => b.disabled = false);
     el('resultados').innerHTML = '';
     if(!desde || !hasta || desde > hasta) {
       el('estado').textContent = 'Elige un rango de fechas válido.';
       return;
     }
-    botones.forEach(b => b.disabled = true);
+    if (!hasPermiso('contabilidad')) { el('estado').textContent = 'Se requiere acceso a Contabilidad.'; return; }
+    controles.forEach(b => b.disabled = true);
     el('estado').textContent = 'Consultando…';
     try {
+      if (borrador) {
+        const vigente = () => turno === consulta && clinica === currentClinicaId && hasPermiso('contabilidad');
+        el('estado').textContent = 'Preparando el borrador con los documentos del expediente…';
+        const datos = await BorradorDiario.obtener(clinica,desde,hasta,vigente,nombre=>{
+          if (vigente()) el('estado').textContent='Leyendo el expediente · '+nombre;
+        });
+        if (!vigente()) return;
+        el('resultados').innerHTML = BorradorDiario.mostrar(datos);
+        el('estado').textContent = 'Borrador fiscal · Pendiente de conciliación. Importes en córdobas.';
+        return;
+      }
       const datos = await obtener(clinica,desde,hasta);
       if(turno !== consulta || clinica !== currentClinicaId) return;
       if(!datos?.cuentas.length) {
-        el('estado').textContent = datos ? 'No hay asientos importados hasta esa fecha.' : 'Aplica la migración actualizada de Excel en Supabase.';
+        el('estado').textContent = datos ? 'Sin asientos importados hasta esa fecha. Puedes generar el borrador con el expediente fiscal.' : 'Aplica la migración actualizada de Excel en Supabase.';
         return;
       }
       reporte = datos;
@@ -77,7 +90,7 @@ const LibroDiario = (() => {
     } catch(error) {
       if(turno === consulta) el('estado').textContent = error.message;
     } finally {
-      if(turno === consulta) botones.forEach(b => b.disabled = false);
+      if(turno === consulta) controles.forEach(b => b.disabled = false);
     }
   }
 

@@ -1,4 +1,4 @@
-const CajaEmpresa = (() => {
+﻿const CajaEmpresa = (() => {
   const el = id => document.getElementById('caja-' + id);
   const meses = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
   let consulta = 0;
@@ -115,5 +115,5 @@ const CajaEmpresa = (() => {
   function abrirLibros() {
     if (datos?.clinica === currentClinicaId) LibroDiario.abrir(el('anio').value);
   }
-  return {cargar,mostrar,abrirLibros};
+  return {cargar,mostrar,abrirLibros,periodoFiscal,ingresoDeclarado};
 })();

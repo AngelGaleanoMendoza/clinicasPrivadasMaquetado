@@ -3258,16 +3258,18 @@
 </div>
 <script src="js/app.js?v=20261118caja" defer></script>
 <script src="js/reportes-zip.js?v=20261118diario" defer></script>
-<script src="js/importar-excel.js?v=20261118caja" defer></script>
-<script src="js/libro-diario.js?v=20261118caja" defer></script>
-<script src="js/caja-empresa.js?v=20261118" defer></script>
+<script src="js/importar-excel.js?v=20261118borrador" defer></script>
+<script src="js/libro-diario.js?v=20261118borrador" defer></script>
+<script src="js/caja-empresa.js?v=20261118borrador" defer></script>
+<script src="js/borrador-diario.js?v=20261118" defer></script>
 <div class="modal-overlay" id="modal-libro-diario">
   <section class="modal modal-lg libro-diario" role="dialog" aria-modal="true" aria-labelledby="libro-diario-titulo">
     <h2 id="libro-diario-titulo">Libro diario y balanza de comprobación</h2>
     <form class="libro-diario-filtros" onsubmit="event.preventDefault(); LibroDiario.consultar()">
       <label>Desde<input type="date" id="libro-diario-desde" required></label>
       <label>Hasta<input type="date" id="libro-diario-hasta" required></label>
-      <button type="submit" class="btn btn-primary">Consultar</button>
+      <button type="submit" class="btn btn-primary">Consultar libro</button>
+      <button type="button" class="btn btn-secondary" onclick="LibroDiario.consultar(true)">Generar borrador fiscal</button>
     </form>
     <p class="text-light">La balanza se calcula con los asientos importados, incluido el asiento de apertura.</p>
     <p id="libro-diario-estado" role="status"></p>

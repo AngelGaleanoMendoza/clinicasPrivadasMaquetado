@@ -992,7 +992,7 @@ const ExcelImportacion = (() => {
     descargar(JSON.stringify({...lote, filas:data}, null, 2), 'importacion-' + lote.id + '.json', 'application/json');
   }
 
-  return {abrir,cerrar,cargar,cambiar,plantilla,historial,comprobante,archivar,descargarOriginal,leerArchivo,originalFiscal,
+  return {abrir,cerrar,cargar,cambiar,plantilla,historial,comprobante,archivar,descargarOriginal,leerArchivo,originalFiscal,fecha,
     revisar:() => estado && solicitar(estado,false),
     confirmar:() => estado && solicitar(estado,true),
     // Para pruebas: el reconocimiento y la lectura de valores sin interfaz.
