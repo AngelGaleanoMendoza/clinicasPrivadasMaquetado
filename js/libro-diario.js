@@ -24,17 +24,27 @@ const LibroDiario = (() => {
       if(['PGRST202','42P01'].includes(balanza.error.code)) return null;
       throw new Error('La balanza de comprobación no se pudo consultar.');
     }
-    const diario = await consultarPaginas(() => sb.from('libro_diario').select('id,fecha,documento,lineas')
+    const diario = await consultarPaginas(() => sb.from('libro_diario').select('*')
       .eq('clinica_id',clinica).gte('fecha',desde).lte('fecha',hasta).order('fecha').order('id'));
     if(diario.error) throw new Error('El libro diario no se pudo consultar.');
-    const columnas = ['apertura','debe','haber','saldo'];
-    const sumas = columnas.map(c => balanza.data.reduce((s,r) => s + centavos(r[c]),0n));
-    const cuentas = balanza.data.map(r => [r.codigo,r.nombre,...columnas.map(c=>moneda(centavos(r[c])))]);
+    const apertura=new Map();
+    for(const a of diario.data.filter(a=>a.origen==='apertura')) for(const l of a.lineas) {
+      const prev=apertura.get(l.cuenta)||[0n,0n];
+      apertura.set(l.cuenta,[prev[0]+centavos(l.debe),prev[1]+centavos(l.haber)]);
+    }
+    const sumas=[0n,0n,0n,0n];
+    const cuentas=balanza.data.map(r=>{
+      const [d,h]=apertura.get(r.codigo)||[0n,0n];
+      const importes=[centavos(r.apertura)+d-h,centavos(r.debe)-d,centavos(r.haber)-h,centavos(r.saldo)];
+      importes.forEach((n,i)=>sumas[i]+=n);
+      return [r.codigo,r.nombre,...importes.map(moneda)];
+    });
     if(cuentas.length) cuentas.push(['','Totales',...sumas.map(moneda)]);
     const lineas = diario.data.flatMap(a => a.lineas.map(l => [formatFecha(a.fecha),a.documento,l.cuenta,l.nombre_cuenta,
       l.descripcion,l.referencia,moneda(centavos(l.debe)),moneda(centavos(l.haber))]));
-    const debeLeido = diario.data.reduce((s,a)=>s+a.lineas.reduce((n,l)=>n+centavos(l.debe),0n),0n);
-    const haberLeido = diario.data.reduce((s,a)=>s+a.lineas.reduce((n,l)=>n+centavos(l.haber),0n),0n);
+    const movimientos=diario.data.filter(a=>a.origen!=='apertura');
+    const debeLeido = movimientos.reduce((s,a)=>s+a.lineas.reduce((n,l)=>n+centavos(l.debe),0n),0n);
+    const haberLeido = movimientos.reduce((s,a)=>s+a.lineas.reduce((n,l)=>n+centavos(l.haber),0n),0n);
     if(sumas[0] || sumas[3] || sumas[1] !== sumas[2] || sumas[1] !== debeLeido || sumas[2] !== haberLeido)
       throw new Error('El diario y la balanza no coinciden. Vuelve a consultar antes de exportar.');
     return {clinica,desde,hasta,cuentas,lineas};

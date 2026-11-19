@@ -558,7 +558,8 @@ async function verificarPantalla(db) {
   }
 }
 
-(async () => {
+module.exports={crearBase};
+if(require.main===module) (async () => {
   const db = await crearBase();
   try {
     await verificarBase(db);

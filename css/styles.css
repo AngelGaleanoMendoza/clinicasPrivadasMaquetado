@@ -551,6 +551,27 @@ body.dark .balance-pct{background:#0F172A}
 #excel-fecha-apertura{background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px}
 #libro-diario-resultados details{margin:12px 0}
 #libro-diario-resultados summary{cursor:pointer;font-weight:600}
+.lc-modulo{min-width:0}
+.lc-modulo .tabs{flex-wrap:wrap;margin-bottom:20px}
+.lc-modulo h2{font-size:1.2rem;margin:0 0 12px}
+.lc-modulo h3,.lc-modulo details{margin:18px 0 10px}
+.lc-modulo summary{font-weight:700;cursor:pointer}
+.lc-modulo p{margin:10px 0;line-height:1.55}
+.lc-campos,.lc-acciones{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;margin:14px 0}
+.lc-modulo label{display:grid;gap:5px;font-weight:600;font-size:13px;min-width:0}
+.lc-modulo input,.lc-modulo select{box-sizing:border-box;width:100%;min-width:0;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);padding:8px}
+.lc-modulo .lc-archivo{margin:12px 0;max-width:28rem}
+.lc-lineas{display:grid;gap:8px;margin:12px 0}
+.lc-linea{display:grid;grid-template-columns:minmax(90px,1fr) minmax(140px,2fr) minmax(100px,1fr) repeat(2,minmax(85px,1fr)) auto;gap:8px;align-items:end;padding:10px 0;border-bottom:1px solid var(--border)}
+.lc-tabla{max-height:55vh;overflow:auto}
+.lc-tabla table{width:100%;min-width:560px;border-collapse:collapse;font-size:13px}
+.lc-tabla th,.lc-tabla td{display:table-cell!important;text-align:left;padding:8px;border-bottom:1px solid var(--border)}
+.lc-tabla th{position:sticky;top:0;background:var(--card)}
+#lc-totales{font-variant-numeric:tabular-nums;font-weight:700}
+#lc-estado:empty{display:none}
+.lc-modulo [hidden]{display:none!important}
+@media(max-width:980px){.lc-linea{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:620px){.lc-linea{grid-template-columns:repeat(2,minmax(0,1fr))}.lc-campos label{flex:1 1 130px}.lc-modulo .tabs{gap:4px}.lc-modulo .tab{flex:1 1 44%}.lc-modulo{padding:14px}}
 .excel-hoja-lista{border-color:rgba(16,185,129,.45)}
 .excel-modal p.excel-detectado{margin:6px 0 0;font-weight:700;color:#15803D}
 body.dark .excel-modal p.excel-detectado{color:#6EE7B7}

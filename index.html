@@ -22,7 +22,7 @@
 <!-- Lectura local de machotes. El archivo se procesa en el navegador antes de
      guardarlo; Mammoth extrae DOCX y PDF.js se carga al elegir un PDF. -->
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js" defer></script>
-<link rel="stylesheet" href="css/styles.css?v=20261118inventario">
+<link rel="stylesheet" href="css/styles.css?v=20261119libro">
 </head>
 <body>
 <script>
@@ -134,6 +134,7 @@
       <div class="menu-item" id="menu-inventario" onclick="navigate('inventario')" style="display:none"><span class="icon">📦</span> Inventario</div>
       <div class="menu-item" id="menu-finanzas" onclick="navigate('finanzas')" style="display:none"><span class="icon">💰</span> Finanzas</div>
       <div class="menu-item" id="menu-contabilidad" onclick="navigate('contabilidad')" style="display:none"><span class="icon">📒</span> Contabilidad</div>
+      <div class="menu-item" id="menu-libro-contable" onclick="navigate('libro-contable')" style="display:none"><span class="icon">📖</span> Libro contable</div>
       <div class="menu-item" id="menu-estadisticas" onclick="navigate('estadisticas')" style="display:none"><span class="icon">📈</span> Estadísticas</div>
       <div class="menu-item" id="menu-exportar" onclick="navigate('exportar')" style="display:none"><span class="icon">📤</span> Exportar</div>
       <div class="menu-section" id="menu-admin-section" style="display:none">Super Admin</div>
@@ -1094,6 +1095,18 @@
       </div>
 
       <!-- CONTABILIDAD (empresa médica) -->
+      <div id="view-libro-contable" class="view">
+        <section class="card lc-modulo">
+          <nav class="tabs" aria-label="Libro contable" id="lc-tabs">
+            <button type="button" class="tab" data-panel="reportes">Reportes</button>
+            <button type="button" class="tab" data-panel="asiento">Nuevo asiento</button>
+            <button type="button" class="tab" data-panel="apertura">Saldos iniciales</button>
+            <button type="button" class="tab" data-panel="cuentas">Cuentas</button>
+          </nav>
+          <div id="lc-panel"></div>
+          <p id="lc-estado" role="status" aria-live="polite"></p>
+        </section>
+      </div>
       <div id="view-contabilidad" class="view">
         <div class="card" style="margin-bottom:18px">
           <div class="card-header">
@@ -1101,6 +1114,7 @@
             <div class="doc-acciones">
               <button class="btn btn-secondary btn-sm" id="btn-cont-excel" onclick="ExcelImportacion.abrir()" hidden>Importar Excel</button>
               <button type="button" class="btn btn-secondary btn-sm" onclick="LibroDiario.abrir()">Libro diario y balanza</button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="navigate('libro-contable')">Libro contable por cuentas</button>
               <button class="btn btn-secondary btn-sm" id="btn-cont-cliente" onclick="abrirClienteCom()">+ Cliente</button>
               <button class="btn btn-primary btn-sm" id="btn-cont-venta" onclick="abrirNuevaVenta()">+ Nueva venta</button>
             </div>
@@ -3263,12 +3277,13 @@
     </div>
   </section>
 </div>
-<script src="js/app.js?v=20261118inventario" defer></script>
-<script src="js/reportes-zip.js?v=20261118inventario" defer></script>
+<script src="js/app.js?v=20261119libro" defer></script>
+<script src="js/reportes-zip.js?v=20261119libro" defer></script>
 <script src="js/importar-excel.js?v=20261118inventario" defer></script>
-<script src="js/libro-diario.js?v=20261118inventario" defer></script>
+<script src="js/libro-diario.js?v=20261119libro" defer></script>
 <script src="js/caja-empresa.js?v=20261118borrador" defer></script>
 <script src="js/borrador-diario.js?v=20261118inventario" defer></script>
+<script src="js/libro-contable.js?v=20261119" defer></script>
 <div class="modal-overlay" id="modal-libro-diario">
   <section class="modal modal-lg libro-diario" role="dialog" aria-modal="true" aria-labelledby="libro-diario-titulo">
     <h2 id="libro-diario-titulo">Libro diario y balanza de comprobación</h2>

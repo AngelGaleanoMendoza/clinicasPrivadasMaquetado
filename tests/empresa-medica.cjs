@@ -113,7 +113,7 @@ const abrir=async p=>{
     for(const id of ['menu-pacientes','menu-citas','menu-agendas','menu-medicaciones','menu-notas','menu-expedientes','menu-examenes-digitalizados','menu-farmacia','menu-procedimientos','menu-clinica-section','menu-admin'])
       assert.equal(menu[id],false,id+' no debe verse en una empresa privada');
     for(const id of ['menu-inventario','menu-finanzas','menu-contabilidad','menu-estadisticas','menu-exportar']) assert.equal(menu[id],true,id+' debe verse');
-    assert.deepEqual(menu.rapidos,['Estadísticas','Inventario','Finanzas','Contabilidad','Exportar']);
+    assert.deepEqual(menu.rapidos,['Estadísticas','Inventario','Finanzas','Contabilidad','Libro contable','Exportar']);
     assert.equal(menu.buscador,'none','No hay pacientes que buscar');
     assert.equal(menu.identidad,'Empresa privada','La barra lateral dice qué es el establecimiento');
 

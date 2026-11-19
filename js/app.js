@@ -2638,6 +2638,7 @@ async function navigate(view, patientId) {
   const mi=document.querySelector(`.menu-item[onclick*="'${view}'"]`);
   if(mi) mi.classList.add('active');
   const titles={dashboard:'Dashboard',expedientes:'Expedientes Clínicos','examenes-digitalizados':'Exámenes digitalizados',pacientes:'Pacientes',citas:'Citas',agendas:'Agendas',medicaciones:'Medicaciones',notas:'Notas Clínicas',atendidos:'Atendidos por Día',estadisticas:'Estadísticas',configuracion:'Configuración Clínica',exportar:'Exportar / Enviar','paciente-detalle':'Expediente del Paciente',admin:'Administración',inventario:'Inventario',finanzas:'Finanzas',contabilidad:'Contabilidad',procedimientos:'Procedimientos clínicos','procedimientos-oftalmo':'Procedimientos clínicos',farmacia:'Farmacia',clientes:'Clientes',mascotas:'Mascotas','mascota-detalle':'Ficha de la Mascota',hospitalizacion:'Hospitalización'};
+  titles['libro-contable']='Libro contable';
   document.getElementById('page-title').textContent = view==='configuracion'
     ? _textoEstablecimiento(titles[view]) : (titles[view]||view);
   currentView=view;
@@ -2661,7 +2662,7 @@ async function navigate(view, patientId) {
     navigate('dashboard'); return;
   }
   // Guards por permiso
-  if(view==='contabilidad' && !hasPermiso('contabilidad')) { _sinPermiso('Contabilidad'); return; }
+  if(['contabilidad','libro-contable'].includes(view) && !hasPermiso('contabilidad')) { _sinPermiso('Contabilidad'); return; }
   if(view==='finanzas'     && !hasPermiso('finanzas'))     { _sinPermiso('Finanzas'); return; }
   if(view==='inventario'   && !hasPermiso('inventario'))   { _sinPermiso('Inventario'); return; }
   if(view==='estadisticas' && !hasPermiso('estadisticas')) { _sinPermiso('Estadísticas'); return; }
@@ -2718,6 +2719,7 @@ function renderView(v) {
   switch(v){
     case 'dashboard': renderDashboard(); break;
     case 'contabilidad': renderContabilidad(); break;
+    case 'libro-contable': void LibroContable.abrir(); break;
     case 'expedientes': renderExpedientes(); break;
     case 'examenes-digitalizados': renderModuloExamenes(); break;
     case 'pacientes': renderPacientes(); break;
@@ -2887,6 +2889,7 @@ function renderNavQuickGrid(cv) {
     { view:'inventario',   icon:'📦', label:'Inventario',   show: hasPermiso('inventario') },
     { view:'finanzas',     icon:'💰', label:'Finanzas',     show: hasPermiso('finanzas') },
     { view:'contabilidad', icon:'📒', label:'Contabilidad', show: hasPermiso('contabilidad') },
+    { view:'libro-contable', icon:'📖', label:'Libro contable', show: hasPermiso('contabilidad') },
     { view:'exportar',     icon:'📤', label:'Exportar',     show: hasPermiso('exportar') },
     { view:'configuracion',icon:'⚙️', label:'Config.',      show: sa },
   ].filter(x=>x.show && !(esEmpresaMedica() && VISTAS_CLINICAS.includes(x.view)));
@@ -13911,7 +13914,7 @@ function renderEstadoResultados() {
         <button class="btn btn-secondary btn-sm" onclick="imprimirEstadoResultados()">🖨️ Imprimir</button>
         <button class="btn btn-primary btn-sm" onclick="descargarDocumento(imprimirEstadoResultados)">⬇️ PDF</button>
       </div></div>
-    <p class="text-light cont-ayuda">${_etiquetaPeriodoCont()}${er.empresa ? ' · montos sin IVA' : ''}.</p>
+    <p class="text-light cont-ayuda">Resumen operativo · ${_etiquetaPeriodoCont()}${er.empresa ? ' · montos sin IVA' : ''}. Los estados por cuenta se consultan en Libro contable.</p>
     <div class="er-tabla">
       ${er.empresa ? `
       ${_filaEstado('Ventas netas', er.ingresosVentas, '', `${er.ventas.length} venta${er.ventas.length === 1 ? '' : 's'}`)}
@@ -13952,7 +13955,7 @@ function renderBalanceGeneral() {
         <button class="btn btn-secondary btn-sm" onclick="imprimirBalanceGeneral()">🖨️ Imprimir</button>
         <button class="btn btn-primary btn-sm" onclick="descargarDocumento(imprimirBalanceGeneral)">⬇️ PDF</button>
       </div></div>
-    <p class="text-light cont-ayuda">Al ${formatFecha(hoy())}.</p>
+    <p class="text-light cont-ayuda">Resumen operativo al ${formatFecha(hoy())}. Para ver las contrapartidas registradas por el contador, consulta Libro contable.</p>
     <div class="bg-columnas">
       <div class="er-tabla">
         <div class="er-grupo">Activos</div>
@@ -17597,6 +17600,7 @@ function applyRoleMenu() {
   vis('menu-inventario',      invAccess);
   vis('menu-finanzas',        finAccess);
   vis('menu-contabilidad',    contAccess);
+  vis('menu-libro-contable',  contAccess);
   vis('tab-fin-balance',      finAccess && puedeVerBalance());
   vis('menu-estadisticas',    statAccess);
   vis('menu-exportar',        expAccess);

@@ -221,7 +221,7 @@ const de=(ll,t,op)=>ll.filter(q=>q.t===t&&q.op===op);
     assert.match(source,/\{tabla:'ventas', opcional:true, select:'\*,venta_items\(\*\),venta_cobros\(\*\)'\}/,'Las ventas van en el respaldo');
     assert.match(source,/\{tabla:'inventario_lotes', opcional:true\}/);
     assert.match(source,/lotesInventario:t\.inventario_lotes\|\|\[\], clientesComerciales:t\.clientes_comerciales\|\|\[\], ventas:t\.ventas\|\|\[\]/);
-    assert.match(extraer('navigate'),/view==='contabilidad' && !hasPermiso\('contabilidad'\)/,'Contabilidad se abre con su permiso');
+    assert.match(extraer('navigate'),/\['contabilidad','libro-contable'\]\.includes\(view\) && !hasPermiso\('contabilidad'\)/,'Ambas vistas requieren permiso de Contabilidad');
     assert.doesNotMatch(extraer('navigate'),/Contabilidad es el módulo de las empresas médicas/,'Una clínica con el permiso también entra');
 
     // ── Lotes: primero lo más antiguo ──

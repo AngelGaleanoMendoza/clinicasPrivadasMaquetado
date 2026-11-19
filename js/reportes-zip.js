@@ -48,8 +48,29 @@ async function descargarReportesZip(boton) {
         if (!['42P01','PGRST205'].includes(error.code)) throw error;
       }
     }
-    if(modulos.includes('contabilidad'))
-      informes.push(...LibroDiario.informes(await LibroDiario.obtener(clinica,'0001-01-01',corte)));
+    if(modulos.includes('contabilidad')) {
+      const libros=LibroDiario.informes(await LibroDiario.obtener(clinica,'0001-01-01',corte));
+      if(libros.length) {
+        let contables={};
+        try {
+          const datos=await LibroContable.datosLibro(clinica,'0001-01-01',corte);
+          contables=LibroContable.construir(datos,'0001-01-01',corte);
+        } catch(error) { if(!['PGRST202','42883'].includes(error.code)) throw error; }
+        for(const k of ['balanza','resultados','balance']) {
+          const r=contables[k];
+          if(!r) continue;
+          const titulo=LibroContable.titulos[k];
+          const libro={titulo:k==='balanza'?titulo:titulo+' por cuentas',secciones:['<p>'+escAttr(r.nota)+'</p>',_tablaReporteZip('',r.columnas,r.filas)]};
+          if(k==='balanza') libros[0]=libro;
+          else informes.push(libro);
+        }
+        if(contables.balanza) {
+          informes.filter(r=>['Balance general','Estado de resultados'].includes(r.titulo)).forEach(r=>r.titulo+=' operativo');
+          if(contables.pendiente) informes.push({titulo:'Cuentas por clasificar',secciones:['<p>'+escAttr(contables.pendiente)+'</p>']});
+        }
+      }
+      informes.push(...libros);
+    }
     const archivos = informes.map(({titulo,secciones}) => {
       const aviso = resultados.some(r => r.advertencia)
         ? '<p>Las fuentes opcionales sin habilitar se indican en cada reporte.</p>' : '';

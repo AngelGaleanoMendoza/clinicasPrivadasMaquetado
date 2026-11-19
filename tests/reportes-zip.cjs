@@ -60,6 +60,10 @@ const origen = 'http://localhost:38638/';
         prueba.consultas.push([d.tabla,clinica]);
         return {tabla:d.tabla,filas:tablas[d.tabla] || []};
       };
+      LibroContable.datosLibro = async () => ({apertura:null,cuentas:[
+        {codigo:'001',nombre:'Caja',clase:'activo',inicial:'0',debe:'20',haber:'0',saldo:'20',usada:true},
+        {codigo:'300',nombre:'Capital',clase:'patrimonio',inicial:'0',debe:'0',haber:'20',saldo:'-20',usada:true}
+      ]});
       LibroDiario.obtener = async () => ({
         cuentas:[['001','Caja','C$ 0.00','C$ 20.00','C$ 0.00','C$ 20.00'],
           ['300','Capital','C$ 0.00','C$ 0.00','C$ 20.00','C$ -20.00'],
@@ -155,7 +159,9 @@ const origen = 'http://localhost:38638/';
       const zip = await JSZip.loadAsync(new Uint8Array(data),{checkCRC32:true});
       return Promise.all(Object.values(zip.files).map(async f => [f.name,(await f.async('string')).slice(0,5)]));
     },[...bytes]);
-    assert.equal(entradas.length,informes.length+3);
+    assert.equal(entradas.length,informes.length+5);
+    assert.ok(entradas.some(([nombre])=>nombre==='Balance-general-por-cuentas.pdf'));
+    assert.ok(entradas.some(([nombre])=>nombre==='Estado-de-resultados-por-cuentas.pdf'));
     assert.ok(entradas.some(([nombre])=>nombre==='Auxiliar-de-inventario-importado.pdf'));
     assert.ok(entradas.some(([nombre])=>nombre==='Balanza-de-comprobacion.pdf'));
     assert.ok(entradas.some(([nombre])=>nombre==='Libro-diario.pdf'));
