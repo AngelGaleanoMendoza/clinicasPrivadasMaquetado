@@ -47,9 +47,13 @@ function archivo({actual=5,total=12.65,actualizacion='31/10/2026',nombre='Format
       calls.push({n,args});
       assert.equal(n,'importar_control_inventario');
       const {p_clinica,p_fecha,p_bodega,p_modo,p_filas,p_confirmar,p_revision}=args;
-      const {rows}=await db.query('SELECT importar_control_inventario($1,$2,$3,$4,$5,$6,$7) AS data',
-        [p_clinica,p_fecha,p_bodega,p_modo,JSON.stringify(p_filas),p_confirmar,p_revision]);
-      return rows[0];
+      try {
+        const {rows}=await db.query('SELECT importar_control_inventario($1,$2,$3,$4,$5,$6,$7) AS data',
+          [p_clinica,p_fecha,p_bodega,p_modo,JSON.stringify(p_filas),p_confirmar,p_revision]);
+        return rows[0];
+      } catch (error) {
+        return {error:{code:error.code,message:error.message}};
+      }
     });
     await p.route('**/*',r=>{
       const u=new URL(r.request().url());
@@ -90,8 +94,14 @@ function archivo({actual=5,total=12.65,actualizacion='31/10/2026',nombre='Format
       catch {throw new Error('Se esperaba '+s+'. La pantalla indica '+await p.locator('#excel-estado').textContent());}
     };
     const original=archivo();
+    // La base antigua falla durante la revisión; la misma selección debe poder reintentarse.
+    await db.exec('ALTER TABLE inventario DROP COLUMN sku');
     await subir([original,{...original,name:'Formato control inventario (1).xlsx'}]);
     const guardar=p.locator('#excel-confirmar');
+    await estado('Falta actualizar el inventario en Supabase');
+    assert.ok(await guardar.isHidden());
+    await db.exec(fs.readFileSync(path.join(raiz,'migracion_informe_maestro.sql'),'utf8'));
+    await p.getByRole('button',{name:'Volver a revisar'}).click();
     const opciones=p.locator('#excel-opciones-control');
     const modo=p.locator('#excel-control-modo'),fecha=p.locator('#excel-control-fecha');
     await guardar.waitFor();

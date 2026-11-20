@@ -185,7 +185,39 @@ async function probar() {
     assert.equal(await valor('SELECT count(*)::int r FROM cierres_maestro'),0);
     await assert.rejects(informe(),/permisos/);
     await assert.rejects(db.exec('DELETE FROM controles_inventario'),/permission denied/);
-    console.log('OK · aperturas y costos pendientes, dos bodegas, corte, trazabilidad, ajuste, aprobación y RLS');
+
+    // Reproduce una instalación que ya tiene el informe maestro y un catálogo sin SKU.
+    await db.exec(`RESET ROLE;
+      ALTER TABLE inventario DROP COLUMN sku;
+      ALTER TABLE inventario_movimientos DROP COLUMN costo_unitario, DROP COLUMN valor_costo, DROP COLUMN costo_importado;`);
+    const productoAnterior=await valor(`INSERT INTO inventario(clinica_id,nombre,unidad,stock_actual,costo_unitario,precio_unitario)
+      VALUES(10,'Vendas antiguas','blíster',4,3,7) RETURNING id r`);
+    await db.query(`INSERT INTO inventario_movimientos(clinica_id,inventario_id,tipo,cantidad,motivo,fecha)
+      VALUES(10,$1,'entrada',4,'Existencia inicial','2026-08-01')`,[productoAnterior]);
+    const fichaAnterior=await valor('SELECT to_jsonb(i) r FROM inventario i WHERE id=$1',[productoAnterior]);
+    const movAnterior=await valor('SELECT to_jsonb(m) r FROM inventario_movimientos m WHERE inventario_id=$1',[productoAnterior]);
+    await db.exec(sql('migracion_informe_maestro.sql'));
+    await db.exec("SET ROLE authenticated; SET test.uid='c0000000-0000-0000-0000-000000000003'");
+    const controlAnterior=[fila('Vendas antiguas','V-4',4,0,0,3)];
+    const revisarAnterior=(confirmar,revision)=>importar('apertura','2026-08-31','Central',controlAnterior,confirmar,revision);
+    const previa=await revisarAnterior(false);
+    assert.equal(previa.lote,null);
+    assert.equal(previa.filas[0].detalle,'Existencia previa vinculada');
+    assert.equal(previa.resumen.valor_conocido,12);
+    assert.equal(await valor("SELECT count(*)::int r FROM controles_inventario WHERE bodega='Central'"),0);
+    const confirmado=await revisarAnterior(true,previa.revision);
+    assert.ok(confirmado.lote);
+    const reintento=await revisarAnterior(true,previa.revision);
+    assert.equal(reintento.lote,confirmado.lote);
+    assert.equal(reintento.resumen.duplicadas,1);
+    await db.exec('RESET ROLE');
+    await db.exec(sql('migracion_informe_maestro.sql'));
+    assert.deepEqual(await valor('SELECT to_jsonb(i) r FROM inventario i WHERE id=$1',[productoAnterior]),{...fichaAnterior,sku:'V-4'});
+    assert.deepEqual(await valor('SELECT jsonb_agg(to_jsonb(m)) r FROM inventario_movimientos m WHERE inventario_id=$1',[productoAnterior]),
+      [{...movAnterior,costo_unitario:null,valor_costo:null,costo_importado:null}]);
+    assert.equal(await valor("SELECT count(*)::int r FROM controles_inventario WHERE bodega='Central'"),1);
+    assert.equal(await valor("SELECT count(*)::int r FROM inventario WHERE clinica_id=10 AND nombre='Vendas antiguas'"),1);
+    console.log('OK · catálogo anterior sin SKU, reintentos, aperturas, costos, bodegas, corte, trazabilidad, ajuste, aprobación y RLS');
   } finally { await db.close(); }
 }
 probar().catch(e=>{console.error([e.message,e.where,e.detail,e.stack].filter(Boolean).join('\n'));process.exitCode=1;});

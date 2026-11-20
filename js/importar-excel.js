@@ -1419,6 +1419,8 @@ const ExcelImportacion = (() => {
       if (!activo(e) || version !== e.version) return;
       if (error?.code === 'PGRST202' || error?.code === '42883') throw new Error(plan.control ?
         'Aplica la migración del Informe maestro mensual en Supabase.' : 'Falta aplicar la migración de importación de Excel en Supabase.');
+      if (plan.control && error?.code === '42703' && /\b(sku|costo_unitario|valor_costo|costo_importado)\b/i.test(error.message))
+        throw new Error('Falta actualizar el inventario en Supabase. Ejecuta migracion_informe_maestro.sql y pulsa «Volver a revisar» con el mismo Excel.');
       if (error && /tipo_check|no tienes permiso para uno de los destinos/i.test(error.message || ''))
         throw new Error('Falta aplicar la versión nueva de migracion_importar_excel.sql en Supabase (proveedores, clientes y saldos).');
       if (plan.control && !confirmar && (error?.message==='Hay artículos repetidos en el control de esa bodega.' ||

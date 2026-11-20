@@ -1,6 +1,17 @@
 -- Ejecutar completa después de migracion_importar_excel.sql y migracion_libro_contable.sql.
 BEGIN;
 
+-- El importador anterior podía estar instalado sin códigos ni costos por movimiento.
+ALTER TABLE public.inventario
+  ADD COLUMN IF NOT EXISTS sku text,
+  ADD COLUMN IF NOT EXISTS costo_unitario numeric(14,4);
+CREATE UNIQUE INDEX IF NOT EXISTS inventario_sku_empresa
+  ON public.inventario (clinica_id, lower(btrim(sku))) WHERE nullif(btrim(sku),'') IS NOT NULL;
+ALTER TABLE public.inventario_movimientos
+  ADD COLUMN IF NOT EXISTS costo_unitario numeric(14,4),
+  ADD COLUMN IF NOT EXISTS valor_costo numeric(20,2),
+  ADD COLUMN IF NOT EXISTS costo_importado boolean;
+
 CREATE TABLE IF NOT EXISTS public.controles_inventario (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   clinica_id bigint NOT NULL REFERENCES public.clinicas(id) ON DELETE CASCADE,
