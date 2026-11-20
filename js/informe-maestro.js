@@ -132,7 +132,7 @@ const InformeMaestro = (() => {
     filtro.onsubmit=ev=>{ev.preventDefault();consultar();};
     mes.oninput=()=>{consulta++;destino.replaceChildren();estado.textContent='';};
     mes.onchange=()=>{if(mes.checkValidity()) consultar();};
-    el('cargar').onclick=()=>{if(vigente()) ExcelImportacion.abrir();};
+    el('cargar').onclick=()=>{if(vigente()) ExcelImportacion.abrir('inventario',mes.value);};
     // Solo el panel visible recibe el evento tras cerrar el importador.
     filtro.addEventListener('refrescar-maestro',({detail:detalle})=>{
       if(vigente() && detalle.clinica===clinica) {

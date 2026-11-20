@@ -87,8 +87,12 @@ const MaestroInventario = (() => {
         if (vistos.has(clave)) a.pendientes.add('Hay más de un conteo para el mismo artículo, bodega y corte.');
         vistos.add(clave);
         a[etapa].push(f);
-        trazar(a,etapa==='apertura'?'Saldo inicial':'Conteo final',f,f.bodega||'General',cantidad(f.actual),
-          costoControl(f),referenciaControl(f),unitario(f.costo));
+        for (const origen of f.origenes || [f]) {
+          const parte={...origen,fecha:f.fecha,bodega:f.bodega};
+          const referencia=[referenciaControl(parte),parte.bonificacion?'Bonificación':'',parte.observaciones].filter(Boolean).join(' · ');
+          trazar(a,etapa==='apertura'?'Saldo inicial':'Conteo final',parte,f.bodega||'General',cantidad(parte.actual),
+            costoControl(parte),referencia,unitario(parte.costo));
+        }
       }
     }
     if (!datos.aperturas.length) globales.add('Falta la apertura física o el cierre aprobado del mes anterior.');
@@ -240,7 +244,7 @@ const MaestroInventario = (() => {
         inicial,entradas:a.entradas,salidas:a.salidas,entradasReportadas,salidasReportadas,finalCalculado,finalReportado,
         diferenciaUnidades,costoUnitario,precioCompra:precioCoincidente(a.cierre,'precio_compra'),precioVenta:precioCoincidente(a.cierre,'precio'),
         gananciaPct:precioCoincidente(a.cierre,'ganancia_pct',6),margenGanancia:precioCoincidente(a.cierre,'margen_ganancia',2),
-        valorInicial,compras:a.compras,valorFinal,valorFinalConocido:a.cierre.reduce((s,f)=>s+(costoControl(f)??0n),0n),
+        valorInicial,compras:a.compras,valorFinal,valorFinalConocido:a.cierre.flatMap(f=>f.origenes||[f]).reduce((s,f)=>s+(costoControl(f)??0n),0n),
         costoPeriodico,costoVentas:a.costoVentas,ventas:a.ventas,utilidad:restar(a.ventas,a.costoVentas),
         diferenciaCosto,ajusteNeto:a.ajusteNeto,diferenciaSinExplicar,
         pendientes:[...a.pendientes].sort(cmp)});

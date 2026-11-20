@@ -174,26 +174,24 @@ const ExcelImportacion = (() => {
     return !!e && estado === e && e.clinica === currentClinicaId && e.usuario === currentUser?.id;
   }
 
-  function abrir() {
+  function abrir(origen, mes) {
     if (!currentClinicaId || !tiposDisponibles().length) {
       toast('Selecciona un establecimiento con acceso a Finanzas, Inventario o Contabilidad.', 'info');
       return;
     }
-    estado = {clinica:currentClinicaId, usuario:currentUser?.id, hojas:[], recibos:[], respaldos:[], documentos:[], version:0, fechaApertura:hoy()};
+    estado = {clinica:currentClinicaId, usuario:currentUser?.id, hojas:[], recibos:[], respaldos:[], documentos:[], version:0, fechaApertura:hoy(),
+      desdeInventario:origen==='inventario' && esEmpresaMedica() && hasPermiso('inventario'),mes};
     el('fecha-apertura').value = estado.fechaApertura;
     reiniciarControl();
     el('carpeta').value = '';
     el('archivos').value = '';
     el('hojas').replaceChildren();
-    el('establecimiento').textContent = (currentClinica?.nombre || 'Establecimiento activo') +
-      ' · Sube los archivos y el sistema reconoce qué contiene cada hoja.';
     el('plantilla').innerHTML = tiposDisponibles().map(t => `<option value="${t}">${TIPOS[t].titulo}</option>`).join('');
     el('historial').replaceChildren();
     el('historial-toggle').open = false;
     mensaje('');
     invalidar();
     openModalOverlay('modal-importar-excel');
-    el('expediente').hidden = !hasPermiso('contabilidad');
     el('documentos').textContent = '';
     el('expediente-resumen').textContent = 'Expediente fiscal';
     el('situacion').textContent = '';
@@ -203,6 +201,7 @@ const ExcelImportacion = (() => {
 
   function cerrar() {
     if (estado?.ocupado === 'guardando') return;
+    clearTimeout(estado?.revisionPendiente);
     estado = null;
     el('carpeta').value = '';
     el('archivos').value = '';
@@ -219,21 +218,38 @@ const ExcelImportacion = (() => {
 
   function controles() {
     const ocupado = !!estado.ocupado;
+    const simple = soloControl(estado);
+    const entradaInventario = simple || (estado.desdeInventario && !estado.hojas.length && !estado.respaldos.length);
+    const revisarColumnas = simple && estado.hojas.some(h=>h.tipo && faltantes(h).length);
+    el('titulo').textContent = entradaInventario ? 'Cargar inventario' : 'Importar Excel';
+    el('archivo-etiqueta').textContent = entradaInventario ? 'Archivo de inventario' : 'Excel y anexos del expediente';
+    el('establecimiento').textContent = (currentClinica?.nombre || 'Establecimiento activo')+
+      (entradaInventario ? '' : ' · Sube los archivos y el sistema reconoce qué contiene cada hoja.');
+    el('carpeta-campo').hidden = el('plantilla-campo').hidden = entradaInventario;
+    el('hojas').hidden = simple && !revisarColumnas;
+    el('situacion').hidden = entradaInventario;
+    el('expediente').hidden = entradaInventario || !hasPermiso('contabilidad');
+    el('historial-toggle').hidden = entradaInventario;
     el('fecha-apertura-campo').hidden = !estado.hojas.some(h => h.tipo === 'productos');
     el('fecha-apertura').disabled = ocupado;
     el('control').hidden = !estado.hojas.some(h => h.tipo === 'control_inventario');
-    el('control').disabled = ocupado;
+    el('control').disabled = ocupado && !(simple && estado.ocupado==='validando');
     el('archivos').disabled = el('carpeta').disabled = ocupado;
     el('archivar').hidden = !estado.respaldos.length || !hasPermiso('contabilidad');
     el('archivar').disabled = ocupado;
     el('hojas').disabled = ocupado;
     el('revisar').disabled = ocupado || !estado.hojas.some(h => h.tipo || h.control);
+    el('revisar').hidden = (entradaInventario && !estado.hojas.length) || (simple && !estado.reintentar && !revisarColumnas);
+    el('revisar').textContent = simple && estado.reintentar ? 'Volver a revisar' : 'Revisar filas';
     el('confirmar').hidden = !estado.plan;
+    el('confirmar').textContent = simple ? 'Confirmar carga' : 'Guardar importación';
     el('confirmar').disabled = ocupado;
     el('cerrar').disabled = estado.ocupado === 'guardando';
   }
 
   function invalidar() {
+    clearTimeout(estado.revisionPendiente);
+    estado.reintentar = false;
     estado.version++;
     estado.plan = null;
     el('resultados').replaceChildren();
@@ -250,16 +266,35 @@ const ExcelImportacion = (() => {
   function reiniciarControl() {
     for (const campo of ['modo','fecha','bodega']) el('control-'+campo).value = '';
     el('control-ayuda').textContent = '';
+    el('corte-resumen').textContent = '';
+    el('opciones-control').open = false;
+  }
+
+  function soloControl(e) {
+    return e.hojas.some(h=>h.tipo==='control_inventario') && !e.respaldos.length &&
+      e.hojas.every(h=>h.tipo==='control_inventario' || h.referenciaMaestro || (!h.filas.length && !h.error));
+  }
+
+  function mostrarCorte() {
+    const modo=el('control-modo').value, fecha=el('control-fecha').value, bodega=el('control-bodega').value.trim();
+    el('corte-resumen').textContent = [modo==='apertura'?'Inventario inicial':modo==='cierre'?'Conteo mensual':'',
+      fecha && fecha.split('-').reverse().join('/'),bodega && 'Bodega '+bodega].filter(Boolean).join(' · ');
+    el('control-ayuda').textContent = modo==='apertura' ? 'Registra las existencias al inicio del período.' :
+      modo==='cierre' ? 'Compara el conteo del último día del mes con las existencias del sistema.' : '';
   }
 
   function cambiarControl() {
-    if (!activo(estado) || estado.ocupado) return;
-    el('control-ayuda').textContent = ({
-      apertura:'La existencia actual del archivo queda como saldo físico de apertura. Para conciliar un mes completo, usa el saldo de arranque fechado el último día del mes anterior o el primer día del mes.',
-      cierre:'Elige el último día del mes. El conteo se compara con el kardex y conserva la existencia física registrada por los movimientos del sistema.'
-    })[el('control-modo').value] || '';
+    const e=estado;
+    if (!activo(e) || (e.ocupado && e.ocupado!=='validando')) return;
+    if (e.ocupado==='validando') e.ocupado='';
     invalidar();
-    mensaje('Pulsa «Revisar filas» para comprobar el corte y las existencias.');
+    mostrarCorte();
+    if (!soloControl(e)) { mensaje('Pulsa «Revisar filas» para comprobar el corte.'); return; }
+    if (!el('control-modo').value || !el('control-fecha').value || !el('control-bodega').value.trim()) {
+      mensaje('Completa los datos del control para revisar el inventario.'); return;
+    }
+    mensaje('Revisando el inventario…');
+    e.revisionPendiente=setTimeout(()=>{if(activo(e)) solicitar(e,false);},350);
   }
 
   function leerArchivo(archivo) {
@@ -279,6 +314,51 @@ const ExcelImportacion = (() => {
     });
   }
 
+  async function sugerirControl(e) {
+    recogerEstado(e,'preparando','Preparando la carga…');
+    const hojas=e.hojas.filter(h=>h.tipo==='control_inventario');
+    const valores=campo=>[...new Set(hojas.map(h=>h.metadataControl?.[campo]).filter(Boolean))];
+    try {
+      const {data:aperturas,error}=await sb.from('controles_inventario').select('bodega,fecha')
+        .eq('clinica_id',e.clinica).eq('modo','apertura').eq('vigente',true);
+      if (!activo(e)) return;
+      if (error) throw error;
+      const bodegas=valores('bodega');
+      const fechas=hojas.map(h=>h.metadataControl?.fecha || h.metadataControl?.fechaFilas || h.metadataControl?.fechaActualizacion).filter(Boolean);
+      const fechaUnica=[...new Set(fechas)];
+      const anteriores=[...new Set(aperturas.map(a=>a.bodega))];
+      const bodega=bodegas.length===1 ? bodegas[0] : !bodegas.length && anteriores.length<=1 ? (anteriores[0]||'General') : '';
+      const apertura=aperturas.find(a=>normal(a.bodega)===normal(bodega));
+      const fechaOrigen=fechaUnica.length===1 ? fechaUnica[0] : '';
+      const modo=apertura && apertura.fecha!==fechaOrigen ? 'cierre' : 'apertura';
+      const mes=fechaOrigen?.slice(0,7) || e.mes || hoy().slice(0,7);
+      const ultimo=new Date(Date.UTC(Number(mes.slice(0,4)),Number(mes.slice(5,7)),0)).toISOString().slice(0,10);
+      const fechaPropuesta=modo==='cierre' ? ultimo : mes+'-01';
+      const fecha=fechaOrigen && (valores('fecha').length || valores('fechaFilas').length || fechaOrigen===ultimo || (modo==='apertura' && fechaOrigen.endsWith('-01')))
+        ? fechaOrigen : fechaUnica.length>1 ? '' : fechaPropuesta;
+      el('control-bodega').value=bodega;
+      el('control-fecha').value=fecha;
+      el('control-modo').value=modo;
+      mostrarCorte();
+      e.necesitaSugerencia=false;
+      if (!bodega || !fecha || hojas.some(h=>faltantes(h).length)) {
+        el('opciones-control').open=!bodega || !fecha;
+        mensaje(!bodega || !fecha ? 'Revisa la bodega y la fecha del control.' : 'Revisa las columnas que faltan para cargar el inventario.');
+        return;
+      }
+    } catch (error) {
+      if (activo(e)) {
+        e.necesitaSugerencia=e.reintentar=true;
+        const falta=['42P01','PGRST205','42883'].includes(error.code);
+        mensaje(falta?'Aplica la migración del informe maestro en Supabase.':'No se pudo consultar la apertura de la bodega. Pulsa «Volver a revisar».',true);
+      }
+      return;
+    } finally {
+      if (activo(e)) {e.ocupado='';controles();}
+    }
+    if (activo(e)) await solicitar(e,false);
+  }
+
   async function cargar(carpeta = false) {
     const e = estado;
     if (!activo(e) || e.ocupado) return;
@@ -287,6 +367,8 @@ const ExcelImportacion = (() => {
     el(carpeta ? 'archivos' : 'carpeta').value = '';
     e.respaldos = [];
     e.hojas = [];
+    e.necesitaSugerencia=false;
+    e.copias=0;
     reiniciarControl();
     invalidar();
     dibujarHojas();
@@ -296,6 +378,7 @@ const ExcelImportacion = (() => {
     }
     recogerEstado(e, 'leyendo', 'Leyendo y reconociendo las hojas…');
     const errores = [];
+    const controlesLeidos=[];
     for (const archivo of archivos) {
       if (!activo(e)) return;
       try {
@@ -307,6 +390,13 @@ const ExcelImportacion = (() => {
         if (archivo.size > 5 * 1024 * 1024) throw new Error('Supera el máximo de 5 MB por archivo.');
         const hojas = await leerArchivo(archivo);
         const clasificadas = hojas.map(h => detectar({...h, archivo:archivo.name, encabezado:h.filas[0]?.numero, tipo:'', mapa:{}, fijos:{}}));
+        if (archivos.length>1 && clasificadas.some(h=>h.tipo==='control_inventario')) {
+          const contenido=new Uint8Array(await archivo.arrayBuffer());
+          if (controlesLeidos.some(previo=>previo.length===contenido.length && previo.every((v,i)=>v===contenido[i]))) {
+            e.copias++; continue;
+          }
+          controlesLeidos.push(contenido);
+        }
         if (clasificadas.some(h => h.fiscal || h.control || h.tipo === 'diario')) e.respaldos.push(archivo);
         e.hojas.push(...clasificadas);
       } catch (error) {
@@ -324,6 +414,7 @@ const ExcelImportacion = (() => {
     const pendientes = reconocidas.filter(h => faltantes(h).length);
     const deBodega = reconocidas.filter(h => h.tipo === 'control_inventario');
     if (deBodega.length) {
+      if (soloControl(e)) {await sugerirControl(e);return;}
       for (const campo of ['fecha','bodega']) {
         const valores = [...new Set(deBodega.map(h => h.metadataControl?.[campo] ||
           (campo==='fecha' && h.metadataControl?.fechaActualizacion)).filter(Boolean))];
@@ -466,9 +557,9 @@ const ExcelImportacion = (() => {
     return false;
   }
 
-  function metadataControl(hoja, encabezado) {
+  function metadataControl(hoja, encabezado, mapa) {
     const meta = {};
-    for (const fila of hoja.filas.filter(f => f.numero < encabezado)) {
+    for (const fila of hoja.filas.filter(f => f.numero < encabezado.numero)) {
       fila.celdas.forEach((celda,i) => {
         if (typeof celda?.valor !== 'string') return;
         const [titulo,...partes] = celda.valor.split(':');
@@ -484,6 +575,18 @@ const ExcelImportacion = (() => {
         if (campo === 'bodega') meta.bodega = texto(valor);
         else try { meta[campo] = fecha(valor,hoja.fecha1904); } catch { /* El usuario elige el corte si la fecha no se puede leer. */ }
       });
+    }
+    const colFecha = encabezado.celdas.findIndex(c => ['fecha','fecha de inventario','fecha de conteo'].includes(normal(c?.valor)));
+    const colObservaciones = encabezado.celdas.findIndex(c => ['ubicacion observaciones','observaciones','ubicacion'].includes(normal(c?.valor)));
+    if (colObservaciones >= 0) meta.colObservaciones = colObservaciones;
+    if (colFecha >= 0) {
+      meta.colFecha = colFecha;
+      const articulos = hoja.filas.filter(f => f.numero > encabezado.numero &&
+        f.celdas[mapa.nombre]?.valor && f.celdas[mapa.unidad]?.valor);
+      try {
+        const fechas = new Set(articulos.map(f => fecha(f.celdas[colFecha],hoja.fecha1904)));
+        if (fechas.size === 1 && !fechas.has(null)) meta.fechaFilas = [...fechas][0];
+      } catch { /* Si la columna mezcla fechas o formatos, deja que se confirme el corte. */ }
     }
     return meta;
   }
@@ -516,8 +619,14 @@ const ExcelImportacion = (() => {
         if (mapa.nombre != null && mapa.inicial != null && mapa.actual != null) {
           hoja.destinoInventario = 'control_inventario';
           if (!hasPermiso('inventario')) { hoja.deteccion = {estado:'sinInventario'}; return hoja; }
-          return Object.assign(hoja,{tipo:'control_inventario',encabezado:fila.numero,mapa,
-            metadataControl:metadataControl(hoja,fila.numero),deteccion:{estado:'reconocida',columnas:Object.keys(mapa).length}});
+          const esBonificacion = titulo => {
+            const etiqueta = normal(titulo);
+            return !/\b(?:sin|no)\b/.test(etiqueta) && /\b(?:bonificaci(?:on|ones)|bonificad[oa]s?)\b/.test(etiqueta);
+          };
+          const bonificacion = esBonificacion(hoja.nombre) || cabeceras.some(f => f.numero < fila.numero &&
+            f.celdas.some(c => esBonificacion(c?.valor)));
+          return Object.assign(hoja,{tipo:'control_inventario',encabezado:fila.numero,mapa,bonificacion,
+            metadataControl:metadataControl(hoja,fila,mapa),deteccion:{estado:'reconocida',columnas:Object.keys(mapa).length}});
         }
       }
       const camposDiario = mapear('diario',fila.celdas).mapa;
@@ -649,6 +758,10 @@ const ExcelImportacion = (() => {
   }
 
   function dibujarHojas() {
+    if (soloControl(estado) && !estado.hojas.some(h=>h.tipo && faltantes(h).length)) {
+      el('hojas').replaceChildren();
+      return;
+    }
     el('hojas').innerHTML = estado.hojas.map((h, i) => {
       if (h.tipoDetectado === undefined) h.tipoDetectado = h.tipo;
       const titulo = escAttr(h.archivo) + ' · ' + escAttr(h.nombre) + (h.oculta ? ' (oculta)' : '');
@@ -711,6 +824,7 @@ const ExcelImportacion = (() => {
       invalidar();
       mensaje('');
       dibujarHojas();
+      if (soloControl(estado) && !faltantes(hoja).length) {cambiarControl();return;}
       el('hojas').querySelector(`[data-hoja="${tarjeta.dataset.hoja}"] [data-mapa="${id}"]`)?.focus();
       return;
     }
@@ -864,6 +978,16 @@ const ExcelImportacion = (() => {
       if ((datos.debe > 0) === (datos.haber > 0)) throw new Error('Cada línea debe tener un importe en Debe o en Haber.');
     }
     if (t === 'control_inventario') {
+      if (hoja.bonificacion) datos.bonificacion = true;
+      if (!datos.nombre) throw new Error('Falta la descripción de un artículo con datos de inventario. Completa el nombre en la fila indicada.');
+      if (hoja.metadataControl?.colFecha != null) {
+        const fechaOrigen = fecha(fila.celdas[hoja.metadataControl.colFecha],hoja.fecha1904);
+        if (fechaOrigen) datos.fecha_origen = fechaOrigen;
+      }
+      if (hoja.metadataControl?.colObservaciones != null) {
+        const observaciones = texto(fila.celdas[hoja.metadataControl.colObservaciones]);
+        if (observaciones) datos.observaciones = observaciones;
+      }
       if (hoja.metadataControl?.fechaActualizacion) datos.fecha_actualizacion = hoja.metadataControl.fechaActualizacion;
       datos.entradas ??= 0;
       datos.salidas ??= 0;
@@ -969,19 +1093,63 @@ const ExcelImportacion = (() => {
     return h.toString(36);
   }
 
+  // El pie impreso de la bodega puede repartir el rótulo o su importe en dos filas.
+  // Solo admite el rótulo y la celda de valor, nunca una fila con cantidades de artículos.
+  function piesDeControl(hoja, filas) {
+    const pies = new Set(), totales = [];
+    const rotulos = new Set(['valor total del inventario','valor total inventario','total inventario','total general','gran total','total','totales','subtotal','sub total']);
+    const monto = hoja.mapa.costo_total;
+    const celdas = f => f.celdas.flatMap((c,col) =>
+      c && (c.invalida || String(c.valor ?? '').trim()) ? [{...c,col}] : []);
+    const rotulo = cs => normal(cs.map(c => c.valor).join(' '));
+    for (let i = 0; i < filas.length; i++) {
+      const fila = filas[i];
+      let partes = celdas(fila);
+      if (!partes.length || typeof partes[0].valor !== 'string') continue;
+      if (partes.some(c => c.col === hoja.mapa.sku || c.col === hoja.mapa.unidad)) continue;
+      const siguiente = filas[i+1];
+      let ocupaSiguiente = false;
+      const prefijo = rotulo(partes);
+      if (siguiente && siguiente.numero === fila.numero+1 && (rotulos.has(prefijo) || prefijo === 'valor total del' || prefijo === 'valor total')) {
+        const segunda = celdas(siguiente);
+        if (segunda.length && (segunda.length===1 && segunda[0].col===monto ||
+          rotulos.has(rotulo([...partes,...segunda.filter(c=>c.col!==monto)])))) {
+          partes = partes.concat(segunda);
+          ocupaSiguiente = true;
+        }
+      }
+      let etiqueta = rotulo(partes), importe;
+      if (!rotulos.has(etiqueta)) {
+        importe = partes.at(-1);
+        if (monto==null || importe.col!==monto || partes.length<2) continue;
+        etiqueta = rotulo(partes.slice(0,-1));
+      }
+      if (!rotulos.has(etiqueta)) continue;
+      pies.add(fila.numero);
+      if (ocupaSiguiente) { pies.add(siguiente.numero); i++; }
+      if (importe && !['subtotal','sub total'].includes(etiqueta))
+        totales.push({numero:ocupaSiguiente?siguiente.numero:fila.numero,importe});
+    }
+    return {pies,totales};
+  }
+
   // Filas que no son datos: totales al pie y filas sin nada en las columnas asignadas.
   function filaIgnorable(hoja, fila) {
     const columnas = Object.values(hoja.mapa);
     if (columnas.some(i => fila.celdas[i]?.invalida)) return false;
     if (hoja.tipo === 'diario' && hoja.mapa.documento != null && texto(fila.celdas[hoja.mapa.documento])) return false;
     const valores = columnas.map(i => fila.celdas[i]).filter(c => c && !c.invalida && String(c.valor ?? '').trim() !== '');
-    if (!valores.length) return true;
     if (hoja.tipo === 'control_inventario') {
-      if (fila.celdas.some(c => ['valor total del inventario','valor total inventario','total general'].includes(normal(c?.valor)))) return true;
-      // Las filas sin artículo bajo el conteo pueden llevar resultados 0 en sus fórmulas.
-      if (!texto(fila.celdas[hoja.mapa.nombre]) && !texto(fila.celdas[hoja.mapa.sku]) &&
-          valores.every(c => typeof c.valor === 'number' && c.valor === 0)) return true;
+      // El consecutivo y el porcentaje de ganancia pueden venir prellenados hasta el final.
+      const nota = fila.celdas[hoja.metadataControl?.colObservaciones];
+      if (nota?.invalida || String(nota?.valor ?? '').trim()) return false;
+      return Object.entries(hoja.mapa).every(([campo,i]) => {
+        const valor = fila.celdas[i]?.valor;
+        return !String(valor ?? '').trim() || campo==='ganancia_pct' ||
+          (['actual','margen_ganancia','costo_total'].includes(campo) && valor===0);
+      });
     }
+    if (!valores.length) return true;
     if (['productos','movimientos'].includes(hoja.tipo)) {
       const nombre = normal(fila.celdas[hoja.mapa[hoja.tipo === 'productos' ? 'nombre' : 'producto']]?.valor);
       if (nombre && !TOTALES.has(nombre)) return false;
@@ -1025,6 +1193,7 @@ const ExcelImportacion = (() => {
         continue;
       }
       const candidatas = h.filas.filter(f => f.numero > h.encabezado);
+      const pieControl = h.tipo==='control_inventario' ? piesDeControl(h,candidatas) : null;
       const lotes = cabecera(h).flatMap((c,i) => /\b(lote|serie|bodega|almacen)\b/.test(normal(c?.valor)) ? [i] : []);
       if (h.tipo === 'productos' && lotes.length && candidatas.some(f => lotes.some(i => String(f.celdas[i]?.valor ?? '').trim()))) {
         errores.push({...origen, error:'El archivo detalla existencias por lote, serie o almacén. La apertura de productos requiere existencias consolidadas por artículo. Conserva el desglose para cargarlo con sus lotes.'});
@@ -1033,7 +1202,7 @@ const ExcelImportacion = (() => {
       let datosHoja = 0;
       let sumaCentavos = 0n, costosIncompletos = false;
       for (const fila of candidatas) {
-        if (filaIgnorable(h, fila)) { ignoradas++; continue; }
+        if (pieControl?.pies.has(fila.numero) || filaIgnorable(h, fila)) { ignoradas++; continue; }
         datosHoja++;
         try {
           const r = normalizar(h, fila);
@@ -1100,14 +1269,10 @@ const ExcelImportacion = (() => {
         }
         catch (error) { errores.push({...origen, fila:fila.numero, error:error.message}); }
       }
-      if (h.tipo === 'control_inventario' && h.mapa.costo_total != null) {
-        for (const pie of candidatas.filter(f => f.celdas.some(c =>
-          ['total general','valor total del inventario','valor total inventario'].includes(normal(c?.valor))))) {
+      if (pieControl) {
+        for (const pie of pieControl.totales) {
           try {
-            const etiqueta = pie.celdas.findIndex(c => ['total general','valor total del inventario','valor total inventario'].includes(normal(c?.valor)));
-            const celda = pie.celdas[h.mapa.costo_total] && h.mapa.costo_total !== etiqueta ? pie.celdas[h.mapa.costo_total] :
-              pie.celdas.slice(etiqueta+1).find(c => c && String(c.valor ?? '').trim() !== '');
-            const declarado = decimal(celda,2,false,true);
+            const declarado = decimal(pie.importe,2,false,true);
             if (declarado != null && sumaCentavos !== BigInt(Math.round(declarado*100)))
               throw new Error('El valor total del inventario difiere de la suma de los importes conocidos por producto.');
           } catch (error) { errores.push({...origen,fila:pie.numero,error:error.message}); }
@@ -1168,7 +1333,36 @@ const ExcelImportacion = (() => {
     return {filas, errores, ignoradas, aperturasSinFecha,control};
   }
 
-  function resultados(entradas, resumen = null) {
+  function resumenControl(plan,resumen) {
+    const grupos=new Map(), formato=v=>fmtC(Number(v)/100);
+    for (const fila of plan.filas) {
+      const d=fila.datos, clave=JSON.stringify([fila.archivo,fila.hoja]);
+      if (!grupos.has(clave)) grupos.set(clave,{hoja:fila.hoja,bonificacion:!!d.bonificacion,filas:[],importe:0n});
+      const grupo=grupos.get(clave);
+      const centavos=d.costo_total!=null ? BigInt(Math.round(d.costo_total*100)) : d.costo!=null ?
+        (BigInt(Math.round(d.actual*1000))*BigInt(Math.round(d.costo*10000))+50000n)/100000n : d.actual===0 ? 0n : null;
+      grupo.importe+=centavos??0n;
+      grupo.filas.push({fila:fila.fila,nombre:d.nombre,cantidad:d.actual,unidad:d.unidad,centavos});
+    }
+    const cantidad=plan.filas.length, fichas=resumen.nuevas+resumen.duplicadas, faltan=resumen.productos_sin_costo;
+    const lineas=[...grupos.values()].map(g=>{
+      const rotulo=g.bonificacion?'Bonificaciones':g.hoja;
+      return '<div class="excel-resumen-hoja"><strong>'+escAttr(rotulo)+'</strong><span>'+g.filas.length+
+        (g.filas.length===1?' fila':' filas')+' · '+escAttr(formato(g.importe))+'</span></div>';
+    }).join('');
+    el('resultados').innerHTML='<div class="excel-resumen-control">'+lineas+
+      '<p class="excel-totales">Total con costo conocido · '+escAttr(fmtC(resumen.valor_conocido))+'</p>'+
+      (cantidad>fichas?'<p>'+cantidad+' filas agrupadas en '+escAttr(fichas)+' fichas de inventario.</p>':'')+
+      (faltan?'<p>'+escAttr(faltan)+(faltan===1?' artículo pendiente':' artículos pendientes')+' de valorar.</p>':'')+
+      (estado.copias?'<p>Copias idénticas omitidas: '+estado.copias+'.</p>':'')+'</div>'+
+      '<details><summary>Ver las '+cantidad+' filas del archivo</summary>'+
+      [...grupos.values()].map(g=>'<p>'+escAttr(g.hoja)+'</p><div class="excel-tabla"><table><thead><tr><th>Fila</th><th>Artículo</th><th>Existencia</th><th>Valor</th></tr></thead><tbody>'+
+        g.filas.map(f=>'<tr><td>'+escAttr(f.fila)+'</td><td>'+escAttr(f.nombre)+'</td><td>'+escAttr(f.cantidad+' '+f.unidad)+
+          '</td><td>'+escAttr(f.centavos===null?'Pendiente':formato(f.centavos))+'</td></tr>').join('')+'</tbody></table></div>').join('')+'</details>';
+  }
+
+  function resultados(entradas, resumen = null, plan = null) {
+    if (resumen && plan?.control && soloControl(estado) && !resumen.errores) {resumenControl(plan,resumen);return;}
     const omitidas = estado.hojas.filter(h => h.omitida).length;
     const partes = resumen ? [
       resumen.conciliacion && 'Diario, balanza y auxiliares conciliados del ' + resumen.conciliacion.desde + ' al ' + resumen.conciliacion.hasta,
@@ -1200,7 +1394,7 @@ const ExcelImportacion = (() => {
   async function solicitar(e, confirmar, reconocidas = 0) {
     if (!activo(e) || e.ocupado) return;
     const version = e.version;
-    if (!confirmar) e.plan = null;
+    if (!confirmar) { e.plan=null; e.reintentar=false; }
     const plan = confirmar ? e.plan : preparar();
     if (!plan) return;
     if (!confirmar) {
@@ -1227,12 +1421,15 @@ const ExcelImportacion = (() => {
         'Aplica la migración del Informe maestro mensual en Supabase.' : 'Falta aplicar la migración de importación de Excel en Supabase.');
       if (error && /tipo_check|no tienes permiso para uno de los destinos/i.test(error.message || ''))
         throw new Error('Falta aplicar la versión nueva de migracion_importar_excel.sql en Supabase (proveedores, clientes y saldos).');
+      if (plan.control && !confirmar && (error?.message==='Hay artículos repetidos en el control de esa bodega.' ||
+          (!error && data?.resumen?.filas_origen==null && plan.filas.some(r=>r.datos.bonificacion || r.datos.observaciones || r.datos.fecha_origen))))
+        throw new Error('Actualiza migracion_informe_maestro.sql en Supabase para conservar las bonificaciones y las filas de origen.');
       if (error) throw new Error(error.message);
       const requiereValoracion = plan.filas.some(r => r.tipo === 'productos' && (r.datos.sku != null || r.datos.costo_total != null) ||
         r.tipo === 'movimientos' && (r.datos.documental || r.datos.sku != null || r.datos.unidad != null || r.datos.costo != null || r.datos.costo_total != null));
       if (!confirmar && requiereValoracion && data.resumen?.valor_inventario_inicial == null)
         throw new Error('Actualiza migracion_importar_excel.sql en Supabase para guardar los códigos y los costos del inventario.');
-      resultados(data.filas, data.resumen);
+      resultados(data.filas, data.resumen, plan);
       e.plan = !data.resumen.errores && data.resumen.nuevas && (!confirmar || data.cambio)
         ? {...plan, revision:data.revision} : null;
       if (data.resumen.errores) mensaje('Hay filas que requieren corrección. La carga sigue sin guardar.', true);
@@ -1259,14 +1456,17 @@ const ExcelImportacion = (() => {
           else if (!inventario || currentView!=='libro-contable') renderView(currentView);
           if (inventario) document.dispatchEvent(new CustomEvent('inventario-importado',{detail:{clinica:e.clinica}}));
         }
-      } else if (data.resumen.nuevas) mensaje((reconocidas ? 'Se reconocieron ' + reconocidas + ' hoja(s) y se revisaron sus filas. ' : '') +
-        'Comprueba el detalle y pulsa «Guardar importación».');
+      } else if (data.resumen.nuevas) mensaje(plan.control && soloControl(e) ? 'Inventario revisado. Confirma la carga.' :
+        (reconocidas ? 'Se reconocieron ' + reconocidas + ' hoja(s) y se revisaron sus filas. ' : '')+'Comprueba el detalle y pulsa «Guardar importación».');
       else mensaje(plan.control ? 'Este control ya está guardado. Consulta sus filas en el Informe maestro.' :
         'Todas las filas ya están registradas. Consulta sus comprobantes en el historial.');
     } catch (error) {
-      if (activo(e)) mensaje(error.message || 'No se pudo completar la importación.', true);
+      if (activo(e) && version===e.version) {
+        e.reintentar=true;
+        mensaje(error.message || 'No se pudo completar la importación.', true);
+      }
     } finally {
-      if (activo(e)) { e.ocupado = ''; controles(); }
+      if (activo(e) && version===e.version) { e.ocupado = ''; controles(); }
     }
   }
 
@@ -1405,8 +1605,8 @@ const ExcelImportacion = (() => {
   }
 
   return {abrir,cerrar,cargar,cambiar,cambiarFechaApertura,cambiarControl,plantilla,historial,comprobante,archivar,descargarOriginal,leerArchivo,originalFiscal,fecha,
-    revisar:() => estado && solicitar(estado,false),
+    revisar:() => estado && (estado.necesitaSugerencia ? sugerirControl(estado) : solicitar(estado,false)),
     confirmar:() => estado && solicitar(estado,true),
     // Para pruebas: el reconocimiento y la lectura de valores sin interfaz.
-    _probar:{detectar, mapear, decimal, fecha, normalizar, faltantes, tiposDisponibles}};
+    _probar:{detectar, mapear, decimal, fecha, normalizar, faltantes, tiposDisponibles, filaIgnorable, piesDeControl}};
 })();

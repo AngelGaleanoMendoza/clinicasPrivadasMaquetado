@@ -22,7 +22,7 @@
 <!-- Lectura local de machotes. El archivo se procesa en el navegador antes de
      guardarlo; Mammoth extrae DOCX y PDF.js se carga al elegir un PDF. -->
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js" defer></script>
-<link rel="stylesheet" href="css/styles.css?v=20261120maestro">
+<link rel="stylesheet" href="css/styles.css?v=20261120control">
 </head>
 <body>
 <script>
@@ -844,7 +844,7 @@
               <button class="btn btn-secondary btn-sm" onclick="openModalEntrada()">📥 Entrada</button>
               <button class="btn btn-secondary btn-sm" onclick="openModalSalida()">📤 Salida</button>
               <button class="btn btn-secondary btn-sm" onclick="abrirNuevaCompra()" title="Registrar una compra a un proveedor, con su costo">🛒 Compra</button>
-              <button class="btn btn-secondary btn-sm" onclick="ExcelImportacion.abrir()">Importar Excel</button>
+              <button class="btn btn-secondary btn-sm" onclick="ExcelImportacion.abrir('inventario')">Importar Excel</button>
               <button class="btn btn-secondary btn-sm" id="btn-importar-minsa" onclick="abrirSelectorMINSA()" style="display:none">📋 Catálogo MINSA</button>
               <button class="btn btn-danger btn-sm" id="btn-borrar-inventario" onclick="eliminarTodoInventario()" style="display:none">🗑️ Borrar todo</button>
               <button class="btn btn-primary btn-sm" onclick="openModalProducto()">+ Producto</button>
@@ -3247,11 +3247,11 @@
     <h2 id="excel-titulo">Importar Excel</h2>
     <p id="excel-establecimiento"></p>
     <div class="excel-grid">
-      <label>Excel y anexos del expediente
+      <label><span id="excel-archivo-etiqueta">Excel y anexos del expediente</span>
         <input type="file" id="excel-archivos" accept=".xlsx,.xls,.csv,.pdf,.zip,.eml,.png,.jpg,.jpeg" multiple onchange="ExcelImportacion.cargar()">
       </label>
-      <label>Carpeta del expediente<input type="file" id="excel-carpeta" webkitdirectory multiple onchange="ExcelImportacion.cargar(true)"></label>
-      <div class="excel-plantilla">
+      <label id="excel-carpeta-campo">Carpeta del expediente<input type="file" id="excel-carpeta" webkitdirectory multiple onchange="ExcelImportacion.cargar(true)"></label>
+      <div id="excel-plantilla-campo" class="excel-plantilla">
         <label>Plantilla CSV<select id="excel-plantilla"></select></label>
         <button type="button" class="btn btn-secondary btn-sm" onclick="ExcelImportacion.plantilla()">Descargar</button>
       </div>
@@ -3260,18 +3260,21 @@
     <label id="excel-fecha-apertura-campo" hidden>Fecha de apertura para productos sin fecha en el archivo
       <input type="date" id="excel-fecha-apertura" onchange="ExcelImportacion.cambiarFechaApertura()">
     </label>
-    <fieldset id="excel-control" hidden oninput="ExcelImportacion.cambiarControl()">
-      <legend>Control de inventario de bodega</legend>
+    <fieldset id="excel-control" hidden>
+      <legend>Datos de la carga</legend>
+      <p id="excel-corte-resumen"></p>
+      <details id="excel-opciones-control"><summary>Cambiar datos del control</summary>
       <div class="excel-grid">
-        <label>Uso del control<select id="excel-control-modo">
+        <label>Uso del control<select id="excel-control-modo" oninput="ExcelImportacion.cambiarControl()">
           <option value="">Selecciona el uso</option>
-          <option value="apertura">Apertura · registrar existencias físicas al corte</option>
-          <option value="cierre">Cierre mensual · conciliar el conteo con el sistema</option>
+          <option value="apertura">Inventario inicial</option>
+          <option value="cierre">Conteo de fin de mes</option>
         </select></label>
-        <label>Fecha de corte<input id="excel-control-fecha" type="date"></label>
-        <label>Área / bodega<input id="excel-control-bodega" maxlength="100" type="text"></label>
+        <label>Fecha de corte<input id="excel-control-fecha" type="date" oninput="ExcelImportacion.cambiarControl()"></label>
+        <label>Área / bodega<input id="excel-control-bodega" maxlength="100" type="text" oninput="ExcelImportacion.cambiarControl()"></label>
       </div>
       <p class="excel-ayuda" id="excel-control-ayuda"></p>
+      </details>
     </fieldset>
     <p id="excel-estado" role="status"></p>
     <div id="excel-resultados"></div>
@@ -3294,12 +3297,12 @@
 </div>
 <script src="js/app.js?v=20261120maestro" defer></script>
 <script src="js/reportes-zip.js?v=20261119libro" defer></script>
-<script src="js/importar-excel.js?v=20261120maestro" defer></script>
+<script src="js/importar-excel.js?v=20261120control" defer></script>
 <script src="js/libro-diario.js?v=20261119libro" defer></script>
 <script src="js/caja-empresa.js?v=20261118borrador" defer></script>
 <script src="js/borrador-diario.js?v=20261118inventario" defer></script>
-<script src="js/maestro-inventario.js?v=20261120" defer></script>
-<script src="js/informe-maestro.js?v=20261120" defer></script>
+<script src="js/maestro-inventario.js?v=20261120control" defer></script>
+<script src="js/informe-maestro.js?v=20261120control" defer></script>
 <script src="js/libro-contable.js?v=20261120maestro" defer></script>
 <div class="modal-overlay" id="modal-libro-diario">
   <section class="modal modal-lg libro-diario" role="dialog" aria-modal="true" aria-labelledby="libro-diario-titulo">

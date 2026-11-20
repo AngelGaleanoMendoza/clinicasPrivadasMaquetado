@@ -44,6 +44,8 @@ RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 <<carga>>
 DECLARE
   f jsonb; d jsonb; lin jsonb; plan jsonb:='[]'; guardadas jsonb:='[]'; resultados jsonb;
+  partidas jsonb:='[]'; grupo record; firma_anterior text;
+  origen jsonb; antiguo jsonb; origenes jsonb; libre numeric; cantidad_origen numeric;
   fuente public.controles_inventario%ROWTYPE; prod public.inventario%ROWTYPE;
   nombre text; codigo text; unidad text; cat text; archivo text; hoja text; num int; k text;
   ini numeric; ent numeric; sal numeric; actual numeric; costo numeric; valor numeric; precio numeric; compra numeric;
@@ -66,9 +68,11 @@ BEGIN
   SELECT * INTO fuente FROM public.controles_inventario WHERE clinica_id=p_clinica AND fecha=p_fecha
     AND lower(bodega)=lower(p_bodega) AND modo=p_modo AND vigente;
   -- La huella de datos es independiente del orden de filas y nombre de archivo.
-  SELECT md5(jsonb_agg(datos ORDER BY datos::text)::text) INTO firma
-    FROM (SELECT (x->'datos')-'fecha_actualizacion' datos FROM jsonb_array_elements(p_filas) x) semantica;
-  repetida:=fuente.id IS NOT NULL AND fuente.firma=firma;
+  WITH valores AS (SELECT x->>'hoja' hoja,(x->'datos')-'fecha_actualizacion' datos FROM jsonb_array_elements(p_filas) x),
+  huellas AS (SELECT jsonb_build_array(v.hoja,v.datos) actual, v.datos-ARRAY['fecha_origen','observaciones','bonificacion'] anterior FROM valores v)
+  SELECT 'v2:'||md5(jsonb_agg(h.actual ORDER BY h.actual::text)::text),md5(jsonb_agg(anterior ORDER BY anterior::text)::text)
+    INTO firma,firma_anterior FROM huellas h;
+  repetida:=fuente.id IS NOT NULL AND fuente.firma IN (firma,firma_anterior);
   IF NOT repetida AND EXISTS (SELECT FROM public.cierres_maestro WHERE clinica_id=p_clinica
       AND mes+interval '1 month'>p_fecha) THEN RAISE EXCEPTION 'Ya existe un cierre aprobado que incluye este corte.'; END IF;
   IF NOT repetida AND p_modo='apertura' AND EXISTS (SELECT FROM public.controles_inventario WHERE clinica_id=p_clinica
@@ -95,8 +99,48 @@ BEGIN
       IF costo IS NULL AND actual>0 AND valor IS NOT NULL THEN costo:=round(valor/actual,4); END IF;
       IF valor IS NOT NULL AND valor<>round(actual*coalesce(costo,0),2) THEN RAISE EXCEPTION '% · fila %: el costo y el valor declarado difieren.',hoja,num; END IF;
       valor:=coalesce(valor,CASE WHEN actual=0 THEN 0 ELSE round(actual*costo,2) END);
+      partidas:=partidas||jsonb_build_array(jsonb_build_object(
+        'archivo',archivo,'hoja',hoja,'fila',num,'sku',codigo,'nombre',nombre,'categoria',cat,'unidad',unidad,
+        'fecha_actualizacion',public._excel_fecha(d->>'fecha_actualizacion','Fecha de actualización del archivo',false),
+        'fecha_origen',public._excel_fecha(d->>'fecha_origen','Fecha de la fila',false),
+        'observaciones',public._excel_texto(d->>'observaciones','Las observaciones',500),
+        'bonificacion',coalesce((d->>'bonificacion')::boolean,false),
+        'inicial',ini,'entradas',ent,'salidas',sal,'actual',actual,'costo',costo,'costo_total',valor::text,
+        'precio_compra',compra,'precio',precio,'ganancia_pct',porcentaje,'margen_ganancia',margen));
+    END LOOP;
+    IF EXISTS (SELECT FROM jsonb_array_elements(partidas) x GROUP BY x->>'archivo',x->>'hoja',x->>'fila' HAVING count(*)>1) THEN
+      RAISE EXCEPTION 'La misma fila de origen aparece dos veces. Selecciona una sola copia del control.'; END IF;
+    -- En una bodega, una ficha tiene una presentación. Una fila de bonificación conserva su hoja y su costo.
+    FOR grupo IN
+      SELECT jsonb_agg(x ORDER BY ord) filas, count(*) n,
+        count(DISTINCT jsonb_build_array(x->'archivo',lower(x->>'sku'),lower(x->>'categoria'))) identidades,
+        sum((x->>'inicial')::numeric) inicial, sum((x->>'entradas')::numeric) entradas,
+        sum((x->>'salidas')::numeric) salidas, sum((x->>'actual')::numeric) existencia,
+        CASE WHEN bool_and(x->>'costo_total' IS NOT NULL) THEN sum((x->>'costo_total')::numeric) END importe,
+        CASE WHEN count(DISTINCT x->'costo')=1 THEN min((x->>'costo')::numeric)
+          WHEN bool_and((x->>'actual')::numeric=0 OR x->>'costo' IS NOT NULL)
+          THEN round(sum((x->>'actual')::numeric*(x->>'costo')::numeric)/nullif(sum((x->>'actual')::numeric),0),4) END promedio
+      FROM jsonb_array_elements(partidas) WITH ORDINALITY AS t(x,ord)
+      GROUP BY lower(x->>'nombre'),x->>'unidad' ORDER BY min(ord)
+    LOOP
+      lin:=grupo.filas->0;
+      nombre:=lin->>'nombre'; unidad:=lin->>'unidad'; codigo:=lin->>'sku';
+      hoja:=lin->>'hoja'; num:=(lin->>'fila')::integer;
+      IF grupo.n>1 THEN
+        IF grupo.identidades>1 THEN RAISE EXCEPTION '% · %: hay varias filas para % en % con distinto archivo, código o categoría. Revisa sus presentaciones.',hoja,num,nombre,unidad; END IF;
+        lin:=lin||jsonb_build_object('origenes',grupo.filas,'inicial',grupo.inicial,'entradas',grupo.entradas,
+          'salidas',grupo.salidas,'actual',grupo.existencia,'costo',grupo.promedio,'costo_total',grupo.importe::text);
+        -- Un precio o margen distinto por partida sólo se muestra en el detalle de origen.
+        FOREACH k IN ARRAY ARRAY['precio','precio_compra','ganancia_pct','margen_ganancia'] LOOP
+          IF EXISTS (SELECT FROM jsonb_array_elements(grupo.filas) x WHERE x->k IS DISTINCT FROM lin->k) THEN
+            lin:=jsonb_set(lin,ARRAY[k],'null');
+          END IF;
+        END LOOP;
+      END IF;
+      ini:=grupo.inicial; ent:=grupo.entradas; sal:=grupo.salidas; actual:=grupo.existencia; costo:=(lin->>'costo')::numeric;
       SELECT count(*),min(i.id) INTO n,producto_id FROM public.inventario i WHERE i.clinica_id=p_clinica AND
-        (lower(btrim(i.nombre))=lower(carga.nombre) OR (codigo IS NOT NULL AND lower(btrim(i.sku))=lower(codigo)));
+        ((lower(btrim(i.nombre))=lower(carga.nombre) AND lower(btrim(i.unidad))=carga.unidad)
+          OR (codigo IS NOT NULL AND lower(btrim(i.sku))=lower(codigo)));
       IF n>1 THEN RAISE EXCEPTION '% · fila %: el nombre o código identifica más de un producto.',hoja,num; END IF;
       accion:='documental'; vieja:=NULL; stock_corte:=NULL;
       IF producto_id IS NOT NULL THEN
@@ -119,6 +163,24 @@ BEGIN
               OR (vieja->>'costo' IS NOT NULL AND (vieja->>'costo')::numeric IS DISTINCT FROM costo) THEN
               RAISE EXCEPTION 'La cantidad o identidad de % cambió. La apertura admite completar costos pendientes en las mismas filas.',nombre;
             END IF;
+            IF vieja ? 'origenes' OR lin ? 'origenes' THEN
+              IF jsonb_array_length(coalesce(vieja->'origenes','[]'))<>grupo.n THEN
+                RAISE EXCEPTION 'Las filas de origen de % cambiaron. Conserva sus hojas y cantidades al completar costos.',nombre;
+              END IF;
+              origenes:='[]';
+              FOR origen IN SELECT value FROM jsonb_array_elements(grupo.filas) LOOP
+                SELECT x INTO antiguo FROM jsonb_array_elements(vieja->'origenes') x
+                  WHERE x->>'hoja'=origen->>'hoja' AND x->'fila'=origen->'fila';
+                IF antiguo IS NULL OR jsonb_build_array(antiguo->'inicial',antiguo->'entradas',antiguo->'salidas',antiguo->'actual',antiguo->'bonificacion')
+                  <>jsonb_build_array(origen->'inicial',origen->'entradas',origen->'salidas',origen->'actual',origen->'bonificacion')
+                  OR (antiguo->>'costo' IS NOT NULL AND antiguo->'costo' IS DISTINCT FROM origen->'costo') THEN
+                  RAISE EXCEPTION 'Conserva las partidas y los costos ya registrados de % en % · fila %.',nombre,origen->>'hoja',origen->>'fila';
+                END IF;
+                mejora:=mejora OR (antiguo->>'costo' IS NULL AND origen->>'costo' IS NOT NULL);
+                origenes:=origenes||jsonb_build_array(origen||jsonb_build_object('lote_fisico_id',antiguo->'lote_fisico_id'));
+              END LOOP;
+              lin:=jsonb_set(lin,'{origenes}',origenes);
+            END IF;
             mejora:=mejora OR (vieja->>'costo' IS NULL AND costo IS NOT NULL);
             accion:='completar';
           ELSIF EXISTS (SELECT FROM public.controles_inventario c CROSS JOIN LATERAL jsonb_array_elements(c.filas) x
@@ -137,20 +199,16 @@ BEGIN
         END IF;
       ELSIF producto_id IS NULL THEN accion:='alta_catalogo';
       END IF;
-      lin:=jsonb_build_object('archivo',archivo,'hoja',hoja,'fila',num,'sku',codigo,'nombre',nombre,'categoria',cat,'unidad',unidad,
-        'fecha_actualizacion',public._excel_fecha(d->>'fecha_actualizacion','Fecha de actualización del archivo',false),
-        'inicial',ini,'entradas',ent,'salidas',sal,'actual',actual,'costo',costo,'costo_total',valor::text,'precio_compra',compra,'precio',precio,
-        'ganancia_pct',porcentaje,'margen_ganancia',margen,'inventario_id',producto_id,'accion',accion,
+      lin:=lin||jsonb_build_object('inventario_id',producto_id,'accion',accion,
         'movimiento_inicial_id',vieja->'movimiento_inicial_id','lote_fisico_id',vieja->'lote_fisico_id','existencia_previa',stock_corte);
       plan:=plan||jsonb_build_array(lin);
     END LOOP;
     IF p_modo='apertura' AND fuente.id IS NOT NULL AND (NOT mejora OR jsonb_array_length(fuente.filas)<>jsonb_array_length(plan)
       OR EXISTS (SELECT FROM jsonb_array_elements(plan) x WHERE x->>'accion'<>'completar')) THEN
       RAISE EXCEPTION 'La apertura ya se aplicó. Para completar costos pendientes conserva todos los artículos y cantidades de ese corte.'; END IF;
-    IF EXISTS (SELECT FROM jsonb_array_elements(plan) x GROUP BY lower(x->>'nombre') HAVING count(*)>1)
-       OR EXISTS (SELECT FROM jsonb_array_elements(plan) x WHERE x->>'sku' IS NOT NULL GROUP BY lower(x->>'sku') HAVING count(*)>1)
+    IF EXISTS (SELECT FROM jsonb_array_elements(plan) x WHERE x->>'sku' IS NOT NULL GROUP BY lower(x->>'sku') HAVING count(*)>1)
        OR EXISTS (SELECT FROM jsonb_array_elements(plan) x WHERE x->>'inventario_id' IS NOT NULL GROUP BY x->>'inventario_id' HAVING count(*)>1) THEN
-      RAISE EXCEPTION 'Hay artículos repetidos en el control de esa bodega.';
+      RAISE EXCEPTION 'Dos presentaciones comparten el mismo código o apuntan a la misma ficha. Comprueba los códigos del archivo.';
     END IF;
   ELSE plan:=fuente.filas;
   END IF;
@@ -208,14 +266,24 @@ BEGIN
         IF guardado IS DISTINCT FROM actual THEN RAISE EXCEPTION 'El movimiento de apertura pierde precisión para %.',lin->>'nombre'; END IF;
       END IF;
       lote_fisico:=(lin->>'lote_fisico_id')::bigint;
-      IF p_modo='apertura' AND actual>0 AND lin->>'costo' IS NOT NULL AND lote_fisico IS NULL AND
+      IF p_modo='apertura' AND actual>0 AND lote_fisico IS NULL AND
           NOT EXISTS (SELECT FROM public.inventario_movimientos WHERE clinica_id=p_clinica AND inventario_id=producto_id AND fecha>=p_fecha AND tipo='salida') THEN
         SELECT coalesce(sum(l.cantidad_disponible),0) INTO cubierto FROM public.inventario_lotes l
           WHERE l.clinica_id=p_clinica AND l.inventario_id=producto_id;
-        IF actual<=(SELECT i.stock_actual FROM public.inventario i WHERE i.id=producto_id)-cubierto THEN
-          INSERT INTO public.inventario_lotes(clinica_id,inventario_id,lote,fecha_ingreso,cantidad_inicial,cantidad_disponible,costo_unitario)
-            VALUES(p_clinica,producto_id,'Apertura · '||p_bodega,p_fecha,actual,actual,(lin->>'costo')::numeric) RETURNING id INTO lote_fisico;
-        END IF;
+        SELECT i.stock_actual-cubierto INTO libre FROM public.inventario i WHERE i.id=producto_id;
+        origenes:='[]';
+        FOR origen IN SELECT value FROM jsonb_array_elements(coalesce(lin->'origenes',jsonb_build_array(lin))) LOOP
+          lote_fisico:=(origen->>'lote_fisico_id')::bigint; cantidad_origen:=(origen->>'actual')::numeric;
+          IF lote_fisico IS NULL AND origen->>'costo' IS NOT NULL AND cantidad_origen>0 AND cantidad_origen<=libre THEN
+            INSERT INTO public.inventario_lotes(clinica_id,inventario_id,lote,fecha_ingreso,cantidad_inicial,cantidad_disponible,costo_unitario)
+              VALUES(p_clinica,producto_id,'Apertura · '||p_bodega||
+                CASE WHEN lin ? 'origenes' THEN ' · '||(origen->>'hoja')||' · fila '||(origen->>'fila') ELSE '' END,
+                p_fecha,cantidad_origen,cantidad_origen,(origen->>'costo')::numeric) RETURNING id INTO lote_fisico;
+            libre:=libre-cantidad_origen;
+          END IF;
+          IF lin ? 'origenes' THEN origenes:=origenes||jsonb_build_array(origen||jsonb_build_object('lote_fisico_id',lote_fisico)); END IF;
+        END LOOP;
+        IF lin ? 'origenes' THEN lin:=jsonb_set(lin,'{origenes}',origenes); lote_fisico:=NULL; END IF;
       END IF;
       guardadas:=guardadas||jsonb_build_array(lin||jsonb_build_object('inventario_id',producto_id,'movimiento_inicial_id',mov_id,'lote_fisico_id',lote_fisico));
     END LOOP;
@@ -224,15 +292,20 @@ BEGIN
       VALUES(p_clinica,p_fecha,p_bodega,p_modo,firma,guardadas,auth.uid()) RETURNING id INTO fuente_id;
   END IF;
   SELECT jsonb_build_object('nuevas',CASE WHEN repetida THEN 0 ELSE count(*) END,'duplicadas',CASE WHEN repetida THEN count(*) ELSE 0 END,
-      'errores',0,'productos_sin_costo',count(*) FILTER(WHERE (x->>'actual')::numeric>0 AND x->>'costo_total' IS NULL),
-      'valor_conocido',coalesce(sum((x->>'costo_total')::numeric),0)),
-    jsonb_agg(jsonb_build_object('archivo',x->>'archivo','hoja',x->>'hoja','fila',x->'fila','estado',
+      'errores',0,'productos_sin_costo',count(*) FILTER(WHERE (x->>'actual')::numeric>0 AND x->>'costo_total' IS NULL))
+    INTO resumen FROM jsonb_array_elements(plan) x;
+  SELECT resumen||jsonb_build_object('filas_origen',count(*),'filas_bonificacion',count(*) FILTER(WHERE (o->>'bonificacion')::boolean),
+      'valor_conocido',coalesce(sum((o->>'costo_total')::numeric),0),
+      'valor_bonificacion',coalesce(sum((o->>'costo_total')::numeric) FILTER(WHERE (o->>'bonificacion')::boolean),0)),
+    jsonb_agg(jsonb_build_object('archivo',o->>'archivo','hoja',o->>'hoja','fila',o->'fila','nombre',o->>'nombre',
+      'bonificacion',coalesce((o->>'bonificacion')::boolean,false),'estado',
       CASE WHEN repetida THEN 'duplicada' WHEN p_confirmar AND NOT cambio THEN 'guardada' ELSE 'lista' END,
       'detalle',CASE WHEN repetida THEN 'Conteo ya registrado' WHEN fuente.id IS NOT NULL THEN 'Sustituye el conteo previo de esta bodega'
         ELSE CASE x->>'accion' WHEN 'alta' THEN 'Alta con existencia inicial' WHEN 'vincular' THEN 'Existencia previa vinculada'
         WHEN 'inicializar' THEN 'Inicializa la ficha existente' WHEN 'alta_catalogo' THEN 'Alta de ficha y conteo documental'
-        ELSE 'Conteo documental' END END))
-    INTO resumen,resultados FROM jsonb_array_elements(plan) x;
+        ELSE 'Conteo documental' END END) ORDER BY ficha_ord,origen_ord)
+    INTO resumen,resultados FROM jsonb_array_elements(plan) WITH ORDINALITY AS fichas(x,ficha_ord)
+    CROSS JOIN LATERAL jsonb_array_elements(coalesce(x->'origenes',jsonb_build_array(x))) WITH ORDINALITY AS origen(o,origen_ord);
   RETURN jsonb_build_object('revision',revision,'cambio',cambio,'lote',CASE WHEN p_confirmar AND NOT cambio THEN fuente_id END,'resumen',resumen,'filas',resultados);
 END $$;
 

@@ -521,6 +521,14 @@ body.dark .balance-pct{background:#0F172A}
 .excel-modal h2{margin-bottom:4px}
 .excel-modal p{font-size:13px;color:var(--text-light);margin:8px 0;white-space:pre-line;overflow-wrap:anywhere}
 .excel-modal [hidden],#btn-cont-excel[hidden]{display:none!important}
+#excel-control{min-width:0;margin:14px 0;padding:10px 14px;border:1px solid var(--border);border-radius:10px}
+#excel-control legend{font-size:12px;padding:0 4px;color:var(--text-light)}
+#excel-control #excel-corte-resumen{font-weight:700;color:var(--text);margin:0}
+#excel-control details{margin:5px 0 0}
+.excel-resumen-control{padding:8px 14px;background:var(--card);border:1px solid var(--border);border-radius:10px}
+.excel-resumen-hoja{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:3px 12px;padding:6px 0;font-size:13px}
+.excel-resumen-hoja span{font-variant-numeric:tabular-nums}
+.excel-resumen-control .excel-totales{border-top:1px solid var(--border);padding-top:8px}
 .excel-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(210px,100%),1fr));gap:10px;margin-top:10px}
 .excel-grid label{display:grid;align-content:start;gap:4px;min-width:0;font-size:12px;font-weight:700}
 .excel-grid input,.excel-grid select{width:100%;min-width:0;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);font:inherit}
