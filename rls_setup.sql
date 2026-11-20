@@ -1093,3 +1093,25 @@ BEGIN
     END IF;
   END LOOP;
 END $$;
+
+-- Cortes físicos de bodega e informes aprobados de Libro contable.
+-- Las escrituras se realizan por las funciones que verifican empresa, revisión y paridad.
+DO $$
+BEGIN
+  IF to_regclass('public.controles_inventario') IS NOT NULL THEN
+    ALTER TABLE public.controles_inventario ENABLE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS controles_inventario_lectura ON public.controles_inventario;
+    CREATE POLICY controles_inventario_lectura ON public.controles_inventario FOR SELECT TO authenticated
+      USING ('inventario'=ANY(public.modulos_importacion_excel(clinica_id)));
+    REVOKE ALL ON public.controles_inventario FROM PUBLIC,anon,authenticated;
+    GRANT SELECT ON public.controles_inventario TO authenticated;
+  END IF;
+  IF to_regclass('public.cierres_maestro') IS NOT NULL THEN
+    ALTER TABLE public.cierres_maestro ENABLE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS cierres_maestro_lectura ON public.cierres_maestro;
+    CREATE POLICY cierres_maestro_lectura ON public.cierres_maestro FOR SELECT TO authenticated
+      USING (ARRAY['inventario','contabilidad'] <@ public.modulos_importacion_excel(clinica_id));
+    REVOKE ALL ON public.cierres_maestro FROM PUBLIC,anon,authenticated;
+    GRANT SELECT ON public.cierres_maestro TO authenticated;
+  END IF;
+END $$;

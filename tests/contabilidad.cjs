@@ -242,6 +242,30 @@ const de=(ll,t,op)=>ll.filter(q=>q.t===t&&q.op===op);
     assert.equal(fifo.sinLote,5);
     assert.deepEqual(fifo.valor,{total:185,lotes:155,sinLote:30});
 
+    const costosApertura=await page.evaluate(async({INV,LOTES})=>{
+      __estado({C:{inv:INV,lotes:LOTES,ventas:[],cliCom:[]}});
+      C.inv[0].costo=null;
+      abrirNuevaVenta();
+      const id=_lineasV()[0].id;
+      cambiarLineaVenta(id,'invId','1');
+      cambiarLineaVenta(id,'cantidad','1');
+      __llamadas.length=0; await guardarVenta();
+      const pendiente={aviso:__toasts.at(-1)[1],consultas:__llamadas.length,
+        ganancia:document.getElementById('venta-ganancia').textContent,info:document.getElementById('venta-info-'+id).textContent};
+      cambiarLineaVenta(id,'loteId','11');
+      const valorado=document.getElementById('venta-ganancia').textContent;
+      C.inv[0].costo=0;
+      cambiarLineaVenta(id,'loteId','');
+      const gananciaCero=document.getElementById('venta-ganancia').textContent;
+      __llamadas.length=0; await guardarVenta();
+      return {pendiente,valorado,gananciaCero,guardado:__llamadas.find(q=>q.t==='venta_items')?.datos[0].costo_unitario};
+    },{INV,LOTES});
+    assert.equal(costosApertura.pendiente.consultas,0);
+    assert.match(costosApertura.pendiente.aviso,/Falta el costo de Guantes/);
+    assert.match(costosApertura.pendiente.info,/costo pendiente/);
+    assert.equal(costosApertura.pendiente.ganancia,'Pendiente');
+    assert.deepEqual([costosApertura.valorado,costosApertura.gananciaCero,costosApertura.guardado],['C$ 5.00','C$ 10.00',0]);
+
     // ── Venta de contado, sin IVA ──
     const contado=await page.evaluate(async({INV,LOTES})=>{
       localStorage.clear();
@@ -396,6 +420,7 @@ const de=(ll,t,op)=>ll.filter(q=>q.t===t&&q.op===op);
     // ── Compra de la empresa: cada línea crea su lote con proveedor y costo ──
     const compra=await page.evaluate(async({INV,PROV})=>{
       __estado({C:{inv:INV,prov:PROV,comp:[],lotes:[]}});
+      C.inv[1].stock=3;  // La apertura de estas tres unidades aún carece de costo.
       abrirNuevaCompra(); document.getElementById('compra-proveedor').value='7';
       const r={conLote:document.querySelector('#compra-lineas .compra-linea').classList.contains('con-lote'),
         gastoOculto:getComputedStyle(document.getElementById('compra-gasto-wrap')).display==='none'};
@@ -413,6 +438,7 @@ const de=(ll,t,op)=>ll.filter(q=>q.t===t&&q.op===op);
     const lotesIns=de(compra.llamadas,'inventario_lotes','insert')[0].datos;
     assert.equal(lotesIns.length,2);
     assert.deepEqual(lotesIns.map(l=>[l.inventario_id,l.proveedor_id,l.cantidad_inicial,l.cantidad_disponible,l.costo_unitario]),[[1,7,10,10,7],[2,7,100,100,1.5]]);
+    assert.deepEqual(de(compra.llamadas,'inventario','update')[1].datos,{stock_actual:103,costo_unitario:null});
     assert.equal(lotesIns[0].lote,'LOT-99');
     assert.match(lotesIns[1].lote,/^C\d+-2$/,'Sin número, el lote se nombra por la compra');
     const itemsC=de(compra.llamadas,'compra_items','insert')[0].datos;
@@ -447,6 +473,8 @@ const de=(ll,t,op)=>ll.filter(q=>q.t===t&&q.op===op);
     },{INV,LOTES});
     assert.deepEqual(de(salida,'inventario_lotes','update').map(q=>[q.filtros[0][1],q.datos.cantidad_disponible]),[[11,7]],'5 sin lote y 3 de L-A');
     assert.equal(de(salida,'inventario_movimientos','insert')[0].datos.motivo,'Merma · lote L-A (3)');
+    const merma=de(salida,'inventario_movimientos','insert')[0].datos;
+    assert.deepEqual([merma.valor_costo,merma.costo_unitario],[45,5.625]);
     assert.equal(de(salida,'finanzas','insert').length,0,'Una salida manual no se anota como ingreso');
 
     // Kardex: lotes con proveedor
@@ -568,6 +596,21 @@ const de=(ll,t,op)=>ll.filter(q=>q.t===t&&q.op===op);
     assert.match(P['Estado de cuenta'],/TotalesC\$ 345\.00C\$ 15\.00C\$ 330\.00/);
     assert.match(P['Reporte de IVA'],/C\$ 30\.00IVA cobrado \(ventas\) ?C\$ 10\.50IVA pagado \(compras\) ?C\$ 19\.50IVA a pagar ?C\$ 5\.00Pagado a la DGI/);
     assert.match(P['Existencias por lote'],/Guantes de nitrilo ML-BProveedor A.*15 caja.*Sin lote/);
+    const valoracion=await page.evaluate(({INV,LOTES})=>{
+      __estado({C:{inv:[{...INV[0],costo:null}],lotes:LOTES}});
+      function leer() {
+        imprimirExistenciasLotes();
+        const doc=new DOMParser().parseFromString(__pdf.at(-1).body,'text/html');
+        return {importe:doc.querySelectorAll('.kpi-val')[2].textContent, pie:doc.querySelector('tbody tr:last-child').textContent,
+          sinLote:[...doc.querySelectorAll('tbody tr')].find(tr=>tr.children[1]?.textContent==='Sin lote').lastElementChild.textContent};
+      }
+      const mixto=leer(); C.lotes=[];
+      const pendiente=leer(); C.inv[0].costo=0;
+      return [mixto,pendiente,leer()];
+    },{INV,LOTES});
+    assert.deepEqual(valoracion,[{importe:'C$ 155.00',pie:'Subtotal conocidoC$ 155.00',sinLote:'Pendiente'},
+      {importe:'Pendiente',pie:'Subtotal conocidoPendiente',sinLote:'Pendiente'},
+      {importe:'C$ 0.00',pie:'TotalC$ 0.00',sinLote:'C$ 0.00'}]);
     assert.match(P['Venta V-000010'],/Comprobante de venta V-000010/);
     assert.match(P['Venta V-000010'],/RUC J031/);
     assert.match(P['Venta V-000010'],/L-A/);

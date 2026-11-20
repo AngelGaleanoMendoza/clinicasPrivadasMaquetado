@@ -22,7 +22,7 @@
 <!-- Lectura local de machotes. El archivo se procesa en el navegador antes de
      guardarlo; Mammoth extrae DOCX y PDF.js se carga al elegir un PDF. -->
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js" defer></script>
-<link rel="stylesheet" href="css/styles.css?v=20261119libro">
+<link rel="stylesheet" href="css/styles.css?v=20261120maestro">
 </head>
 <body>
 <script>
@@ -1099,6 +1099,7 @@
         <section class="card lc-modulo">
           <nav class="tabs" aria-label="Libro contable" id="lc-tabs">
             <button type="button" class="tab" data-panel="reportes">Reportes</button>
+            <button type="button" class="tab" data-panel="maestro" hidden>Informe maestro mensual</button>
             <button type="button" class="tab" data-panel="asiento">Nuevo asiento</button>
             <button type="button" class="tab" data-panel="apertura">Saldos iniciales</button>
             <button type="button" class="tab" data-panel="cuentas">Cuentas</button>
@@ -1558,6 +1559,7 @@
       <div class="form-group"><label>Unidad de medida</label>
         <select id="prod-unidad">
           <option value="unidad">Unidad</option>
+          <option value="blister">Blíster</option>
           <option value="caja">Caja</option>
           <option value="frasco">Frasco</option>
           <option value="ampolla">Ampolla</option>
@@ -3258,6 +3260,19 @@
     <label id="excel-fecha-apertura-campo" hidden>Fecha de apertura para productos sin fecha en el archivo
       <input type="date" id="excel-fecha-apertura" onchange="ExcelImportacion.cambiarFechaApertura()">
     </label>
+    <fieldset id="excel-control" hidden oninput="ExcelImportacion.cambiarControl()">
+      <legend>Control de inventario de bodega</legend>
+      <div class="excel-grid">
+        <label>Uso del control<select id="excel-control-modo">
+          <option value="">Selecciona el uso</option>
+          <option value="apertura">Apertura · registrar existencias físicas al corte</option>
+          <option value="cierre">Cierre mensual · conciliar el conteo con el sistema</option>
+        </select></label>
+        <label>Fecha de corte<input id="excel-control-fecha" type="date"></label>
+        <label>Área / bodega<input id="excel-control-bodega" maxlength="100" type="text"></label>
+      </div>
+      <p class="excel-ayuda" id="excel-control-ayuda"></p>
+    </fieldset>
     <p id="excel-estado" role="status"></p>
     <div id="excel-resultados"></div>
     <p id="excel-situacion"></p>
@@ -3277,13 +3292,15 @@
     </div>
   </section>
 </div>
-<script src="js/app.js?v=20261119libro" defer></script>
+<script src="js/app.js?v=20261120maestro" defer></script>
 <script src="js/reportes-zip.js?v=20261119libro" defer></script>
-<script src="js/importar-excel.js?v=20261118inventario" defer></script>
+<script src="js/importar-excel.js?v=20261120maestro" defer></script>
 <script src="js/libro-diario.js?v=20261119libro" defer></script>
 <script src="js/caja-empresa.js?v=20261118borrador" defer></script>
 <script src="js/borrador-diario.js?v=20261118inventario" defer></script>
-<script src="js/libro-contable.js?v=20261119" defer></script>
+<script src="js/maestro-inventario.js?v=20261120" defer></script>
+<script src="js/informe-maestro.js?v=20261120" defer></script>
+<script src="js/libro-contable.js?v=20261120maestro" defer></script>
 <div class="modal-overlay" id="modal-libro-diario">
   <section class="modal modal-lg libro-diario" role="dialog" aria-modal="true" aria-labelledby="libro-diario-titulo">
     <h2 id="libro-diario-titulo">Libro diario y balanza de comprobación</h2>

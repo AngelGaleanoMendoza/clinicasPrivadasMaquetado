@@ -11840,6 +11840,16 @@ function _onProdVencChange() {
 }
 
 // ── Modal Producto ──
+function seleccionarOpcionProducto(id,valor){
+  const campo = document.getElementById(id);
+  campo.querySelector('option[data-importada]')?.remove();
+  if(valor && !Array.from(campo.options).some(opcion=>opcion.value===valor)){
+    const opcion = new Option(valor,valor);
+    opcion.dataset.importada = 'true';
+    campo.add(opcion);
+  }
+  campo.value = valor;
+}
 function openModalProducto(id){
   editingProdId=id||null;
   document.getElementById('modal-producto-title').textContent=id?'✏️ Editar Producto':'📦 Nuevo Producto';
@@ -11847,8 +11857,8 @@ function openModalProducto(id){
   if(id){
     const p=C.inv.find(x=>x.id===id); if(!p) return;
     document.getElementById('prod-nombre').value=p.nombre;
-    document.getElementById('prod-categoria').value=p.categoria;
-    document.getElementById('prod-unidad').value=p.unidad;
+    seleccionarOpcionProducto('prod-categoria',p.categoria||'general');
+    seleccionarOpcionProducto('prod-unidad',p.unidad||'unidad');
     document.getElementById('prod-stock-min').value=p.stockMin;
     document.getElementById('prod-precio').value=p.precio!=null?p.precio:'';
     // Con 4 decimales, como se guarda: redondear a 2 cambiaba el costo promedio
@@ -11862,8 +11872,8 @@ function openModalProducto(id){
     if(stockWrap) stockWrap.style.display='none';
   } else {
     ['prod-nombre','prod-stock','prod-stock-min','prod-precio','prod-costo','prod-descripcion'].forEach(f=>document.getElementById(f).value='');
-    document.getElementById('prod-categoria').value='medicamento';
-    document.getElementById('prod-unidad').value='unidad';
+    seleccionarOpcionProducto('prod-categoria','medicamento');
+    seleccionarOpcionProducto('prod-unidad','unidad');
     document.getElementById('prod-vencimiento').value='';
     document.getElementById('prod-alerta-meses').value=1;
     const alertWrap = document.getElementById('prod-alerta-wrap');
@@ -12134,12 +12144,21 @@ async function confirmarMovMasivo() {
       if(!ok) continue;
     }
     const nuevoStock = (prod.stock||0) + (tipo==='entrada' ? qty : -qty);
-    const deLotes = tipo==='salida' && conLotes
-      ? _asignarLotes(Number(id), Math.min(qty, Math.max(0, prod.stock)), null, usado).partes.filter(x => x.loteId) : [];
+    const asignacion = tipo==='salida' && conLotes ? _asignarLotes(Number(id), qty, null, usado) : null;
+    const partes = asignacion?.partes || [];
+    const deLotes = partes.filter(x => x.loteId);
     const motivoMov = deLotes.length
       ? [motivo, 'lote ' + deLotes.map(x => `${x.lote} (${_cant(x.cantidad)})`).join(', ')].filter(Boolean).join(' · ') : motivo;
     // Primero el movimiento: si no se guarda, el stock no se toca.
-    const {error:movErr} = await sb.from('inventario_movimientos').insert({inventario_id:Number(id),clinica_id:currentClinicaId,tipo,cantidad:qty,motivo:motivoMov,fecha});
+    const mov = {inventario_id:Number(id),clinica_id:currentClinicaId,tipo,cantidad:qty,motivo:motivoMov,fecha};
+    const valorar = asignacion && !asignacion.falta && qty<=prod.stock && partes.every(x => x.costo!=null);
+    const valor = valorar ? {valor_costo:_r2(partes.reduce((s,x)=>s+_costoLineaInventario(x.cantidad,x.costo),0)),
+      costo_unitario:_r4(partes.reduce((s,x)=>s+x.cantidad*x.costo,0)/qty)} : {};
+    let {error:movErr} = await sb.from('inventario_movimientos').insert({...mov,...valor});
+    if(valorar && ['PGRST204','42703'].includes(movErr?.code) && ['valor_costo','costo_unitario'].some(c => _faltaColumna(movErr,c))) {
+      ({error:movErr} = await sb.from('inventario_movimientos').insert(mov));
+      if(!movErr) avisos.push(`${prod.nombre} (actualiza el esquema de costos para valorar sus movimientos)`);
+    }
     if(movErr) { avisos.push(`${prod.nombre} (no se registró: ${movErr.message})`); continue; }
     const {error:stockErr} = await sb.from('inventario').update({stock_actual:Math.max(0,nuevoStock)}).eq('id',Number(id));
     if(stockErr) avisos.push(`${prod.nombre} (movimiento guardado, pero el stock no se actualizó)`);
@@ -12498,10 +12517,11 @@ function _totalCompra() {
 }
 
 // Costo promedio ponderado tras recibir `cantidad` unidades a `costo` cada una.
-// Sin costo previo (o sin stock) el costo es el de lo que entra.
+// El promedio del stock anterior queda pendiente hasta conocer su costo.
 function _costoPromedio(stock, costoActual, cantidad, costo) {
   const base = Math.max(0, stock || 0);
-  if(costoActual == null || base === 0) return costo;
+  if(base === 0) return costo;
+  if(costoActual == null) return null;
   return (base * costoActual + cantidad * costo) / (base + cantidad);
 }
 
@@ -12567,7 +12587,7 @@ async function guardarCompra() {
       for(const l of ls) { costo = _costoPromedio(stock, costo, l.cantidad, l.costo); stock += l.cantidad; }
       const [rm, ru] = await Promise.all([
         sb.from('inventario_movimientos').insert(ls.map(l => ({ inventario_id:invId, clinica_id:currentClinicaId, tipo:'entrada', cantidad:l.cantidad, motivo, fecha }))),
-        sb.from('inventario').update({ stock_actual:stock, costo_unitario:Math.round(costo * 10000) / 10000 }).eq('id', invId),
+        sb.from('inventario').update({ stock_actual:stock, costo_unitario:costo==null ? null : _r4(costo) }).eq('id', invId),
       ]);
       if(rm.error || ru.error) avisos.push(p?.nombre || 'producto');
     }
@@ -12884,14 +12904,14 @@ function _asignarLotes(invId, cantidad, loteId = null, usado = new Map()) {
     const q = Math.min(resto, Math.max(0, Math.round((disp - (usado.get(clave) || 0)) * 1000) / 1000));
     if(!(q > 0)) return;
     usado.set(clave, (usado.get(clave) || 0) + q);
-    partes.push({ loteId:id, lote, cantidad:q, costo:Number(costo) || 0 });
+    partes.push({ loteId:id, lote, cantidad:q, costo:costo==null ? null : Number(costo) });
     resto = Math.round((resto - q) * 1000) / 1000;
   };
   if(loteId) {
     const l = C.lotes.find(x => x.id === loteId && x.invId === invId);
     if(l) tomar(l.id, l.id, l.lote, l.disponible, l.costo);
   } else {
-    tomar('sin-' + invId, null, '', _stockSinLote(p), p?.costo ?? 0);
+    tomar('sin-' + invId, null, '', _stockSinLote(p), p?.costo);
     for(const l of _lotesDisponibles(invId)) { if(resto <= 0) break; tomar(l.id, l.id, l.lote, l.disponible, l.costo); }
   }
   return { partes, falta:Math.max(0, resto) };
@@ -12963,7 +12983,12 @@ function _tagCobroVenta(v) {
   const [cls, txt] = _ETIQUETA_COBRO[_estadoCobroVenta(v)];
   return `<span class="tag ${cls}">${txt}</span>`;
 }
-function _costoVenta(v) { return v.items.reduce((s, i) => s + i.cantidad * i.costo, 0); }
+// PostgreSQL redondea por línea: cantidades a milésimas y costos a diezmilésimas.
+function _costoLineaInventario(cantidad,costo) {
+  const importe = BigInt(Math.round(cantidad*1000)) * BigInt(Math.round(costo*10000));
+  return Number((importe+50000n)/100000n)/100;
+}
+function _costoVenta(v) { return _r2(v.items.reduce((s,i)=>s+_costoLineaInventario(i.cantidad,i.costo),0)); }
 const _TRAMOS_COBRO = [['al_dia','Por vencer'],['d30','1–30 días'],['d60','31–60 días'],['d90','61–90 días'],['mas90','Más de 90 días']];
 function _tramoCobro(v) { const d = _diasVencida(v); return !d ? 'al_dia' : d <= 30 ? 'd30' : d <= 60 ? 'd60' : d <= 90 ? 'd90' : 'mas90'; }
 
@@ -13065,6 +13090,12 @@ function _valorInventario(datos = C, productos = _productosValorados(datos)) {
   const sinLote = productos.reduce((s, p) => s + p.valorSinLote, 0);
   return { total:_r2(lotes + sinLote), lotes:_r2(lotes), sinLote:_r2(sinLote) };
 }
+function _resumenValoracion(productos,total) {
+  const pendientes=productos.filter(p=>p.sinCosto>0).length;
+  const hayCosto=productos.some(p=>p.producto.stock>p.sinCosto || p.valorLotes>0);
+  return {pendientes,importe:pendientes && !hayCosto ? 'Pendiente' : fmtC(total),
+    etiqueta:pendientes ? 'Valor conocido a costo' : 'Valor total a costo'};
+}
 const _fmtCostoUnitario = n => n == null ? '—' : 'C$ ' + n.toLocaleString('es-NI', {minimumFractionDigits:2, maximumFractionDigits:4});
 function _costoMovimientoDocumentado(m) {
   return m.valorCosto ?? (m.costoUnitario == null ? null : _r2(m.cantidad * m.costoUnitario));
@@ -13081,7 +13112,6 @@ function _tablasValorInventario(datos = C) {
   const ajuste = _r2(total - productos.reduce((s, p) => s + _r2(p.valor), 0));
   const grupos = new Map();
   const filas = [];
-  let pendientes = 0;
   for(const {producto:p, sinCosto, valor} of productos) {
     const clave = JSON.stringify([p.categoria, p.unidad]);
     const grupo = grupos.get(clave) || {categoria:p.categoria, unidad:p.unidad, stock:0, sinCosto:0, valor:0};
@@ -13089,20 +13119,18 @@ function _tablasValorInventario(datos = C) {
     grupo.sinCosto += sinCosto;
     grupo.valor += valor;
     grupos.set(clave, grupo);
-    if(sinCosto > 0) pendientes++;
     filas.push([p.sku ? p.sku + ' · ' + p.nombre : p.nombre, p.categoria, _cant(p.stock) + ' ' + p.unidad,
       _fmtCostoUnitario(p.costo), _cant(sinCosto), sinCosto > 0 && sinCosto === p.stock ? 'Pendiente' : fmtC(_r2(valor)),
       p.fechaVenc ? formatFecha(p.fechaVenc) : '—']);
   }
-  const resumen = [
-    [pendientes ? 'Valor conocido a costo' : 'Valor total a costo', fmtC(total)],
-    ['Productos con existencias pendientes de valorar', pendientes]
-  ];
+  const {pendientes,importe,etiqueta} = _resumenValoracion(productos,total);
+  const resumen = [[etiqueta,importe],['Productos con existencias pendientes de valorar',pendientes]];
   if(ajuste) resumen.push(['Ajuste de redondeo de líneas', fmtC(ajuste)]);
   return [
     {titulo:'Valoración de existencias', columnas:['Concepto','Resultado'], filas:resumen},
     {titulo:'Existencias por categoría y unidad', columnas:['Categoría','Unidad','Existencia','Cantidad sin costo','Valor conocido'],
-      filas:[...grupos.values()].map(g => [g.categoria, g.unidad, _cant(g.stock), _cant(g.sinCosto), fmtC(_r2(g.valor))])},
+      filas:[...grupos.values()].map(g => [g.categoria, g.unidad, _cant(g.stock), _cant(g.sinCosto),
+        g.sinCosto>0 && g.sinCosto===g.stock ? 'Pendiente' : fmtC(_r2(g.valor))])},
     {titulo:'Detalle por producto', columnas:['Producto','Categoría','Existencia','Costo unitario base','Cantidad sin costo','Valor conocido','Vencimiento'], filas}
   ];
 }
@@ -13163,7 +13191,7 @@ function _gananciaPorProducto(r = _rangoCont()) {
   const g = {};
   C.ventas.filter(v => v.estado !== 'anulada' && _enRango(v.fecha, r)).forEach(v => v.items.forEach(i => {
     const x = g[i.invId || i.descripcion] ||= { nombre:i.descripcion, cantidad:0, ventas:0, costo:0 };
-    x.cantidad += i.cantidad; x.ventas += i.subtotal; x.costo += i.cantidad * i.costo;
+    x.cantidad += i.cantidad; x.ventas += i.subtotal; x.costo += _costoLineaInventario(i.cantidad,i.costo);
   }));
   return Object.values(g).map(x => ({ ...x, ventas:_r2(x.ventas), costo:_r2(x.costo), ganancia:_r2(x.ventas - x.costo) })).sort((a, b) => b.ganancia - a.ganancia);
 }
@@ -13224,6 +13252,8 @@ function _htmlGraficaCont() {
 // Resumen de la versión para clínicas: ingresos de Finanzas, costo de lo usado
 // del inventario, gastos, utilidad, lo que se debe a proveedores e inventario.
 function _renderContResumenClinica() {
+  const valoracion=_productosValorados();
+  const valor=_resumenValoracion(valoracion,_valorInventario(C,valoracion).total);
   const er = _estadoResultados();
   const cxp = C.comp.reduce((s, c) => s + _saldoCompra(c), 0);
   const vencido = C.comp.filter(c => _estadoPagoCompra(c) === 'vencida').reduce((s, c) => s + _saldoCompra(c), 0);
@@ -13236,7 +13266,7 @@ function _renderContResumenClinica() {
       ${_statCard('📤', 'red', fmtC(er.totGastos), 'Gastos de operación')}
       <div class="stat-card"><div class="stat-icon si-purple">💼</div><div class="stat-info"><h3${neg(er.neta)}>${fmtC(er.neta)}</h3><p>Utilidad neta${er.totOtros ? ' · margen ' + (Math.round(er.neta / er.totOtros * 1000) / 10).toLocaleString('es-NI') + ' %' : ''}</p></div></div>
       ${_statCard('🚚', 'red', fmtC(cxp), 'Por pagar a proveedores', vencido ? ` · <span class="compra-vencido">${fmtC(vencido)} vencido</span>` : '')}
-      ${_statCard('🏷️', 'green', fmtC(_valorInventario().total), 'Inventario a costo')}
+      ${_statCard('🏷️', 'green', valor.importe, valor.pendientes ? 'Inventario · valor conocido' : 'Inventario a costo')}
     </div>
     ${_htmlGraficaCont()}
     <div class="grid-2">
@@ -13576,7 +13606,8 @@ function _calculoLineasVenta() {
   return _lineasVenta.map(l => {
     if(!l.invId || !(l.cantidad > 0)) return { l, partes:[], falta:0, costo:0 };
     const a = _asignarLotes(l.invId, l.cantidad, l.loteId, usado);
-    return { l, ...a, costo:a.partes.reduce((s, x) => s + x.cantidad * x.costo, 0) };
+    const costo = a.partes.some(x=>x.costo==null) ? null : _r2(a.partes.reduce((s,x)=>s+_costoLineaInventario(x.cantidad,x.costo),0));
+    return { l, ...a, costo };
   });
 }
 function _totalVenta() {
@@ -13591,15 +13622,17 @@ function _totalVenta() {
       else {
         const disp = l.loteId ? (C.lotes.find(x => x.id === l.loteId)?.disponible || 0) : p.stock;
         const vendidas = (l.cantidad || 0) - falta;
-        const cu = vendidas > 0 ? costo / vendidas : (p.costo ?? null);
+        let cu = p.costo;
+        if(vendidas>0) cu=costo==null ? null : partes.reduce((s,x)=>s+x.cantidad*x.costo,0)/vendidas;
         const lotesTxt = partes.some(x => x.loteId) ? partes.map(x => `${x.loteId ? x.lote : 'sin lote'} (${_cant(x.cantidad)})`).join(', ') : '';
         info.textContent = falta > 0
           ? `⚠️ Solo hay ${_cant(disp)} ${p.unidad} disponibles${l.loteId ? ' en ese lote' : ''}`
-          : `Disponible ${_cant(disp)} ${p.unidad}${cu != null ? ' · costo ' + fmtC(cu) : ''}${cu != null && l.precio > 0 ? ' · margen ' + _pctMargen(cu, l.precio) : ''}${lotesTxt ? ' · sale de ' + lotesTxt : ''}`;
-        info.className = 'compra-linea-margen' + (falta > 0 || (cu != null && l.precio != null && l.precio < cu) ? ' prod-margen-neg' : '');
+          : `Disponible ${_cant(disp)} ${p.unidad}${cu != null ? ' · costo ' + fmtC(cu) : ' · costo pendiente'}${cu != null && l.precio > 0 ? ' · margen ' + _pctMargen(cu, l.precio) : ''}${lotesTxt ? ' · sale de ' + lotesTxt : ''}`;
+        info.className = 'compra-linea-margen' + (falta > 0 || costo==null || (cu != null && l.precio != null && l.precio < cu) ? ' prod-margen-neg' : '');
       }
     }
-    ganancia += (l.cantidad || 0) * (l.precio || 0) - costo;
+    if(costo==null || falta>0) ganancia=null;
+    else if(ganancia!=null) ganancia += (l.cantidad || 0) * (l.precio || 0) - costo;
   });
   const mt = _montosVenta();
   document.getElementById('venta-subtotal').textContent = fmtC(mt.subtotal);
@@ -13607,7 +13640,7 @@ function _totalVenta() {
   document.getElementById('venta-iva-lbl').textContent = `IVA (${mt.pct.toLocaleString('es-NI')} %)`;
   document.getElementById('venta-iva').textContent = fmtC(mt.iva);
   document.getElementById('venta-total').textContent = fmtC(mt.total);
-  document.getElementById('venta-ganancia').textContent = fmtC(ganancia);
+  document.getElementById('venta-ganancia').textContent = ganancia==null ? 'Pendiente' : fmtC(ganancia);
   return mt.total;
 }
 
@@ -13632,6 +13665,12 @@ async function guardarVenta() {
   if(corta >= 0) {
     const p = C.inv.find(x => x.id === calc[corta].l.invId);
     toast(`Línea ${corta + 1}: no alcanza el stock de ${escAttr(p?.nombre || 'ese producto')}${calc[corta].l.loteId ? ' en el lote elegido' : ''}. Faltan ${_cant(calc[corta].falta)} ${escAttr(p?.unidad || '')}.`,'error');
+    return;
+  }
+  const pendiente = calc.find(c => c.costo==null);
+  if(pendiente) {
+    const p = C.inv.find(x=>x.id===pendiente.l.invId);
+    toast(`Falta el costo de ${escAttr(p?.nombre || 'este producto')}. Completa el costo del inventario o selecciona un lote valorado.`,'error');
     return;
   }
   const vencimiento = credito ? (document.getElementById('venta-vencimiento').value || null) : null;
@@ -13961,7 +14000,7 @@ function renderBalanceGeneral() {
         <div class="er-grupo">Activos</div>
         ${_filaEstado('Efectivo y bancos', b.efectivo, 'er-detalle', 'ingresos − gastos de Finanzas')}
         ${esEmpresaMedica() ? _filaEstado('Cuentas por cobrar', b.cxc, 'er-detalle') : ''}
-        ${_filaEstado('Inventario', b.inventario.total, 'er-detalle', esEmpresaMedica() ? 'a costo, por lote' : 'a costo promedio')}
+        ${_filaEstado('Inventario', b.inventario.total, 'er-detalle', b.productosSinCosto ? 'valor conocido al corte' : esEmpresaMedica() ? 'a costo, por lote' : 'a costo promedio')}
         ${b.ivaFavor ? _filaEstado('IVA a favor', b.ivaFavor, 'er-detalle', 'crédito fiscal') : ''}
         ${_filaEstado('Total activos', b.activos, 'er-total')}
       </div>
@@ -14224,22 +14263,25 @@ function imprimirReporteIva() {
   return pdfAbrir('Reporte de IVA', body);
 }
 function imprimirExistenciasLotes() {
-  const prods = [...C.inv].filter(p => p.stock > 0 || C.lotes.some(l => l.invId === p.id && l.disponible > 0)).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
-  const v = _valorInventario();
+  const valoracion = _productosValorados();
+  const prods = valoracion.filter(({producto:p}) => p.stock>0 || C.lotes.some(l=>l.invId===p.id && l.disponible>0))
+    .sort((a,b)=>a.producto.nombre.localeCompare(b.producto.nombre,'es'));
+  const v = _valorInventario(C,valoracion);
+  const {pendientes,importe} = _resumenValoracion(prods,v.total);
   const body = `${_pdfEncabezado('Existencias por lote', `Al ${formatFecha(hoy())}`)}
     <div class="kpi-grid">
       <div class="kpi blue"><div class="kpi-val">${prods.length}</div><div class="kpi-lbl">Productos con existencia</div></div>
       <div class="kpi green"><div class="kpi-val">${C.lotes.filter(l => l.disponible > 0).length}</div><div class="kpi-lbl">Lotes con existencia</div></div>
-      <div class="kpi orange"><div class="kpi-val">${fmtC(v.total)}</div><div class="kpi-lbl">Inventario a costo</div></div>
-      <div class="kpi red"><div class="kpi-val">${fmtC(v.sinLote)}</div><div class="kpi-lbl">De eso, sin lote</div></div>
+      <div class="kpi orange"><div class="kpi-val">${importe}</div><div class="kpi-lbl">${pendientes?'Valor conocido a costo':'Inventario a costo'}</div></div>
+      <div class="kpi red"><div class="kpi-val">${pendientes||fmtC(v.sinLote)}</div><div class="kpi-lbl">${pendientes?'Productos pendientes de valorar':'De eso, sin lote'}</div></div>
     </div>
     ${prods.length ? `<table style="font-size:10.5px"><thead><tr><th>Producto</th><th>Lote</th><th>Proveedor</th><th>Ingreso</th><th style="${_num}">Disponible</th><th style="${_num}">Costo</th><th style="${_num}">Valor</th></tr></thead>
-    <tbody>${prods.flatMap(p => {
+    <tbody>${prods.flatMap(({producto:p}) => {
       const ls = _lotesDisponibles(p.id), sl = _stockSinLote(p);
       return [...ls.map(l => `<tr><td>${escAttr(p.nombre)}</td><td>${escAttr(l.lote)}</td><td>${escAttr(_nombreProveedor(l.proveedorId))}</td><td>${formatFecha(l.fecha)}</td><td style="${_num}">${_cant(l.disponible)} ${escAttr(p.unidad)}</td><td style="${_num}">${fmtC(l.costo)}</td><td style="${_num}">${fmtC(l.disponible * l.costo)}</td></tr>`),
-        ...(sl ? [`<tr style="color:#64748B"><td>${escAttr(p.nombre)}</td><td>Sin lote</td><td>—</td><td>—</td><td style="${_num}">${_cant(sl)} ${escAttr(p.unidad)}</td><td style="${_num}">${p.costo != null ? fmtC(p.costo) : '—'}</td><td style="${_num}">${fmtC(sl * (p.costo || 0))}</td></tr>`] : [])];
+        ...(sl ? [`<tr style="color:#64748B"><td>${escAttr(p.nombre)}</td><td>Sin lote</td><td>—</td><td>—</td><td style="${_num}">${_cant(sl)} ${escAttr(p.unidad)}</td><td style="${_num}">${_fmtCostoUnitario(p.costo)}</td><td style="${_num}">${p.costo==null ? 'Pendiente' : fmtC(sl*p.costo)}</td></tr>`] : [])];
     }).join('')}
-    <tr style="${_PDF_SUB}"><td colspan="6">Total</td><td style="${_num}">${fmtC(v.total)}</td></tr></tbody></table>`
+    <tr style="${_PDF_SUB}"><td colspan="6">${pendientes?'Subtotal conocido':'Total'}</td><td style="${_num}">${importe}</td></tr></tbody></table>`
     : '<p style="color:#94A3B8;text-align:center;padding:16px">No hay existencias</p>'}`;
   return pdfAbrir('Existencias por lote', body);
 }

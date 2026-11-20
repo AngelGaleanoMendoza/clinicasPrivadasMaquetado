@@ -27,6 +27,7 @@ const LibroContable = (() => {
     if(!hasPermiso('contabilidad') || !_exigeClinica()) return;
     const e=estado={clinica:currentClinicaId,usuario:currentUser?.id,tab:'reportes',cuentas:[],asiento:borrador(false),apertura:borrador(true),
       desde:hoy().slice(0,7)+'-01',hasta:hoy(),tipo:'balanza',detalle:false,turno:0};
+    id('tabs').querySelector('[data-panel="maestro"]').hidden=!(esEmpresaMedica() && hasPermiso('inventario'));
     id('tabs').onclick=ev=>{
       const boton=ev.target.closest('[data-panel]');
       if(boton && vigente(e) && !e.ocupado) panel(e,boton.dataset.panel);
@@ -60,6 +61,10 @@ const LibroContable = (() => {
       b.setAttribute('aria-pressed',String(b.dataset.panel===tab));
     });
     if(tab==='reportes') return verReportes(e);
+    if(tab==='maestro' && esEmpresaMedica() && hasPermiso('inventario')) {
+      const turno=e.turno;
+      return InformeMaestro.abrir(id('panel'),e.clinica,()=>vigente(e) && turno===e.turno && hasPermiso('inventario'));
+    }
     if(tab==='cuentas') return verCuentas(e);
     verAsiento(e);
   }

@@ -570,6 +570,23 @@ body.dark .balance-pct{background:#0F172A}
 #lc-totales{font-variant-numeric:tabular-nums;font-weight:700}
 #lc-estado:empty{display:none}
 .lc-modulo [hidden]{display:none!important}
+.im-cabecera{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px}
+.im-cabecera h3{margin:0 0 4px}
+.im-cabecera span,.im-cifras span{font-size:13px;color:var(--text-light)}
+.im-cifras{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr));gap:10px;margin:14px 0}
+.im-cifras>div{display:grid;gap:7px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--bg)}
+.im-cifras strong,.im-num{font-variant-numeric:tabular-nums}
+.im-cifras strong{font-size:1.16rem;overflow-wrap:anywhere}
+.im-buscar{max-width:28rem;margin:10px 0}
+.im-tabla{width:100%;max-height:54vh;overflow:auto;border:1px solid var(--border);border-radius:8px}
+.im-tabla table{width:100%;border-collapse:separate;border-spacing:0;font-size:13px}
+.im-tabla th,.im-tabla td{display:table-cell!important;text-align:left;padding:8px 10px;border-bottom:1px solid var(--border)}
+.im-tabla th{position:sticky;top:0;background:var(--card);white-space:nowrap}
+.im-tabla td{min-width:5rem}
+.im-tabla .im-num{text-align:right;white-space:nowrap}
+#im-articulos td:nth-child(2),#im-fuentes td:last-child{min-width:13rem}
+#im-informe details{border-top:1px solid var(--border);padding:10px 0}
+#im-informe details li{margin:4px 0;overflow-wrap:anywhere}
 @media(max-width:980px){.lc-linea{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:620px){.lc-linea{grid-template-columns:repeat(2,minmax(0,1fr))}.lc-campos label{flex:1 1 130px}.lc-modulo .tabs{gap:4px}.lc-modulo .tab{flex:1 1 44%}.lc-modulo{padding:14px}}
 .excel-hoja-lista{border-color:rgba(16,185,129,.45)}

@@ -22,9 +22,11 @@ function leerLibroExcel(buffer, nombre) {
     raw:true, cellHTML:false, sheetStubs:true, sheetRows:2002
   });
   if (libro.SheetNames.length > 30) throw new Error('El archivo supera el máximo de 30 hojas.');
+  const esInformeMaestro = /^Informe maestro mensual · /.test(libro.Props?.Title || '') &&
+    libro.SheetNames.includes('Maestro de inventario') && libro.SheetNames.includes('Conciliación de costo');
   return libro.SheetNames.map((nombreHoja, i) => {
     const hoja = libro.Sheets[nombreHoja];
-    const resultado = {nombre:nombreHoja, oculta:!!libro.Workbook?.Sheets?.[i]?.Hidden, filas:[]};
+    const resultado = {nombre:nombreHoja, esInformeMaestro, oculta:!!libro.Workbook?.Sheets?.[i]?.Hidden, filas:[]};
     if (!hoja || !hoja['!ref']) return resultado;
     const rango = XLSX.utils.decode_range(hoja['!fullref'] || hoja['!ref']);
     if (rango.e.r > 1999 || rango.e.c > 79)
