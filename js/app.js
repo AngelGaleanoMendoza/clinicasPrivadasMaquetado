@@ -404,7 +404,8 @@ const fromCompra  = r => ({ id:r.id, proveedorId:r.proveedor_id||null, fecha:r.f
   // Saldo que se debía al migrar (importado de Excel): se paga como cualquier
   // compra al crédito, pero no es una compra del período.
   saldoInicial:r.saldo_inicial===true,
-  items:(r.compra_items||[]).map(i => ({ id:i.id, invId:i.inventario_id||null, lote:i.lote||'', descripcion:i.descripcion||'', cantidad:Number(i.cantidad||0), costo:Number(i.costo_unitario||0), subtotal:Number(i.subtotal||0) })),
+  items:(r.compra_items||[]).map(i => ({ id:i.id, invId:i.inventario_id||null, lote:i.lote||'', descripcion:i.descripcion||'', cantidad:Number(i.cantidad||0), costo:Number(i.costo_unitario||0),
+    subtotal:Number(i.subtotal||0), ivaPct:i.iva_pct==null ? null : Number(i.iva_pct), iva:i.iva==null ? null : Number(i.iva) })),
   pagos:(r.compra_pagos||[]).map(p => ({ id:p.id, fecha:p.fecha, monto:Number(p.monto||0), metodoPago:p.metodo_pago||'efectivo', referencia:p.referencia||'', finanzasId:p.finanzas_id||null, creadoPor:p.creado_por||'' }))
     .sort((a, b) => (a.fecha||'').localeCompare(b.fecha||'') || a.id - b.id) });
 const fromCliCom  = r => ({ id:r.id, nombre:r.nombre||'', identificacion:r.identificacion||'', contacto:r.contacto||'', telefono:r.telefono||'', email:r.email||'', direccion:r.direccion||'', diasCredito:r.dias_credito!=null?Number(r.dias_credito):30, notas:r.notas||'', activo:r.activo!==false });
@@ -416,7 +417,8 @@ const fromVenta   = r => ({ id:r.id, clienteId:r.cliente_id||null, numero:r.nume
   // cualquier venta al crédito, pero no es una venta del período.
   saldoInicial:r.saldo_inicial===true,
   items:(r.venta_items||[]).map(i => ({ id:i.id, invId:i.inventario_id||null, loteId:i.lote_id||null, lote:i.lote||'', descripcion:i.descripcion||'', cantidad:Number(i.cantidad||0),
-    precio:Number(i.precio_unitario||0), costo:Number(i.costo_unitario||0), subtotal:Number(i.subtotal||0) })),
+    precio:Number(i.precio_unitario||0), costo:Number(i.costo_unitario||0), subtotal:Number(i.subtotal||0),
+    ivaPct:i.iva_pct == null ? null : Number(i.iva_pct), iva:i.iva == null ? null : Number(i.iva) })),
   cobros:(r.venta_cobros||[]).map(p => ({ id:p.id, fecha:p.fecha, monto:Number(p.monto||0), metodoPago:p.metodo_pago||'efectivo', referencia:p.referencia||'', finanzasId:p.finanzas_id||null, creadoPor:p.creado_por||'' }))
     .sort((a, b) => (a.fecha||'').localeCompare(b.fecha||'') || a.id - b.id) });
 const fromMov     = r => ({ id:r.id, invId:r.inventario_id, tipo:r.tipo, cantidad:Number(r.cantidad), motivo:r.motivo||null, fecha:r.fecha, referencia:r.referencia||null, notas:r.notas||null,
@@ -12221,6 +12223,116 @@ function _tagPagoCompra(c) {
 }
 const _METODOS_PAGO = { efectivo:'Efectivo', transferencia:'Transferencia', tarjeta:'Tarjeta', cheque:'Cheque' };
 
+function _modoIvaProductos(tipo, cambio) {
+  const todos = document.getElementById(tipo + '-con-iva');
+  const manual = document.getElementById(tipo + '-iva-manual');
+  if(cambio === 'todos' && todos.checked) manual.checked = false;
+  if(cambio === 'manual' && manual.checked) todos.checked = false;
+  return manual.checked ? 'manual' : todos.checked ? 'todos' : 'sin';
+}
+
+function _validarTasaIvaProductos(tipo, modo) {
+  if(modo === 'sin') return;
+  const tasa = document.getElementById(tipo + '-iva-pct');
+  if(tasa.value === '' || !tasa.validity.valid || !(Number(tasa.value) > 0))
+    throw new Error('Indica un porcentaje de IVA mayor que 0 y de hasta 100 %, con un máximo de dos decimales.');
+}
+
+function _centavosProductos(importe) {
+  const centavos = Math.round((importe + Number.EPSILON * Math.abs(importe)) * 100);
+  return Number.isSafeInteger(centavos) ? centavos : 0;
+}
+
+function _montosIvaProductos(tipo, lineas, campo) {
+  const modo = _modoIvaProductos(tipo);
+  const aplicaIva = modo === 'todos' || (modo === 'manual' && lineas.some(l => l.conIva === true));
+  const puntosBasicos = !aplicaIva ? 0 :
+    Math.max(0, Math.min(10000, _centavosProductos(Number(document.getElementById(tipo + '-iva-pct').value) || 0)));
+  const pct = puntosBasicos / 100;
+  const detalle = new Map();
+  const maximo = 999999999999.99;
+  let baseGravada = 0, baseExenta = 0, basePendiente = 0, iva = 0;
+  let pendientes = 0;
+  let fueraRango = false;
+  for(const l of lineas) {
+    const importe = (l.cantidad || 0) * (l[campo] || 0);
+    const valido = Number.isFinite(importe) && Math.abs(importe) <= maximo;
+    if(!valido) fueraRango = true;
+    const base = valido ? _centavosProductos(importe) : 0;
+    const gravado = modo === 'todos' || (modo === 'manual' && l.conIva === true);
+    const pendiente = modo === 'manual' && l.invId && l.conIva == null;
+    let impuesto = 0;
+    if(pendiente) {
+      basePendiente += base;
+      pendientes++;
+    } else if(gravado) {
+      baseGravada += base;
+      // Redondear sobre la base gravada acumulada permite que el IVA por línea
+      // sume exactamente el IVA de la factura, incluso con fracciones de centavo.
+      const acumulado = Number((BigInt(baseGravada) * BigInt(puntosBasicos) + 5000n) / 10000n);
+      impuesto = acumulado - iva;
+      iva = acumulado;
+    } else {
+      baseExenta += base;
+    }
+    detalle.set(l.id, {subtotal:base / 100, iva:impuesto / 100, pct:gravado ? pct : 0, total:(base + impuesto) / 100});
+  }
+  const subtotal = baseGravada + baseExenta + basePendiente;
+  return {subtotal:subtotal / 100, baseGravada:baseGravada / 100, baseExenta:baseExenta / 100,
+    basePendiente:basePendiente / 100, pendientes, iva:iva / 100, pct, total:(subtotal + iva) / 100,
+    fueraRango:fueraRango || (subtotal + iva) / 100 > maximo, detalle};
+}
+
+function _repartirImporteProductos(importe, partes) {
+  const milUnidades = partes.map(cantidad => Math.round(cantidad * 1000));
+  const total = milUnidades.reduce((suma, cantidad) => suma + BigInt(cantidad), 0n);
+  if(!total) return partes.map(() => 0);
+  const centavos = BigInt(_centavosProductos(importe));
+  let unidades = 0n, asignado = 0n;
+  return milUnidades.map(cantidad => {
+    unidades += BigInt(cantidad);
+    const acumulado = (centavos * unidades + total / 2n) / total;
+    const parte = Number(acumulado - asignado) / 100;
+    asignado = acumulado;
+    return parte;
+  });
+}
+
+function _pintarTotalesIvaProductos(tipo, montos) {
+  const el = nombre => document.getElementById(tipo + '-' + nombre);
+  el('subtotal').textContent = fmtC(montos.subtotal);
+  el('base-gravada').textContent = fmtC(montos.baseGravada);
+  el('base-exenta').textContent = fmtC(montos.baseExenta);
+  el('pendientes-iva').hidden = !montos.pendientes;
+  el('base-pendiente').textContent = fmtC(montos.basePendiente);
+  el('iva-linea').hidden = !montos.pct;
+  el('iva-lbl').textContent = 'IVA ('+montos.pct.toLocaleString('es-NI')+' %)';
+  el('iva').textContent = fmtC(montos.iva);
+  el('gravado-con-iva').textContent = fmtC((_centavosProductos(montos.baseGravada) + _centavosProductos(montos.iva)) / 100);
+  el('total').textContent = fmtC(montos.total);
+}
+
+function _desgloseIvaGuardado(documento) {
+  if(!documento.items?.length || documento.items.some(item => item.ivaPct == null || item.iva == null)) return null;
+  let baseGravada = 0, baseExenta = 0;
+  for(const item of documento.items) {
+    if(item.ivaPct > 0) baseGravada += _centavosProductos(item.subtotal);
+    else baseExenta += _centavosProductos(item.subtotal);
+  }
+  return {baseGravada:baseGravada / 100, baseExenta:baseExenta / 100,
+    totalGravado:(baseGravada + _centavosProductos(documento.iva)) / 100};
+}
+
+async function _esquemaIvaProductos(tabla, modo) {
+  const {error} = await sb.from(tabla).select('iva_pct,iva').eq('clinica_id',currentClinicaId).limit(1);
+  if(!error) return true;
+  if(['42703','PGRST204'].includes(error.code) || ['iva_pct','iva'].some(columna => _faltaColumna(error,columna))) {
+    if(modo !== 'manual') return false;
+    throw new Error('Ejecuta migracion_iva_productos.sql en Supabase para guardar el IVA por producto.');
+  }
+  throw new Error(error.message);
+}
+
 function _ajustarCondicionCompra() {
   const credito = document.getElementById('compra-condicion').value === 'credito';
   document.getElementById('compra-vence-wrap').hidden = !credito;
@@ -12234,17 +12346,13 @@ function _ajustarCondicionCompra() {
     vence.value = fechaLocal(d);
   }
 }
-function _ajustarIvaCompra() {
-  document.getElementById('compra-iva-pct-wrap').hidden = !document.getElementById('compra-con-iva').checked;
-  _totalCompra();
+function _ajustarIvaCompra(cambio) {
+  const modo = _modoIvaProductos('compra', cambio);
+  document.getElementById('compra-iva-pct-wrap').hidden = modo === 'sin';
+  _pintarLineasCompra();
 }
-// Subtotal (sin IVA), IVA y total de lo que hay en el formulario.
-function _montosCompra() {
-  const subtotal = Math.round(_lineasCompra.reduce((s, l) => s + (l.cantidad || 0) * (l.costo || 0), 0) * 100) / 100;
-  const conIva = document.getElementById('compra-con-iva')?.checked;
-  const pct = conIva ? Math.max(0, Number(document.getElementById('compra-iva-pct')?.value) || 0) : 0;
-  const iva = Math.round(subtotal * pct) / 100;
-  return { subtotal, iva, pct, total:Math.round((subtotal + iva) * 100) / 100 };
+function _montosCompra(lineas = _lineasCompra) {
+  return _montosIvaProductos('compra', lineas, 'costo');
 }
 
 // ── Proveedores ──
@@ -12445,6 +12553,7 @@ function abrirNuevaCompra() {
   document.getElementById('compra-condicion').value = 'contado';
   document.getElementById('compra-vencimiento').value = '';
   document.getElementById('compra-con-iva').checked = false;
+  document.getElementById('compra-iva-manual').checked = true;
   document.getElementById('compra-iva-pct').value = 15;
   document.getElementById('compra-notas').value = '';
   _ajustarCondicionCompra();
@@ -12454,12 +12563,12 @@ function abrirNuevaCompra() {
 }
 
 function agregarLineaCompra() {
-  _lineasCompra.push({ id:++_lineaCompraSec, invId:null, cantidad:1, costo:null, lote:'' });
+  _lineasCompra.push({ id:++_lineaCompraSec, invId:null, cantidad:1, costo:null, lote:'', conIva:null });
   _pintarLineasCompra();
 }
 function quitarLineaCompra(id) {
   _lineasCompra = _lineasCompra.filter(l => l.id !== id);
-  if(!_lineasCompra.length) _lineasCompra.push({ id:++_lineaCompraSec, invId:null, cantidad:1, costo:null, lote:'' });
+  if(!_lineasCompra.length) { agregarLineaCompra(); return; }
   _pintarLineasCompra();
 }
 function cambiarLineaCompra(id, campo, valor) {
@@ -12467,6 +12576,7 @@ function cambiarLineaCompra(id, campo, valor) {
   if(!l) return;
   if(campo === 'invId') {
     l.invId = Number(valor) || null;
+    l.conIva = null;
     // Se propone el último costo conocido del producto; se puede cambiar.
     const p = C.inv.find(x => x.id === l.invId);
     l.costo = p?.costo != null ? Math.round(p.costo * 100) / 100 : null;
@@ -12474,7 +12584,8 @@ function cambiarLineaCompra(id, campo, valor) {
     return;
   }
   if(campo === 'lote') { l.lote = valor; return; }
-  l[campo] = valor === '' ? null : Number(valor);
+  if(campo === 'conIva') l.conIva = valor === '' ? null : valor === 'gravado';
+  else l[campo] = valor === '' ? null : Number(valor);
   _totalCompra();
 }
 // La empresa médica lleva lotes: cada línea de compra crea uno.
@@ -12484,6 +12595,7 @@ function _pintarLineasCompra() {
   const cont = document.getElementById('compra-lineas');
   const opciones = [...C.inv].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
   const conLotes = _comprasConLotes();
+  const manual = _modoIvaProductos('compra') === 'manual';
   cont.innerHTML = _lineasCompra.map((l, i) => {
     const p = C.inv.find(x => x.id === l.invId);
     return `<div class="compra-linea${conLotes ? ' con-lote' : ''}">
@@ -12496,6 +12608,13 @@ function _pintarLineasCompra() {
       <label class="compra-campo"><span>Costo sin IVA</span><input type="number" min="0" step="0.01" placeholder="0.00" value="${l.costo ?? ''}" oninput="cambiarLineaCompra(${l.id},'costo',this.value)"></label>
       <div class="compra-linea-sub" id="compra-sub-${l.id}"></div>
       <button type="button" class="btn btn-secondary btn-sm compra-quitar" onclick="quitarLineaCompra(${l.id})" aria-label="Quitar producto">✕</button>
+      ${manual ? `<label class="compra-campo compra-linea-iva"><span>Tratamiento IVA</span>
+        <select id="compra-clase-iva-${l.id}" aria-label="IVA del producto ${i + 1}" onchange="cambiarLineaCompra(${l.id},'conIva',this.value)" required${!p ? ' disabled' : ''}>
+          <option value="">Selecciona…</option>
+          <option value="gravado"${l.conIva === true ? ' selected' : ''}>Con IVA (gravado)</option>
+          <option value="exento"${l.conIva === false ? ' selected' : ''}>Exento de IVA</option>
+        </select>
+      </label>` : ''}
       ${p && p.precio > 0 && l.costo != null ? `<div class="compra-linea-margen${l.costo > p.precio ? ' prod-margen-neg' : ''}">Lo vendes a ${fmtC(p.precio)} · margen ${_pctMargen(l.costo, p.precio)}</div>` : ''}
     </div>`;
   }).join('');
@@ -12503,16 +12622,16 @@ function _pintarLineasCompra() {
 }
 
 function _totalCompra() {
+  const m = _montosCompra();
   _lineasCompra.forEach(l => {
     const el = document.getElementById('compra-sub-' + l.id);
-    if(el) el.textContent = fmtC((l.cantidad || 0) * (l.costo || 0));
+    const {subtotal, iva, total} = m.detalle.get(l.id);
+    if(el) {
+      el.textContent = fmtC(total);
+      el.title = iva ? `${fmtC(subtotal)} + ${fmtC(iva)} de IVA` : '';
+    }
   });
-  const m = _montosCompra();
-  document.getElementById('compra-subtotal').textContent = fmtC(m.subtotal);
-  document.getElementById('compra-iva-linea').hidden = !m.pct;
-  document.getElementById('compra-iva-lbl').textContent = `IVA (${m.pct.toLocaleString('es-NI')} %)`;
-  document.getElementById('compra-iva').textContent = fmtC(m.iva);
-  document.getElementById('compra-total').textContent = fmtC(m.total);
+  _pintarTotalesIvaProductos('compra', m);
   return m.total;
 }
 
@@ -12529,16 +12648,32 @@ async function guardarCompra() {
   if(!_exigeClinica()) return;
   const proveedorId = Number(document.getElementById('compra-proveedor').value) || null;
   const fecha = document.getElementById('compra-fecha').value;
-  const lineas = _lineasCompra.filter(l => l.invId || l.cantidad || l.costo);
+  const lineas = _lineasCompra.filter(l => l.invId || l.cantidad || l.costo).map(l => ({...l}));
   if(!proveedorId) { toast('Elige el proveedor (o créalo con + Nuevo)','error'); return; }
   if(!fecha) { toast('Indica la fecha de la compra','error'); return; }
   if(!lineas.length) { toast('Agrega al menos un producto','error'); return; }
   for(const [i, l] of lineas.entries()) {
     if(!l.invId) { toast(`Elige el producto de la línea ${i + 1}`,'error'); return; }
-    if(!(l.cantidad > 0)) { toast(`Indica la cantidad de la línea ${i + 1}`,'error'); return; }
-    if(l.costo == null || !(l.costo >= 0)) { toast(`Indica el costo unitario de la línea ${i + 1}`,'error'); return; }
+    if(!Number.isFinite(l.cantidad) || !(l.cantidad > 0) || l.cantidad >= 1e11) {
+      toast(`Indica una cantidad válida en la línea ${i + 1}.`,'error'); return;
+    }
+    if(!Number.isFinite(l.costo) || l.costo < 0 || l.costo >= 1e10) {
+      toast(`Indica un costo unitario válido en la línea ${i + 1}.`,'error'); return;
+    }
   }
-  const { subtotal, iva, pct, total } = _montosCompra();
+  const modoIva = _modoIvaProductos('compra');
+  if(modoIva === 'sin') { toast('Selecciona Agregar a todos los productos o Agregar manual.','error'); return; }
+  if(modoIva === 'manual') {
+    const pendiente = lineas.findIndex(l => l.conIva == null);
+    if(pendiente >= 0) {
+      toast(`Selecciona «Con IVA (gravado)» o «Exento de IVA» para el producto de la línea ${pendiente + 1}.`,'error');
+      document.getElementById('compra-clase-iva-' + lineas[pendiente].id)?.focus();
+      return;
+    }
+  }
+  const { subtotal, iva, pct, total, detalle, fueraRango } = _montosCompra(lineas);
+  if(fueraRango) { toast('El importe de la compra supera el límite permitido.','error'); return; }
+  const aplicaIva = modoIva === 'todos' || lineas.some(l => l.conIva === true);
   const credito = document.getElementById('compra-condicion').value === 'credito';
   const vencimiento = credito ? (document.getElementById('compra-vencimiento').value || null) : null;
   if(credito && vencimiento && vencimiento < fecha) { toast('El vencimiento no puede ser antes de la fecha de la compra','error'); return; }
@@ -12550,8 +12685,10 @@ async function guardarCompra() {
   btn.disabled = true;
   setLoading(true);
   try {
+    if(aplicaIva) _validarTasaIvaProductos('compra', modoIva);
+    const guardaIva = await _esquemaIvaProductos('compra_items', modoIva);
     const rc = await sb.from('compras').insert({ clinica_id:currentClinicaId, proveedor_id:proveedorId, fecha, numero_factura:numero, metodo_pago:metodo,
-      subtotal, iva, iva_pct:pct, total, condicion:credito ? 'credito' : 'contado', vencimiento,
+      subtotal, iva, iva_pct:aplicaIva ? pct : 0, total, condicion:credito ? 'credito' : 'contado', vencimiento,
       notas:document.getElementById('compra-notas').value.trim() || null, creado_por:currentUser?.name || null }).select().single();
     // Sin las columnas de IVA o crédito la compra quedaría mal (una a crédito
     // como pagada): no se guarda y el formulario sigue abierto.
@@ -12565,8 +12702,10 @@ async function guardarCompra() {
     if(_comprasConLotes() && !lotes) avisos.push('los lotes');
     const items = lineas.map((l, i) => {
       const p = C.inv.find(x => x.id === l.invId);
+      const impuesto = detalle.get(l.id);
       return { compra_id:compraId, clinica_id:currentClinicaId, inventario_id:l.invId, descripcion:p?.nombre || 'Producto',
-        cantidad:l.cantidad, costo_unitario:l.costo, subtotal:Math.round(l.cantidad * l.costo * 100) / 100,
+        cantidad:l.cantidad, costo_unitario:l.costo, subtotal:impuesto.subtotal,
+        ...(guardaIva ? { iva_pct:impuesto.pct, iva:impuesto.iva } : {}),
         ...(lotes?.[i] ? { lote:lotes[i].lote, lote_id:lotes[i].id } : {}) };
     });
     const ri = await sb.from('compra_items').insert(items);
@@ -12687,6 +12826,21 @@ function imprimirCuentasPorPagar() {
   return pdfAbrir('Cuentas por pagar', body);
 }
 
+function _filasIvaCompra(c) {
+  const desglose = _desgloseIvaGuardado(c);
+  const fila = (titulo, monto) => `<tr><td colspan="3" style="${_num}">${titulo}</td><td style="${_num}">${fmtC(monto)}</td></tr>`;
+  const impuesto = c.ivaPct > 0 ? `IVA (${c.ivaPct.toLocaleString('es-NI')} %)` : 'IVA';
+  if(desglose) return fila('Subtotal exento', desglose.baseExenta) + fila('Subtotal gravado sin IVA', desglose.baseGravada) +
+    fila(impuesto, c.iva) + fila('Subtotal gravado con IVA', desglose.totalGravado);
+  return c.iva ? fila('Subtotal', c.subtotal) + fila(impuesto, c.iva) : '';
+}
+
+function _detalleIvaCompra(i) {
+  if(i.ivaPct == null || i.iva == null) return '';
+  const texto = i.ivaPct ? `IVA (${i.ivaPct.toLocaleString('es-NI')} %) ${fmtC(i.iva)}` : 'Exento de IVA';
+  return `<div class="compra-item-sub">${texto}</div>`;
+}
+
 function imprimirCompra(id) {
   const c = C.comp.find(x => x.id === id);
   if(!c) return;
@@ -12699,9 +12853,8 @@ function imprimirCompra(id) {
       ${c.condicion === 'credito' ? `<tr><td style="font-weight:700">Vence</td><td>${c.vencimiento ? formatFecha(c.vencimiento) : '—'}</td></tr>` : ''}
     </tbody></table>
     <table><thead><tr><th>Producto</th><th style="${_num}">Cantidad</th><th style="${_num}">Costo sin IVA</th><th style="${_num}">Subtotal</th></tr></thead>
-    <tbody>${c.items.map(i => `<tr><td>${escAttr(i.descripcion)}${i.lote ? ` · lote ${escAttr(i.lote)}` : ''}</td><td style="${_num}">${i.cantidad.toLocaleString('es-NI')}</td><td style="${_num}">${fmtC(i.costo)}</td><td style="${_num}">${fmtC(i.subtotal)}</td></tr>`).join('')}
-    <tr><td colspan="3" style="${_num};font-weight:700">Subtotal</td><td style="${_num}">${fmtC(c.subtotal)}</td></tr>
-    ${c.iva ? `<tr><td colspan="3" style="${_num};font-weight:700">IVA (${c.ivaPct.toLocaleString('es-NI')} %)</td><td style="${_num}">${fmtC(c.iva)}</td></tr>` : ''}
+    <tbody>${c.items.map(i => `<tr><td>${escAttr(i.descripcion)}${i.lote ? ` · lote ${escAttr(i.lote)}` : ''}${_detalleIvaCompra(i)}</td><td style="${_num}">${i.cantidad.toLocaleString('es-NI')}</td><td style="${_num}">${fmtC(i.costo)}</td><td style="${_num}">${fmtC(i.subtotal)}</td></tr>`).join('')}
+    ${_filasIvaCompra(c) || `<tr><td colspan="3" style="${_num};font-weight:700">Subtotal</td><td style="${_num}">${fmtC(c.subtotal)}</td></tr>`}
     <tr style="font-weight:800;background:#F1F5F9"><td colspan="3" style="${_num}">Total</td><td style="${_num}">${fmtC(c.total)}</td></tr></tbody></table>
     ${c.pagos.length ? `<div class="section-title">💵 Pagos</div><table><thead><tr><th>Fecha</th><th>Forma</th><th>Referencia</th><th style="${_num}">Monto</th></tr></thead>
       <tbody>${c.pagos.map(x => `<tr><td>${formatFecha(x.fecha)}</td><td>${escAttr(_METODOS_PAGO[x.metodoPago] || x.metodoPago)}</td><td>${escAttr(x.referencia || '—')}</td><td style="${_num}">${fmtC(x.monto)}</td></tr>`).join('')}</tbody></table>` : ''}
@@ -12780,9 +12933,9 @@ function verCompra(id) {
       <div><span>Estado</span><strong>${_tagPagoCompra(c)}</strong></div>
     </div>
     <div class="table-wrap"><table class="compra-detalle-tabla"><thead><tr><th>Producto</th><th>Cant.</th><th>Costo sin IVA</th><th>Subtotal</th></tr></thead>
-      <tbody>${c.items.map(i => `<tr><td>${escAttr(i.descripcion)}${i.lote ? `<div class="compra-item-sub">Lote ${escAttr(i.lote)}</div>` : ''}</td><td>${i.cantidad.toLocaleString('es-NI')}</td><td>${fmtC(i.costo)}</td><td>${fmtC(i.subtotal)}</td></tr>`).join('')}</tbody>
+      <tbody>${c.items.map(i => `<tr><td>${escAttr(i.descripcion)}${i.lote ? `<div class="compra-item-sub">Lote ${escAttr(i.lote)}</div>` : ''}${_detalleIvaCompra(i)}</td><td>${i.cantidad.toLocaleString('es-NI')}</td><td>${fmtC(i.costo)}</td><td>${fmtC(i.subtotal)}</td></tr>`).join('')}</tbody>
       <tfoot>
-        ${c.iva ? `<tr><td colspan="3">Subtotal</td><td>${fmtC(c.subtotal)}</td></tr><tr><td colspan="3">IVA (${c.ivaPct.toLocaleString('es-NI')} %)</td><td>${fmtC(c.iva)}</td></tr>` : ''}
+        ${_filasIvaCompra(c)}
         <tr><td colspan="3">Total</td><td>${fmtC(c.total)}</td></tr>
         ${c.estado !== 'anulada' ? `<tr><td colspan="3">Pagado</td><td>${fmtC(_pagadoCompra(c))}</td></tr><tr class="compra-saldo"><td colspan="3">Falta pagar</td><td>${fmtC(saldo)}</td></tr>` : ''}
       </tfoot></table></div>
@@ -13534,16 +13687,13 @@ function _ajustarCondicionVenta(recalcularVence = false) {
     vence.value = fechaLocal(d);
   }
 }
-function _ajustarIvaVenta() {
-  document.getElementById('venta-iva-pct-wrap').hidden = !document.getElementById('venta-con-iva').checked;
-  _totalVenta();
+function _ajustarIvaVenta(cambio) {
+  const modo = _modoIvaProductos('venta',cambio);
+  document.getElementById('venta-iva-pct-wrap').hidden = modo === 'sin';
+  _pintarLineasVenta();
 }
 function _montosVenta() {
-  const subtotal = _r2(_lineasVenta.reduce((s, l) => s + (l.cantidad || 0) * (l.precio || 0), 0));
-  const conIva = document.getElementById('venta-con-iva')?.checked;
-  const pct = conIva ? Math.min(100, Math.max(0, Number(document.getElementById('venta-iva-pct')?.value) || 0)) : 0;
-  const iva = _r2(subtotal * pct / 100);
-  return { subtotal, iva, pct, total:_r2(subtotal + iva) };
+  return _montosIvaProductos('venta',_lineasVenta,'precio');
 }
 function _siguienteNumeroVenta() {
   // Solo cuentan los números propios (V-000123): los saldos importados llevan
@@ -13564,7 +13714,8 @@ function abrirNuevaVenta(clienteId = null) {
   document.getElementById('venta-vencimiento').value = '';
   document.getElementById('venta-metodo').value = 'efectivo';
   const iva = _ivaVentaGuardado();
-  document.getElementById('venta-con-iva').checked = !!iva.conIva;
+  document.getElementById('venta-con-iva').checked = iva.modo ? iva.modo === 'todos' : !!iva.conIva;
+  document.getElementById('venta-iva-manual').checked = iva.modo === 'manual';
   document.getElementById('venta-iva-pct').value = iva.pct;
   document.getElementById('venta-notas').value = '';
   _ajustarCondicionVenta();
@@ -13585,7 +13736,9 @@ function cambiarLineaVenta(id, campo, valor) {
   const l = _lineasVenta.find(x => x.id === id);
   if(!l) return;
   if(campo === 'invId') {
-    l.invId = Number(valor) || null;
+    const invId = Number(valor) || null;
+    if(l.invId !== invId) l.conIva = null;
+    l.invId = invId;
     l.loteId = null;
     const p = C.inv.find(x => x.id === l.invId);
     l.precio = p?.precio != null ? _r2(p.precio) : null;
@@ -13593,6 +13746,7 @@ function cambiarLineaVenta(id, campo, valor) {
     return;
   }
   if(campo === 'loteId') l.loteId = Number(valor) || null;
+  else if(campo === 'conIva') l.conIva = valor === '' ? null : valor === 'gravado';
   else l[campo] = valor === '' ? null : Number(valor);
   _totalVenta();
 }
@@ -13600,6 +13754,7 @@ function _pintarLineasVenta() {
   const cont = document.getElementById('venta-lineas');
   const opciones = [...C.inv].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
   const fecha = document.getElementById('venta-fecha').value;
+  const ivaManual = _modoIvaProductos('venta') === 'manual';
   cont.innerHTML = _lineasVenta.map((l, i) => {
     const lotes = l.invId ? _lotesDisponibles(l.invId, fecha) : [];
     if(l.loteId && !lotes.some(x => x.id === l.loteId)) l.loteId = null;
@@ -13617,6 +13772,11 @@ function _pintarLineasVenta() {
       <label class="compra-campo"><span>Precio sin IVA</span><input type="number" min="0" step="0.01" placeholder="0.00" value="${l.precio ?? ''}" oninput="cambiarLineaVenta(${l.id},'precio',this.value)"></label>
       <div class="compra-linea-sub" id="venta-sub-${l.id}"></div>
       <button type="button" class="btn btn-secondary btn-sm compra-quitar" onclick="quitarLineaVenta(${l.id})" aria-label="Quitar producto">✕</button>
+      ${ivaManual ? `<label class="compra-campo compra-linea-iva"><span>IVA</span><select aria-label="IVA del producto ${i + 1}" onchange="cambiarLineaVenta(${l.id},'conIva',this.value)"${l.invId ? '' : ' disabled'}>
+        <option value=""${l.conIva == null ? ' selected' : ''}>Selecciona</option>
+        <option value="gravado"${l.conIva === true ? ' selected' : ''}>Con IVA (gravado)</option>
+        <option value="exento"${l.conIva === false ? ' selected' : ''}>Exento de IVA</option>
+      </select></label>` : ''}
       <div class="compra-linea-margen" id="venta-info-${l.id}"></div>
     </div>`;
   }).join('');
@@ -13634,10 +13794,15 @@ function _calculoLineasVenta() {
   });
 }
 function _totalVenta() {
+  const montos = _montosVenta();
   let ganancia = 0;
   _calculoLineasVenta().forEach(({ l, partes, falta, costo }) => {
     const sub = document.getElementById('venta-sub-' + l.id);
-    if(sub) sub.textContent = fmtC((l.cantidad || 0) * (l.precio || 0));
+    const importe = montos.detalle.get(l.id);
+    if(sub) {
+      sub.textContent = fmtC(importe?.total ?? 0);
+      sub.title = importe?.pct ? fmtC(importe.subtotal)+' + '+fmtC(importe.iva)+' de IVA' : '';
+    }
     const info = document.getElementById('venta-info-' + l.id);
     const p = C.inv.find(x => x.id === l.invId);
     if(info) {
@@ -13658,16 +13823,11 @@ function _totalVenta() {
       }
     }
     if(costo==null || falta>0) ganancia=null;
-    else if(ganancia!=null) ganancia += (l.cantidad || 0) * (l.precio || 0) - costo;
+    else if(ganancia!=null) ganancia += (importe?.subtotal ?? 0) - costo;
   });
-  const mt = _montosVenta();
-  document.getElementById('venta-subtotal').textContent = fmtC(mt.subtotal);
-  document.getElementById('venta-iva-linea').hidden = !mt.pct;
-  document.getElementById('venta-iva-lbl').textContent = `IVA (${mt.pct.toLocaleString('es-NI')} %)`;
-  document.getElementById('venta-iva').textContent = fmtC(mt.iva);
-  document.getElementById('venta-total').textContent = fmtC(mt.total);
+  _pintarTotalesIvaProductos('venta',montos);
   document.getElementById('venta-ganancia').textContent = ganancia==null ? 'Pendiente' : fmtC(ganancia);
-  return mt.total;
+  return montos.total;
 }
 
 async function guardarVenta() {
@@ -13676,14 +13836,20 @@ async function guardarVenta() {
   const clienteId = Number(document.getElementById('venta-cliente').value) || null;
   const fecha = document.getElementById('venta-fecha').value;
   const credito = document.getElementById('venta-condicion').value === 'credito';
+  const modoIva = _modoIvaProductos('venta');
   const lineas = _lineasVenta.filter(l => l.invId || l.cantidad || l.precio);
   if(!fecha) { toast('Indica la fecha de la venta','error'); return; }
   if(credito && !clienteId) { toast('Una venta al crédito necesita un cliente: elígelo o créalo con + Nuevo','error'); return; }
   if(!lineas.length) { toast('Agrega al menos un producto','error'); return; }
   for(const [i, l] of lineas.entries()) {
     if(!l.invId) { toast(`Elige el producto de la línea ${i + 1}`,'error'); return; }
-    if(!(l.cantidad > 0)) { toast(`Indica la cantidad de la línea ${i + 1}`,'error'); return; }
-    if(l.precio == null || !(l.precio >= 0)) { toast(`Indica el precio de la línea ${i + 1}`,'error'); return; }
+    if(!Number.isFinite(l.cantidad) || !(l.cantidad > 0)) { toast(`Indica la cantidad de la línea ${i + 1}`,'error'); return; }
+    if(!Number.isFinite(l.precio) || !(l.precio >= 0)) { toast(`Indica el precio de la línea ${i + 1}`,'error'); return; }
+    if(modoIva === 'manual' && l.conIva == null) {
+      toast(`Elige Con IVA o Exento de IVA en la línea ${i + 1}.`,'error');
+      document.querySelector(`#venta-lineas select[aria-label="IVA del producto ${i + 1}"]`)?.focus();
+      return;
+    }
   }
   _lineasVenta = lineas;
   const calc = _calculoLineasVenta();
@@ -13701,13 +13867,16 @@ async function guardarVenta() {
   }
   const vencimiento = credito ? (document.getElementById('venta-vencimiento').value || null) : null;
   if(credito && vencimiento && vencimiento < fecha) { toast('El vencimiento no puede ser antes de la fecha de la venta','error'); return; }
-  const { subtotal, iva, pct, total } = _montosVenta();
+  const { subtotal, iva, pct, total, detalle, fueraRango } = _montosVenta();
+  if(fueraRango) { toast('El importe de la venta supera el máximo permitido.','error'); return; }
   const metodo = document.getElementById('venta-metodo').value;
   const cliente = _nombreCliente(clienteId);
   const btn = document.getElementById('btn-guardar-venta');
   btn.disabled = true;
   setLoading(true);
   try {
+    if(modoIva === 'todos' || lineas.some(l=>l.conIva === true)) _validarTasaIvaProductos('venta',modoIva);
+    const guardarDetalleIva = await _esquemaIvaProductos('venta_items',modoIva);
     let n = _siguienteNumeroVenta(), rv = null;
     // Si otra persona tomó el mismo número a la vez, se prueba el siguiente.
     for(let intento = 0; intento < 5; intento++) {
@@ -13721,8 +13890,12 @@ async function guardarVenta() {
     const ventaId = rv.data.id, numero = rv.data.numero;
     const items = calc.flatMap(({ l, partes }) => {
       const p = C.inv.find(x => x.id === l.invId);
-      return partes.map(x => ({ venta_id:ventaId, clinica_id:currentClinicaId, inventario_id:l.invId, lote_id:x.loteId, lote:x.lote || null,
-        descripcion:p?.nombre || 'Producto', cantidad:x.cantidad, precio_unitario:l.precio, costo_unitario:_r4(x.costo), subtotal:_r2(x.cantidad * l.precio) }));
+      const lineaIva = detalle.get(l.id);
+      const subtotales = _repartirImporteProductos(lineaIva.subtotal,partes.map(x=>x.cantidad));
+      const impuestos = _repartirImporteProductos(lineaIva.iva,subtotales);
+      return partes.map((x,i) => ({ venta_id:ventaId, clinica_id:currentClinicaId, inventario_id:l.invId, lote_id:x.loteId, lote:x.lote || null,
+        descripcion:p?.nombre || 'Producto', cantidad:x.cantidad, precio_unitario:l.precio, costo_unitario:_r4(x.costo), subtotal:subtotales[i],
+        ...(guardarDetalleIva ? {iva_pct:lineaIva.pct, iva:impuestos[i]} : {}) }));
     });
     const ri = await sb.from('venta_items').insert(items);
     // Sin sus líneas la venta no vale: se borra y no se toca el inventario.
@@ -13745,7 +13918,7 @@ async function guardarVenta() {
       const aviso = await _registrarCobroVenta({ ventaId, numero, cliente, fecha, monto:total, metodo, referencia:null });
       if(aviso) avisos.push(aviso);
     }
-    try { localStorage.setItem('lumea_iva_venta_' + currentClinicaId, JSON.stringify({ conIva:pct > 0, pct:pct || Number(document.getElementById('venta-iva-pct').value) || 15 })); } catch(e) {}
+    try { localStorage.setItem('lumea_iva_venta_' + currentClinicaId, JSON.stringify({ modo:modoIva, pct:pct || Number(document.getElementById('venta-iva-pct').value) || 15 })); } catch(e) {}
     closeModal('modal-venta');
     toast(avisos.length ? `Venta ${numero} registrada, pero no se pudo actualizar: ${avisos.join(', ')}. Revisa Inventario y Finanzas.`
       : `Venta ${numero} registrada ✅ · ${fmtC(total)}${credito ? ' · queda por cobrar' : ''}`, avisos.length ? 'warning' : 'success');
@@ -13809,10 +13982,26 @@ async function guardarCobroVenta() {
 }
 
 // ── Detalle y anulación ──
+function _filasDesgloseVenta(desglose, columnas, estilo = '') {
+  if(!desglose) return '';
+  return [
+    ['Subtotal gravado sin IVA', desglose.baseGravada],
+    ['Subtotal exento', desglose.baseExenta],
+    ['Total gravado con IVA', desglose.totalGravado]
+  ].map(([etiqueta, importe]) => `<tr><td colspan="${columnas}">${etiqueta}</td><td style="${estilo}">${fmtC(importe)}</td></tr>`).join('');
+}
+
+function _etiquetaIvaLineaVenta(linea) {
+  if(linea.ivaPct == null) return '—';
+  return linea.ivaPct > 0 ? `${linea.ivaPct.toLocaleString('es-NI')} % · ${fmtC(linea.iva)}` : 'Exento de IVA';
+}
+
 function verVenta(id) {
   const v = C.ventas.find(x => x.id === id);
   if(!v) return;
   const saldo = _saldoVenta(v), costo = _costoVenta(v);
+  const desglose = _desgloseIvaGuardado(v);
+  const columnas = desglose ? 5 : 4;
   document.getElementById('venta-detalle-titulo').textContent = `🧾 Venta ${v.numero}`;
   document.getElementById('venta-detalle-cuerpo').innerHTML = `
     <div class="compra-detalle-datos">
@@ -13821,13 +14010,14 @@ function verVenta(id) {
       <div><span>Condición</span><strong>${v.condicion === 'credito' ? '📆 Crédito' + (v.vencimiento ? ' · vence ' + formatFecha(v.vencimiento) : '') : '💵 Contado'}</strong></div>
       <div><span>Estado</span><strong>${_tagCobroVenta(v)}</strong></div>
     </div>
-    <div class="table-wrap"><table class="compra-detalle-tabla"><thead><tr><th>Producto</th><th>Lote</th><th>Cant.</th><th>Precio</th><th>Subtotal</th></tr></thead>
-      <tbody>${v.items.map(i => `<tr><td>${escAttr(i.descripcion)}</td><td>${escAttr(i.lote || '—')}</td><td>${_cant(i.cantidad)}</td><td>${fmtC(i.precio)}</td><td>${fmtC(i.subtotal)}</td></tr>`).join('')}</tbody>
+    <div class="table-wrap"><table class="compra-detalle-tabla"><thead><tr><th>Producto</th><th>Lote</th><th>Cant.</th><th>Precio sin IVA</th>${desglose ? '<th>IVA</th>' : ''}<th>Subtotal</th></tr></thead>
+      <tbody>${v.items.map(i => `<tr><td>${escAttr(i.descripcion)}</td><td>${escAttr(i.lote || '—')}</td><td>${_cant(i.cantidad)}</td><td>${fmtC(i.precio)}</td>${desglose ? `<td>${_etiquetaIvaLineaVenta(i)}</td>` : ''}<td>${fmtC(i.subtotal)}</td></tr>`).join('')}</tbody>
       <tfoot>
-        <tr><td colspan="4">Subtotal</td><td>${fmtC(v.subtotal)}</td></tr>
-        ${v.iva ? `<tr><td colspan="4">IVA (${v.ivaPct.toLocaleString('es-NI')} %)</td><td>${fmtC(v.iva)}</td></tr>` : ''}
-        <tr><td colspan="4">Total</td><td>${fmtC(v.total)}</td></tr>
-        ${v.estado !== 'anulada' ? `<tr><td colspan="4">Cobrado</td><td>${fmtC(_cobradoVenta(v))}</td></tr><tr class="compra-saldo"><td colspan="4">Falta cobrar</td><td>${fmtC(saldo)}</td></tr>` : ''}
+        ${_filasDesgloseVenta(desglose,columnas)}
+        <tr><td colspan="${columnas}">Subtotal sin IVA</td><td>${fmtC(v.subtotal)}</td></tr>
+        ${v.iva || desglose ? `<tr><td colspan="${columnas}">IVA${v.ivaPct ? ` (${v.ivaPct.toLocaleString('es-NI')} %)` : ''}</td><td>${fmtC(v.iva)}</td></tr>` : ''}
+        <tr><td colspan="${columnas}">Total</td><td>${fmtC(v.total)}</td></tr>
+        ${v.estado !== 'anulada' ? `<tr><td colspan="${columnas}">Cobrado</td><td>${fmtC(_cobradoVenta(v))}</td></tr><tr class="compra-saldo"><td colspan="${columnas}">Falta cobrar</td><td>${fmtC(saldo)}</td></tr>` : ''}
       </tfoot></table></div>
     ${v.saldoInicial ? '<p class="text-light venta-ganancia-det">Saldo inicial importado: lo que el cliente debía al empezar a usar el sistema. Se cobra como cualquier venta al crédito, pero no cuenta como venta del período.</p>'
       : `<p class="text-light venta-ganancia-det">Costo de lo vendido ${fmtC(costo)} · ganancia ${fmtC(v.subtotal - costo)} (${_pctMargen(costo, v.subtotal)})</p>`}
@@ -14315,6 +14505,8 @@ function imprimirVenta(id) {
   const v = C.ventas.find(x => x.id === id);
   if(!v) return;
   const c = C.cliCom.find(x => x.id === v.clienteId);
+  const desglose = _desgloseIvaGuardado(v);
+  const columnas = desglose ? 5 : 4;
   const body = `${_pdfEncabezado(`Comprobante de venta ${escAttr(v.numero)}`, v.estado === 'anulada' ? '<span style="color:#B91C1C">ANULADA</span>' : (v.condicion === 'credito' ? 'Al crédito' : 'De contado'))}
     <table style="margin-bottom:14px"><tbody>
       <tr><td style="font-weight:700;width:150px">Cliente</td><td>${escAttr(_nombreCliente(v.clienteId))}${c?.identificacion ? ' · RUC ' + escAttr(c.identificacion) : ''}</td></tr>
@@ -14322,11 +14514,12 @@ function imprimirVenta(id) {
       <tr><td style="font-weight:700">Fecha</td><td>${formatFecha(v.fecha)}</td></tr>
       ${v.condicion === 'credito' ? `<tr><td style="font-weight:700">Vence</td><td>${v.vencimiento ? formatFecha(v.vencimiento) : '—'}</td></tr>` : ''}
     </tbody></table>
-    <table><thead><tr><th>Producto</th><th>Lote</th><th style="${_num}">Cantidad</th><th style="${_num}">Precio</th><th style="${_num}">Subtotal</th></tr></thead>
-    <tbody>${v.items.map(i => `<tr><td>${escAttr(i.descripcion)}</td><td>${escAttr(i.lote || '—')}</td><td style="${_num}">${_cant(i.cantidad)}</td><td style="${_num}">${fmtC(i.precio)}</td><td style="${_num}">${fmtC(i.subtotal)}</td></tr>`).join('')}
-    <tr><td colspan="4" style="${_num};font-weight:700">Subtotal</td><td style="${_num}">${fmtC(v.subtotal)}</td></tr>
-    ${v.iva ? `<tr><td colspan="4" style="${_num};font-weight:700">IVA (${v.ivaPct.toLocaleString('es-NI')} %)</td><td style="${_num}">${fmtC(v.iva)}</td></tr>` : ''}
-    <tr style="${_PDF_SUB}"><td colspan="4" style="${_num}">Total</td><td style="${_num}">${fmtC(v.total)}</td></tr></tbody></table>
+    <table><thead><tr><th>Producto</th><th>Lote</th><th style="${_num}">Cantidad</th><th style="${_num}">Precio sin IVA</th>${desglose ? `<th style="${_num}">IVA</th>` : ''}<th style="${_num}">Subtotal</th></tr></thead>
+    <tbody>${v.items.map(i => `<tr><td>${escAttr(i.descripcion)}</td><td>${escAttr(i.lote || '—')}</td><td style="${_num}">${_cant(i.cantidad)}</td><td style="${_num}">${fmtC(i.precio)}</td>${desglose ? `<td style="${_num}">${_etiquetaIvaLineaVenta(i)}</td>` : ''}<td style="${_num}">${fmtC(i.subtotal)}</td></tr>`).join('')}
+    ${_filasDesgloseVenta(desglose,columnas,_num)}
+    <tr><td colspan="${columnas}" style="${_num};font-weight:700">Subtotal sin IVA</td><td style="${_num}">${fmtC(v.subtotal)}</td></tr>
+    ${v.iva || desglose ? `<tr><td colspan="${columnas}" style="${_num};font-weight:700">IVA${v.ivaPct ? ` (${v.ivaPct.toLocaleString('es-NI')} %)` : ''}</td><td style="${_num}">${fmtC(v.iva)}</td></tr>` : ''}
+    <tr style="${_PDF_SUB}"><td colspan="${columnas}" style="${_num}">Total</td><td style="${_num}">${fmtC(v.total)}</td></tr></tbody></table>
     ${v.cobros.length ? `<div class="section-title">💵 Pagos recibidos</div><table><thead><tr><th>Fecha</th><th>Forma</th><th>Referencia</th><th style="${_num}">Monto</th></tr></thead>
       <tbody>${v.cobros.map(x => `<tr><td>${formatFecha(x.fecha)}</td><td>${escAttr(_METODOS_PAGO[x.metodoPago] || x.metodoPago)}</td><td>${escAttr(x.referencia || '—')}</td><td style="${_num}">${fmtC(x.monto)}</td></tr>`).join('')}</tbody></table>` : ''}
     ${v.estado !== 'anulada' ? `<p style="font-size:13px;font-weight:800;margin-top:12px">Saldo pendiente: ${fmtC(_saldoVenta(v))}</p>` : ''}

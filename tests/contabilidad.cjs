@@ -258,7 +258,7 @@ const de=(ll,t,op)=>ll.filter(q=>q.t===t&&q.op===op);
       const error=__toasts.at(-1)[1],escrituras=__llamadas.length;
       cambiarLineaVenta(id,'cantidad','10');
       await guardarVenta();
-      const resultado={opciones,error,escrituras,detalle:__llamadas.find(q=>q.t==='venta_items')?.datos,
+      const resultado={opciones,error,escrituras,detalle:__llamadas.find(q=>q.t==='venta_items'&&q.op==='insert')?.datos,
         fechaCobro:__llamadas.find(q=>q.t==='venta_cobros')?.datos.fecha};
       __estado({C:{mov:[]}});
       return resultado;
@@ -285,7 +285,7 @@ const de=(ll,t,op)=>ll.filter(q=>q.t===t&&q.op===op);
       cambiarLineaVenta(id,'loteId','');
       const gananciaCero=document.getElementById('venta-ganancia').textContent;
       __llamadas.length=0; await guardarVenta();
-      return {pendiente,valorado,gananciaCero,guardado:__llamadas.find(q=>q.t==='venta_items')?.datos[0].costo_unitario};
+      return {pendiente,valorado,gananciaCero,guardado:__llamadas.find(q=>q.t==='venta_items'&&q.op==='insert')?.datos[0].costo_unitario};
     },{INV,LOTES});
     assert.equal(costosApertura.pendiente.consultas,0);
     assert.match(costosApertura.pendiente.aviso,/Falta el costo de Guantes/);
@@ -351,7 +351,7 @@ const de=(ll,t,op)=>ll.filter(q=>q.t===t&&q.op===op);
     assert(de(ll,'venta_cobros','update').some(q=>q.datos.finanzas_id),'El cobro recuerda su ingreso');
     assert.equal(contado.toast[0],'success');
 
-    // ── Al crédito, con IVA manual: vence según el cliente y no se cobra todavía ──
+    // ── Al crédito, con IVA en todos los productos y tasa editable ──
     const credito=await page.evaluate(async({INV,LOTES,CLIENTES})=>{
       __estado({C:{inv:INV,lotes:LOTES,ventas:[],cliCom:CLIENTES}});
       abrirNuevaVenta();
@@ -375,6 +375,66 @@ const de=(ll,t,op)=>ll.filter(q=>q.t===t&&q.op===op);
     assert.equal(de(credito.llamadas,'inventario','update').length,1,'El stock sale aunque no se haya cobrado');
     assert.match(credito.toast,/queda por cobrar/);
     assert.deepEqual(credito.recuerda,{con:true,pct:'13',visible:true},'La próxima venta propone el mismo IVA');
+
+    // Mezcla de productos gravados y exentos en una venta cuyo primer producto sale de tres lotes.
+    const mixta=await page.evaluate(async({INV,LOTES})=>{
+      __estado({C:{inv:[INV[0],{...INV[1],stock:4,costo:0.1}],lotes:LOTES,ventas:[],cliCom:[]}});
+      abrirNuevaVenta();
+      document.getElementById('venta-iva-manual').click();
+      const modoManual=document.getElementById('venta-iva-manual').checked&&!document.getElementById('venta-con-iva').checked;
+      document.getElementById('venta-iva-pct').value='15';
+      const primera=_lineasV()[0].id;
+      cambiarLineaVenta(primera,'invId','1');
+      cambiarLineaVenta(primera,'cantidad','18');
+      cambiarLineaVenta(primera,'precio','0.05');
+      agregarLineaVenta();
+      const segunda=_lineasV()[1].id;
+      cambiarLineaVenta(segunda,'invId','2');
+      cambiarLineaVenta(segunda,'cantidad','2');
+      cambiarLineaVenta(segunda,'precio','0.33');
+      const clasificar=(numero,tipo)=>{
+        const control=document.querySelector('#venta-lineas select[aria-label="IVA del producto '+numero+'"]');
+        control.value=tipo;
+        control.dispatchEvent(new Event('change'));
+      };
+      clasificar(1,'gravado');
+      __llamadas.length=0; await guardarVenta();
+      const pendiente={escrituras:__llamadas.length,aviso:__toasts.at(-1)[1],
+        importe:document.getElementById('venta-base-pendiente').textContent};
+      clasificar(2,'exento');
+      window.__fallar=q=>q.t==='venta_items'&&q.op==='select'?{code:'42703',message:'column venta_items.iva_pct does not exist'}:null;
+      __llamadas.length=0; await guardarVenta();
+      const sinMigracion={escrituras:__llamadas.filter(q=>q.op!=='select').length,aviso:__toasts.at(-1)[1]};
+      window.__fallar=null;
+      const totales=['base-gravada','base-exenta','subtotal','iva','total'].map(id=>document.getElementById('venta-'+id).textContent);
+      __llamadas.length=0; await guardarVenta();
+      const cabecera=__llamadas.find(q=>q.t==='ventas'&&q.op==='insert').datos;
+      const items=__llamadas.find(q=>q.t==='venta_items'&&q.op==='insert').datos;
+      const cobro=__llamadas.find(q=>q.t==='venta_cobros'&&q.op==='insert').datos;
+      __estado({C:{ventas:[fromVenta({...cabecera,id:1,venta_items:items})]}});
+      verVenta(1);
+      const detalle=document.getElementById('venta-detalle-cuerpo').textContent;
+      imprimirVenta(1);
+      localStorage.removeItem('lumea_iva_venta_9');
+      return {modoManual,pendiente,sinMigracion,totales,cabecera,items,cobro,detalle,pdf:__pdf.at(-1).body};
+    },{INV,LOTES});
+    assert.equal(mixta.modoManual,true,'La selección manual desmarca todos los productos');
+    assert.deepEqual(mixta.pendiente,{escrituras:0,aviso:'Elige Con IVA o Exento de IVA en la línea 2.',importe:'C$ 0.66'});
+    assert.equal(mixta.sinMigracion.escrituras,0);
+    assert.match(mixta.sinMigracion.aviso,/migracion_iva_productos.sql/);
+    assert.deepEqual(mixta.totales,['C$ 0.90','C$ 0.66','C$ 1.56','C$ 0.14','C$ 1.70']);
+    assert.deepEqual([mixta.cabecera.subtotal,mixta.cabecera.iva_pct,mixta.cabecera.iva,mixta.cabecera.total],[1.56,15,0.14,1.7]);
+    assert.deepEqual(mixta.items.map(i=>[i.lote_id,i.subtotal,i.iva_pct]),[[null,.25,15],[11,.50,15],[12,.15,15],[null,.66,0]]);
+    assert.equal(mixta.items.reduce((total,i)=>total+Math.round(i.iva*100),0),14,'La suma del IVA de las partes coincide al centavo');
+    assert.equal(mixta.items.at(-1).iva,0);
+    assert.equal(mixta.cobro.monto,1.7);
+    for(const vista of [mixta.detalle,mixta.pdf]) {
+      assert.match(vista,/Subtotal gravado sin IVA/);
+      assert.match(vista,/Subtotal exento/);
+      assert.match(vista,/Total gravado con IVA/);
+      assert.match(vista,/Exento/);
+      assert.match(vista,/C\$ 1\.70/);
+    }
 
     // ── Número repetido (dos personas a la vez): se toma el siguiente ──
     const numero=await page.evaluate(async({INV,LOTES})=>{
@@ -449,6 +509,7 @@ const de=(ll,t,op)=>ll.filter(q=>q.t===t&&q.op===op);
       __estado({C:{inv:INV,prov:PROV,comp:[],lotes:[]}});
       C.inv[1].stock=3;  // La apertura de estas tres unidades aún carece de costo.
       abrirNuevaCompra(); document.getElementById('compra-proveedor').value='7';
+      document.getElementById('compra-con-iva').click();
       const r={conLote:document.querySelector('#compra-lineas .compra-linea').classList.contains('con-lote'),
         gastoOculto:getComputedStyle(document.getElementById('compra-gasto-wrap')).display==='none'};
       document.getElementById('compra-gasto').checked=false;
@@ -471,6 +532,7 @@ const de=(ll,t,op)=>ll.filter(q=>q.t===t&&q.op===op);
     const itemsC=de(compra.llamadas,'compra_items','insert')[0].datos;
     assert.deepEqual(itemsC.map(i=>i.lote),['LOT-99',lotesIns[1].lote]);
     assert(itemsC.every(i=>i.lote_id>0),'Cada línea apunta a su lote');
+    assert.deepEqual(itemsC.map(i=>[i.costo_unitario,i.iva_pct,i.iva]),[[7,15,10.5],[1.5,15,22.5]]);
     assert.equal(de(compra.llamadas,'finanzas','insert')[0].datos.categoria,'compras','En la empresa el pago siempre va a Finanzas');
     assert.equal(compra.toast[0],'success');
     assert(compraId);

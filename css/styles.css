@@ -2396,6 +2396,9 @@ body.dark .compra-linea-margen{color:#6EE7B7}
 .compra-total strong{font-size:20px}
 .compra-iva-fila{display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;gap:10px 18px}
 .compra-iva-fila .compra-check{margin-top:0}
+.compra-iva-titulo{font-size:13px;font-weight:700}
+.compra-linea-iva{grid-column:1/-1;display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer}
+.compra-linea-iva select{width:auto;max-width:100%}
 .compra-iva-pct{display:flex!important;align-items:center;gap:6px;font-size:13px!important;text-transform:none!important;letter-spacing:0!important;margin:0}
 .compra-iva-pct[hidden]{display:none!important}
 .compra-iva-pct input{width:80px;padding:7px 9px;border:1.5px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-family:inherit;font-size:13px}

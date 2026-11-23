@@ -85,8 +85,13 @@ const INV=[{id:1,nombre:'Guantes de nitrilo M',unidad:'caja',stock:10,stockMin:5
            {id:2,nombre:'Jeringas 5 ml',unidad:'unidad',stock:0,stockMin:0,costo:null,precio:3,categoria:'material'}];
 const PROV=[{id:7,nombre:'Proveedor A',activo:true,telefono:'8888 0000'},{id:8,nombre:'Viejo',activo:false}];
 // Rellena el formulario de compra: [[invId, cantidad, costo], ...]
-const llenar=`(lineas)=>{ lineas.forEach(([inv,cant,costo],i)=>{ if(i) agregarLineaCompra(); const l=_lineas()[i];
-  cambiarLineaCompra(l.id,'invId',String(inv)); cambiarLineaCompra(_lineas()[i].id,'cantidad',String(cant)); cambiarLineaCompra(_lineas()[i].id,'costo',String(costo)); }); }`;
+const llenar=`(lineas,marcarExento=true)=>{ lineas.forEach(([inv,cant,costo],i)=>{ if(i) agregarLineaCompra(); const l=_lineas()[i];
+  cambiarLineaCompra(l.id,'invId',String(inv)); cambiarLineaCompra(l.id,'cantidad',String(cant)); cambiarLineaCompra(l.id,'costo',String(costo));
+  if(marcarExento && document.getElementById('compra-iva-manual').checked) {
+    const iva=document.getElementById('compra-clase-iva-'+l.id);
+    iva.value='exento'; iva.dispatchEvent(new Event('change'));
+  }
+}); }`;
 
 (async()=>{
   const browser=await lanzar();
@@ -153,7 +158,7 @@ const llenar=`(lineas)=>{ lineas.forEach(([inv,cant,costo],i)=>{ if(i) agregarLi
     const conIva=await page.evaluate(async({INV,PROV})=>{
       __estado({C:{inv:JSON.parse(JSON.stringify(INV)),prov:PROV,comp:[]}});
       abrirNuevaCompra(); document.getElementById('compra-proveedor').value='7';
-      document.getElementById('compra-con-iva').checked=true; _ajustarIvaCompra();
+      document.getElementById('compra-con-iva').click();
       __llenar([[2,100,1]]);
       const ui={sub:document.getElementById('compra-subtotal').textContent,iva:document.getElementById('compra-iva').textContent,lbl:document.getElementById('compra-iva-lbl').textContent,total:document.getElementById('compra-total').textContent};
       __llamadas.length=0; await guardarCompra();
@@ -164,6 +169,54 @@ const llenar=`(lineas)=>{ lineas.forEach(([inv,cant,costo],i)=>{ if(i) agregarLi
     assert.deepEqual([cabIva.subtotal,cabIva.iva,cabIva.iva_pct,cabIva.total],[100,15,15,115]);
     assert.equal(de(conIva.llamadas,'inventario','update')[0].datos.costo_unitario,1,'El IVA no entra en el costo del producto');
     assert.equal(de(conIva.llamadas,'finanzas','insert')[0].datos.monto,115,'Se paga el total con IVA');
+
+    // IVA manual: el producto exento integra el pago y conserva su costo original.
+    const mixto=await page.evaluate(async({INV,PROV})=>{
+      __estado({C:{inv:INV,prov:PROV,comp:[]}});
+      abrirNuevaCompra(); document.getElementById('compra-proveedor').value='7';
+      __llenar([[1,10,10],[2,4,10]],false);
+      const todos=document.getElementById('compra-con-iva'), manual=document.getElementById('compra-iva-manual');
+      const abreEnManual=manual.checked;
+      todos.click(); manual.click();
+      const porLinea=[...document.querySelectorAll('#compra-lineas .compra-linea-iva select')];
+      const clasificar=(i,clase)=>{porLinea[i].value=clase; porLinea[i].dispatchEvent(new Event('change'));};
+      clasificar(0,'gravado');
+      __llamadas.length=0; await guardarCompra();
+      const sinClasificar={error:__toasts.at(-1),llamadas:__llamadas.length,foco:document.activeElement===porLinea[1]};
+      clasificar(1,'exento');
+      const visto={abreEnManual,todos:todos.checked,manual:manual.checked,porLinea:porLinea.map(c=>c.value),
+        opciones:[...porLinea[0].options].map(o=>o.textContent)};
+      const montos=['base-gravada','base-exenta','iva','gravado-con-iva','total']
+        .map(campo=>document.getElementById('compra-'+campo).textContent);
+      window.__fallar=q=>q.t==='compra_items'&&q.op==='select'?'column compra_items.iva_pct does not exist':null;
+      __llamadas.length=0; await guardarCompra(); window.__fallar=null;
+      const error=__toasts.at(-1);
+      const escriturasSinMigracion=__llamadas.filter(q=>q.op!=='select').length;
+      __llamadas.length=0; await guardarCompra();
+      const llamadas=JSON.parse(JSON.stringify(__llamadas));
+      const cabecera=llamadas.find(q=>q.t==='compras'&&q.op==='insert').datos;
+      const lineas=llamadas.find(q=>q.t==='compra_items'&&q.op==='insert').datos;
+      __estado({C:{comp:[fromCompra({id:210,...cabecera,compra_items:lineas})]}});
+      verCompra(210); imprimirCompra(210);
+      return {visto,montos,sinClasificar,error,escriturasSinMigracion,llamadas,detalle:document.getElementById('compra-detalle-cuerpo').textContent,
+        pdf:new DOMParser().parseFromString(__pdf.at(-1).body,'text/html').body.textContent};
+    },{INV,PROV});
+    assert.deepEqual(mixto.visto,{abreEnManual:true,todos:false,manual:true,porLinea:['gravado','exento'],
+      opciones:['Selecciona…','Con IVA (gravado)','Exento de IVA']});
+    assert.deepEqual(mixto.sinClasificar,{error:['error','Selecciona «Con IVA (gravado)» o «Exento de IVA» para el producto de la línea 2.'],llamadas:0,foco:true});
+    assert.deepEqual(mixto.montos,['C$ 100.00','C$ 40.00','C$ 15.00','C$ 115.00','C$ 155.00']);
+    assert.equal(mixto.escriturasSinMigracion,0);
+    assert.match(mixto.error[1],/migracion_iva_productos\.sql/);
+    const mixta=de(mixto.llamadas,'compras','insert')[0].datos;
+    assert.deepEqual([mixta.subtotal,mixta.iva,mixta.total],[140,15,155]);
+    assert.deepEqual(de(mixto.llamadas,'compra_items','insert')[0].datos.map(i=>[i.costo_unitario,i.subtotal,i.iva_pct,i.iva]),
+      [[10,100,15,15],[10,40,0,0]]);
+    assert.equal(de(mixto.llamadas,'compra_pagos','insert')[0].datos.monto,155);
+    for(const documento of [mixto.detalle,mixto.pdf]) {
+      assert.match(documento,/Exento de IVA/);
+      assert.match(documento,/Subtotal exento\s*C\$ 40\.00/);
+      assert.match(documento,/Subtotal gravado con IVA\s*C\$ 115\.00/);
+    }
 
     // ── Al crédito: sin pagos ni gasto hasta que se pague ──
     const credito=await page.evaluate(async({INV,PROV})=>{
@@ -192,7 +245,7 @@ const llenar=`(lineas)=>{ lineas.forEach(([inv,cant,costo],i)=>{ if(i) agregarLi
       abrirNuevaCompra(); document.getElementById('compra-proveedor').value='7'; __llenar([[1,1,5]]);
       window.__fallar=q=>q.t==='compras'&&q.op==='insert'?'column "condicion" of relation "compras" does not exist':null;
       __llamadas.length=0; await guardarCompra(); window.__fallar=null;
-      return {toast:__toasts.at(-1),abierto:document.getElementById('modal-compra').classList.contains('open'),otras:__llamadas.filter(q=>q.t!=='compras').length};
+      return {toast:__toasts.at(-1),abierto:document.getElementById('modal-compra').classList.contains('open'),otras:__llamadas.filter(q=>q.t!=='compras' && q.op!=='select').length};
     },{INV,PROV});
     assert.equal(sinColumnas.toast[0],'error');
     assert.match(sinColumnas.toast[1],/migracion_compras_proveedores\.sql/);
