@@ -23,6 +23,18 @@ CREATE UNIQUE INDEX IF NOT EXISTS control_vigente_por_corte ON public.controles_
   (clinica_id, fecha, lower(bodega), modo) WHERE vigente;
 CREATE UNIQUE INDEX IF NOT EXISTS control_apertura_por_bodega ON public.controles_inventario
   (clinica_id, lower(bodega)) WHERE modo='apertura' AND vigente;
+ALTER TABLE public.controles_inventario
+  ADD COLUMN IF NOT EXISTS anulado_en timestamptz,
+  ADD COLUMN IF NOT EXISTS anulado_por uuid,
+  ADD COLUMN IF NOT EXISTS motivo_anulacion text;
+-- Los valores previos son privados. El historial público de cada empresa conserva el comprobante.
+CREATE TABLE IF NOT EXISTS public.reversiones_control_inventario (
+  control_id uuid PRIMARY KEY REFERENCES public.controles_inventario(id) ON DELETE CASCADE,
+  anterior_id uuid REFERENCES public.controles_inventario(id),
+  productos jsonb NOT NULL
+);
+ALTER TABLE public.reversiones_control_inventario ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.reversiones_control_inventario FROM PUBLIC,anon,authenticated;
 CREATE TABLE IF NOT EXISTS public.cierres_maestro (
   clinica_id bigint NOT NULL REFERENCES public.clinicas(id) ON DELETE CASCADE,
   mes date NOT NULL, fuentes jsonb NOT NULL, aprobado_por uuid NOT NULL,
@@ -49,6 +61,19 @@ BEGIN
   END IF;
 END $$;
 
+-- Captura tanto las ediciones de la ficha como los movimientos y consumos de lotes,
+-- incluso si dos operaciones dejan el mismo saldo final.
+CREATE OR REPLACE FUNCTION public._huella_control_inventario(p_clinica bigint,p_producto bigint)
+RETURNS text LANGUAGE sql STABLE SET search_path='' SET timezone='UTC' AS $$
+  SELECT md5(jsonb_build_array(to_jsonb(i)-ARRAY['updated_at','actualizado_en'],
+    (SELECT jsonb_agg(to_jsonb(m)-ARRAY['updated_at','actualizado_en'] ORDER BY m.id) FROM public.inventario_movimientos m
+     WHERE m.clinica_id=p_clinica AND m.inventario_id=i.id),
+    (SELECT jsonb_agg(to_jsonb(l)-ARRAY['updated_at','actualizado_en'] ORDER BY l.id) FROM public.inventario_lotes l
+     WHERE l.clinica_id=p_clinica AND l.inventario_id=i.id))::text)
+  FROM public.inventario i WHERE i.clinica_id=p_clinica AND i.id=p_producto;
+$$;
+REVOKE ALL ON FUNCTION public._huella_control_inventario(bigint,bigint) FROM PUBLIC,anon,authenticated;
+
 CREATE OR REPLACE FUNCTION public.importar_control_inventario(p_clinica bigint,p_fecha date,p_bodega text,p_modo text,
   p_filas jsonb,p_confirmar boolean,p_revision text)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
@@ -57,13 +82,14 @@ DECLARE
   f jsonb; d jsonb; lin jsonb; plan jsonb:='[]'; guardadas jsonb:='[]'; resultados jsonb;
   partidas jsonb:='[]'; grupo record; firma_anterior text;
   origen jsonb; antiguo jsonb; origenes jsonb; libre numeric; cantidad_origen numeric;
-  fuente public.controles_inventario%ROWTYPE; prod public.inventario%ROWTYPE;
+  fuente public.controles_inventario%ROWTYPE; prod public.inventario%ROWTYPE; fila_corregida jsonb;
   nombre text; codigo text; unidad text; cat text; archivo text; hoja text; num int; k text;
   ini numeric; ent numeric; sal numeric; actual numeric; costo numeric; valor numeric; precio numeric; compra numeric;
   producto_id bigint; n int; stock_corte numeric; mov_id bigint; accion text;
   fuente_id uuid; firma text; revision text; repetida boolean; cambio boolean; resumen jsonb;
   vieja jsonb; previos numeric; calculado numeric; pendientes bigint; cantidad_bodegas numeric; mejora boolean:=false;
   porcentaje numeric; margen numeric; lote_fisico bigint; cubierto numeric; esperado numeric; guardado numeric;
+  prev_ficha jsonb; prev_mov jsonb; lotes_creados bigint[]; reversion jsonb:='{}';
 BEGIN
   PERFORM public._acceso_maestro(p_clinica,false);
   p_bodega:=public._excel_texto(p_bodega,'La bodega',100,true);
@@ -153,9 +179,31 @@ BEGIN
         ((lower(btrim(i.nombre))=lower(carga.nombre) AND lower(btrim(i.unidad))=carga.unidad)
           OR (codigo IS NOT NULL AND lower(btrim(i.sku))=lower(codigo)));
       IF n>1 THEN RAISE EXCEPTION '% · fila %: el nombre o código identifica más de un producto.',hoja,num; END IF;
+      -- Una corrección ortográfica en la misma partida del mismo corte conserva su ficha.
+      -- Se comparan las palabras completas, incluidas las medidas y presentaciones.
+      fila_corregida:=NULL;
+      IF p_modo='apertura' AND fuente.id IS NOT NULL AND grupo.n=1 THEN
+        SELECT x INTO fila_corregida FROM jsonb_array_elements(fuente.filas) x
+          WHERE NOT (x ? 'origenes') AND x->>'hoja'=hoja AND x->'fila'=lin->'fila'
+            AND x->'sku'=lin->'sku' AND x->'unidad'=lin->'unidad' AND x->'categoria'=lin->'categoria'
+            AND coalesce((x->>'bonificacion')::boolean,false)=coalesce((lin->>'bonificacion')::boolean,false)
+            AND x->>'nombre'<>nombre AND
+            array_remove(regexp_split_to_array(lower(btrim(x->>'nombre')),'[[:space:]]+'),'de')
+              =array_remove(regexp_split_to_array(lower(btrim(nombre)),'[[:space:]]+'),'de');
+        IF fila_corregida IS NOT NULL THEN
+          IF producto_id IS NOT NULL AND producto_id<>(fila_corregida->>'inventario_id')::bigint THEN
+            RAISE EXCEPTION '% · fila %: el nombre corregido corresponde a otra ficha del catálogo.',hoja,num;
+          END IF;
+          producto_id:=(fila_corregida->>'inventario_id')::bigint;
+          lin:=lin||jsonb_build_object('nombre_anterior',fila_corregida->>'nombre');
+        END IF;
+      END IF;
       accion:='documental'; vieja:=NULL; stock_corte:=NULL;
       IF producto_id IS NOT NULL THEN
         SELECT * INTO STRICT prod FROM public.inventario WHERE clinica_id=p_clinica AND id=producto_id FOR UPDATE;
+        IF fila_corregida IS NOT NULL AND prod.nombre NOT IN (fila_corregida->>'nombre',nombre) THEN
+          RAISE EXCEPTION '% · fila %: el nombre del catálogo ya cambió. Revisa el artículo antes de corregir la apertura.',hoja,num;
+        END IF;
         IF (codigo IS NOT NULL AND prod.sku IS NOT NULL AND lower(btrim(prod.sku))<>lower(codigo)) OR
            lower(btrim(prod.unidad)) IS DISTINCT FROM unidad THEN RAISE EXCEPTION '% · fila %: código o unidad incompatible con el catálogo.',hoja,num; END IF;
       END IF;
@@ -169,7 +217,7 @@ BEGIN
             WHERE m.clinica_id=p_clinica AND m.inventario_id=producto_id;
           IF fuente.id IS NOT NULL THEN
             SELECT x INTO vieja FROM jsonb_array_elements(fuente.filas) x WHERE (x->>'inventario_id')::bigint=producto_id;
-            IF vieja IS NULL OR vieja->>'sku' IS DISTINCT FROM codigo OR vieja->>'nombre'<>nombre OR vieja->>'unidad'<>unidad OR
+            IF vieja IS NULL OR vieja->>'sku' IS DISTINCT FROM codigo OR (vieja->>'nombre'<>nombre AND fila_corregida IS NULL) OR vieja->>'unidad'<>unidad OR
               (vieja->>'actual')::numeric<>actual OR (vieja->>'inicial')::numeric<>ini OR (vieja->>'entradas')::numeric<>ent OR (vieja->>'salidas')::numeric<>sal
               OR (vieja->>'costo' IS NOT NULL AND (vieja->>'costo')::numeric IS DISTINCT FROM costo) THEN
               RAISE EXCEPTION 'La cantidad o identidad de % cambió. La apertura admite completar costos pendientes en las mismas filas.',nombre;
@@ -192,7 +240,7 @@ BEGIN
               END LOOP;
               lin:=jsonb_set(lin,'{origenes}',origenes);
             END IF;
-            mejora:=mejora OR (vieja->>'costo' IS NULL AND costo IS NOT NULL);
+            mejora:=mejora OR (vieja->>'costo' IS NULL AND costo IS NOT NULL) OR fila_corregida IS NOT NULL;
             accion:='completar';
           ELSIF EXISTS (SELECT FROM public.controles_inventario c CROSS JOIN LATERAL jsonb_array_elements(c.filas) x
             WHERE c.clinica_id=p_clinica AND c.modo='apertura' AND c.vigente AND (x->>'inventario_id')::bigint=producto_id) THEN
@@ -229,7 +277,11 @@ BEGIN
   IF p_confirmar AND NOT cambio AND NOT repetida THEN
     FOR lin IN SELECT value FROM jsonb_array_elements(plan) LOOP
       producto_id:=(lin->>'inventario_id')::bigint; mov_id:=(lin->>'movimiento_inicial_id')::bigint; actual:=(lin->>'actual')::numeric;
-      esperado:=NULL;
+      esperado:=NULL; lotes_creados:='{}';
+      SELECT jsonb_build_object('nombre',i.nombre,'stock',i.stock_actual,'sku',i.sku,'costo',i.costo_unitario,'precio',i.precio_unitario)
+        INTO prev_ficha FROM public.inventario i WHERE i.clinica_id=p_clinica AND i.id=producto_id;
+      SELECT jsonb_build_object('costo',m.costo_unitario,'valor',m.valor_costo) INTO prev_mov
+        FROM public.inventario_movimientos m WHERE m.clinica_id=p_clinica AND m.id=mov_id;
       IF lin->>'accion' IN ('alta','alta_catalogo') THEN
         esperado:=CASE WHEN p_modo='apertura' THEN actual ELSE 0 END;
         INSERT INTO public.inventario(clinica_id,sku,nombre,unidad,categoria,stock_minimo,stock_actual,costo_unitario,precio_unitario)
@@ -248,6 +300,9 @@ BEGIN
             THEN (lin->>'costo')::numeric ELSE i.costo_unitario END
           WHERE i.clinica_id=p_clinica AND i.id=producto_id;
       ELSIF lin->>'accion' IN ('completar','ampliar') THEN
+        IF lin ? 'nombre_anterior' THEN
+          UPDATE public.inventario SET nombre=lin->>'nombre' WHERE clinica_id=p_clinica AND id=producto_id;
+        END IF;
         SELECT coalesce(sum((x->>'actual')::numeric),0),coalesce(sum((x->>'costo_total')::numeric),0),
           count(*) FILTER (WHERE (x->>'actual')::numeric>0 AND x->>'costo_total' IS NULL)
           INTO cantidad_bodegas,calculado,pendientes
@@ -290,6 +345,7 @@ BEGIN
               VALUES(p_clinica,producto_id,'Apertura · '||p_bodega||
                 CASE WHEN lin ? 'origenes' THEN ' · '||(origen->>'hoja')||' · fila '||(origen->>'fila') ELSE '' END,
                 p_fecha,cantidad_origen,cantidad_origen,(origen->>'costo')::numeric) RETURNING id INTO lote_fisico;
+            lotes_creados:=array_append(lotes_creados,lote_fisico);
             libre:=libre-cantidad_origen;
           END IF;
           IF lin ? 'origenes' THEN origenes:=origenes||jsonb_build_array(origen||jsonb_build_object('lote_fisico_id',lote_fisico)); END IF;
@@ -297,19 +353,25 @@ BEGIN
         IF lin ? 'origenes' THEN lin:=jsonb_set(lin,'{origenes}',origenes); lote_fisico:=NULL; END IF;
       END IF;
       guardadas:=guardadas||jsonb_build_array(lin||jsonb_build_object('inventario_id',producto_id,'movimiento_inicial_id',mov_id,'lote_fisico_id',lote_fisico));
+      IF lin->>'accion'<>'documental' THEN
+        reversion:=reversion||jsonb_build_object(producto_id::text,jsonb_build_object('previo',prev_ficha,
+          'movimiento_previo',prev_mov,'lotes',lotes_creados,'huella',public._huella_control_inventario(p_clinica,producto_id)));
+      END IF;
     END LOOP;
     UPDATE public.controles_inventario SET vigente=false WHERE id=fuente.id;
     INSERT INTO public.controles_inventario(clinica_id,fecha,bodega,modo,firma,filas,creado_por)
       VALUES(p_clinica,p_fecha,p_bodega,p_modo,firma,guardadas,auth.uid()) RETURNING id INTO fuente_id;
+    INSERT INTO public.reversiones_control_inventario(control_id,anterior_id,productos) VALUES(fuente_id,fuente.id,reversion);
   END IF;
   SELECT jsonb_build_object('nuevas',CASE WHEN repetida THEN 0 ELSE count(*) END,'duplicadas',CASE WHEN repetida THEN count(*) ELSE 0 END,
-      'errores',0,'productos_sin_costo',count(*) FILTER(WHERE (x->>'actual')::numeric>0 AND x->>'costo_total' IS NULL))
+      'errores',0,'actualiza_apertura',p_modo='apertura' AND fuente.id IS NOT NULL AND NOT repetida,
+      'productos_sin_costo',count(*) FILTER(WHERE (x->>'actual')::numeric>0 AND x->>'costo_total' IS NULL))
     INTO resumen FROM jsonb_array_elements(plan) x;
   SELECT resumen||jsonb_build_object('filas_origen',count(*),'filas_bonificacion',count(*) FILTER(WHERE (o->>'bonificacion')::boolean),
       'valor_conocido',coalesce(sum((o->>'costo_total')::numeric),0),
       'valor_bonificacion',coalesce(sum((o->>'costo_total')::numeric) FILTER(WHERE (o->>'bonificacion')::boolean),0)),
     jsonb_agg(jsonb_build_object('archivo',o->>'archivo','hoja',o->>'hoja','fila',o->'fila','nombre',o->>'nombre',
-      'bonificacion',coalesce((o->>'bonificacion')::boolean,false),'estado',
+      'bonificacion',coalesce((o->>'bonificacion')::boolean,false),'nombre_anterior',x->>'nombre_anterior','estado',
       CASE WHEN repetida THEN 'duplicada' WHEN p_confirmar AND NOT cambio THEN 'guardada' ELSE 'lista' END,
       'detalle',CASE WHEN repetida THEN 'Conteo ya registrado' WHEN fuente.id IS NOT NULL THEN 'Sustituye el conteo previo de esta bodega'
         ELSE CASE x->>'accion' WHEN 'alta' THEN 'Alta con existencia inicial' WHEN 'vincular' THEN 'Existencia previa vinculada'
@@ -319,6 +381,133 @@ BEGIN
     CROSS JOIN LATERAL jsonb_array_elements(coalesce(x->'origenes',jsonb_build_array(x))) WITH ORDINALITY AS origen(o,origen_ord);
   RETURN jsonb_build_object('revision',revision,'cambio',cambio,'lote',CASE WHEN p_confirmar AND NOT cambio THEN fuente_id END,'resumen',resumen,'filas',resultados);
 END $$;
+
+CREATE OR REPLACE FUNCTION public.anular_control_inventario(p_clinica bigint,p_control uuid,p_motivo text)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE
+  c public.controles_inventario%ROWTYPE; rev public.reversiones_control_inventario%ROWTYPE;
+  prod public.inventario%ROWTYPE; linea jsonb; copia jsonb; previo jsonb; fuente jsonb;
+  producto bigint; movimiento bigint; lotes bigint[]; nuevo boolean; usado boolean; tabla text;
+BEGIN
+  PERFORM public._acceso_maestro(p_clinica,false);
+  IF NOT public.is_superadmin() AND (SELECT p.rol FROM public.profiles p WHERE p.clinica_id=p_clinica AND
+    (p.id=auth.uid() OR lower(p.email)=lower(nullif(auth.jwt()->>'email','')))
+    ORDER BY (p.id=auth.uid()) DESC NULLS LAST LIMIT 1) IS DISTINCT FROM 'admin_empresa' THEN
+    RAISE EXCEPTION 'Solo un administrador de la empresa puede deshacer una carga.';
+  END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended('lumea-importar-excel:'||p_clinica,0));
+  SELECT * INTO c FROM public.controles_inventario WHERE clinica_id=p_clinica AND id=p_control FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'La carga seleccionada no pertenece a esta empresa.'; END IF;
+  IF c.anulado_en IS NOT NULL THEN RETURN jsonb_build_object('id',c.id,'anulado',true); END IF;
+  IF NOT c.vigente THEN RAISE EXCEPTION 'La carga fue sustituida. Consulta la versión vigente.'; END IF;
+  p_motivo:=public._excel_texto(p_motivo,'El motivo de la anulación',300,true);
+  IF EXISTS (SELECT FROM public.cierres_maestro WHERE clinica_id=p_clinica AND mes+interval '1 month'>c.fecha)
+    OR EXISTS (SELECT FROM public.libro_diario a WHERE a.clinica_id=p_clinica AND a.fecha>=c.fecha
+      AND lower(a.documento)='maestro-'||to_char(a.fecha,'YYYY-MM')) THEN
+    RAISE EXCEPTION 'Un cierre aprobado o un asiento de costo de ventas utiliza este período.';
+  END IF;
+  IF EXISTS (SELECT FROM public.controles_inventario d WHERE d.clinica_id=p_clinica AND d.vigente AND d.id<>c.id
+    AND lower(d.bodega)=lower(c.bodega) AND (d.fecha>c.fecha OR (d.fecha=c.fecha AND c.modo='apertura' AND d.modo='cierre'))) THEN
+    RAISE EXCEPTION 'La bodega tiene un control posterior. Revisa primero ese control.';
+  END IF;
+  SELECT * INTO rev FROM public.reversiones_control_inventario WHERE control_id=c.id;
+  IF rev.control_id IS NULL AND EXISTS (SELECT FROM public.controles_inventario d WHERE d.clinica_id=p_clinica
+    AND d.fecha=c.fecha AND d.modo=c.modo AND lower(d.bodega)=lower(c.bodega) AND d.id<>c.id AND d.anulado_en IS NULL) THEN
+    RAISE EXCEPTION 'Esta carga antigua sustituye otra versión sin copia del estado anterior.';
+  END IF;
+  FOR linea IN SELECT x FROM jsonb_array_elements(c.filas) x ORDER BY (x->>'inventario_id')::bigint LOOP
+    IF linea->>'accion'='documental' THEN CONTINUE; END IF;
+    producto:=(linea->>'inventario_id')::bigint; movimiento:=(linea->>'movimiento_inicial_id')::bigint;
+    SELECT * INTO prod FROM public.inventario WHERE clinica_id=p_clinica AND id=producto FOR UPDATE;
+    IF NOT FOUND THEN RAISE EXCEPTION 'La ficha de % ya no existe.',linea->>'nombre'; END IF;
+    PERFORM id FROM public.inventario_movimientos WHERE clinica_id=p_clinica AND inventario_id=producto ORDER BY id FOR UPDATE;
+    PERFORM id FROM public.inventario_lotes WHERE clinica_id=p_clinica AND inventario_id=producto ORDER BY id FOR UPDATE;
+    nuevo:=linea->>'accion' IN ('alta','alta_catalogo');
+    copia:=rev.productos->(producto::text);
+    IF rev.control_id IS NOT NULL THEN
+      IF copia->>'huella' IS DISTINCT FROM public._huella_control_inventario(p_clinica,producto) THEN
+        RAISE EXCEPTION '% tiene cambios de ficha, movimientos o lotes posteriores a la carga.',prod.nombre;
+      END IF;
+      SELECT ARRAY(SELECT value::bigint FROM jsonb_array_elements_text(copia->'lotes')) INTO lotes;
+    ELSE
+      -- El primer formato ya vinculaba los ID que creó. Solo permite retirar altas
+      -- antiguas cuando sus unidades, su valoración y sus documentos siguen intactos.
+      IF NOT nuevo THEN RAISE EXCEPTION 'Esta carga antigua modificó una ficha previa de % sin conservar una copia.',prod.nombre; END IF;
+      IF prod.nombre IS DISTINCT FROM linea->>'nombre' OR prod.sku IS DISTINCT FROM linea->>'sku'
+        OR prod.unidad IS DISTINCT FROM linea->>'unidad' OR prod.categoria IS DISTINCT FROM linea->>'categoria'
+        OR prod.stock_actual IS DISTINCT FROM (CASE c.modo WHEN 'apertura' THEN (linea->>'actual')::numeric ELSE 0 END)
+        OR prod.costo_unitario IS DISTINCT FROM (CASE c.modo WHEN 'apertura' THEN (linea->>'costo')::numeric END)
+        OR prod.precio_unitario IS DISTINCT FROM (linea->>'precio')::numeric OR prod.stock_minimo IS DISTINCT FROM 0
+        OR coalesce(to_jsonb(prod)->>'descripcion',to_jsonb(prod)->>'codigo_minsa',to_jsonb(prod)->>'fecha_vencimiento') IS NOT NULL
+        OR coalesce((to_jsonb(prod)->>'alerta_meses_antes')::int,1)<>1 THEN
+        RAISE EXCEPTION 'La ficha de % cambió desde la carga original.',prod.nombre;
+      END IF;
+      IF EXISTS (SELECT FROM public.inventario_movimientos m WHERE m.inventario_id=producto AND m.id IS DISTINCT FROM movimiento)
+        OR ((c.modo='apertura' AND prod.stock_actual>0) IS DISTINCT FROM (movimiento IS NOT NULL))
+        OR (movimiento IS NOT NULL AND NOT EXISTS (SELECT FROM public.inventario_movimientos m
+          WHERE m.clinica_id=p_clinica AND m.inventario_id=producto AND m.id=movimiento AND m.tipo='entrada'
+            AND m.fecha=c.fecha AND m.cantidad=prod.stock_actual AND m.motivo='Excel · Apertura de inventario · '||c.bodega
+            AND coalesce(to_jsonb(m)->>'notas',to_jsonb(m)->>'referencia',to_jsonb(m)->>'paciente_id') IS NULL
+            AND m.costo_importado AND m.costo_unitario IS NOT DISTINCT FROM prod.costo_unitario
+            AND m.valor_costo IS NOT DISTINCT FROM (linea->>'costo_total')::numeric)) THEN
+        RAISE EXCEPTION 'Los movimientos de % cambiaron desde la carga.',prod.nombre;
+      END IF;
+      lotes:='{}';
+      FOR fuente IN SELECT value FROM jsonb_array_elements(coalesce(linea->'origenes',jsonb_build_array(linea))) LOOP
+        IF fuente->>'lote_fisico_id' IS NULL THEN CONTINUE; END IF;
+        IF NOT EXISTS (SELECT FROM public.inventario_lotes l WHERE l.id=(fuente->>'lote_fisico_id')::bigint
+          AND l.inventario_id=producto AND l.clinica_id=p_clinica AND l.fecha_ingreso=c.fecha
+          AND l.cantidad_inicial=(fuente->>'actual')::numeric AND l.cantidad_disponible=l.cantidad_inicial
+          AND l.costo_unitario=(fuente->>'costo')::numeric AND to_jsonb(l)->>'compra_id' IS NULL AND to_jsonb(l)->>'proveedor_id' IS NULL
+          AND l.lote='Apertura · '||c.bodega||CASE WHEN linea ? 'origenes' THEN ' · '||(fuente->>'hoja')||' · fila '||(fuente->>'fila') ELSE '' END) THEN
+          RAISE EXCEPTION 'El lote de % cambió o ya fue utilizado.',prod.nombre;
+        END IF;
+        lotes:=array_append(lotes,(fuente->>'lote_fisico_id')::bigint);
+      END LOOP;
+      IF EXISTS (SELECT FROM public.inventario_lotes WHERE inventario_id=producto AND NOT (id=ANY(lotes))) THEN
+        RAISE EXCEPTION '% tiene lotes adicionales.',prod.nombre;
+      END IF;
+    END IF;
+    IF nuevo AND EXISTS (SELECT FROM public.controles_inventario d CROSS JOIN LATERAL jsonb_array_elements(d.filas) f
+      WHERE d.clinica_id=p_clinica AND d.vigente AND d.id<>c.id AND (f->>'inventario_id')::bigint=producto) THEN
+      RAISE EXCEPTION 'Otro control de bodega utiliza %.',prod.nombre;
+    END IF;
+    -- Algunos módulos históricos guardan la referencia como un entero sin FK.
+    -- Los comprobantes se conservan incluso si se anularon contablemente.
+    FOREACH tabla IN ARRAY ARRAY['compra_items','venta_items','factura_items'] LOOP
+      IF to_regclass('public.'||tabla) IS NULL THEN CONTINUE; END IF;
+      EXECUTE format('SELECT EXISTS (SELECT FROM public.%I t WHERE ($1 AND (to_jsonb(t)->>''inventario_id'')::bigint=$2)
+        OR (to_jsonb(t)->>''lote_id'')::bigint=ANY($3))',tabla) INTO usado USING nuevo,producto,lotes;
+      IF usado THEN RAISE EXCEPTION 'Una factura de compra o venta utiliza % o uno de sus lotes.',prod.nombre; END IF;
+    END LOOP;
+    IF EXISTS (SELECT FROM public.importaciones_excel_filas f WHERE f.clinica_id=p_clinica AND
+      ((nuevo AND f.tipo='productos' AND f.registro_id=producto) OR f.movimiento_inicial_id=movimiento OR (f.tipo='movimientos' AND f.registro_id=movimiento)))
+      OR EXISTS (SELECT FROM public.finanzas f WHERE f.clinica_id=p_clinica AND (to_jsonb(f)->>'inventario_mov_id')::bigint=movimiento) THEN
+      RAISE EXCEPTION 'Hay un comprobante asociado a %.',prod.nombre;
+    END IF;
+    DELETE FROM public.inventario_lotes WHERE clinica_id=p_clinica AND inventario_id=producto AND id=ANY(lotes);
+    IF movimiento IS NOT NULL THEN
+      IF linea->>'accion'='completar' THEN
+        UPDATE public.inventario_movimientos SET costo_unitario=(copia->'movimiento_previo'->>'costo')::numeric,
+          valor_costo=(copia->'movimiento_previo'->>'valor')::numeric WHERE clinica_id=p_clinica AND id=movimiento AND inventario_id=producto;
+      ELSE
+        DELETE FROM public.inventario_movimientos WHERE clinica_id=p_clinica AND id=movimiento AND inventario_id=producto;
+      END IF;
+    END IF;
+    IF nuevo THEN DELETE FROM public.inventario WHERE clinica_id=p_clinica AND id=producto;
+    ELSE
+      previo:=copia->'previo';
+      UPDATE public.inventario SET nombre=previo->>'nombre',sku=previo->>'sku',stock_actual=(previo->>'stock')::numeric,
+        costo_unitario=(previo->>'costo')::numeric,precio_unitario=(previo->>'precio')::numeric WHERE clinica_id=p_clinica AND id=producto;
+    END IF;
+  END LOOP;
+  UPDATE public.controles_inventario SET vigente=false,anulado_por=auth.uid(),anulado_en=clock_timestamp(),motivo_anulacion=p_motivo
+    WHERE id=c.id;
+  UPDATE public.controles_inventario SET vigente=true WHERE id=rev.anterior_id AND clinica_id=p_clinica AND anulado_en IS NULL;
+  RETURN jsonb_build_object('id',c.id,'anulado',true);
+END $$;
+REVOKE ALL ON FUNCTION public.anular_control_inventario(bigint,uuid,text) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.anular_control_inventario(bigint,uuid,text) TO authenticated;
 
 -- Una sola lectura consistente y completa del establecimiento; no depende de los
 -- límites de paginación del cliente ni de un precio actual para reconstruir costos.
@@ -402,7 +591,7 @@ BEGIN
     UNION ALL SELECT 'movimientos',to_jsonb(m)||jsonb_build_object('valor_costo',m.valor_costo::text,
       'anulacion_conciliada',EXISTS(SELECT FROM anuladas_validas a WHERE a.mov=m.id),'es_apertura',EXISTS (SELECT FROM apertura a WHERE
         (a.f->>'movimiento_inicial_id')::bigint=m.id) OR EXISTS (SELECT FROM public.controles_inventario c
-        CROSS JOIN LATERAL jsonb_array_elements(c.filas) x WHERE c.clinica_id=p_clinica AND c.modo='apertura' AND c.fecha=p_mes
+        CROSS JOIN LATERAL jsonb_array_elements(c.filas) x WHERE c.clinica_id=p_clinica AND c.anulado_en IS NULL AND c.modo='apertura' AND c.fecha=p_mes
         AND (x->>'inventario_id')::bigint=m.inventario_id AND x->>'accion'='vincular'
         AND m.motivo IN ('Existencia inicial','Excel · Existencia inicial') AND m.fecha=p_mes))
       FROM public.inventario_movimientos m WHERE m.clinica_id=p_clinica AND m.fecha BETWEEN p_mes AND fin
@@ -562,4 +751,5 @@ GRANT EXECUTE ON FUNCTION public.importar_control_inventario(bigint,date,text,te
   public.aprobar_informe_maestro(bigint,date,text),public.registrar_ajuste_maestro(bigint,date,text,numeric,text,text) TO authenticated;
 NOTIFY pgrst,'reload schema';
 COMMIT;
-SELECT to_regprocedure('public.datos_informe_maestro(bigint,date)') IS NOT NULL AS informe_maestro_listo;
+SELECT to_regprocedure('public.datos_informe_maestro(bigint,date)') IS NOT NULL AS informe_maestro_listo,
+       to_regprocedure('public.anular_control_inventario(bigint,uuid,text)') IS NOT NULL AS anulacion_lista;

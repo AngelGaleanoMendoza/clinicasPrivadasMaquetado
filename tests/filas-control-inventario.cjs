@@ -46,4 +46,40 @@ for (const partes of [
   assert.equal(totales.length,1);
   assert.equal(totales[0].importe.valor,10);
 }
-console.log('OK · Fila prellenada, artículos incompletos, bonificación, fecha común y pies de tabla.');
+// En el libro corregido la fecha desaparece, las columnas se desplazan y la hoja de movimientos puede venir vacía.
+const corregida = fila(7, encabezado.celdas.slice(1).map(c=>c?.valor));
+const articulo = fila(8, producto.celdas.slice(1).map(c=>c?.valor));
+const control = detectar({nombre:'Inventario',archivo:'Inventario corregido.xlsx',filas:[corregida,articulo],fijos:{}});
+assert.equal(control.tipo,'control_inventario');
+assert.equal(control.metadataControl.fechaFilas,undefined);
+const partida = normalizar(control,articulo).datos;
+assert.equal(partida.costo_total,10);
+assert.equal(partida.actual,5);
+assert.equal(partida.observaciones,'Prueba');
+assert.equal(partida.fecha_origen,undefined);
+
+const registro = [fila(1,['REGISTRO DE ENTRADAS Y SALIDAS']),
+  fila(3,['Fecha','Tipo de movimiento','Código','Descripción','Cantidad','Documento / Referencia','Entregado / Recibido por','Observaciones'])];
+const detectarRegistro = filas=>detectar({nombre:'Movimientos',archivo:'Inventario corregido.xlsx',filas,fijos:{}});
+const vacio=detectarRegistro(registro);
+assert.ok(vacio.plantillaMovimientosVacia);
+assert.ok(vacio.omitida);
+assert.equal(detectarRegistro([...registro,fila(4,['01/11/2026','entrada','007','Producto',2])]).tipo,'movimientos');
+assert.equal(detectarRegistro([...registro,fila(4,[null,null,null,null,null,null,null,'Por aclarar'])]).tipo,'movimientos');
+
+// La plantilla ofrecida en la aplicación debe volver a pasar por el mismo lector que los archivos subidos.
+const lector=vm.createContext({XLSX:require('../js/vendor/xlsx-0.20.3.full.min.js'),importScripts:()=>{},self:{}});
+vm.runInContext(fs.readFileSync(require.resolve('../js/importar-excel-parser.js'),'utf8'),lector);
+const libro=fs.readFileSync(require.resolve('../plantillas/control-inventario.xlsx'));
+const plantillas=lector.leerLibroExcel(libro.buffer.slice(libro.byteOffset,libro.byteOffset+libro.byteLength),'control-inventario.xlsx')
+  .map(h=>detectar({...h,archivo:'control-inventario.xlsx',fijos:{}}));
+assert.equal(plantillas.length,3);
+for(const h of plantillas.slice(0,2)) {
+  assert.equal(h.tipo,'control_inventario');
+  const despues=h.filas.filter(f=>f.numero>h.encabezado);
+  const pie=piesDeControl(h,despues);
+  assert.ok(despues.every(f=>pie.pies.has(f.numero) || filaIgnorable(h,f)),'La plantilla debe estar vacía.');
+}
+assert.equal(plantillas[1].bonificacion,true);
+assert.equal(plantillas[2].plantillaMovimientosVacia,true);
+console.log('OK · Existencias con y sin fecha, movimientos con y sin filas, bonificación y pies de tabla.');

@@ -3246,6 +3246,7 @@
   <section class="modal modal-lg excel-modal" role="dialog" aria-modal="true" aria-labelledby="excel-titulo">
     <h2 id="excel-titulo">Importar Excel</h2>
     <p id="excel-establecimiento"></p>
+    <a id="excel-formato-inventario" class="btn btn-secondary btn-sm" href="plantillas/control-inventario.xlsx" download hidden>Descargar formato de inventario</a>
     <div class="excel-grid">
       <label><span id="excel-archivo-etiqueta">Excel y anexos del expediente</span>
         <input type="file" id="excel-archivos" accept=".xlsx,.xls,.csv,.pdf,.zip,.eml,.png,.jpg,.jpeg" multiple onchange="ExcelImportacion.cargar()">
@@ -3273,6 +3274,7 @@
         <label>Fecha de corte<input id="excel-control-fecha" type="date" oninput="ExcelImportacion.cambiarControl()"></label>
         <label>Área / bodega<input id="excel-control-bodega" maxlength="100" type="text" oninput="ExcelImportacion.cambiarControl()"></label>
       </div>
+      <button id="excel-usar-apertura" type="button" class="btn btn-secondary" hidden onclick="ExcelImportacion.usarAperturaAnterior()"></button>
       <p class="excel-ayuda" id="excel-control-ayuda"></p>
       </details>
     </fieldset>
@@ -3284,8 +3286,18 @@
       <div id="excel-documentos"></div>
     </details>
     <details id="excel-historial-toggle" ontoggle="ExcelImportacion.historial()">
-      <summary>Historial y comprobantes</summary>
+      <summary id="excel-historial-nombre">Historial y comprobantes</summary>
       <div id="excel-historial"></div>
+      <form id="excel-anulacion" class="excel-hoja" hidden onsubmit="event.preventDefault(); ExcelImportacion.anular()">
+        <strong id="excel-anulacion-titulo"></strong>
+        <p>Se desharán los cambios de esta carga. Si una operación depende de ella, el sistema indicará qué impide anularla.</p>
+        <div class="excel-grid"><label>Motivo de la anulación<input id="excel-anulacion-motivo" required maxlength="300"></label></div>
+        <div class="excel-recibo">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="ExcelImportacion.cancelarAnulacion()">Cancelar</button>
+          <button type="submit" class="btn btn-danger btn-sm">Confirmar anulación</button>
+        </div>
+        <p id="excel-anulacion-estado" role="status"></p>
+      </form>
     </details>
     <div class="modal-footer">
       <button type="button" id="excel-cerrar" class="btn btn-secondary" onclick="ExcelImportacion.cerrar()">Cerrar</button>
@@ -3297,7 +3309,7 @@
 </div>
 <script src="js/app.js?v=20261120maestro" defer></script>
 <script src="js/reportes-zip.js?v=20261119libro" defer></script>
-<script src="js/importar-excel.js?v=20261120sku" defer></script>
+<script src="js/importar-excel.js?v=20261123inventario" defer></script>
 <script src="js/libro-diario.js?v=20261119libro" defer></script>
 <script src="js/caja-empresa.js?v=20261118borrador" defer></script>
 <script src="js/borrador-diario.js?v=20261118inventario" defer></script>

@@ -217,6 +217,62 @@ async function probar() {
       [{...movAnterior,costo_unitario:null,valor_costo:null,costo_importado:null}]);
     assert.equal(await valor("SELECT count(*)::int r FROM controles_inventario WHERE bodega='Central'"),1);
     assert.equal(await valor("SELECT count(*)::int r FROM inventario WHERE clinica_id=10 AND nombre='Vendas antiguas'"),1);
+    const anular=(id,motivo='Se seleccionó el control equivocado',clinica=10)=>
+      valor('SELECT anular_control_inventario($1,$2,$3) r',[clinica,id,motivo]);
+    const admin=() => db.exec("SET ROLE authenticated; SET test.uid='c0000000-0000-0000-0000-000000000003'");
+    await admin();
+    // Una ficha vinculada a existencias previas sobrevive; la anulación restaura su SKU anterior.
+    await anular(confirmado.lote);
+    await db.exec('RESET ROLE');
+    assert.deepEqual(await valor('SELECT to_jsonb(i) r FROM inventario i WHERE id=$1',[productoAnterior]),{...fichaAnterior,sku:null});
+    assert.equal(await valor('SELECT count(*)::int r FROM inventario_movimientos WHERE inventario_id=$1',[productoAnterior]),1);
+    await admin();
+    const sinCosto=fila('Kit prueba','kit',3,0,0,null);
+    const control=await guardar('apertura','2026-10-31','Bodega de prueba',[sinCosto]);
+    const mejoraKit=await guardar('apertura','2026-10-31','Bodega de prueba',[fila('Kit prueba','kit',3,0,0,2)]);
+    await assert.rejects(anular(control.lote),/sustituida/);
+    const resultadoAnular=await anular(mejoraKit.lote);
+    assert.deepEqual(await anular(mejoraKit.lote),resultadoAnular);
+    await db.exec('RESET ROLE');
+    assert.equal(await valor("SELECT costo_unitario r FROM inventario WHERE nombre='Kit prueba'"),null);
+    assert.equal(await valor("SELECT count(*)::int r FROM inventario_lotes l JOIN inventario i ON i.id=l.inventario_id WHERE i.nombre='Kit prueba'"),0);
+    assert.equal(await valor('SELECT vigente r FROM controles_inventario WHERE id=$1',[control.lote]),true);
+    assert.equal(await valor('SELECT motivo_anulacion r FROM controles_inventario WHERE id=$1',[mejoraKit.lote]),'Se seleccionó el control equivocado');
+    await admin();
+    await assert.rejects(anular(control.lote,'   '),/motivo/);
+    await assert.rejects(anular(control.lote,'Otra empresa',9),/permisos/);
+    await db.exec("RESET ROLE; UPDATE profiles SET rol='farmaceutico' WHERE id=auth.uid(); SET ROLE authenticated");
+    await assert.rejects(anular(control.lote),/administrador/);
+    await db.exec("RESET ROLE; UPDATE profiles SET rol='admin_empresa' WHERE id=auth.uid(); SET ROLE authenticated");
+    const conteo=await guardar('cierre','2026-11-30','Bodega de prueba',[sinCosto]);
+    await assert.rejects(anular(control.lote),/posterior/);
+    await anular(conteo.lote);
+    await anular(control.lote);
+    await db.exec('RESET ROLE');
+    assert.equal(await valor("SELECT count(*)::int r FROM inventario WHERE nombre='Kit prueba'"),0);
+    await admin();
+    // Emula la apertura del formato anterior. Una factura sobre la segunda ficha impide
+    // retirar cualquiera de las dos, incluso si no llegó a mover stock.
+    const antiguas=[fila('Kit nuevo','A2',4,0,0,3),{...fila('Kit bonificado','B2',1,0,0,0),fila:5}];
+    const heredado=await guardar('apertura','2026-10-31','Antigua',antiguas);
+    await db.exec('RESET ROLE');
+    await db.query('DELETE FROM reversiones_control_inventario WHERE control_id=$1',[heredado.lote]);
+    await db.exec("INSERT INTO compra_items(clinica_id,inventario_id,cantidad) SELECT 10,id,1 FROM inventario WHERE nombre='Kit bonificado'");
+    await admin();
+    await assert.rejects(anular(heredado.lote),/factura/);
+    await db.exec('RESET ROLE');
+    assert.equal(await valor("SELECT count(*)::int r FROM inventario WHERE sku IN ('A2','B2')"),2);
+    assert.equal(await valor('SELECT vigente r FROM controles_inventario WHERE id=$1',[heredado.lote]),true);
+    await db.exec("DELETE FROM compra_items WHERE inventario_id=(SELECT id FROM inventario WHERE sku='B2')");
+    await admin();
+    await anular(heredado.lote);
+    const corregido=await guardar('apertura','2026-10-31','Antigua',antiguas);
+    assert.notEqual(corregido.lote,heredado.lote);
+    await db.exec('RESET ROLE');
+    await db.exec("INSERT INTO inventario_movimientos(clinica_id,inventario_id,tipo,cantidad,fecha) SELECT 10,id,'salida',1,'2026-11-01' FROM inventario WHERE sku='B2'");
+    await admin();
+    await assert.rejects(anular(corregido.lote),/movimientos o lotes posteriores/);
+    await assert.rejects(anular(apertura.lote),/sustituida|cierre aprobado/);
     console.log('OK · catálogo anterior sin SKU, reintentos, aperturas, costos, bodegas, corte, trazabilidad, ajuste, aprobación y RLS');
   } finally { await db.close(); }
 }

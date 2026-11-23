@@ -10,12 +10,12 @@ const encabezados = ['Código','Descripción del artículo','Categoría','Unidad
   'Salidas','Existencia actual','Costo unitario (C$)','Precio de compra (C$)','Precio de venta (C$)',
   'Porcentaje de Ganancia (%)','Margen de ganancia (C$)','Valor total del inventario (C$)'];
 
-function archivo({actual=5,total=12.65,actualizacion='31/10/2026',nombre='Formato control inventario.xlsx'}={}) {
+function archivo({actual=5,total=12.65,actualizacion='31/10/2026',nombre='Formato control inventario.xlsx',nombreB='Producto B'}={}) {
   const libro = XLSX.utils.book_new();
   const filas = [
     ['Área / Bodega:','Central',null,'Fecha de actualización:',actualizacion],encabezados,
     ['0007','Producto A','','BLISTER',7,1,3,actual,2.53,2.68,3.51,{t:'n',v:0.2278,z:'0.00%'},0.98,total],
-    [null,'Producto B','','UNIDAD',8,null,null,8,null,null,null,null,null,0],
+    [null,nombreB,'','UNIDAD',8,null,null,8,null,null,null,null,null,0],
     [null,null,null,null,null,null,null,0,null,null,null,null,null,0],
     [null,null,null,null,null,null,null,null,null,null,null,{t:'n',v:0.4,z:'0%'},null,null],
     [null,null,null,null,null,null,null,null,null,null,null,null,'VALOR TOTAL DEL INVENTARIO:',12.65]
@@ -40,14 +40,18 @@ function archivo({actual=5,total=12.65,actualizacion='31/10/2026',nombre='Format
     const calls=[];
     await p.exposeFunction('controlesPrueba',async filtros=>{
       assert.equal(filtros.clinica_id,10);
-      const {rows}=await db.query('SELECT fecha::text,bodega,modo,vigente FROM controles_inventario WHERE clinica_id=$1 ORDER BY creado_en DESC',[filtros.clinica_id]);
+      const {rows}=await db.query('SELECT id,creado_en,fecha::text,bodega,modo,vigente,anulado_en,motivo_anulacion FROM controles_inventario WHERE clinica_id=$1 ORDER BY creado_en DESC,id',[filtros.clinica_id]);
       return rows.filter(row=>(!filtros.modo || row.modo===filtros.modo) && (filtros.vigente==null || row.vigente===filtros.vigente));
     });
     await p.exposeFunction('rpcPrueba',async(n,args)=>{
       calls.push({n,args});
-      assert.equal(n,'importar_control_inventario');
+      assert.ok(['importar_control_inventario','anular_control_inventario'].includes(n),n);
       const {p_clinica,p_fecha,p_bodega,p_modo,p_filas,p_confirmar,p_revision}=args;
       try {
+        if(n==='anular_control_inventario') {
+          const {rows}=await db.query('SELECT anular_control_inventario($1,$2,$3) AS data',[p_clinica,args.p_control,args.p_motivo]);
+          return rows[0];
+        }
         const {rows}=await db.query('SELECT importar_control_inventario($1,$2,$3,$4,$5,$6,$7) AS data',
           [p_clinica,p_fecha,p_bodega,p_modo,JSON.stringify(p_filas),p_confirmar,p_revision]);
         return rows[0];
@@ -74,11 +78,11 @@ function archivo({actual=5,total=12.65,actualizacion='31/10/2026',nombre='Format
             tabla==='expediente_fiscal_excel'?[{id:'fiscal',archivo:'IVA.xlsx'}]:[]});}catch(e){reject(e);}}
         };
       };
-      Object.assign(window,{currentClinicaId:10,currentUser:{id:'u1'},currentClinica:{nombre:'Medicsa'},currentView:'libro-contable',
+      Object.assign(window,{currentClinicaId:10,currentUser:{id:'u1',key:'admin_empresa'},currentClinica:{nombre:'Medicsa'},currentView:'libro-contable',
         hasPermiso:p=>['inventario','contabilidad'].includes(p),esEmpresaMedica:()=>true,hoy:()=>'2026-11-10',escAttr:v=>String(v??''),
         fmtC:v=>'C$ '+Number(v).toLocaleString('es-NI',{minimumFractionDigits:2,maximumFractionDigits:2}),
         openModalOverlay:id=>document.getElementById(id).classList.add('open'),closeModal:()=>{},
-        consultarPaginas:f=>Promise.resolve(f()),loadAll:async()=>{},sb:{from,rpc:async(n,a)=>{
+        consultarPaginas:f=>Promise.resolve(f()),recargas:0,loadAll:async()=>{window.recargas++;},sb:{from,rpc:async(n,a)=>{
           const respuesta=await rpcPrueba(n,a);
           if(window.retenerCierre && a.p_modo==='cierre' && !a.p_confirmar)
             await new Promise(resolve=>{window.continuarRevision=resolve;});
@@ -188,6 +192,57 @@ function archivo({actual=5,total=12.65,actualizacion='31/10/2026',nombre='Format
     await estado('El informe maestro es un reporte de consulta');
     assert.equal(await p.locator('#excel-revisar').isDisabled(),true);
     assert.equal(calls.length,cantidad);
+
+    await p.evaluate(()=>ExcelImportacion.abrir('inventario'));
+    const historial=p.locator('#excel-historial');
+    await p.locator('#excel-historial-nombre').click();
+    const anularRecibo=rotulo=>historial.locator('.excel-recibo').filter({hasText:rotulo}).getByRole('button',{name:'Anular carga'});
+    const confirmarAnulacion=p.getByRole('button',{name:'Confirmar anulación'});
+    const motivo=p.getByLabel('Motivo de la anulación');
+    await anularRecibo('Conteo mensual').click();
+    await p.getByRole('button',{name:'Cancelar',exact:true}).click();
+    assert.equal(calls.filter(c=>c.n==='anular_control_inventario').length,0);
+    assert.equal(await motivo.isHidden(),true);
+    await anularRecibo('Apertura').click();
+    await motivo.fill('Verificar dependencia del conteo');
+    await confirmarAnulacion.click();
+    await p.locator('#excel-anulacion-estado').getByText(/control posterior/).waitFor();
+    assert.deepEqual(await inventario(),fichas);
+    await p.getByRole('button',{name:'Cancelar',exact:true}).click();
+    const anular=async(rotulo,razon)=>{
+      const antes=await p.evaluate(()=>recargas);
+      await anularRecibo(rotulo).click();
+      await motivo.fill(razon);
+      await confirmarAnulacion.click();
+      await p.waitForFunction(()=>{
+        const aviso=document.getElementById('excel-anulacion-estado').textContent;
+        return document.getElementById('excel-anulacion').hidden || (aviso && aviso!=='Anulando la carga…');
+      });
+      assert.ok(await motivo.isHidden(),await p.locator('#excel-anulacion-estado').textContent());
+      await historial.getByText('Anulada · '+razon,{exact:false}).waitFor();
+      await p.waitForFunction(antes=>recargas>antes,antes);
+    };
+    await anular('Conteo mensual','Se eligió el corte equivocado');
+    assert.deepEqual(await inventario(),fichas,'Anular el conteo documental conserva todas las existencias');
+    await anular('Apertura','Se seleccionó otro inventario');
+    assert.deepEqual(await inventario(),[]);
+    assert.equal((await db.query('SELECT count(*) FROM inventario_movimientos')).rows[0].count,0);
+    assert.equal((await db.query('SELECT count(*) FROM inventario_lotes')).rows[0].count,0);
+
+    await subir(original);await guardar.waitFor();await guardar.click();await estado('Apertura de inventario registrada');
+    const saldos=async()=>(await db.query('SELECT id,stock_actual,costo_unitario FROM inventario ORDER BY id')).rows;
+    const previos=await saldos();
+    const idB=(await db.query("SELECT id FROM inventario WHERE nombre='Producto B'")).rows[0].id;
+    await subir(archivo({actualizacion:null,nombre:'Control corregido.xlsx',nombreB:'Producto de B'}));
+    await p.getByRole('button',{name:'Usar apertura del 31/10/2026'}).click();
+    await guardar.waitFor();
+    await p.locator('#excel-resultados').getByText('Producto B → Producto de B',{exact:true}).waitFor();
+    await p.locator('#excel-resultados').getByText('Ver partidas pendientes de costo (1)').click();
+    await p.locator('#excel-resultados').getByText('Producto de B · 8 unidad · Inventario (fila 4)').waitFor();
+    await guardar.click();await estado('Apertura actualizada con las mismas unidades');
+    assert.deepEqual(await saldos(),previos,'La corrección conserva los ID, cantidades y costos');
+    assert.deepEqual((await db.query('SELECT nombre FROM inventario WHERE id=$1',[idB])).rows,[{nombre:'Producto de B'}]);
+    assert.equal((await db.query('SELECT count(*) FROM inventario_movimientos')).rows[0].count,3,'Una sola entrada física por producto');
   } finally {await browser.close();await db.close();}
-  console.log('Control de bodega: reconocimiento, faltantes, corte y confirmación correctos.');
+  console.log('Control de bodega: reconocimiento, costos pendientes, confirmación, anulación, recarga y corrección de nombre verificados.');
 })().catch(e=>{console.error(e);process.exitCode=1;});
