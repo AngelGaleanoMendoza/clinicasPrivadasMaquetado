@@ -1351,7 +1351,7 @@
       <div class="form-group"><label>N.º de factura del proveedor</label><input type="text" id="compra-numero" placeholder="Opcional"></div>
       <div class="form-group"><label>Condición</label>
         <select id="compra-condicion" onchange="_ajustarCondicionCompra()">
-          <option value="contado">💵 De contado (se paga hoy)</option>
+          <option value="contado">💵 De contado (se paga en la fecha de compra)</option>
           <option value="credito">📆 Al crédito (se paga después)</option>
         </select>
       </div>
@@ -1457,10 +1457,10 @@
           <button type="button" class="btn btn-secondary btn-sm" onclick="abrirClienteCom(null,true)">+ Nuevo</button>
         </div>
       </div>
-      <div class="form-group"><label>Fecha *</label><input type="date" id="venta-fecha" onchange="_ajustarCondicionVenta(true)"></div>
+      <div class="form-group"><label>Fecha *</label><input type="date" id="venta-fecha" onchange="_ajustarCondicionVenta(true); _pintarLineasVenta()"></div>
       <div class="form-group"><label>Condición</label>
         <select id="venta-condicion" onchange="_ajustarCondicionVenta(true)">
-          <option value="contado">💵 De contado (se cobra hoy)</option>
+          <option value="contado">💵 De contado (se cobra en la fecha de venta)</option>
           <option value="credito">📆 Al crédito (se cobra después)</option>
         </select>
       </div>
@@ -3307,7 +3307,7 @@
     </div>
   </section>
 </div>
-<script src="js/app.js?v=20261120maestro" defer></script>
+<script src="js/app.js?v=20261123inventario" defer></script>
 <script src="js/reportes-zip.js?v=20261119libro" defer></script>
 <script src="js/importar-excel.js?v=20261123inventario" defer></script>
 <script src="js/libro-diario.js?v=20261119libro" defer></script>

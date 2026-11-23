@@ -242,6 +242,33 @@ const de=(ll,t,op)=>ll.filter(q=>q.t===t&&q.op===op);
     assert.equal(fifo.sinLote,5);
     assert.deepEqual(fifo.valor,{total:185,lotes:155,sinLote:30});
 
+    const retroactiva=await page.evaluate(async({INV,LOTES})=>{
+      const lotes=LOTES.map(l=>l.id===12 ? {...l,fecha:'2026-11-08'} : l);
+      __estado({C:{inv:INV,lotes,mov:[
+        {invId:1,tipo:'entrada',cantidad:15,fecha:'2026-11-08'},
+        {invId:1,tipo:'entrada',cantidad:5,fecha:'2026-11-05'}
+      ],ventas:[],cliCom:[]}});
+      abrirNuevaVenta();
+      document.getElementById('venta-fecha').value='2026-11-01';
+      const id=_lineasV()[0].id;
+      cambiarLineaVenta(id,'invId','1');
+      const opciones=[...document.querySelectorAll('#venta-lineas .compra-campo-lote option')].map(o=>o.value);
+      cambiarLineaVenta(id,'cantidad','11');
+      __llamadas.length=0;await guardarVenta();
+      const error=__toasts.at(-1)[1],escrituras=__llamadas.length;
+      cambiarLineaVenta(id,'cantidad','10');
+      await guardarVenta();
+      const resultado={opciones,error,escrituras,detalle:__llamadas.find(q=>q.t==='venta_items')?.datos,
+        fechaCobro:__llamadas.find(q=>q.t==='venta_cobros')?.datos.fecha};
+      __estado({C:{mov:[]}});
+      return resultado;
+    },{INV,LOTES});
+    assert.deepEqual(retroactiva.opciones,['','11'],'El lote comprado el 8 no aparece el día 1');
+    assert.equal(retroactiva.escrituras,0,'Una venta sin existencias al corte carece de efectos');
+    assert.match(retroactiva.error,/Faltan 1 caja/);
+    assert.deepEqual(retroactiva.detalle.map(i=>[i.lote_id,i.cantidad,i.costo_unitario]),[[11,10,5]]);
+    assert.equal(retroactiva.fechaCobro,'2026-11-01');
+
     const costosApertura=await page.evaluate(async({INV,LOTES})=>{
       __estado({C:{inv:INV,lotes:LOTES,ventas:[],cliCom:[]}});
       C.inv[0].costo=null;

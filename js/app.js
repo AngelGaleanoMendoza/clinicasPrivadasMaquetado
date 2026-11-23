@@ -12880,8 +12880,8 @@ const _r4 = n => Math.round((Number(n) || 0) * 10000) / 10000;
 const _cant = n => Number(n || 0).toLocaleString('es-NI', { maximumFractionDigits:3 });
 
 // ── Lotes ──
-function _lotesDisponibles(invId) {
-  return C.lotes.filter(l => l.invId === invId && l.disponible > 0)
+function _lotesDisponibles(invId, fecha = null) {
+  return C.lotes.filter(l => l.invId === invId && l.disponible > 0 && (!fecha || l.fecha <= fecha))
     .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '') || a.id - b.id);
 }
 // Existencia que no está en ningún lote: la que había antes de llevar lotes o
@@ -12891,12 +12891,31 @@ function _stockSinLote(p, lotes = C.lotes) {
   const enLotes = lotes.filter(l => l.invId === p.id).reduce((s, l) => s + l.disponible, 0);
   return Math.max(0, Math.round((p.stock - enLotes) * 1000) / 1000);
 }
+// Una factura anterior solo puede consumir existencias que ya estaban disponibles.
+// Reserva los lotes antiguos aún disponibles al reconstruir el saldo sin lote.
+function _stockSinLoteVenta(p, fecha, lotesAlCorte) {
+  const actual = _stockSinLote(p);
+  if(!actual || !fecha) return actual;
+  const cambios = new Map();
+  for(const m of C.mov) {
+    if(m.invId !== p.id || m.fecha <= fecha) continue;
+    const cambio = m.tipo === 'entrada' ? m.cantidad : -m.cantidad;
+    cambios.set(m.fecha, (cambios.get(m.fecha) || 0) + cambio);
+  }
+  let saldo = p.stock, minimo = saldo;
+  for(const dia of [...cambios.keys()].sort().reverse()) {
+    saldo -= cambios.get(dia);
+    minimo = Math.min(minimo, saldo);
+  }
+  const enLotes = lotesAlCorte.reduce((s,l) => s+l.disponible,0);
+  return Math.min(actual, Math.max(0, _r4(minimo - enLotes)));
+}
 // Reparte `cantidad` de un producto entre lo disponible. Con un lote elegido
 // sale solo de ese lote; en automático sale primero la existencia sin lote (la
 // más antigua) y luego los lotes por orden de llegada. `usado` acumula lo ya
 // tomado por otras líneas de la misma operación para no contarlo dos veces.
 // Devuelve { partes:[{ loteId, lote, cantidad, costo }], falta }.
-function _asignarLotes(invId, cantidad, loteId = null, usado = new Map()) {
+function _asignarLotes(invId, cantidad, loteId = null, usado = new Map(), fecha = null) {
   const p = C.inv.find(x => x.id === invId);
   const partes = [];
   let resto = Number(cantidad) || 0;
@@ -12909,10 +12928,11 @@ function _asignarLotes(invId, cantidad, loteId = null, usado = new Map()) {
   };
   if(loteId) {
     const l = C.lotes.find(x => x.id === loteId && x.invId === invId);
-    if(l) tomar(l.id, l.id, l.lote, l.disponible, l.costo);
+    if(l && (!fecha || l.fecha <= fecha)) tomar(l.id, l.id, l.lote, l.disponible, l.costo);
   } else {
-    tomar('sin-' + invId, null, '', _stockSinLote(p), p?.costo);
-    for(const l of _lotesDisponibles(invId)) { if(resto <= 0) break; tomar(l.id, l.id, l.lote, l.disponible, l.costo); }
+    const lotes = _lotesDisponibles(invId, fecha);
+    tomar('sin-' + invId, null, '', _stockSinLoteVenta(p, fecha, lotes), p?.costo);
+    for(const l of lotes) { if(resto <= 0) break; tomar(l.id, l.id, l.lote, l.disponible, l.costo); }
   }
   return { partes, falta:Math.max(0, resto) };
 }
@@ -13579,8 +13599,10 @@ function cambiarLineaVenta(id, campo, valor) {
 function _pintarLineasVenta() {
   const cont = document.getElementById('venta-lineas');
   const opciones = [...C.inv].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  const fecha = document.getElementById('venta-fecha').value;
   cont.innerHTML = _lineasVenta.map((l, i) => {
-    const lotes = l.invId ? _lotesDisponibles(l.invId) : [];
+    const lotes = l.invId ? _lotesDisponibles(l.invId, fecha) : [];
+    if(l.loteId && !lotes.some(x => x.id === l.loteId)) l.loteId = null;
     return `<div class="compra-linea con-lote">
       <select aria-label="Producto ${i + 1}" onchange="cambiarLineaVenta(${l.id},'invId',this.value)">
         <option value="">Producto…</option>
@@ -13603,9 +13625,10 @@ function _pintarLineasVenta() {
 // Reparto de cada línea entre lotes, en orden, sin contar dos veces un lote.
 function _calculoLineasVenta() {
   const usado = new Map();
+  const fecha = document.getElementById('venta-fecha').value;
   return _lineasVenta.map(l => {
     if(!l.invId || !(l.cantidad > 0)) return { l, partes:[], falta:0, costo:0 };
-    const a = _asignarLotes(l.invId, l.cantidad, l.loteId, usado);
+    const a = _asignarLotes(l.invId, l.cantidad, l.loteId, usado, fecha);
     const costo = a.partes.some(x=>x.costo==null) ? null : _r2(a.partes.reduce((s,x)=>s+_costoLineaInventario(x.cantidad,x.costo),0));
     return { l, ...a, costo };
   });
@@ -13620,13 +13643,16 @@ function _totalVenta() {
     if(info) {
       if(!p) { info.textContent = ''; info.className = 'compra-linea-margen'; }
       else {
-        const disp = l.loteId ? (C.lotes.find(x => x.id === l.loteId)?.disponible || 0) : p.stock;
+        const fecha = document.getElementById('venta-fecha').value;
+        const lotes = _lotesDisponibles(l.invId, fecha);
+        const disp = l.loteId ? (lotes.find(x => x.id === l.loteId)?.disponible || 0)
+          : _stockSinLoteVenta(p,fecha,lotes) + lotes.reduce((n,x) => n+x.disponible,0);
         const vendidas = (l.cantidad || 0) - falta;
         let cu = p.costo;
         if(vendidas>0) cu=costo==null ? null : partes.reduce((s,x)=>s+x.cantidad*x.costo,0)/vendidas;
         const lotesTxt = partes.some(x => x.loteId) ? partes.map(x => `${x.loteId ? x.lote : 'sin lote'} (${_cant(x.cantidad)})`).join(', ') : '';
         info.textContent = falta > 0
-          ? `⚠️ Solo hay ${_cant(disp)} ${p.unidad} disponibles${l.loteId ? ' en ese lote' : ''}`
+          ? `⚠️ Solo hay ${_cant(disp)} ${p.unidad} disponibles${l.loteId ? ' en ese lote' : ''} para la fecha de la venta`
           : `Disponible ${_cant(disp)} ${p.unidad}${cu != null ? ' · costo ' + fmtC(cu) : ' · costo pendiente'}${cu != null && l.precio > 0 ? ' · margen ' + _pctMargen(cu, l.precio) : ''}${lotesTxt ? ' · sale de ' + lotesTxt : ''}`;
         info.className = 'compra-linea-margen' + (falta > 0 || costo==null || (cu != null && l.precio != null && l.precio < cu) ? ' prod-margen-neg' : '');
       }
@@ -13664,7 +13690,7 @@ async function guardarVenta() {
   const corta = calc.findIndex(c => c.falta > 0);
   if(corta >= 0) {
     const p = C.inv.find(x => x.id === calc[corta].l.invId);
-    toast(`Línea ${corta + 1}: no alcanza el stock de ${escAttr(p?.nombre || 'ese producto')}${calc[corta].l.loteId ? ' en el lote elegido' : ''}. Faltan ${_cant(calc[corta].falta)} ${escAttr(p?.unidad || '')}.`,'error');
+    toast(`Línea ${corta + 1}: no alcanza el stock de ${escAttr(p?.nombre || 'ese producto')}${calc[corta].l.loteId ? ' en el lote elegido' : ''} para el ${formatFecha(fecha)}. Faltan ${_cant(calc[corta].falta)} ${escAttr(p?.unidad || '')}.`,'error');
     return;
   }
   const pendiente = calc.find(c => c.costo==null);
