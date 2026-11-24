@@ -399,6 +399,8 @@ const toInv   = x => ({ nombre:x.nombre, categoria:x.categoria||'general', unida
 const fromProv    = r => ({ id:r.id, nombre:r.nombre||'', identificacion:r.identificacion||'', contacto:r.contacto||'', telefono:r.telefono||'', email:r.email||'', direccion:r.direccion||'', notas:r.notas||'', activo:r.activo!==false });
 const fromCompra  = r => ({ id:r.id, proveedorId:r.proveedor_id||null, fecha:r.fecha, numeroFactura:r.numero_factura||'', metodoPago:r.metodo_pago||'efectivo',
   total:Number(r.total||0), subtotal:r.subtotal!=null?Number(r.subtotal):Number(r.total||0), iva:Number(r.iva||0), ivaPct:Number(r.iva_pct||0),
+  retencionIr2:r.retencion_ir_2==null ? null : Number(r.retencion_ir_2),
+  retencionIr1:r.retencion_ir_1==null ? null : Number(r.retencion_ir_1),
   condicion:r.condicion||'contado', vencimiento:r.vencimiento||null,
   estado:r.estado||'registrada', notas:r.notas||'', finanzasId:r.finanzas_id||null, creadoPor:r.creado_por||'',
   // Saldo que se debía al migrar (importado de Excel): se paga como cualquier
@@ -12200,14 +12202,22 @@ const _AVISO_MIGRACION_COMPRAS = '<div class="balance-aviso">🛠️ Falta ejecu
 
 function _nombreProveedor(id) { return C.prov.find(p => p.id === id)?.nombre || 'Sin proveedor'; }
 
-// Lo pagado sale de los pagos registrados. Una compra de contado sin pagos
-// guardados (anterior a los pagos) se da por pagada.
+function _tieneRetencionesCompra(c) {
+  return c.retencionIr2 != null || c.retencionIr1 != null;
+}
+function _retencionTotalCompra(c) {
+  return _r2((c.retencionIr2 ?? 0) + (c.retencionIr1 ?? 0));
+}
+function _netoCompra(c) {
+  return _r2(c.total - _retencionTotalCompra(c));
+}
+// Las compras antiguas de contado podían estar pagadas sin un registro de pago.
 function _pagadoCompra(c) {
   if(c.estado === 'anulada') return 0;
-  if(c.condicion !== 'credito' && !(c.pagos || []).length) return c.total;
+  if(c.condicion !== 'credito' && !_tieneRetencionesCompra(c) && !(c.pagos || []).length) return c.total;
   return Math.round((c.pagos || []).reduce((s, p) => s + p.monto, 0) * 100) / 100;
 }
-function _saldoCompra(c) { return c.estado === 'anulada' ? 0 : Math.max(0, Math.round((c.total - _pagadoCompra(c)) * 100) / 100); }
+function _saldoCompra(c) { return c.estado === 'anulada' ? 0 : Math.max(0, _r2(_netoCompra(c) - _pagadoCompra(c))); }
 // 'pagada' | 'parcial' | 'pendiente' | 'vencida' (a crédito, con saldo y ya vencida)
 function _estadoPagoCompra(c) {
   const saldo = _saldoCompra(c);
@@ -12555,6 +12565,8 @@ function abrirNuevaCompra() {
   document.getElementById('compra-con-iva').checked = false;
   document.getElementById('compra-iva-manual').checked = true;
   document.getElementById('compra-iva-pct').value = 15;
+  document.getElementById('compra-retencion-ir-2').checked = false;
+  document.getElementById('compra-retencion-ir-1').checked = false;
   document.getElementById('compra-notas').value = '';
   _ajustarCondicionCompra();
   _ajustarIvaCompra();
@@ -12621,6 +12633,12 @@ function _pintarLineasCompra() {
   _totalCompra();
 }
 
+function _retencionesCompraFormulario(subtotal) {
+  const calcular = tasa => document.getElementById('compra-retencion-ir-' + tasa).checked
+    ? Math.round(_centavosProductos(subtotal) * tasa / 100) / 100 : null;
+  return {retencionIr2:calcular(2), retencionIr1:calcular(1)};
+}
+
 function _totalCompra() {
   const m = _montosCompra();
   _lineasCompra.forEach(l => {
@@ -12632,7 +12650,14 @@ function _totalCompra() {
     }
   });
   _pintarTotalesIvaProductos('compra', m);
-  return m.total;
+  const retenciones = _retencionesCompraFormulario(m.subtotal);
+  for(const [tasa, monto] of [[2, retenciones.retencionIr2],[1, retenciones.retencionIr1]]) {
+    document.getElementById(`compra-retencion-ir-${tasa}-fila`).hidden = monto == null;
+    document.getElementById(`compra-retencion-ir-${tasa}-monto`).textContent = monto == null ? '' : '−' + fmtC(monto);
+  }
+  const neto = _netoCompra({...m, ...retenciones});
+  document.getElementById('compra-neto').textContent = fmtC(neto);
+  return neto;
 }
 
 // Costo promedio ponderado tras recibir `cantidad` unidades a `costo` cada una.
@@ -12673,6 +12698,9 @@ async function guardarCompra() {
   }
   const { subtotal, iva, pct, total, detalle, fueraRango } = _montosCompra(lineas);
   if(fueraRango) { toast('El importe de la compra supera el límite permitido.','error'); return; }
+  const retenciones = _retencionesCompraFormulario(subtotal);
+  const conRetenciones = _tieneRetencionesCompra(retenciones);
+  const neto = _netoCompra({total, ...retenciones});
   const aplicaIva = modoIva === 'todos' || lineas.some(l => l.conIva === true);
   const credito = document.getElementById('compra-condicion').value === 'credito';
   const vencimiento = credito ? (document.getElementById('compra-vencimiento').value || null) : null;
@@ -12689,7 +12717,10 @@ async function guardarCompra() {
     const guardaIva = await _esquemaIvaProductos('compra_items', modoIva);
     const rc = await sb.from('compras').insert({ clinica_id:currentClinicaId, proveedor_id:proveedorId, fecha, numero_factura:numero, metodo_pago:metodo,
       subtotal, iva, iva_pct:aplicaIva ? pct : 0, total, condicion:credito ? 'credito' : 'contado', vencimiento,
+      ...(conRetenciones ? {retencion_ir_2:retenciones.retencionIr2, retencion_ir_1:retenciones.retencionIr1} : {}),
       notas:document.getElementById('compra-notas').value.trim() || null, creado_por:currentUser?.name || null }).select().single();
+    if(rc.error && ['retencion_ir_2','retencion_ir_1'].some(col => _faltaColumna(rc.error, col)))
+      throw new Error('Ejecuta migracion_retenciones_compras.sql en Supabase para guardar esta factura con sus retenciones.');
     // Sin las columnas de IVA o crédito la compra quedaría mal (una a crédito
     // como pagada): no se guarda y el formulario sigue abierto.
     if(rc.error && ['iva','condicion','vencimiento','subtotal'].some(col => _faltaColumna(rc.error, col)))
@@ -12730,14 +12761,14 @@ async function guardarCompra() {
       ]);
       if(rm.error || ru.error) avisos.push(p?.nombre || 'producto');
     }
-    // De contado nace pagada: un pago por el total. A crédito, sin pagos.
-    if(!credito && total > 0) {
-      const aviso = await _registrarPagoProveedor({ compraId, proveedor, numero, fecha, monto:total, metodo, referencia:null, anotarGasto });
+    // El pago al proveedor liquida el total de la factura menos las retenciones.
+    if(!credito && neto > 0) {
+      const aviso = await _registrarPagoProveedor({ compraId, proveedor, numero, fecha, monto:neto, metodo, referencia:null, anotarGasto });
       if(aviso) avisos.push(aviso);
     }
     closeModal('modal-compra');
     toast(avisos.length ? `Compra registrada, pero no se pudo actualizar: ${avisos.join(', ')}. Revisa Movimientos y Finanzas.`
-      : `Compra registrada ✅ · ${fmtC(total)}${credito ? ' · queda por pagar' : ''}`, avisos.length ? 'warning' : 'success');
+      : `Compra registrada ✅ · ${fmtC(neto)}${credito ? ' · queda por pagar' : ''}`, avisos.length ? 'warning' : 'success');
   } catch(e) {
     toast('No se pudo registrar la compra: ' + (e.message || e),'error');
   } finally {
@@ -12776,6 +12807,7 @@ function _etiquetaPeriodoCompras() {
 function imprimirReporteCompras() {
   const lista = _comprasFiltradas();
   const vig = lista.filter(c => c.estado !== 'anulada');
+  const retenidas = vig.filter(_tieneRetencionesCompra);
   const prov = document.getElementById('compras-proveedor')?.value;
   const suma = k => vig.reduce((s, c) => s + (typeof k === 'function' ? k(c) : c[k]), 0);
   const porProv = {};
@@ -12797,6 +12829,14 @@ function imprimirReporteCompras() {
       <td style="${_num}">${fmtC(c.subtotal)}</td><td style="${_num}">${fmtC(c.iva)}</td><td style="${_num}">${fmtC(c.total)}</td><td style="${_num}">${fmtC(_pagadoCompra(c))}</td><td style="${_num}">${fmtC(_saldoCompra(c))}</td></tr>`).join('')}
     <tr style="font-weight:800;background:#F1F5F9"><td colspan="4">Total (sin anuladas)</td><td style="${_num}">${fmtC(suma('subtotal'))}</td><td style="${_num}">${fmtC(suma('iva'))}</td><td style="${_num}">${fmtC(suma('total'))}</td><td style="${_num}">${fmtC(suma(_pagadoCompra))}</td><td style="${_num}">${fmtC(suma(_saldoCompra))}</td></tr>
     </tbody></table>` : '<p style="color:#94A3B8;text-align:center;padding:16px">No hay compras en este período</p>'}
+    ${retenidas.length ? `<div class="section-title">Retenciones por factura</div>
+    <table style="font-size:10.5px"><thead><tr><th>Fecha</th><th>Proveedor</th><th>Factura</th><th>Base sin IVA</th><th>IR 2 %</th><th>IR 1 %</th><th>Total retenido</th><th>Neto al proveedor</th></tr></thead>
+    <tbody>${retenidas.map(c => `<tr><td>${formatFecha(c.fecha)}</td><td>${escAttr(_nombreProveedor(c.proveedorId))}</td>
+      <td>${escAttr(c.numeroFactura || '#' + c.id)}</td><td>${fmtC(c.subtotal)}</td><td>${c.retencionIr2 == null ? '—' : fmtC(c.retencionIr2)}</td>
+      <td>${c.retencionIr1 == null ? '—' : fmtC(c.retencionIr1)}</td><td>${fmtC(_retencionTotalCompra(c))}</td><td>${fmtC(_netoCompra(c))}</td></tr>`).join('')}
+    <tr style="font-weight:800;background:#F1F5F9"><td colspan="3">Total</td><td>${fmtC(retenidas.reduce((s,c) => s + c.subtotal,0))}</td>
+      <td>${fmtC(suma(c => c.retencionIr2 ?? 0))}</td><td>${fmtC(suma(c => c.retencionIr1 ?? 0))}</td>
+      <td>${fmtC(suma(_retencionTotalCompra))}</td><td>${fmtC(retenidas.reduce((s,c) => s + _netoCompra(c),0))}</td></tr></tbody></table>` : ''}
     <p style="font-size:11px;color:#64748B;margin-top:10px">El costo de los productos se lleva sin IVA; el IVA de cada compra se muestra aparte.</p>`;
   return pdfAbrir('Reporte de compras', body);
 }
@@ -12841,6 +12881,16 @@ function _detalleIvaCompra(i) {
   return `<div class="compra-item-sub">${texto}</div>`;
 }
 
+function _filasRetencionesCompra(c) {
+  if(!_tieneRetencionesCompra(c)) return '';
+  const fila = (titulo, monto) => `<tr><td colspan="3" style="${_num}">${titulo}</td><td style="${_num}">${fmtC(monto)}</td></tr>`;
+  return fila('Base de las retenciones (exento + gravado sin IVA)', c.subtotal) +
+    (c.retencionIr2 == null ? '' : fila('Menos retención IR 2 %', -c.retencionIr2)) +
+    (c.retencionIr1 == null ? '' : fila('Menos retención IR 1 %', -c.retencionIr1)) +
+    fila('Total retenido', _retencionTotalCompra(c)) +
+    fila('Neto a pagar al proveedor', _netoCompra(c));
+}
+
 function imprimirCompra(id) {
   const c = C.comp.find(x => x.id === id);
   if(!c) return;
@@ -12855,7 +12905,8 @@ function imprimirCompra(id) {
     <table><thead><tr><th>Producto</th><th style="${_num}">Cantidad</th><th style="${_num}">Costo sin IVA</th><th style="${_num}">Subtotal</th></tr></thead>
     <tbody>${c.items.map(i => `<tr><td>${escAttr(i.descripcion)}${i.lote ? ` · lote ${escAttr(i.lote)}` : ''}${_detalleIvaCompra(i)}</td><td style="${_num}">${i.cantidad.toLocaleString('es-NI')}</td><td style="${_num}">${fmtC(i.costo)}</td><td style="${_num}">${fmtC(i.subtotal)}</td></tr>`).join('')}
     ${_filasIvaCompra(c) || `<tr><td colspan="3" style="${_num};font-weight:700">Subtotal</td><td style="${_num}">${fmtC(c.subtotal)}</td></tr>`}
-    <tr style="font-weight:800;background:#F1F5F9"><td colspan="3" style="${_num}">Total</td><td style="${_num}">${fmtC(c.total)}</td></tr></tbody></table>
+    <tr style="font-weight:800;background:#F1F5F9"><td colspan="3" style="${_num}">Total de la factura</td><td style="${_num}">${fmtC(c.total)}</td></tr>
+    ${_filasRetencionesCompra(c)}</tbody></table>
     ${c.pagos.length ? `<div class="section-title">💵 Pagos</div><table><thead><tr><th>Fecha</th><th>Forma</th><th>Referencia</th><th style="${_num}">Monto</th></tr></thead>
       <tbody>${c.pagos.map(x => `<tr><td>${formatFecha(x.fecha)}</td><td>${escAttr(_METODOS_PAGO[x.metodoPago] || x.metodoPago)}</td><td>${escAttr(x.referencia || '—')}</td><td style="${_num}">${fmtC(x.monto)}</td></tr>`).join('')}</tbody></table>` : ''}
     ${c.estado !== 'anulada' ? `<p style="font-size:13px;font-weight:800;margin-top:12px">Pendiente de pago: ${fmtC(_saldoCompra(c))}</p>` : ''}
@@ -12886,7 +12937,7 @@ function abrirPagoCompra(id) {
   const saldo = _saldoCompra(c);
   if(!saldo) { toast('Esta compra ya está pagada','info'); return; }
   _pagoCompraId = id;
-  document.getElementById('pago-compra-info').innerHTML = `${escAttr(_nombreProveedor(c.proveedorId))}${c.numeroFactura ? ' · Fact. ' + escAttr(c.numeroFactura) : ''}<br>Total ${fmtC(c.total)} · pagado ${fmtC(_pagadoCompra(c))} · <strong>falta ${fmtC(saldo)}</strong>`;
+  document.getElementById('pago-compra-info').innerHTML = `${escAttr(_nombreProveedor(c.proveedorId))}${c.numeroFactura ? ' · Fact. ' + escAttr(c.numeroFactura) : ''}<br>${_tieneRetencionesCompra(c) ? 'Neto al proveedor' : 'Total'} ${fmtC(_netoCompra(c))} · pagado ${fmtC(_pagadoCompra(c))} · <strong>falta ${fmtC(saldo)}</strong>`;
   document.getElementById('pago-compra-fecha').value = hoy();
   document.getElementById('pago-compra-monto').value = saldo;
   document.getElementById('pago-compra-metodo').value = 'efectivo';
@@ -12936,7 +12987,8 @@ function verCompra(id) {
       <tbody>${c.items.map(i => `<tr><td>${escAttr(i.descripcion)}${i.lote ? `<div class="compra-item-sub">Lote ${escAttr(i.lote)}</div>` : ''}${_detalleIvaCompra(i)}</td><td>${i.cantidad.toLocaleString('es-NI')}</td><td>${fmtC(i.costo)}</td><td>${fmtC(i.subtotal)}</td></tr>`).join('')}</tbody>
       <tfoot>
         ${_filasIvaCompra(c)}
-        <tr><td colspan="3">Total</td><td>${fmtC(c.total)}</td></tr>
+        <tr><td colspan="3">Total de la factura</td><td>${fmtC(c.total)}</td></tr>
+        ${_filasRetencionesCompra(c)}
         ${c.estado !== 'anulada' ? `<tr><td colspan="3">Pagado</td><td>${fmtC(_pagadoCompra(c))}</td></tr><tr class="compra-saldo"><td colspan="3">Falta pagar</td><td>${fmtC(saldo)}</td></tr>` : ''}
       </tfoot></table></div>
     ${c.pagos.length ? `<div class="lumi-sub" style="margin:14px 0 6px">Pagos</div>
@@ -13183,7 +13235,7 @@ function setContPeriodo(p) { contPeriodo = p; renderContabilidad(); }
 // Categorías de Finanzas que no son ingreso ni gasto del período: el cobro de
 // una venta ya cuenta como venta, el pago de una compra se vuelve costo cuando
 // el producto se vende, y el pago del IVA salda un impuesto cobrado a terceros.
-const _FIN_FUERA_RESULTADOS = ['ventas','compras','pago_iva'];
+const _FIN_FUERA_RESULTADOS = ['ventas','compras','pago_iva','pago_retenciones_compras'];
 function _destinoSalidaInventario(motivo) {
   const texto = String(motivo ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .toLowerCase().trim().replace(/^excel\s*·\s*/, '').replace(/\s+/g, ' ');
@@ -13332,11 +13384,16 @@ function _balanceGeneral(datos = C, empresa = esEmpresaMedica()) {
   const ivaNeto = _r2(ivaVentas - ivaCompras - ivaPagado);
   const ivaFavor = ivaNeto < 0 ? -ivaNeto : 0, ivaPorPagar = ivaNeto > 0 ? ivaNeto : 0;
   const cxp = _r2(datos.comp.reduce((s, c) => s + _saldoCompra(c), 0));
-  const activos = _r2(efectivo + cxc + inventario.total + ivaFavor);
-  const pasivos = _r2(cxp + ivaPorPagar);
+  const retenido = datos.comp.filter(c => c.estado !== 'anulada').reduce((s,c) => s + _retencionTotalCompra(c), 0);
+  const retencionesPagadas = datos.fin.filter(f => f.tipo === 'egreso' && f.categoria === 'pago_retenciones_compras').reduce((s,f) => s + f.monto, 0);
+  const saldoRetenciones = _r2(retenido - retencionesPagadas);
+  const retencionesPorPagar = Math.max(0, saldoRetenciones);
+  const anticiposRetenciones = Math.max(0, -saldoRetenciones);
+  const activos = _r2(efectivo + cxc + inventario.total + ivaFavor + anticiposRetenciones);
+  const pasivos = _r2(cxp + ivaPorPagar + retencionesPorPagar);
   const resultados = _estadoResultados({ desde:'', hasta:'' },datos,empresa).neta;
   const capital = _r2(activos - pasivos - resultados);
-  return { efectivo, cxc, inventario, productosSinCosto, ivaVentas, ivaCompras, ivaPagado, ivaFavor, ivaPorPagar, cxp, activos, pasivos,
+  return { efectivo, cxc, inventario, productosSinCosto, ivaVentas, ivaCompras, ivaPagado, ivaFavor, ivaPorPagar, cxp, retencionesPorPagar, anticiposRetenciones, activos, pasivos,
     resultados, capital, patrimonio:_r2(resultados + capital) };
 }
 function _serieMensual(n = 12) {
@@ -14218,12 +14275,14 @@ function renderBalanceGeneral() {
         ${esEmpresaMedica() ? _filaEstado('Cuentas por cobrar', b.cxc, 'er-detalle') : ''}
         ${_filaEstado('Inventario', b.inventario.total, 'er-detalle', b.productosSinCosto ? 'valor conocido al corte' : esEmpresaMedica() ? 'a costo, por lote' : 'a costo promedio')}
         ${b.ivaFavor ? _filaEstado('IVA a favor', b.ivaFavor, 'er-detalle', 'crédito fiscal') : ''}
+        ${b.anticiposRetenciones ? _filaEstado('Anticipos de retenciones', b.anticiposRetenciones, 'er-detalle') : ''}
         ${_filaEstado('Total activos', b.activos, 'er-total')}
       </div>
       <div class="er-tabla">
         <div class="er-grupo">Pasivos</div>
         ${_filaEstado('Cuentas por pagar a proveedores', b.cxp, 'er-detalle')}
         ${b.ivaPorPagar ? _filaEstado('IVA por pagar', b.ivaPorPagar, 'er-detalle', 'cobrado − pagado en compras') : ''}
+        ${b.retencionesPorPagar ? _filaEstado('Retenciones de compras por pagar', b.retencionesPorPagar, 'er-detalle') : ''}
         ${_filaEstado('Total pasivos', b.pasivos, 'er-suma')}
         <div class="er-grupo">Patrimonio</div>
         ${_filaEstado('Utilidades acumuladas', b.resultados, 'er-detalle')}
@@ -14338,6 +14397,7 @@ function imprimirBalanceGeneral() {
       ${esEmpresaMedica() ? _pdfFilaEstado('Cuentas por cobrar a clientes', b.cxc) : ''}
       ${_pdfFilaEstado(b.productosSinCosto ? 'Inventario (valor conocido)' : 'Inventario (a costo)', b.inventario.total)}
       ${b.ivaFavor ? _pdfFilaEstado('IVA a favor (crédito fiscal)', b.ivaFavor) : ''}
+      ${b.anticiposRetenciones ? _pdfFilaEstado('Anticipos de retenciones', b.anticiposRetenciones) : ''}
       ${_pdfFilaEstado('Total activos', b.activos, _PDF_TOT)}
     </tbody></table>
     ${b.productosSinCosto ? `<p>Productos con existencias pendientes de valorar: ${b.productosSinCosto}.</p>` : ''}
@@ -14345,6 +14405,7 @@ function imprimirBalanceGeneral() {
     <table><tbody>
       ${_pdfFilaEstado('Cuentas por pagar a proveedores', b.cxp)}
       ${b.ivaPorPagar ? _pdfFilaEstado('IVA por pagar', b.ivaPorPagar) : ''}
+      ${b.retencionesPorPagar ? _pdfFilaEstado('Retenciones de compras por pagar', b.retencionesPorPagar) : ''}
       ${_pdfFilaEstado('Total pasivos', b.pasivos, _PDF_SUB)}
     </tbody></table>
     <div class="section-title">Patrimonio</div>
@@ -19905,7 +19966,7 @@ const fmtC = n => 'C$ ' + Number(n||0).toLocaleString('es-NI',{minimumFractionDi
 // gasto de la clínica: ese dinero nunca fue suyo, ya salió de sus ingresos al
 // repartir. Tiene categoría propia para poder dejarlo fuera del balance.
 const CATEGORIA_PAGO_PROFESIONAL = 'pago_profesional';
-const CATEGORIAS_FIN_FIJAS = ['medicamento','insumo','equipo','general','factura','compras','ventas','pago_iva',CATEGORIA_PAGO_PROFESIONAL];
+const CATEGORIAS_FIN_FIJAS = ['medicamento','insumo','equipo','general','factura','compras','ventas','pago_iva','pago_retenciones_compras',CATEGORIA_PAGO_PROFESIONAL];
 const CATEGORIAS_FIN_DEFECTO = {
   ingreso: [
     {id:'consulta',      label:'Consulta',      icon:'👨‍⚕️'},
@@ -19925,6 +19986,7 @@ const CATEGORIAS_FIN_DEFECTO = {
     // El IVA que se entrega a la DGI: Contabilidad lo resta del IVA por pagar
     // y no lo cuenta como gasto.
     {id:'pago_iva',    label:'Pago de IVA',        icon:'🧮'},
+    {id:'pago_retenciones_compras', label:'Pago de retenciones de compras', icon:'🧮'},
     {id:'abarrotes',   label:'Abarrotes',          icon:'🛒'},
     {id:'desechos',    label:'Desechos clínicos',  icon:'☣️'},
     {id:'consumibles', label:'Consumibles',        icon:'🧴'},

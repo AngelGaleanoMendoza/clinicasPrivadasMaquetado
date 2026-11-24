@@ -192,14 +192,24 @@ const llenar=`(lineas,marcarExento=true)=>{ lineas.forEach(([inv,cant,costo],i)=
       __llamadas.length=0; await guardarCompra(); window.__fallar=null;
       const error=__toasts.at(-1);
       const escriturasSinMigracion=__llamadas.filter(q=>q.op!=='select').length;
+      document.getElementById('compra-numero').value='IR-123';
+      document.getElementById('compra-retencion-ir-2').click();
+      const soloDos=document.getElementById('compra-neto').textContent;
+      document.getElementById('compra-retencion-ir-1').click();
+      const retenciones=['retencion-ir-2-monto','retencion-ir-1-monto','neto']
+        .map(campo=>document.getElementById('compra-'+campo).textContent);
+      window.__fallar=q=>q.t==='compras'&&q.op==='insert'?'column compras.retencion_ir_2 does not exist':null;
+      __llamadas.length=0; await guardarCompra(); window.__fallar=null;
+      const sinMigracionIR={aviso:__toasts.at(-1)[1], otras:__llamadas.filter(q=>q.t!=='compras'&&q.op!=='select').length};
       __llamadas.length=0; await guardarCompra();
       const llamadas=JSON.parse(JSON.stringify(__llamadas));
       const cabecera=llamadas.find(q=>q.t==='compras'&&q.op==='insert').datos;
       const lineas=llamadas.find(q=>q.t==='compra_items'&&q.op==='insert').datos;
       __estado({C:{comp:[fromCompra({id:210,...cabecera,compra_items:lineas})]}});
-      verCompra(210); imprimirCompra(210);
-      return {visto,montos,sinClasificar,error,escriturasSinMigracion,llamadas,detalle:document.getElementById('compra-detalle-cuerpo').textContent,
-        pdf:new DOMParser().parseFromString(__pdf.at(-1).body,'text/html').body.textContent};
+      verCompra(210); imprimirCompra(210); imprimirReporteCompras();
+      const textoPdf=i=>new DOMParser().parseFromString(__pdf.at(i).body,'text/html').body.textContent;
+      return {visto,montos,sinClasificar,error,escriturasSinMigracion,llamadas,soloDos,retenciones,sinMigracionIR,
+        detalle:document.getElementById('compra-detalle-cuerpo').textContent, pdf:textoPdf(-2), reporte:textoPdf(-1)};
     },{INV,PROV});
     assert.deepEqual(mixto.visto,{abreEnManual:true,todos:false,manual:true,porLinea:['gravado','exento'],
       opciones:['Selecciona…','Con IVA (gravado)','Exento de IVA']});
@@ -208,14 +218,22 @@ const llenar=`(lineas,marcarExento=true)=>{ lineas.forEach(([inv,cant,costo],i)=
     assert.equal(mixto.escriturasSinMigracion,0);
     assert.match(mixto.error[1],/migracion_iva_productos\.sql/);
     const mixta=de(mixto.llamadas,'compras','insert')[0].datos;
-    assert.deepEqual([mixta.subtotal,mixta.iva,mixta.total],[140,15,155]);
+    assert.deepEqual([mixta.subtotal,mixta.iva,mixta.total,mixta.retencion_ir_2,mixta.retencion_ir_1],[140,15,155,2.8,1.4]);
+    assert.equal(mixto.soloDos,'C$ 152.20');
+    assert.deepEqual(mixto.retenciones,['−C$ 2.80','−C$ 1.40','C$ 150.80']);
+    assert.match(mixto.sinMigracionIR.aviso,/migracion_retenciones_compras\.sql/);
+    assert.equal(mixto.sinMigracionIR.otras,0);
     assert.deepEqual(de(mixto.llamadas,'compra_items','insert')[0].datos.map(i=>[i.costo_unitario,i.subtotal,i.iva_pct,i.iva]),
       [[10,100,15,15],[10,40,0,0]]);
-    assert.equal(de(mixto.llamadas,'compra_pagos','insert')[0].datos.monto,155);
+    assert.equal(de(mixto.llamadas,'compra_pagos','insert')[0].datos.monto,150.8);
+    assert.equal(de(mixto.llamadas,'finanzas','insert')[0].datos.monto,150.8);
+    assert.match(mixto.reporte,/Retenciones por factura[\s\S]*IR-123[\s\S]*C\$ 150\.80/);
     for(const documento of [mixto.detalle,mixto.pdf]) {
       assert.match(documento,/Exento de IVA/);
       assert.match(documento,/Subtotal exento\s*C\$ 40\.00/);
       assert.match(documento,/Subtotal gravado con IVA\s*C\$ 115\.00/);
+      assert.match(documento,/Base de las retenciones \(exento \+ gravado sin IVA\)\s*C\$ 140\.00/);
+      assert.match(documento,/Neto a pagar al proveedor\s*C\$ 150\.80/);
     }
 
     // ── Al crédito: sin pagos ni gasto hasta que se pague ──
@@ -226,15 +244,22 @@ const llenar=`(lineas,marcarExento=true)=>{ lineas.forEach(([inv,cant,costo],i)=
       const visto=id=>getComputedStyle(document.getElementById(id)).display!=='none';
       const ui={vence:document.getElementById('compra-vencimiento').value,metodoOculto:!visto('compra-metodo-wrap'),gastoOculto:!visto('compra-gasto-wrap'),venceVisible:visto('compra-vence-wrap')};
       __llenar([[1,4,6]]);
+      document.getElementById('compra-retencion-ir-1').click();
       document.getElementById('compra-vencimiento').value='2026-11-01'; __llamadas.length=0; await guardarCompra();
       const venceAntes={toast:__toasts.at(-1)[0],llamadas:__llamadas.length};
       document.getElementById('compra-vencimiento').value='2026-12-14'; __llamadas.length=0; await guardarCompra();
-      return {ui,venceAntes,llamadas:JSON.parse(JSON.stringify(__llamadas)),toast:__toasts.at(-1)[1]};
+      const llamadas=JSON.parse(JSON.stringify(__llamadas));
+      const cabecera=llamadas.find(q=>q.t==='compras'&&q.op==='insert').datos;
+      const guardada=fromCompra({id:211,...cabecera});
+      __estado({C:{comp:[guardada]}});
+      abrirPagoCompra(211);
+      return {ui,venceAntes,llamadas,toast:__toasts.at(-1)[1],neto:document.getElementById('pago-compra-monto').value};
     },{INV,PROV});
     assert.deepEqual(credito.ui,{vence:'2026-12-14',metodoOculto:true,gastoOculto:true,venceVisible:true},'A crédito: vence a los 30 días y no se pide forma de pago (de verdad oculta)');
     assert.deepEqual(credito.venceAntes,{toast:'error',llamadas:0},'No vence antes de la compra');
     const cabCred=de(credito.llamadas,'compras','insert')[0].datos;
     assert.deepEqual([cabCred.condicion,cabCred.vencimiento,cabCred.metodo_pago],['credito','2026-12-14','credito']);
+    assert.deepEqual([cabCred.retencion_ir_2,cabCred.retencion_ir_1,credito.neto],[null,0.24,'23.76']);
     assert.equal(credito.llamadas.filter(q=>q.t==='compra_pagos'||q.t==='finanzas').length,0);
     assert.match(credito.toast,/queda por pagar/);
     assert.equal(de(credito.llamadas,'inventario','update').length,1,'El stock entra aunque no se haya pagado');

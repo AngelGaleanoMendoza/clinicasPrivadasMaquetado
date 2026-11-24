@@ -1371,6 +1371,11 @@
         <label class="compra-check"><input type="checkbox" id="compra-iva-manual" onchange="_ajustarIvaCompra('manual')"> Agregar manual</label>
         <label class="compra-iva-pct" id="compra-iva-pct-wrap" hidden><span>IVA</span><input type="number" id="compra-iva-pct" value="15" min="0" max="100" step="0.01" oninput="_totalCompra()"><span>%</span></label>
       </div>
+      <div class="form-group full compra-iva-fila" role="group" aria-labelledby="compra-retenciones-titulo">
+        <span id="compra-retenciones-titulo" class="compra-iva-titulo">Retenciones sobre el subtotal sin IVA</span>
+        <label class="compra-check"><input type="checkbox" id="compra-retencion-ir-2" onchange="_totalCompra()"> IR 2 %</label>
+        <label class="compra-check"><input type="checkbox" id="compra-retencion-ir-1" onchange="_totalCompra()"> IR 1 %</label>
+      </div>
     </div>
     <div class="compra-lineas-cab">
       <span>Productos</span>
@@ -1387,7 +1392,10 @@
       <div><span>Subtotal sin IVA</span><strong id="compra-subtotal">C$ 0.00</strong></div>
       <div id="compra-iva-linea" hidden><span id="compra-iva-lbl">IVA</span><strong id="compra-iva">C$ 0.00</strong></div>
       <div><span>Productos gravados con IVA</span><strong id="compra-gravado-con-iva">C$ 0.00</strong></div>
-      <div class="compra-total"><span>Total de la compra</span><strong id="compra-total">C$ 0.00</strong></div>
+      <div><span>Total de la factura</span><strong id="compra-total">C$ 0.00</strong></div>
+      <div id="compra-retencion-ir-2-fila" hidden><span>Menos retención IR 2 %</span><strong id="compra-retencion-ir-2-monto">C$ 0.00</strong></div>
+      <div id="compra-retencion-ir-1-fila" hidden><span>Menos retención IR 1 %</span><strong id="compra-retencion-ir-1-monto">C$ 0.00</strong></div>
+      <div class="compra-total"><span>Neto a pagar al proveedor</span><strong id="compra-neto">C$ 0.00</strong></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-compra')">Cancelar</button>
@@ -3319,8 +3327,8 @@
     </div>
   </section>
 </div>
-<script src="js/app.js?v=20261123iva" defer></script>
-<script src="js/reportes-zip.js?v=20261119libro" defer></script>
+<script src="js/app.js?v=20261124retenciones" defer></script>
+<script src="js/reportes-zip.js?v=20261124retenciones" defer></script>
 <script src="js/importar-excel.js?v=20261123inventario" defer></script>
 <script src="js/libro-diario.js?v=20261119libro" defer></script>
 <script src="js/caja-empresa.js?v=20261118borrador" defer></script>

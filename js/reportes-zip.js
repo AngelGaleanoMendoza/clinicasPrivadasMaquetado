@@ -216,8 +216,10 @@ function _armarReportesZip(tablas, modulos, corte, empresa) {
       informe('Balance general',tabla('Balance al corte',['Concepto','Monto'],[
         ['Efectivo',fmtC(balance.efectivo)],[balance.productosSinCosto ? 'Inventario (valor conocido)' : 'Inventario',fmtC(balance.inventario.total)],
         ...(balance.productosSinCosto ? [['Productos con existencias pendientes de valorar', balance.productosSinCosto]] : []),
-        ['Cuentas por cobrar',fmtC(balance.cxc)],['IVA a favor',fmtC(balance.ivaFavor)],['Activos',fmtC(balance.activos)],
-        ['Cuentas por pagar',fmtC(balance.cxp)],['IVA por pagar',fmtC(balance.ivaPorPagar)],['Pasivos',fmtC(balance.pasivos)],
+        ['Cuentas por cobrar',fmtC(balance.cxc)],['IVA a favor',fmtC(balance.ivaFavor)],
+        ...(balance.anticiposRetenciones ? [['Anticipos de retenciones',fmtC(balance.anticiposRetenciones)]] : []),['Activos',fmtC(balance.activos)],
+        ['Cuentas por pagar',fmtC(balance.cxp)],['IVA por pagar',fmtC(balance.ivaPorPagar)],
+        ...(balance.retencionesPorPagar ? [['Retenciones de compras por pagar',fmtC(balance.retencionesPorPagar)]] : []),['Pasivos',fmtC(balance.pasivos)],
         ['Capital',fmtC(balance.capital)],['Resultados acumulados',fmtC(balance.resultados)],['Patrimonio',fmtC(balance.patrimonio)]
       ]));
     }

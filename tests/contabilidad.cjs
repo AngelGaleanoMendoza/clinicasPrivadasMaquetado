@@ -619,6 +619,15 @@ const de=(ll,t,op)=>ll.filter(q=>q.t===t&&q.op===op);
     assert.deepEqual(balance.b,{efectivo:50,cxc:38,inventario:56,ivaPorPagar:7.5,ivaFavor:0,cxp:40.5,activos:144,pasivos:48,resultados:46,capital:50,patrimonio:96});
     assert.equal(balance.cuadre,'✅ Activos = Pasivos + Patrimonio');
     assert.equal(balance.periodoOculto,true,'El balance es a hoy: no se elige período');
+    const retenciones=await page.evaluate(()=>{
+      const compra=fromCompra({id:61,subtotal:140,total:155,iva:15,condicion:'credito',retencion_ir_2:'2.80',retencion_ir_1:'1.40'});
+      __estado({C:{inv:[],lotes:[],comp:[compra],ventas:[],fin:[]}});
+      const antes=_balanceGeneral();
+      __estado({C:{fin:[{tipo:'egreso',categoria:'pago_retenciones_compras',monto:4.2,fecha:'2026-11-20'}]}});
+      const despues=_balanceGeneral();
+      return [antes.cxp,antes.retencionesPorPagar,antes.pasivos,despues.cxp,despues.retencionesPorPagar,despues.pasivos,despues.resultados];
+    });
+    assert.deepEqual(retenciones,[150.8,4.2,155,150.8,0,150.8,0],'El pago de la retención liquida su pasivo sin cambiar el saldo del proveedor ni el resultado');
 
     // ── Resumen y gráfica (12 meses, 2 series, tabla, tooltip, modo oscuro) ──
     await page.setViewportSize({width:1280,height:900});
